@@ -6,7 +6,7 @@ import type { GameState } from '../core/GameState';
 import { totalMoneySupply } from '../core/GameState';
 import type { Transaction } from '../core/Transactions';
 import { computeTime } from '../core/Tick';
-import { ALL_PRODUCT_IDS } from '../data/products';
+import { ALL_PRODUCT_IDS, CONSUMER_PRODUCT_IDS, getProduct } from '../data/products';
 import { getQuantity } from '../entities/Inventory';
 
 export interface DebugSnapshot {
@@ -62,4 +62,46 @@ export function debugSnapshot(state: GameState): DebugSnapshot {
 export function recentTransactions(state: GameState, limit = 30): Transaction[] {
   const txns = state.transactions;
   return txns.slice(Math.max(0, txns.length - limit)).reverse();
+}
+
+export interface MacroIndicators {
+  /** Consumer price index: avg of (avg price / base price) across goods, ×100. */
+  priceIndex: number;
+  /** Consumer spend recorded so far today (cents). */
+  consumerSpendToday: number;
+  /** Units sold to citizens today (trade volume). */
+  unitsSoldToday: number;
+  /** Unmet demand today (shortage pressure). */
+  unmetDemandToday: number;
+  /** Total inventory of consumer goods across the economy. */
+  goodsInventory: number;
+  activeFirms: number;
+}
+
+/** Live, transparent macro indicators derived from current state. */
+export function macroIndicators(state: GameState): MacroIndicators {
+  let idxSum = 0, idxN = 0, spend = 0, sold = 0, unmet = 0, inv = 0;
+  for (const pid of CONSUMER_PRODUCT_IDS) {
+    const stat = state.marketStats[pid];
+    if (!stat) continue;
+    const base = getProduct(pid).basePrice;
+    if (stat.averagePrice > 0 && base > 0) { idxSum += stat.averagePrice / base; idxN++; }
+    spend += stat.revenueAccum;
+    sold += stat.unitsSold;
+    unmet += stat.unmetDemand;
+    inv += stat.totalInventory;
+  }
+  let activeFirms = 0;
+  for (const id in state.firms) {
+    const f = state.firms[id]!;
+    if ((f.ownerType === 'player' || f.ownerType === 'ai') && f.bankruptcyStatus !== 'insolvent') activeFirms++;
+  }
+  return {
+    priceIndex: idxN ? (idxSum / idxN) * 100 : 100,
+    consumerSpendToday: spend,
+    unitsSoldToday: sold,
+    unmetDemandToday: unmet,
+    goodsInventory: inv,
+    activeFirms,
+  };
 }

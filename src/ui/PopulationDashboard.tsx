@@ -1,17 +1,31 @@
 import React from 'react';
 import { useGameStore } from '../store/useGameStore';
 import { populationStats, allCitizens, citizenActionLabel } from '../sim/selectors/citizenSelectors';
+import { macroIndicators } from '../sim/selectors/debugSelectors';
 import { formatMoney } from '../utils/formatMoney';
+import { FormulaTooltip } from './FormulaTooltip';
 
 export function PopulationDashboard(): React.ReactElement {
   const sim = useGameStore((s) => s.sim);
   const select = useGameStore((s) => s.select);
   const state = sim.getState();
   const pop = populationStats(state);
+  const macro = macroIndicators(state);
   const citizens = allCitizens(state);
 
   return (
     <div>
+      <h3 style={{ marginTop: 0 }}>Economy Indicators</h3>
+      <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
+        <Stat label="Price index" value={`${macro.priceIndex.toFixed(0)}`} hint="Average market price ÷ base price across consumer goods, ×100. 100 = at base; >100 = inflation." />
+        <Stat label="Consumer spend (today)" value={formatMoney(macro.consumerSpendToday)} />
+        <Stat label="Goods sold (today)" value={String(macro.unitsSoldToday)} />
+        <Stat label="Unmet demand (today)" value={String(macro.unmetDemandToday)} />
+        <Stat label="Goods in economy" value={String(macro.goodsInventory)} />
+        <Stat label="Active firms" value={String(macro.activeFirms)} />
+      </div>
+
+      <h3>Population</h3>
       <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
         <Stat label="Population" value={String(pop.total)} />
         <Stat label="Employed" value={`${pop.employed} (${(pop.employmentRate * 100).toFixed(0)}%)`} />
@@ -44,10 +58,12 @@ export function PopulationDashboard(): React.ReactElement {
   );
 }
 
-function Stat({ label, value }: { label: string; value: string }): React.ReactElement {
+function Stat({ label, value, hint }: { label: string; value: string; hint?: string }): React.ReactElement {
   return (
     <div className="card" style={{ minWidth: 130, marginBottom: 0 }}>
-      <div className="muted small">{label}</div>
+      <div className="muted small">
+        {hint ? <FormulaTooltip title={label} explanation={hint}>{label}</FormulaTooltip> : label}
+      </div>
       <div className="mono" style={{ fontSize: 16 }}>{value}</div>
     </div>
   );
