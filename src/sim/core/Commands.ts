@@ -1,0 +1,67 @@
+/**
+ * Commands.ts — The intent API between UI and simulation.
+ *
+ * React never mutates simulation state. It dispatches one of these commands;
+ * the Simulation validates and applies it. Commands are plain serializable
+ * objects so a command sequence can be logged/replayed for determinism testing.
+ */
+
+import type {
+  FirmId,
+  FacilityId,
+  CitizenId,
+  ProductId,
+  RecipeId,
+  FacilityDefId,
+  ContractId,
+  EntityId,
+} from './Id';
+import type { Vec2 } from '../entities/Location';
+
+export type Speed = 0 | 1 | 5 | 20 | 100;
+
+export type Command =
+  | { type: 'START_NEW_GAME'; seed: number }
+  | { type: 'LOAD_GAME'; slot?: string }
+  | { type: 'SAVE_GAME'; slot?: string }
+  | { type: 'PAUSE' }
+  | { type: 'RESUME' }
+  | { type: 'SET_SPEED'; speed: Speed }
+  | { type: 'CREATE_COMPANY'; name: string; startingCash: number }
+  | {
+      type: 'BUILD_FACILITY';
+      firmId: FirmId;
+      defId: FacilityDefId;
+      location: Vec2;
+    }
+  | { type: 'SELECT_RECIPE'; facilityId: FacilityId; recipeId: RecipeId | null }
+  | {
+      type: 'SET_RETAIL_PRODUCT';
+      facilityId: FacilityId;
+      productId: ProductId | null;
+    }
+  | { type: 'SET_PRICE'; firmId: FirmId; productId: ProductId; price: number }
+  | { type: 'SET_WAGE'; firmId: FirmId; wage: number }
+  | { type: 'HIRE_WORKER'; facilityId: FacilityId; citizenId: CitizenId | null }
+  | { type: 'FIRE_WORKER'; facilityId: FacilityId; citizenId: CitizenId }
+  | {
+      type: 'CREATE_SUPPLY_CONTRACT';
+      ownerFirmId: FirmId;
+      sourceFacilityId: FacilityId;
+      destinationFacilityId: FacilityId;
+      productId: ProductId;
+      targetQuantity: number;
+      reorderPoint: number;
+      maxInventory: number;
+    }
+  | { type: 'CANCEL_SUPPLY_CONTRACT'; contractId: ContractId }
+  | {
+      type: 'BUY_FROM_IMPORTER';
+      firmId: FirmId;
+      destinationFacilityId: FacilityId;
+      productId: ProductId;
+      quantity: number;
+    }
+  | { type: 'SELECT_ENTITY'; entityId: EntityId | null };
+
+export type CommandType = Command['type'];

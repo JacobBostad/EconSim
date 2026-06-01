@@ -1,0 +1,83 @@
+/**
+ * products.ts — Product catalog (data-driven).
+ *
+ * To add a product: append a Product here and (if it can be produced) add a
+ * recipe in recipes.ts and reference it from a facility definition. Nothing
+ * else in the engine needs to change.
+ *
+ * Chains shipped in v1:
+ *   grain  -> bread  (food, sold to citizens)
+ *   minerals -> tools (durable, sold to citizens)
+ */
+
+import type { Product } from '../entities/Product';
+import type { ProductId } from '../core/Id';
+import { dollars } from './constants';
+
+export const PRODUCTS: Record<ProductId, Product> = {
+  grain: {
+    id: 'grain',
+    name: 'Grain',
+    category: 'raw',
+    basePrice: dollars(1.5),
+    perishability: 0.05,
+    qualityWeight: 0,
+    priceWeight: 0,
+    brandWeight: 0,
+    needType: 'none',
+    defaultQuality: 50,
+    unitSize: 1,
+  },
+  bread: {
+    id: 'bread',
+    name: 'Bread',
+    category: 'food',
+    basePrice: dollars(3.5),
+    perishability: 0.08,
+    qualityWeight: 0.15,
+    priceWeight: 0.25,
+    brandWeight: 0.1,
+    needType: 'food',
+    defaultQuality: 60,
+    unitSize: 1,
+  },
+  minerals: {
+    id: 'minerals',
+    name: 'Minerals',
+    category: 'raw',
+    basePrice: dollars(2.0),
+    perishability: 0,
+    qualityWeight: 0,
+    priceWeight: 0,
+    brandWeight: 0,
+    needType: 'none',
+    defaultQuality: 50,
+    unitSize: 1,
+  },
+  tools: {
+    id: 'tools',
+    name: 'Tools',
+    category: 'durable',
+    basePrice: dollars(9.0),
+    perishability: 0,
+    qualityWeight: 0.2,
+    priceWeight: 0.2,
+    brandWeight: 0.15,
+    needType: 'goods',
+    defaultQuality: 65,
+    unitSize: 2,
+  },
+};
+
+export function getProduct(id: ProductId): Product {
+  const p = PRODUCTS[id];
+  if (!p) throw new Error(`Unknown product: ${id}`);
+  return p;
+}
+
+export const ALL_PRODUCT_IDS: ProductId[] = Object.keys(PRODUCTS);
+
+/** Products that satisfy a citizen need (i.e. are sold at retail). */
+export const CONSUMER_PRODUCT_IDS: ProductId[] = ALL_PRODUCT_IDS.filter(
+  (id) => PRODUCTS[id]!.needType !== 'none',
+);

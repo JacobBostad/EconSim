@@ -1,0 +1,73 @@
+/**
+ * MarketStatsSystem — aggregates per-product market statistics.
+ *
+ * - Hourly: recompute economy-wide inventory totals (cheap, keeps dashboards
+ *   fresh without scanning every facility each tick).
+ * - Daily (at the day boundary, before the AI and accounting roll-ups): finalize
+ *   average price/quality and market share from the day's accumulators, push
+ *   per-firm shares onto firms, then reset the daily accumulators.
+ *
+ * RetailDemandSystem feeds the raw accumulators during the day.
+ */
+
+import type { SimContext } from '../core/GameState';
+import { isDayBoundary, isHourBoundary } from '../core/Tick';
+import { ALL_PRODUCT_IDS } from '../data/products';
+import { safeDiv } from '../../utils/math';
+import { getQuantity } from '../entities/Inventory';
+
+export function runMarketStatsSystem(ctx: SimContext): void {
+  if (isHourBoundary(ctx.state.tick, ctx.config)) computeInventoryTotals(ctx);
+  if (isDayBoundary(ctx.state.tick, ctx.config)) finalizeAndReset(ctx);
+}
+
+function computeInventoryTotals(ctx: SimContext): void {
+  const { state } = ctx;
+  const totals: Record<string, number> = {};
+  for (const pid of ALL_PRODUCT_IDS) totals[pid] = 0;
+  for (const fid in state.facilities) {
+    const fac = state.facilities[fid]!;
+    if (fac.type === 'importer') continue; // exclude the infinite buffer
+    for (const pid of ALL_PRODUCT_IDS) {
+      totals[pid]! +=
+        getQuantity(fac.inputInventory, pid) + getQuantity(fac.outputInventory, pid);
+    }
+  }
+  for (const pid of ALL_PRODUCT_IDS) {
+    state.marketStats[pid]!.totalInventory = totals[pid]!;
+  }
+}
+
+function finalizeAndReset(ctx: SimContext): void {
+  const { state } = ctx;
+  for (const pid of ALL_PRODUCT_IDS) {
+    const stat = state.marketStats[pid]!;
+    stat.averagePrice = Math.round(safeDiv(stat.revenueAccum, stat.unitsSold, 0));
+    stat.averageQuality = safeDiv(stat.qualityAccum, stat.unitsSold, 0);
+
+    // Market share by firm (by units sold today).
+    let totalSold = 0;
+    for (const fid in stat.unitsSoldByFirm) totalSold += stat.unitsSoldByFirm[fid]!;
+    const shares: Record<string, number> = {};
+    for (const fid in stat.unitsSoldByFirm) {
+      shares[fid] = safeDiv(stat.unitsSoldByFirm[fid]!, totalSold, 0);
+    }
+    stat.marketShareByFirm = shares;
+    for (const fid in shares) {
+      const firm = state.firms[fid];
+      if (firm) firm.marketShareByProduct[pid] = shares[fid]!;
+    }
+
+    // Reset daily accumulators for the new day.
+    stat.demandAttempts = 0;
+    stat.fulfilledDemand = 0;
+    stat.unmetDemand = 0;
+    stat.unitsSold = 0;
+    stat.stockoutCount = 0;
+    stat.revenueAccum = 0;
+    stat.qualityAccum = 0;
+    stat.lowestPrice = 0;
+    stat.highestPrice = 0;
+    stat.unitsSoldByFirm = {};
+  }
+}
