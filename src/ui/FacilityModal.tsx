@@ -101,6 +101,9 @@ export function FacilityActions({ fac }: { fac: Facility }): React.ReactElement 
               editable={isPlayer}
             />
           )}
+          {fac.retailProductId && firm && (
+            <MarketingControls firm={firm} productId={fac.retailProductId} editable={isPlayer} />
+          )}
         </div>
       )}
 
@@ -220,6 +223,55 @@ export function FacilityActions({ fac }: { fac: Facility }): React.ReactElement 
           </div>
           <div className="small muted">Have: {getQuantity(fac.inputInventory, importProduct)} in input store.</div>
         </div>
+      )}
+    </div>
+  );
+}
+
+function MarketingControls({
+  firm,
+  productId,
+  editable,
+}: {
+  firm: import('../sim/entities/Firm').Firm;
+  productId: string;
+  editable: boolean;
+}): React.ReactElement {
+  const dispatch = useGameStore((s) => s.dispatch);
+  const brand = firm.brandByProduct[productId] ?? 0;
+  const quality = firm.qualityByProduct[productId] ?? getProduct(productId).defaultQuality;
+  const adBudget = firm.adBudgetByProduct[productId] ?? 0;
+  const [ad, setAd] = useState((adBudget / CENTS).toFixed(0));
+  React.useEffect(() => setAd((adBudget / CENTS).toFixed(0)), [adBudget]);
+
+  return (
+    <div style={{ marginTop: 8, borderTop: '1px solid var(--border)', paddingTop: 6 }}>
+      <div className="kv small"><span className="k">Brand</span><span className="mono">{brand.toFixed(0)}/100</span></div>
+      <div className="bar" style={{ margin: '2px 0 5px' }}><span style={{ width: `${brand}%`, background: 'var(--purple)' }} /></div>
+      <div className="kv small"><span className="k">Quality</span><span className="mono">{quality.toFixed(0)}/100</span></div>
+      <div className="bar" style={{ margin: '2px 0 6px' }}><span style={{ width: `${quality}%`, background: 'var(--green)' }} /></div>
+      {editable && (
+        <>
+          <div className="row between small">
+            <span className="k">Ad budget / day</span>
+            <span className="row">$<input style={{ width: 56 }} value={ad} onChange={(e) => setAd(e.target.value)}
+              onBlur={() => {
+                const cents = Math.max(0, Math.round(parseFloat(ad || '0') * CENTS));
+                dispatch({ type: 'SET_AD_BUDGET', firmId: firm.id, productId, dailyBudget: cents });
+              }} /></span>
+          </div>
+          <div className="row" style={{ marginTop: 5 }}>
+            {[1000, 5000].map((amt) => (
+              <button key={amt} onClick={() => dispatch({ type: 'INVEST_RND', firmId: firm.id, productId, amount: amt * CENTS })}>
+                R&D +${amt.toLocaleString()}
+              </button>
+            ))}
+          </div>
+          <div className="small muted" style={{ marginTop: 4 }}>
+            Advertising builds brand (decays ~3%/day). R&D raises quality. Both lift demand &amp; the
+            price customers will pay.
+          </div>
+        </>
       )}
     </div>
   );

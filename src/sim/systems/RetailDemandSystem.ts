@@ -72,13 +72,16 @@ export function scoreStore(
   const reliabilityRaw = citizen.storeReliability[facility.id] ?? 0;
   const reliabilityScore =
     reliabilityRaw > 0 ? clamp(reliabilityRaw / 10, 0, 1) : 0.4;
+  const firm = ctx.state.firms[facility.ownerFirmId];
+  const brandScore = clamp((firm?.brandByProduct[productId] ?? 0) / 100, 0, 1);
 
   const score =
-    availabilityScore * 0.3 +
-    priceScore * 0.25 +
-    distanceScore * 0.2 +
-    qualityScore * 0.15 +
-    reliabilityScore * 0.1;
+    availabilityScore * 0.28 +
+    priceScore * 0.22 +
+    distanceScore * 0.18 +
+    qualityScore * 0.14 +
+    brandScore * 0.12 +
+    reliabilityScore * 0.06;
 
   return { facility, score, price };
 }
@@ -138,7 +141,12 @@ function attemptPurchase(
   const open = storeIsOpen(ctx, store);
   const stock = getQuantity(store.inputInventory, productId);
   const price = storePrice(state, store, productId);
-  const maxPrice = product.basePrice * need.maxAffordablePriceMultiplier;
+  // Strong brands and high quality raise what citizens will pay.
+  const firm = state.firms[store.ownerFirmId];
+  const brand = firm?.brandByProduct[productId] ?? 0;
+  const qual = getQuality(store.inputInventory, productId);
+  const premium = 1 + brand / 250 + (qual - 50) / 300;
+  const maxPrice = product.basePrice * need.maxAffordablePriceMultiplier * premium;
 
   if (!open || stock <= 0) {
     // Stockout / store closed -> lost sale.

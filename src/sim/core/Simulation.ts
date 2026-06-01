@@ -18,6 +18,7 @@ import type { GameState, SimContext } from './GameState';
 import { makeContext, emitEvent, recordTransaction, canAfford } from './GameState';
 import type { Command } from './Commands';
 import { nextId } from './Id';
+import type { FirmId } from './Id';
 import { firmAccount, WORLD_ACCOUNT } from './Transactions';
 import { createInitialState } from '../data/startingScenario';
 import { createFacility } from '../entities/factories';
@@ -25,7 +26,13 @@ import { getFacilityDef } from '../data/facilityDefinitions';
 import { getRecipe } from '../data/recipes';
 import { getProduct } from '../data/products';
 import { addStock, totalUnits } from '../entities/Inventory';
-import { IMPORT_MARKUP } from '../data/constants';
+import {
+  IMPORT_MARKUP,
+  CENTS,
+  RND_QUALITY_GAIN_PER_1000,
+  LOAN_CREDIT_LIMIT_MULTIPLE,
+  LOAN_MIN_CREDIT,
+} from '../data/constants';
 import type { Contract } from '../entities/Contract';
 
 import { runTimeSystem } from '../systems/TimeSystem';
@@ -33,6 +40,8 @@ import { runMarketStatsSystem } from '../systems/MarketStatsSystem';
 import { runAIStrategySystem } from '../systems/AIStrategySystem';
 import { runEventLogSystem } from '../systems/EventLogSystem';
 import { runBankruptcySystem } from '../systems/BankruptcySystem';
+import { runMarketingSystem } from '../systems/MarketingSystem';
+import { runFinanceSystem } from '../systems/FinanceSystem';
 import { runSatisfactionSystem } from '../systems/SatisfactionSystem';
 import { runAccountingSystem } from '../systems/AccountingSystem';
 import { runPayrollSystem } from '../systems/PayrollSystem';
@@ -53,8 +62,10 @@ const SYSTEMS: SystemFn[] = [
   runTimeSystem,
   // --- daily roll-ups (each guards on the day boundary internally) ---
   runMarketStatsSystem, // finalize previous day's stats; hourly inventory totals
-  runAIStrategySystem, // AI reacts using the finalized day
+  runAIStrategySystem, // AI reacts using the finalized day (sets ad/R&D/loans)
   runEventLogSystem, // player-facing alerts (before daily stats are reset)
+  runMarketingSystem, // ad spend -> brand; brand decay (marketing expense)
+  runFinanceSystem, // accrue loan interest
   runBankruptcySystem,
   runSatisfactionSystem,
   runAccountingSystem, // maintenance + snapshot + reset daily accumulators
@@ -165,7 +176,104 @@ export class Simulation {
       case 'BUY_FROM_IMPORTER':
         this.buyFromImporter(command);
         return;
+      case 'SET_AD_BUDGET': {
+        const firm = s.firms[command.firmId];
+        if (firm && command.dailyBudget >= 0) {
+          firm.adBudgetByProduct[command.productId] = Math.round(command.dailyBudget);
+        }
+        return;
+      }
+      case 'INVEST_RND':
+        this.investRnd(command);
+        return;
+      case 'TAKE_LOAN':
+        this.takeLoan(command);
+        return;
+      case 'REPAY_LOAN':
+        this.repayLoan(command);
+        return;
     }
+  }
+
+  /** Net worth used for credit limits: cash + inventory value. */
+  private netWorth(firmId: FirmId): number {
+    const firm = this.state.firms[firmId];
+    if (!firm) return 0;
+    let inv = 0;
+    for (const facId of firm.facilities) {
+      const fac = this.state.facilities[facId];
+      if (!fac) continue;
+      for (const bag of [fac.inputInventory, fac.outputInventory]) {
+        for (const pid in bag) inv += bag[pid]!.quantity * getProduct(pid).basePrice;
+      }
+    }
+    return firm.cash + inv;
+  }
+
+  private investRnd(command: Extract<Command, { type: 'INVEST_RND' }>): void {
+    const s = this.state;
+    const firm = s.firms[command.firmId];
+    if (!firm || command.amount <= 0) return;
+    if (!canAfford(s, firmAccount(firm.id), command.amount)) {
+      emitEvent(s, 'danger', 'player', 'Not enough cash for R&D.', firm.id);
+      return;
+    }
+    recordTransaction(s, {
+      from: firmAccount(firm.id),
+      to: WORLD_ACCOUNT,
+      amount: command.amount,
+      firmId: firm.id,
+      category: 'rnd',
+      productId: command.productId,
+      note: 'R&D investment',
+    });
+    const product = getProduct(command.productId);
+    const cur = firm.qualityByProduct[command.productId] ?? product.defaultQuality;
+    const headroom = (100 - cur) / 100;
+    const gain = RND_QUALITY_GAIN_PER_1000 * (command.amount / (1000 * CENTS)) * headroom;
+    firm.qualityByProduct[command.productId] = Math.min(100, cur + gain);
+    emitEvent(s, 'success', 'player', `R&D improved ${product.name} quality to ${Math.round(firm.qualityByProduct[command.productId]!)}.`, firm.id);
+  }
+
+  private takeLoan(command: Extract<Command, { type: 'TAKE_LOAN' }>): void {
+    const s = this.state;
+    const firm = s.firms[command.firmId];
+    if (!firm || command.amount <= 0) return;
+    const limit = Math.max(LOAN_MIN_CREDIT, Math.round(this.netWorth(firm.id) * LOAN_CREDIT_LIMIT_MULTIPLE));
+    const available = limit - firm.debt;
+    const amount = Math.min(Math.round(command.amount), available);
+    if (amount <= 0) {
+      emitEvent(s, 'warning', 'finance', 'Credit limit reached — cannot borrow more.', firm.id);
+      return;
+    }
+    firm.debt += amount;
+    recordTransaction(s, {
+      from: WORLD_ACCOUNT,
+      to: firmAccount(firm.id),
+      amount,
+      firmId: firm.id,
+      category: 'loanDraw',
+      note: 'Loan drawdown',
+    });
+    emitEvent(s, 'success', 'finance', `Borrowed ${amount}¢. Total debt ${firm.debt}¢.`, firm.id);
+  }
+
+  private repayLoan(command: Extract<Command, { type: 'REPAY_LOAN' }>): void {
+    const s = this.state;
+    const firm = s.firms[command.firmId];
+    if (!firm || command.amount <= 0 || firm.debt <= 0) return;
+    const amount = Math.min(Math.round(command.amount), firm.debt, Math.max(0, firm.cash));
+    if (amount <= 0) return;
+    firm.debt -= amount;
+    recordTransaction(s, {
+      from: firmAccount(firm.id),
+      to: WORLD_ACCOUNT,
+      amount,
+      firmId: firm.id,
+      category: 'loanRepay',
+      note: 'Loan repayment',
+    });
+    emitEvent(s, 'info', 'finance', `Repaid ${amount}¢. Remaining debt ${firm.debt}¢.`, firm.id);
   }
 
   // ---- command handlers -------------------------------------------------

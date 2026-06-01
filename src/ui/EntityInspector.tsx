@@ -156,6 +156,11 @@ function FirmView({ firm, state }: { firm: Firm; state: GameState }): React.Reac
         <span className="k">Cash</span>
         <span className="mono" style={{ color: firm.cash < 0 ? 'var(--red)' : 'var(--green)' }}>{formatMoney(firm.cash)}</span>
       </div>
+      <div className="kv small">
+        <span className="k">Debt</span>
+        <span className="mono" style={{ color: firm.debt > 0 ? 'var(--amber)' : undefined }}>{formatMoney(firm.debt)}</span>
+      </div>
+      {firm.ownerType === 'player' && <FinanceControls firmId={firm.id} />}
 
       <div className="section-title">P&L Today</div>
       <PnL p={today} />
@@ -185,6 +190,22 @@ function FirmView({ firm, state }: { firm: Firm; state: GameState }): React.Reac
   );
 }
 
+function FinanceControls({ firmId }: { firmId: string }): React.ReactElement {
+  const dispatch = useGameStore((s) => s.dispatch);
+  return (
+    <div className="row" style={{ gap: 6, marginTop: 4 }}>
+      {[5000, 20000].map((amt) => (
+        <button key={amt} onClick={() => dispatch({ type: 'TAKE_LOAN', firmId, amount: amt * 100 })}>
+          Borrow ${(amt / 1000).toFixed(0)}k
+        </button>
+      ))}
+      <button onClick={() => dispatch({ type: 'REPAY_LOAN', firmId, amount: 1_000_000_00 })} title="Repay as much as cash allows">
+        Repay
+      </button>
+    </div>
+  );
+}
+
 function PnL({ p }: { p: ReturnType<typeof firmPnLToday> }): React.ReactElement {
   return (
     <>
@@ -194,6 +215,9 @@ function PnL({ p }: { p: ReturnType<typeof firmPnLToday> }): React.ReactElement 
       <div className="kv small"><span className="k">Maintenance</span><span className="mono">{formatMoney(p.maintenance)}</span></div>
       <div className="kv small"><span className="k">Logistics</span><span className="mono">{formatMoney(p.logisticsCost)}</span></div>
       <div className="kv small"><span className="k">Variable cost</span><span className="mono">{formatMoney(p.variableProductionCost)}</span></div>
+      <div className="kv small"><span className="k">Marketing</span><span className="mono">{formatMoney(p.marketing)}</span></div>
+      <div className="kv small"><span className="k">R&amp;D</span><span className="mono">{formatMoney(p.rnd)}</span></div>
+      <div className="kv small"><span className="k">Interest</span><span className="mono">{formatMoney(p.interest)}</span></div>
       <div className="kv small">
         <span className="k">
           <FormulaTooltip title="Gross profit" explanation="revenue − cost of goods sold">Gross profit</FormulaTooltip>
@@ -202,12 +226,20 @@ function PnL({ p }: { p: ReturnType<typeof firmPnLToday> }): React.ReactElement 
       </div>
       <div className="kv small">
         <span className="k">
-          <FormulaTooltip title="Operating profit" explanation="revenue − COGS − wages − maintenance − logistics − variable production cost">
+          <FormulaTooltip title="Operating profit" explanation="revenue − COGS − wages − maintenance − logistics − variable cost − marketing − R&D">
             Operating profit
           </FormulaTooltip>
         </span>
         <span className="mono" style={{ color: p.operatingProfit >= 0 ? 'var(--green)' : 'var(--red)' }}>
           {formatMoney(p.operatingProfit)}
+        </span>
+      </div>
+      <div className="kv small">
+        <span className="k">
+          <FormulaTooltip title="Net profit" explanation="operating profit − loan interest">Net profit</FormulaTooltip>
+        </span>
+        <span className="mono" style={{ color: p.netProfit >= 0 ? 'var(--green)' : 'var(--red)' }}>
+          {formatMoney(p.netProfit)}
         </span>
       </div>
     </>

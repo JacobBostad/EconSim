@@ -91,10 +91,12 @@ export function runProductionSystem(ctx: SimContext): void {
       for (const io of recipe.inputs) {
         removeStock(fac.inputInventory, io.productId, io.quantity);
       }
-      // Produce outputs.
+      // Produce outputs, stamped with this firm's quality (raised by R&D).
+      const firm = state.firms[fac.ownerFirmId];
       for (const io of recipe.outputs) {
         const product = getProduct(io.productId);
-        addStock(fac.outputInventory, io.productId, io.quantity, product.defaultQuality);
+        const quality = firm?.qualityByProduct[io.productId] ?? product.defaultQuality;
+        addStock(fac.outputInventory, io.productId, io.quantity, quality);
         fac.dailyStats.unitsProduced += io.quantity;
       }
       // Pay variable cost to the world account.

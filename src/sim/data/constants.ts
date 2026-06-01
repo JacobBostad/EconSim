@@ -27,3 +27,21 @@ export const IMPORT_MARKUP = 1.5;
 export const TRANSPORT_COST_PER_UNIT_DISTANCE = 0.6;
 /** Flat transport cost (cents) per shipment. */
 export const TRANSPORT_FLAT_COST = dollars(2);
+
+// --- Marketing / brand ---------------------------------------------------
+/** Brand points gained per day per $ of ad spend (with diminishing returns). */
+export const AD_BRAND_GAIN_PER_DOLLAR = 0.05;
+/** Daily multiplicative brand decay (brand fades without spend). */
+export const BRAND_DECAY_PER_DAY = 0.03;
+/** Max brand a store score can contribute via brand weight. */
+export const MAX_BRAND = 100;
+
+// --- R&D / quality -------------------------------------------------------
+/** Quality points gained per $1,000 invested, scaled by remaining headroom. */
+export const RND_QUALITY_GAIN_PER_1000 = 9;
+
+// --- Finance / loans -----------------------------------------------------
+/** A firm may borrow up to this multiple of its net worth (cash + inventory). */
+export const LOAN_CREDIT_LIMIT_MULTIPLE = 1.5;
+/** Minimum credit line (cents) regardless of net worth. */
+export const LOAN_MIN_CREDIT = dollars(5000);

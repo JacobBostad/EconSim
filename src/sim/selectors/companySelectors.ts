@@ -8,7 +8,7 @@ import type { Firm } from '../entities/Firm';
 import type { Facility } from '../entities/Facility';
 import type { Citizen } from '../entities/Citizen';
 import type { FirmId } from '../core/Id';
-import { grossProfit, operatingProfit } from '../entities/Accounting';
+import { grossProfit, operatingProfit, netProfit } from '../entities/Accounting';
 import { getProduct } from '../data/products';
 
 export function getFirm(state: GameState, firmId: FirmId): Firm | undefined {
@@ -52,50 +52,44 @@ export interface FirmPnL {
   maintenance: number;
   logisticsCost: number;
   variableProductionCost: number;
+  marketing: number;
+  rnd: number;
+  interest: number;
   grossProfit: number;
   operatingProfit: number;
+  netProfit: number;
+}
+
+function toPnL(p: import('../entities/Accounting').AccountingPeriod | null): FirmPnL {
+  if (!p) {
+    return {
+      revenue: 0, costOfGoodsSold: 0, wages: 0, maintenance: 0, logisticsCost: 0,
+      variableProductionCost: 0, marketing: 0, rnd: 0, interest: 0,
+      grossProfit: 0, operatingProfit: 0, netProfit: 0,
+    };
+  }
+  return {
+    revenue: p.revenue,
+    costOfGoodsSold: p.costOfGoodsSold,
+    wages: p.wages,
+    maintenance: p.maintenance,
+    logisticsCost: p.logisticsCost,
+    variableProductionCost: p.variableProductionCost,
+    marketing: p.marketing,
+    rnd: p.rnd,
+    interest: p.interest,
+    grossProfit: grossProfit(p),
+    operatingProfit: operatingProfit(p),
+    netProfit: netProfit(p),
+  };
 }
 
 export function firmPnLToday(state: GameState, firmId: FirmId): FirmPnL {
-  const firm = state.firms[firmId];
-  const p = firm ? firm.accounting.today : null;
-  if (!p) {
-    return {
-      revenue: 0, costOfGoodsSold: 0, wages: 0, maintenance: 0,
-      logisticsCost: 0, variableProductionCost: 0, grossProfit: 0, operatingProfit: 0,
-    };
-  }
-  return {
-    revenue: p.revenue,
-    costOfGoodsSold: p.costOfGoodsSold,
-    wages: p.wages,
-    maintenance: p.maintenance,
-    logisticsCost: p.logisticsCost,
-    variableProductionCost: p.variableProductionCost,
-    grossProfit: grossProfit(p),
-    operatingProfit: operatingProfit(p),
-  };
+  return toPnL(state.firms[firmId]?.accounting.today ?? null);
 }
 
 export function firmPnLLifetime(state: GameState, firmId: FirmId): FirmPnL {
-  const firm = state.firms[firmId];
-  const p = firm ? firm.accounting.lifetime : null;
-  if (!p) {
-    return {
-      revenue: 0, costOfGoodsSold: 0, wages: 0, maintenance: 0,
-      logisticsCost: 0, variableProductionCost: 0, grossProfit: 0, operatingProfit: 0,
-    };
-  }
-  return {
-    revenue: p.revenue,
-    costOfGoodsSold: p.costOfGoodsSold,
-    wages: p.wages,
-    maintenance: p.maintenance,
-    logisticsCost: p.logisticsCost,
-    variableProductionCost: p.variableProductionCost,
-    grossProfit: grossProfit(p),
-    operatingProfit: operatingProfit(p),
-  };
+  return toPnL(state.firms[firmId]?.accounting.lifetime ?? null);
 }
 
 /** Human-readable warnings for a firm (cash, distress, bottlenecks). */

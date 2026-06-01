@@ -181,6 +181,21 @@ selling steadily            → drift toward base price
 clamped to [floor, ceil] × basePrice
 ```
 
+**Strategic depth — the three Capitalism-Lab axes** (you win on more than price):
+
+- **Brand / Advertising** (`MarketingSystem.ts`): a daily ad budget builds brand
+  (diminishing returns, ~3%/day decay). Brand adds a 12% term to the store score
+  *and* raises willingness-to-pay (`price cap × (1 + brand/250 + (quality−50)/300)`).
+- **Quality / R&D** (`INVEST_RND` command): cash buys quality points (diminishing
+  toward 100); production stamps the firm's quality onto its goods, feeding the
+  quality term in demand + willingness-to-pay.
+- **Finance / Loans** (`FinanceSystem.ts`, `TAKE_LOAN`/`REPAY_LOAN`): borrow up to
+  1.5× net worth; daily interest is a real cost; `net profit = operating − interest`.
+  Heavy debt deepens insolvency — leverage is genuine risk/reward.
+
+The AI uses all three (advertises, invests in quality when flush, borrows to
+**open new outlets** where demand is unmet), so the world grows on its own.
+
 ---
 
 ## Extending the simulation
@@ -257,16 +272,18 @@ income, etc. Config is part of saved state.
   archetype per chain.
 - Labor market is "instant hire from the unemployed"; no wage-driven poaching
   yet (the architecture leaves room for it).
-- Quality, brand, and advertising fields exist but have light gameplay effect in
-  v1.
-- The default economy can drift over very long runs (a monopoly under tight
-  supply will raise prices); adding competition (you!) is the intended remedy.
-- No banking/finance/taxes/R&D yet (see roadmap).
+- One city; product catalog is grain/bread/minerals/tools.
+- AI expansion currently opens retail outlets only (capped); it doesn't yet add
+  upstream capacity or new product lines.
 
 ## Roadmap
 
-More products & chains · multiple cities · more AI firms & strategies · banks,
-loans, interest · stock market / IPOs · taxes & subsidies · inflation · R&D,
-quality & brand investment · advertising · imports/exports & trade · land values
-& rent · a scenario editor & mod support · LLM-driven strategic agents (the
-command API is designed for this).
+More products & chains · multiple cities & inter-city trade · stock market /
+IPOs & company valuation · taxes & subsidies · inflation & macro policy · deeper
+AI (upstream expansion, M&A) · imports/exports · land values & rent · a scenario
+editor & mod support · LLM-driven strategic agents (the command API is designed
+for this).
+
+Already in (the Capitalism-Lab core loops): real supply chains, retail demand &
+pricing, **brand/advertising**, **quality/R&D**, **corporate finance/loans**,
+competing AI that expands, financial statements, bankruptcy, save/load.

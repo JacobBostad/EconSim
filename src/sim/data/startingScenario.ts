@@ -104,6 +104,11 @@ function newFirm(
     daysInsolvent: 0,
     marketShareByProduct: {},
     createdAtTick: 0,
+    brandByProduct: {},
+    adBudgetByProduct: {},
+    qualityByProduct: {},
+    debt: 0,
+    interestRatePerDay: 0.0009,
   };
   b.state.firms[id] = firm;
   return firm;
@@ -287,6 +292,9 @@ export function createInitialState(
     DEFAULT_AI_WAGE,
   );
   aiFoods.pricesByProduct.bread = getProduct('bread').basePrice;
+  aiFoods.brandByProduct.bread = 22;
+  aiFoods.qualityByProduct.bread = getProduct('bread').defaultQuality;
+  aiFoods.adBudgetByProduct.bread = dollars(20);
 
   const farm = newFacility(b, 'farm', aiFoods.id, { x: 26, y: 16 }, {
     name: 'Sunrise Farm',
@@ -331,6 +339,9 @@ export function createInitialState(
     DEFAULT_AI_WAGE,
   );
   aiInd.pricesByProduct.tools = getProduct('tools').basePrice;
+  aiInd.brandByProduct.tools = 22;
+  aiInd.qualityByProduct.tools = getProduct('tools').defaultQuality;
+  aiInd.adBudgetByProduct.tools = dollars(14);
 
   const mine = newFacility(b, 'mine', aiInd.id, { x: 104, y: 16 }, {
     name: 'Granite Mine',

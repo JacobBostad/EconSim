@@ -207,10 +207,22 @@ function applyToLedger(
     case 'variableCost':
       period.variableProductionCost += amount;
       break;
+    case 'marketing':
+      period.marketing += amount;
+      break;
+    case 'rnd':
+      period.rnd += amount;
+      break;
+    case 'interest':
+      period.interest += amount;
+      break;
     case 'buildSpend':
       period.buildSpend += amount;
       break;
+    case 'loanDraw':
+    case 'loanRepay':
     case 'none':
+      // Loan principal movements are balance-sheet, not P&L.
       break;
   }
 }

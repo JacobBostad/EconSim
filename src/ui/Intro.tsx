@@ -29,16 +29,17 @@ export function Intro(): React.ReactElement | null {
           </div>
           <div>
             <h4>Run your company</h4>
-            <p>You start with <strong>$15,000</strong>. Use <strong>Build</strong>
-              (left) to place a Farm, Factory and Store, then in each building's
-              inspector pick recipes, set a price, hire workers, and wire
-              <strong> supply contracts</strong>. Undercut the AI to win customers.</p>
+            <p>Start with <strong>$15,000</strong>. <strong>Build</strong> a Farm →
+              Factory → Store, pick recipes, set prices, hire workers, and wire
+              <strong> supply contracts</strong>. Compete on price, location and more.</p>
           </div>
           <div>
-            <h4>Controls</h4>
-            <p>Top-left: play/pause and speed (1× / 5× / 20× / 100×). The world
-              <strong> auto-saves</strong> and resumes when you return. Hit
-              <strong> New</strong> for a fresh random town.</p>
+            <h4>Compete on three levers</h4>
+            <p><strong>Brand</strong> — advertise to make customers pay more &amp;
+              choose you. <strong>Quality</strong> — invest in R&amp;D for better
+              goods. <strong>Finance</strong> — borrow to expand, repay before
+              interest bites. (All on a store's inspector.) The AI uses these too —
+              and will open new outlets where demand is unmet.</p>
           </div>
         </div>
 

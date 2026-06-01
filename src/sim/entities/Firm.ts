@@ -51,4 +51,16 @@ export interface Firm {
   daysInsolvent: number;
   marketShareByProduct: Record<ProductId, number>;
   createdAtTick: number;
+
+  // --- Strategic levers (the three Capitalism-Lab axes) ----------------
+  /** Brand strength per product (0..100). Raised by advertising, decays. */
+  brandByProduct: Record<ProductId, number>;
+  /** Daily advertising budget (cents) per product. */
+  adBudgetByProduct: Record<ProductId, number>;
+  /** Quality (0..100) of the goods this firm produces, raised by R&D. */
+  qualityByProduct: Record<ProductId, number>;
+  /** Outstanding loan principal in cents. */
+  debt: number;
+  /** Daily interest rate on debt (e.g. 0.0008 ≈ ~30%/yr). */
+  interestRatePerDay: number;
 }

@@ -13,6 +13,9 @@ export interface AccountingPeriod {
   maintenance: number;
   logisticsCost: number;
   variableProductionCost: number;
+  marketing: number;
+  rnd: number;
+  interest: number;
   buildSpend: number;
 }
 
@@ -24,6 +27,9 @@ export function emptyPeriod(): AccountingPeriod {
     maintenance: 0,
     logisticsCost: 0,
     variableProductionCost: 0,
+    marketing: 0,
+    rnd: 0,
+    interest: 0,
     buildSpend: 0,
   };
 }
@@ -36,9 +42,14 @@ export interface DailySnapshot {
   maintenance: number;
   logisticsCost: number;
   variableProductionCost: number;
+  marketing: number;
+  rnd: number;
+  interest: number;
   grossProfit: number;
   operatingProfit: number;
+  netProfit: number;
   cash: number;
+  debt: number;
   inventoryValue: number;
 }
 
@@ -73,6 +84,13 @@ export function operatingProfit(p: AccountingPeriod): number {
     p.wages -
     p.maintenance -
     p.logisticsCost -
-    p.variableProductionCost
+    p.variableProductionCost -
+    p.marketing -
+    p.rnd
   );
+}
+
+/** Net profit = operating profit minus interest expense (finance cost). */
+export function netProfit(p: AccountingPeriod): number {
+  return operatingProfit(p) - p.interest;
 }

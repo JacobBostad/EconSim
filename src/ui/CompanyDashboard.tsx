@@ -26,12 +26,25 @@ export function CompanyDashboard(): React.ReactElement {
     <div>
       <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
         <Card label="Cash" value={formatMoney(firm.cash)} color={firm.cash < 0 ? 'var(--red)' : 'var(--green)'} />
+        <Card label="Debt" value={formatMoney(firm.debt)} color={firm.debt > 0 ? 'var(--amber)' : undefined} />
         <Card label="Inventory value" value={formatMoney(firmInventoryValue(state, firm.id))} />
-        <Card label="Operating profit (today)" value={formatMoney(today.operatingProfit)} color={today.operatingProfit < 0 ? 'var(--red)' : 'var(--green)'} />
+        <Card label="Net profit (today)" value={formatMoney(today.netProfit)} color={today.netProfit < 0 ? 'var(--red)' : 'var(--green)'} />
         <Card label="Operating profit (life)" value={formatMoney(life.operatingProfit)} color={life.operatingProfit < 0 ? 'var(--red)' : 'var(--green)'} />
         <Card label="Facilities" value={String(facilities.length)} />
         <Card label="Employees" value={String(firmEmployees(state, firm.id).length)} />
       </div>
+
+      {Object.keys(firm.brandByProduct).length + Object.keys(firm.qualityByProduct).length > 0 && (
+        <div className="row" style={{ gap: 8, flexWrap: 'wrap', marginTop: 6 }}>
+          {Array.from(new Set([...Object.keys(firm.brandByProduct), ...Object.keys(firm.qualityByProduct)])).map((pid) => (
+            <div className="card" key={pid} style={{ minWidth: 150, marginBottom: 0 }}>
+              <div className="muted small">{pid}</div>
+              <div className="small">Brand <span className="mono">{(firm.brandByProduct[pid] ?? 0).toFixed(0)}</span> · Quality <span className="mono">{(firm.qualityByProduct[pid] ?? 0).toFixed(0)}</span></div>
+              <div className="small muted">Ad/day {formatMoney(firm.adBudgetByProduct[pid] ?? 0)}</div>
+            </div>
+          ))}
+        </div>
+      )}
 
       {firmWarnings(state, firm.id).length > 0 && (
         <div className="card" style={{ borderColor: 'var(--amber)' }}>
@@ -58,8 +71,9 @@ export function CompanyDashboard(): React.ReactElement {
       </table>
 
       <h3>Daily History (last {history.length} days)</h3>
+      <div className="scroll">
       <table>
-        <thead><tr><th>Day</th><th>Revenue</th><th>COGS</th><th>Wages</th><th>Maint</th><th>Logistics</th><th>Var</th><th>Gross</th><th>Operating</th><th>Cash</th></tr></thead>
+        <thead><tr><th>Day</th><th>Revenue</th><th>COGS</th><th>Wages</th><th>Maint</th><th>Log</th><th>Var</th><th>Mktg</th><th>R&amp;D</th><th>Int</th><th>Operating</th><th>Net</th><th>Cash</th><th>Debt</th></tr></thead>
         <tbody>
           {history.map((d) => (
             <tr key={d.day}>
@@ -70,14 +84,19 @@ export function CompanyDashboard(): React.ReactElement {
               <td className="mono">{formatMoney(d.maintenance)}</td>
               <td className="mono">{formatMoney(d.logisticsCost)}</td>
               <td className="mono">{formatMoney(d.variableProductionCost)}</td>
-              <td className="mono">{formatMoney(d.grossProfit)}</td>
+              <td className="mono">{formatMoney(d.marketing)}</td>
+              <td className="mono">{formatMoney(d.rnd)}</td>
+              <td className="mono">{formatMoney(d.interest)}</td>
               <td className="mono" style={{ color: d.operatingProfit < 0 ? 'var(--red)' : 'var(--green)' }}>{formatMoney(d.operatingProfit)}</td>
+              <td className="mono" style={{ color: d.netProfit < 0 ? 'var(--red)' : 'var(--green)' }}>{formatMoney(d.netProfit)}</td>
               <td className="mono">{formatMoney(d.cash)}</td>
+              <td className="mono">{formatMoney(d.debt)}</td>
             </tr>
           ))}
-          {history.length === 0 && <tr><td colSpan={10} className="muted">History appears after the first full day.</td></tr>}
+          {history.length === 0 && <tr><td colSpan={14} className="muted">History appears after the first full day.</td></tr>}
         </tbody>
       </table>
+      </div>
     </div>
   );
 }

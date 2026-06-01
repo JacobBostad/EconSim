@@ -18,6 +18,7 @@ import {
   emptyPeriod,
   grossProfit,
   operatingProfit,
+  netProfit,
   type DailySnapshot,
 } from '../entities/Accounting';
 import { emptyFacilityDailyStats } from '../entities/Facility';
@@ -58,9 +59,14 @@ export function runAccountingSystem(ctx: SimContext): void {
       maintenance: today.maintenance,
       logisticsCost: today.logisticsCost,
       variableProductionCost: today.variableProductionCost,
+      marketing: today.marketing,
+      rnd: today.rnd,
+      interest: today.interest,
       grossProfit: grossProfit(today),
       operatingProfit: operatingProfit(today),
+      netProfit: netProfit(today),
       cash: firm.cash,
+      debt: firm.debt,
       inventoryValue: computeInventoryValue(ctx, firm.facilities),
     };
     firm.accounting.dailyHistory.push(snapshot);
@@ -116,9 +122,14 @@ function aggregateWeek(firm: import('../entities/Firm').Firm): void {
     maintenance: 0,
     logisticsCost: 0,
     variableProductionCost: 0,
+    marketing: 0,
+    rnd: 0,
+    interest: 0,
     grossProfit: 0,
     operatingProfit: 0,
+    netProfit: 0,
     cash: firm.cash,
+    debt: firm.debt,
     inventoryValue: recent[recent.length - 1]!.inventoryValue,
   };
   for (const d of recent) {
@@ -128,8 +139,12 @@ function aggregateWeek(firm: import('../entities/Firm').Firm): void {
     acc.maintenance += d.maintenance;
     acc.logisticsCost += d.logisticsCost;
     acc.variableProductionCost += d.variableProductionCost;
+    acc.marketing += d.marketing;
+    acc.rnd += d.rnd;
+    acc.interest += d.interest;
     acc.grossProfit += d.grossProfit;
     acc.operatingProfit += d.operatingProfit;
+    acc.netProfit += d.netProfit;
   }
   firm.accounting.weeklyHistory.push(acc);
   trim(firm.accounting.weeklyHistory, 60);

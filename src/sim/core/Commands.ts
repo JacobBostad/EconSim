@@ -62,6 +62,10 @@ export type Command =
       productId: ProductId;
       quantity: number;
     }
+  | { type: 'SET_AD_BUDGET'; firmId: FirmId; productId: ProductId; dailyBudget: number }
+  | { type: 'INVEST_RND'; firmId: FirmId; productId: ProductId; amount: number }
+  | { type: 'TAKE_LOAN'; firmId: FirmId; amount: number }
+  | { type: 'REPAY_LOAN'; firmId: FirmId; amount: number }
   | { type: 'SELECT_ENTITY'; entityId: EntityId | null };
 
 export type CommandType = Command['type'];
