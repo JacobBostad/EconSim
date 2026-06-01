@@ -123,25 +123,42 @@ export class TownRenderer {
   }
   private dpr = 1;
 
-  // --- camera -----------------------------------------------------------
-  private baseScale(s: GameState): number {
-    const margin = 40;
-    return Math.min((this.cssW - margin) / s.config.mapWidth, (this.cssH - margin) / s.config.mapHeight);
-  }
-  private effScale(s: GameState): number { return this.baseScale(s) * this.zoom; }
+  // --- camera (auto-fits to the town's bounding box) --------------------
+  private view = { scale: 1, cx: 65, cy: 46, minX: 0, minY: 0, maxX: 1, maxY: 1 };
 
-  private w2s(s: GameState, p: Vec): Vec {
-    const sc = this.effScale(s);
+  private updateView(s: GameState): void {
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const id in s.facilities) {
+      const f = s.facilities[id]!;
+      if (f.location.x < minX) minX = f.location.x;
+      if (f.location.y < minY) minY = f.location.y;
+      if (f.location.x > maxX) maxX = f.location.x;
+      if (f.location.y > maxY) maxY = f.location.y;
+    }
+    if (!isFinite(minX)) { minX = 0; minY = 0; maxX = s.config.mapWidth; maxY = s.config.mapHeight; }
+    const padW = 14, padH = 12;
+    minX -= padW; maxX += padW; minY -= padH; maxY += padH;
+    const w = Math.max(1, maxX - minX), h = Math.max(1, maxY - minY);
+    const margin = 24;
+    this.view.scale = Math.min((this.cssW - margin) / w, (this.cssH - margin) / h);
+    this.view.cx = (minX + maxX) / 2;
+    this.view.cy = (minY + maxY) / 2;
+    this.view.minX = minX; this.view.minY = minY; this.view.maxX = maxX; this.view.maxY = maxY;
+  }
+
+  private effScale(): number { return this.view.scale * this.zoom; }
+  private w2s(_s: GameState, p: Vec): Vec {
+    const sc = this.effScale();
     return {
-      x: this.cssW / 2 + this.panX + (p.x - s.config.mapWidth / 2) * sc,
-      y: this.cssH / 2 + this.panY + (p.y - s.config.mapHeight / 2) * sc,
+      x: this.cssW / 2 + this.panX + (p.x - this.view.cx) * sc,
+      y: this.cssH / 2 + this.panY + (p.y - this.view.cy) * sc,
     };
   }
-  private s2w(s: GameState, p: Vec): Vec {
-    const sc = this.effScale(s);
+  private s2w(_s: GameState, p: Vec): Vec {
+    const sc = this.effScale();
     return {
-      x: s.config.mapWidth / 2 + (p.x - this.cssW / 2 - this.panX) / sc,
-      y: s.config.mapHeight / 2 + (p.y - this.cssH / 2 - this.panY) / sc,
+      x: this.view.cx + (p.x - this.cssW / 2 - this.panX) / sc,
+      y: this.view.cy + (p.y - this.cssH / 2 - this.panY) / sc,
     };
   }
 
@@ -169,6 +186,7 @@ export class TownRenderer {
   private onWheel = (e: WheelEvent): void => {
     e.preventDefault();
     const s = this.getState();
+    this.updateView(s);
     const m = this.localMouse(e);
     const before = this.s2w(s, m);
     const factor = e.deltaY < 0 ? 1.12 : 1 / 1.12;
@@ -212,6 +230,7 @@ export class TownRenderer {
   }
 
   private pick(s: GameState, m: Vec): string | null {
+    this.updateView(s);
     const best = { id: null as string | null, d: Infinity };
     const consider = (id: string, p: Vec, r: number) => {
       const sp = this.w2s(s, p);
@@ -268,11 +287,12 @@ export class TownRenderer {
     const ctx = this.ctx;
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     if (this.autoFit) { this.panX = 0; this.panY = 0; }
+    this.updateView(s);
 
     const time = computeTime(s.tick, s.config);
     this.drawGround(s, time.hour);
     this.drawRoads(s);
-    this.drawFacilities(s);
+    this.drawFacilities(s, time.hour);
     this.drawShipments(s, dt);
     this.drawCitizens(s, dt);
     this.updateFloaters(s, dt);
@@ -283,58 +303,121 @@ export class TownRenderer {
   }
 
   // --- layers -----------------------------------------------------------
+  private decor: { x: number; y: number; r: number }[] = [];
+  private decorKey = '';
+
+  private buildDecor(s: GameState): void {
+    const key = `${Math.round(this.view.minX)},${Math.round(this.view.maxX)},${Object.keys(s.facilities).length}`;
+    if (key === this.decorKey) return;
+    this.decorKey = key;
+    // deterministic scatter (LCG) of trees/bushes in open ground
+    const trees: { x: number; y: number; r: number }[] = [];
+    let seed = 1337;
+    const rnd = () => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; };
+    const facs = Object.values(s.facilities);
+    for (let i = 0; i < 130; i++) {
+      const x = this.view.minX + rnd() * (this.view.maxX - this.view.minX);
+      const y = this.view.minY + rnd() * (this.view.maxY - this.view.minY);
+      let ok = true;
+      for (const f of facs) {
+        if (Math.abs(f.location.x - x) < 6 && Math.abs(f.location.y - y) < 6) { ok = false; break; }
+      }
+      if (ok) trees.push({ x, y, r: 0.9 + rnd() * 1.1 });
+    }
+    this.decor = trees;
+  }
+
   private drawGround(s: GameState, _hour: number): void {
     const ctx = this.ctx;
-    ctx.fillStyle = '#0b1622';
+    ctx.fillStyle = '#0a1119';
     ctx.fillRect(0, 0, this.cssW, this.cssH);
-    // grassy play area
-    const tl = this.w2s(s, { x: 0, y: 0 });
-    const br = this.w2s(s, { x: s.config.mapWidth, y: s.config.mapHeight });
+
+    const tl = this.w2s(s, { x: this.view.minX, y: this.view.minY });
+    const br = this.w2s(s, { x: this.view.maxX, y: this.view.maxY });
+    const gw = br.x - tl.x, gh = br.y - tl.y;
     const grad = ctx.createLinearGradient(0, tl.y, 0, br.y);
-    grad.addColorStop(0, '#16241c');
-    grad.addColorStop(1, '#12201b');
+    grad.addColorStop(0, '#1c2e22');
+    grad.addColorStop(1, '#15241d');
     ctx.fillStyle = grad;
-    ctx.fillRect(tl.x, tl.y, br.x - tl.x, br.y - tl.y);
-    // subtle field texture
-    ctx.strokeStyle = 'rgba(255,255,255,0.025)';
-    ctx.lineWidth = 1;
-    const step = 10;
-    for (let x = 0; x <= s.config.mapWidth; x += step) {
-      const a = this.w2s(s, { x, y: 0 }); const b = this.w2s(s, { x, y: s.config.mapHeight });
-      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+    this.roundRectPathRaw(ctx, tl.x, tl.y, gw, gh, 14); ctx.fill();
+
+    // zone tints (soft radial blobs)
+    const zone = (wx: number, wy: number, rad: number, color: string) => {
+      const c = this.w2s(s, { x: wx, y: wy });
+      const rr = rad * this.effScale();
+      const g = ctx.createRadialGradient(c.x, c.y, 0, c.x, c.y, rr);
+      g.addColorStop(0, color); g.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(c.x, c.y, rr, 0, Math.PI * 2); ctx.fill();
+    };
+    zone(40, 70, 36, 'rgba(70,120,80,0.18)');   // residential
+    zone(55, 22, 40, 'rgba(150,110,60,0.16)');  // industrial
+    zone(62, 46, 30, 'rgba(70,110,160,0.16)');  // commercial
+
+    // trees / bushes
+    this.buildDecor(s);
+    ctx.save();
+    ctx.beginPath(); this.roundRectPathRaw(ctx, tl.x, tl.y, gw, gh, 14); ctx.clip();
+    for (const t of this.decor) {
+      const p = this.w2s(s, t);
+      const rr = Math.max(1.5, t.r * this.effScale() * 0.5);
+      ctx.fillStyle = 'rgba(20,40,28,0.9)';
+      ctx.beginPath(); ctx.arc(p.x, p.y + rr * 0.4, rr, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#2f6b40';
+      ctx.beginPath(); ctx.arc(p.x, p.y, rr, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = 'rgba(120,200,140,0.35)';
+      ctx.beginPath(); ctx.arc(p.x - rr * 0.3, p.y - rr * 0.3, rr * 0.45, 0, Math.PI * 2); ctx.fill();
     }
-    for (let y = 0; y <= s.config.mapHeight; y += step) {
-      const a = this.w2s(s, { x: 0, y }); const b = this.w2s(s, { x: s.config.mapWidth, y });
-      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
-    }
+    ctx.restore();
+
+    // vignette for depth
+    const vg = ctx.createRadialGradient(
+      this.cssW / 2, this.cssH / 2, Math.min(this.cssW, this.cssH) * 0.3,
+      this.cssW / 2, this.cssH / 2, Math.max(this.cssW, this.cssH) * 0.75,
+    );
+    vg.addColorStop(0, 'rgba(0,0,0,0)');
+    vg.addColorStop(1, 'rgba(0,0,0,0.45)');
+    ctx.fillStyle = vg;
+    ctx.fillRect(0, 0, this.cssW, this.cssH);
   }
 
   private drawRoads(s: GameState): void {
     const ctx = this.ctx;
-    const hub = this.w2s(s, { x: s.config.mapWidth / 2, y: s.config.mapHeight / 2 });
-    const roadW = Math.max(3, this.effScale(s) * 1.6);
+    const sc = this.effScale();
+    const roadW = Math.max(3, sc * 2.2);
+    const { minX, minY, maxX, maxY } = this.view;
+    const insetX = (maxX - minX) * 0.08, insetY = (maxY - minY) * 0.08;
+    const x0 = minX + insetX, x1 = maxX - insetX, y0 = minY + insetY, y1 = maxY - insetY;
+    const hYs = [y0, (y0 + y1) / 2, y1];
+    const vXs = [x0, x0 + (x1 - x0) / 3, x0 + (2 * (x1 - x0)) / 3, x1];
+
+    const road = (ax: number, ay: number, bx: number, by: number) => {
+      const a = this.w2s(s, { x: ax, y: ay }), b = this.w2s(s, { x: bx, y: by });
+      ctx.lineCap = 'round';
+      ctx.strokeStyle = 'rgba(33,40,53,0.95)'; ctx.lineWidth = roadW;
+      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+      ctx.strokeStyle = 'rgba(150,160,180,0.30)'; ctx.lineWidth = Math.max(1, roadW * 0.1);
+      ctx.setLineDash([7, 9]); ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+      ctx.setLineDash([]);
+    };
+    // street grid
+    for (const y of hYs) road(x0, y, x1, y);
+    for (const x of vXs) road(x, y0, x, y1);
+
+    // driveways: connect each building to the nearest horizontal avenue
+    ctx.strokeStyle = 'rgba(33,40,53,0.9)'; ctx.lineWidth = Math.max(2, roadW * 0.6);
+    ctx.lineCap = 'round';
     for (const id in s.facilities) {
       const f = s.facilities[id]!;
-      const p = this.w2s(s, f.location);
-      ctx.strokeStyle = 'rgba(40,48,62,0.9)';
-      ctx.lineWidth = roadW;
-      ctx.lineCap = 'round';
-      ctx.beginPath(); ctx.moveTo(hub.x, hub.y); ctx.lineTo(p.x, p.y); ctx.stroke();
-      ctx.strokeStyle = 'rgba(120,130,150,0.25)';
-      ctx.lineWidth = Math.max(1, roadW * 0.12);
-      ctx.setLineDash([6, 8]);
-      ctx.beginPath(); ctx.moveTo(hub.x, hub.y); ctx.lineTo(p.x, p.y); ctx.stroke();
-      ctx.setLineDash([]);
+      let ny = hYs[0]!; for (const y of hYs) if (Math.abs(y - f.location.y) < Math.abs(ny - f.location.y)) ny = y;
+      const a = this.w2s(s, f.location), bpt = this.w2s(s, { x: f.location.x, y: ny });
+      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(bpt.x, bpt.y); ctx.stroke();
     }
-    // town square
-    ctx.fillStyle = 'rgba(60,70,90,0.5)';
-    ctx.beginPath(); ctx.arc(hub.x, hub.y, roadW * 1.4, 0, Math.PI * 2); ctx.fill();
   }
 
-  private drawFacilities(s: GameState): void {
+  private drawFacilities(s: GameState, hour: number): void {
     const ctx = this.ctx;
     const selected = this.cb.getSelectedId();
-    // homes first (background), then operating facilities
+    const night = Math.max(0, Math.cos(((hour - 13) / 24) * Math.PI * 2) * 0.5 + 0.5 - 0.35);
     const order = Object.keys(s.facilities).sort((a, b) =>
       (s.facilities[a]!.type === 'home' ? 0 : 1) - (s.facilities[b]!.type === 'home' ? 0 : 1));
     for (const id of order) {
@@ -342,29 +425,48 @@ export class TownRenderer {
       const p = this.drawPos(id, f.location);
       const sp = this.w2s(s, p);
       const isHome = f.type === 'home';
-      const size = isHome ? 9 : 17;
+      const size = isHome ? 10 : 18;
       const player = f.ownerFirmId === s.playerFirmId;
       const sel = id === selected || id === this.hoverId;
 
+      // drop shadow
+      ctx.save();
+      ctx.fillStyle = 'rgba(0,0,0,0.32)';
+      ctx.beginPath();
+      ctx.ellipse(sp.x, sp.y + size * 0.85, size * 0.95, size * 0.4, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+
       if (sel) {
-        ctx.beginPath(); ctx.arc(sp.x, sp.y, size + 9, 0, Math.PI * 2);
-        ctx.fillStyle = 'rgba(88,166,255,0.18)'; ctx.fill();
+        ctx.beginPath(); ctx.arc(sp.x, sp.y, size + 11, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(88,166,255,0.22)'; ctx.fill();
       }
       this.drawBuildingIcon(sp.x, sp.y, size, f.type, BUILDING_FILL[f.type], f.status === 'closed');
 
+      // lit windows at night (life after dark)
+      if (night > 0.05 && f.status !== 'closed') {
+        ctx.fillStyle = `rgba(255,214,120,${Math.min(0.9, night * 1.3)})`;
+        const u = size / 10;
+        const wins = isHome ? [[-3, 0]] : [[-5, 2], [0, 2], [5, 2]];
+        for (const [wx, wy] of wins) ctx.fillRect(sp.x + wx! * u - u, sp.y + wy! * u, u * 1.8, u * 1.8);
+      }
+
       if (player) {
         ctx.strokeStyle = '#f0c64c'; ctx.lineWidth = 2.5;
-        this.roundRectPath(sp.x - size, sp.y - size, size * 2, size * 2, 5); ctx.stroke();
+        this.roundRectPath(sp.x - size, sp.y - size, size * 2, size * 2, 6); ctx.stroke();
       }
       if (!isHome) {
-        // status dot
-        ctx.beginPath(); ctx.arc(sp.x + size - 2, sp.y - size + 2, 3.5, 0, Math.PI * 2);
+        ctx.beginPath(); ctx.arc(sp.x + size - 2, sp.y - size + 2, 3.8, 0, Math.PI * 2);
         ctx.fillStyle = this.statusColor(f.status); ctx.fill();
-        // label
-        ctx.fillStyle = 'rgba(230,237,243,0.92)';
+        ctx.strokeStyle = 'rgba(0,0,0,0.5)'; ctx.lineWidth = 1; ctx.stroke();
+        // label with readable backdrop
         ctx.font = '600 10px system-ui, sans-serif';
         ctx.textAlign = 'center'; ctx.textBaseline = 'top';
-        ctx.fillText(f.name, sp.x, sp.y + size + 3);
+        const tw = ctx.measureText(f.name).width;
+        ctx.fillStyle = 'rgba(8,12,18,0.6)';
+        this.roundRectPath(sp.x - tw / 2 - 4, sp.y + size + 2, tw + 8, 13, 3); ctx.fill();
+        ctx.fillStyle = '#eaf1f8';
+        ctx.fillText(f.name, sp.x, sp.y + size + 4);
       }
     }
   }
@@ -372,14 +474,19 @@ export class TownRenderer {
   private drawBuildingIcon(x: number, y: number, r: number, type: FacilityType, fill: string, closed: boolean): void {
     const ctx = this.ctx;
     ctx.globalAlpha = closed ? 0.45 : 1;
-    // base lot
-    ctx.fillStyle = fill;
-    this.roundRectPath(x - r, y - r, r * 2, r * 2, 5); ctx.fill();
-    ctx.strokeStyle = 'rgba(0,0,0,0.35)'; ctx.lineWidth = 1.5;
-    this.roundRectPath(x - r, y - r, r * 2, r * 2, 5); ctx.stroke();
+    // tile with top-light gradient + border + inner highlight
+    const g = ctx.createLinearGradient(0, y - r, 0, y + r);
+    g.addColorStop(0, this.lighten(fill, 0.22));
+    g.addColorStop(1, this.lighten(fill, -0.14));
+    ctx.fillStyle = g;
+    this.roundRectPath(x - r, y - r, r * 2, r * 2, 6); ctx.fill();
+    ctx.strokeStyle = 'rgba(0,0,0,0.4)'; ctx.lineWidth = 1.5;
+    this.roundRectPath(x - r, y - r, r * 2, r * 2, 6); ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,255,255,0.18)'; ctx.lineWidth = 1;
+    this.roundRectPath(x - r + 1.5, y - r + 1.5, r * 2 - 3, r * 2 - 3, 5); ctx.stroke();
 
-    ctx.fillStyle = 'rgba(0,0,0,0.55)';
-    ctx.strokeStyle = 'rgba(0,0,0,0.55)';
+    ctx.fillStyle = 'rgba(10,15,20,0.72)';
+    ctx.strokeStyle = 'rgba(10,15,20,0.72)';
     ctx.lineWidth = 2;
     const u = r / 10; // unit
     ctx.beginPath();
@@ -463,9 +570,16 @@ export class TownRenderer {
         this.trails.push({ x: sp.x, y: sp.y, life: 0.5 });
       }
       const sel = id === selected;
-      ctx.beginPath(); ctx.arc(sp.x, sp.y, sel ? 4.5 : 3, 0, Math.PI * 2);
-      ctx.fillStyle = ACTIVITY_COLOR[c.activity] ?? '#8b949e'; ctx.fill();
-      if (sel) { ctx.lineWidth = 1.5; ctx.strokeStyle = '#fff'; ctx.stroke(); }
+      const col = ACTIVITY_COLOR[c.activity] ?? '#8b949e';
+      const rad = sel ? 5 : 3.6;
+      if (c.movementState === 'moving') {
+        ctx.globalAlpha = 0.25; ctx.fillStyle = col;
+        ctx.beginPath(); ctx.arc(sp.x, sp.y, rad + 2.5, 0, Math.PI * 2); ctx.fill();
+        ctx.globalAlpha = 1;
+      }
+      ctx.beginPath(); ctx.arc(sp.x, sp.y, rad, 0, Math.PI * 2);
+      ctx.fillStyle = col; ctx.fill();
+      ctx.lineWidth = 1.2; ctx.strokeStyle = sel ? '#fff' : 'rgba(0,0,0,0.5)'; ctx.stroke();
     }
     // draw + decay trails
     for (let i = this.trails.length - 1; i >= 0; i--) {
@@ -544,27 +658,47 @@ export class TownRenderer {
 
   private drawHud(time: ReturnType<typeof computeTime>): void {
     const ctx = this.ctx;
-    // legend (bottom-left)
-    const lx = 12; let ly = this.cssH - 14 - LEGEND_BUILDINGS.length * 15;
-    ctx.fillStyle = 'rgba(13,17,23,0.72)';
-    this.roundRectPath(lx - 8, ly - 22, 132, LEGEND_BUILDINGS.length * 15 + 30, 6); ctx.fill();
-    ctx.font = '700 9px system-ui'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
-    ctx.fillStyle = '#8b949e';
-    ctx.fillText('LEGEND', lx, ly - 12);
+    const people: { c: string; label: string }[] = [
+      { c: ACTIVITY_COLOR.working, label: 'Working' },
+      { c: ACTIVITY_COLOR.shopping, label: 'Shopping' },
+      { c: ACTIVITY_COLOR['commuting-to-work'], label: 'Commuting' },
+      { c: ACTIVITY_COLOR.home, label: 'At home' },
+    ];
+    const rows = LEGEND_BUILDINGS.length + people.length + 2; // +2 headers
+    const panelH = rows * 14 + 14;
+    const panelW = 116;
+    const px = this.cssW - panelW - 12;
+    let y = this.cssH - panelH - 12 + 14;
+    ctx.fillStyle = 'rgba(13,17,23,0.78)';
+    this.roundRectPath(px - 8, y - 14, panelW, panelH, 7); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,0.06)'; ctx.lineWidth = 1;
+    this.roundRectPath(px - 8, y - 14, panelW, panelH, 7); ctx.stroke();
+    ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+
+    ctx.fillStyle = '#6e7681'; ctx.font = '700 9px system-ui';
+    ctx.fillText('BUILDINGS', px, y); y += 14;
     for (const item of LEGEND_BUILDINGS) {
       ctx.fillStyle = BUILDING_FILL[item.type];
-      this.roundRectPath(lx, ly - 5, 10, 10, 2); ctx.fill();
+      this.roundRectPath(px, y - 5, 10, 10, 2); ctx.fill();
       ctx.fillStyle = '#cdd9e5'; ctx.font = '10px system-ui';
-      ctx.fillText(item.label, lx + 16, ly);
-      ly += 15;
+      ctx.fillText(item.label, px + 16, y); y += 14;
     }
+    ctx.fillStyle = '#6e7681'; ctx.font = '700 9px system-ui';
+    ctx.fillText('PEOPLE', px, y); y += 14;
+    for (const item of people) {
+      ctx.fillStyle = item.c;
+      ctx.beginPath(); ctx.arc(px + 5, y, 5, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#cdd9e5'; ctx.font = '10px system-ui';
+      ctx.fillText(item.label, px + 16, y); y += 14;
+    }
+
     // clock (top-left)
-    ctx.fillStyle = 'rgba(13,17,23,0.72)';
-    this.roundRectPath(10, 10, 132, 26, 6); ctx.fill();
-    ctx.fillStyle = '#e6edf3'; ctx.font = '600 12px system-ui'; ctx.textBaseline = 'middle';
+    ctx.fillStyle = 'rgba(13,17,23,0.78)';
+    this.roundRectPath(10, 10, 140, 28, 7); ctx.fill();
+    ctx.fillStyle = '#e6edf3'; ctx.font = '600 13px system-ui'; ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
     const hh = String(time.hour).padStart(2, '0');
     const icon = time.hour >= 7 && time.hour < 19 ? '☀' : '☾';
-    ctx.fillText(`${icon}  Day ${time.day + 1} · ${hh}:00`, 18, 24);
+    ctx.fillText(`${icon}  Day ${time.day + 1} · ${hh}:00`, 20, 25);
   }
 
   private drawHover(s: GameState): void {
@@ -597,6 +731,12 @@ export class TownRenderer {
   }
 
   // --- helpers ----------------------------------------------------------
+  private lighten(hex: string, amt: number): string {
+    const h = hex.replace('#', '');
+    const r = parseInt(h.slice(0, 2), 16), g = parseInt(h.slice(2, 4), 16), b = parseInt(h.slice(4, 6), 16);
+    const adj = (c: number) => Math.max(0, Math.min(255, Math.round(c + amt * 255)));
+    return `rgb(${adj(r)},${adj(g)},${adj(b)})`;
+  }
   private productColor(pid: string): string {
     switch (pid) {
       case 'grain': return '#d9b25a';

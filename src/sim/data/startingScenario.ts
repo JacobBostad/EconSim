@@ -224,13 +224,13 @@ export function createInitialState(
   const world = newFirm(b, 'Municipality', 'world', 0, emptyStrategy('none'), 0);
   state.worldFirmId = world.id;
 
-  // --- Homes -------------------------------------------------------------
+  // --- Homes (residential neighbourhood, lower band) ---------------------
   const homeLocations: Vec2[] = [];
   const cols = 5;
   for (let i = 0; i < NUM_HOMES; i++) {
     const col = i % cols;
     const row = Math.floor(i / cols);
-    const loc: Vec2 = { x: 6 + col * 7, y: 8 + row * 12 };
+    const loc: Vec2 = { x: 16 + col * 11, y: 60 + row * 8 };
     homeLocations.push(loc);
     newFacility(b, 'home', world.id, loc, { name: `Home ${i + 1}` });
   }
@@ -270,7 +270,7 @@ export function createInitialState(
     emptyStrategy('none'),
     0,
   );
-  const importerFac = newFacility(b, 'importer', importer.id, { x: 92, y: 4 }, {
+  const importerFac = newFacility(b, 'importer', importer.id, { x: 120, y: 10 }, {
     name: 'Import Terminal',
   });
   // Importer holds a large buffer so contract-based sourcing always succeeds.
@@ -288,20 +288,20 @@ export function createInitialState(
   );
   aiFoods.pricesByProduct.bread = getProduct('bread').basePrice;
 
-  const farm = newFacility(b, 'farm', aiFoods.id, { x: 30, y: 4 }, {
+  const farm = newFacility(b, 'farm', aiFoods.id, { x: 26, y: 16 }, {
     name: 'Sunrise Farm',
     activeRecipeId: 'grow_grain',
   });
   stock(farm.outputInventory, 'grain', 60);
 
-  const bakery = newFacility(b, 'factory', aiFoods.id, { x: 45, y: 22 }, {
+  const bakery = newFacility(b, 'factory', aiFoods.id, { x: 48, y: 32 }, {
     name: 'Sunrise Bakery',
     activeRecipeId: 'bake_bread',
   });
   stock(bakery.inputInventory, 'grain', 30);
   stock(bakery.outputInventory, 'bread', 24);
 
-  const breadShop = newFacility(b, 'retail', aiFoods.id, { x: 38, y: 40 }, {
+  const breadShop = newFacility(b, 'retail', aiFoods.id, { x: 46, y: 48 }, {
     name: 'Sunrise Bread Shop',
     retailProductId: 'bread',
   });
@@ -332,20 +332,20 @@ export function createInitialState(
   );
   aiInd.pricesByProduct.tools = getProduct('tools').basePrice;
 
-  const mine = newFacility(b, 'mine', aiInd.id, { x: 78, y: 6 }, {
+  const mine = newFacility(b, 'mine', aiInd.id, { x: 104, y: 16 }, {
     name: 'Granite Mine',
     activeRecipeId: 'mine_minerals',
   });
   stock(mine.outputInventory, 'minerals', 50);
 
-  const toolFactory = newFacility(b, 'factory', aiInd.id, { x: 72, y: 24 }, {
+  const toolFactory = newFacility(b, 'factory', aiInd.id, { x: 86, y: 32 }, {
     name: 'Granite Tool Works',
     activeRecipeId: 'make_tools',
   });
   stock(toolFactory.inputInventory, 'minerals', 24);
   stock(toolFactory.outputInventory, 'tools', 12);
 
-  const toolShop = newFacility(b, 'retail', aiInd.id, { x: 62, y: 42 }, {
+  const toolShop = newFacility(b, 'retail', aiInd.id, { x: 78, y: 48 }, {
     name: 'Granite Hardware',
     retailProductId: 'tools',
   });

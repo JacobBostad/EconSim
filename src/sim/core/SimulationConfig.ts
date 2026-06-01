@@ -83,7 +83,7 @@ export const DEFAULT_CONFIG: SimulationConfig = {
 
   needUrgencyThreshold: 0.5,
   needUrgentThreshold: 1.1,
-  maxShoppingDistance: 80,
+  maxShoppingDistance: 95,
   storeScoreJitter: 0.06,
   shoppingCooldownTicks: 6, // ~3 in-game hours at default tick rate
 
@@ -99,6 +99,6 @@ export const DEFAULT_CONFIG: SimulationConfig = {
   maxTransactions: 4000,
   maxDailyHistory: 120,
 
-  mapWidth: 100,
-  mapHeight: 70,
+  mapWidth: 130,
+  mapHeight: 92,
 };

@@ -77,7 +77,8 @@ UI (React)  ──dispatch(Command)──▶  Simulation  ──mutates──▶
     /tests        Vitest specs (see "Tests")
   /store          useGameStore — the thin Zustand bridge + fixed-step driver loop
   /ui             React components (display + intent only)
-  /render         Canvas drawing (camera, map, facilities, citizens, vehicles)
+  /render         TownRenderer — self-contained animated canvas (zoned town,
+                  roads, buildings, citizens, trucks, day/night, $/goods popups)
   /utils          formatMoney, formatTime, math, clamp
 ```
 
