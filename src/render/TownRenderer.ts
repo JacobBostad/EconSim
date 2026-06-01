@@ -87,6 +87,8 @@ export class TownRenderer {
   private floaters: Floater[] = [];
   private prevStats = new Map<string, { revenue: number; received: number; produced: number }>();
   private lastFrame = performance.now();
+  private lastSeenTick = 0;
+  private lastSeenSeed = NaN;
 
   constructor(
     private canvas: HTMLCanvasElement,
@@ -252,6 +254,17 @@ export class TownRenderer {
 
   private render(dt: number): void {
     const s = this.getState();
+    // Detect a New game / Load (tick jumped back or seed changed) and clear the
+    // animation caches so entities don't slide in from stale positions.
+    if (s.seed !== this.lastSeenSeed || s.tick < this.lastSeenTick) {
+      this.smooth.clear();
+      this.prevStats.clear();
+      this.floaters.length = 0;
+      this.trails.length = 0;
+    }
+    this.lastSeenSeed = s.seed;
+    this.lastSeenTick = s.tick;
+
     const ctx = this.ctx;
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     if (this.autoFit) { this.panX = 0; this.panY = 0; }
