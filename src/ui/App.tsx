@@ -7,6 +7,7 @@ import { MapView } from './MapView';
 import { InspectorPanel } from './InspectorPanel';
 import { BottomBar } from './BottomBar';
 import { Dashboard } from './Dashboard';
+import { Intro } from './Intro';
 
 export function App(): React.ReactElement {
   // Subscribe to version so the whole tree re-renders as the sim advances.
@@ -32,6 +33,7 @@ export function App(): React.ReactElement {
       <div className="bottom panel">
         <BottomBar />
       </div>
+      <Intro />
     </div>
   );
 }

@@ -48,6 +48,8 @@ interface GameStore {
   version: number;
   buildDefId: FacilityDefId | null;
   dashboard: DashboardTab;
+  showIntro: boolean;
+  setShowIntro: (v: boolean) => void;
   /** Wall-clock ms at the last tick, exposed for render interpolation. */
   lastTickAt: number;
   tickIntervalMs: number;
@@ -93,6 +95,13 @@ export const useGameStore = create<GameStore>((set, get) => {
     version: 0,
     buildDefId: null,
     dashboard: 'none',
+    showIntro: (() => {
+      try { return localStorage.getItem('econsim.introSeen') !== '1'; } catch { return true; }
+    })(),
+    setShowIntro: (v) => {
+      if (!v) { try { localStorage.setItem('econsim.introSeen', '1'); } catch { /* ignore */ } }
+      set({ showIntro: v });
+    },
     lastTickAt: performance.now(),
     tickIntervalMs: 1000 / SPEED_TPS[1],
 
