@@ -1,13 +1,20 @@
 /**
  * useGameStore — the thin React<->engine bridge (Zustand).
  *
- * The store owns a single Simulation instance (NOT reactive) and drives it with
- * a fixed-step loop. React components read the live GameState and re-render when
- * `version` bumps (after each batch of ticks or command). All game mutations go
- * through the engine via `dispatch` — components never touch state directly.
+ * Owns a single Simulation instance (NOT reactive) and drives it with a
+ * real-time, fixed-step accumulator loop on requestAnimationFrame:
  *
- * UI-only state (build mode, active dashboard, hovered formula) also lives here
- * but is kept separate from the serializable GameState.
+ *   speed (1/5/20/100) -> a target ticks-per-second. Each animation frame we
+ *   accumulate elapsed real time and run the right number of ticks. This makes
+ *   playback smooth and watchable (citizens/trucks glide) instead of being tied
+ *   to frame rate.
+ *
+ * React components re-render off a throttled `version` bump (a few times/sec);
+ * the canvas town renderer reads live state every frame on its own loop, so the
+ * map is always smooth regardless of React.
+ *
+ * The world is persistent: it auto-saves to localStorage periodically and on
+ * unload, and auto-restores on boot.
  */
 
 import { create } from 'zustand';
@@ -19,7 +26,14 @@ import type { EntityId, FacilityDefId } from '../sim/core/Id';
 import { saveGame, loadGame, hasSave } from '../sim/persistence/saveLoad';
 
 const DEFAULT_SEED = 20260601;
-const FRAME_MS = 33; // ~30 fps driver
+
+/** Speed multiplier -> simulation ticks per real second. */
+const SPEED_TPS: Record<Speed, number> = { 0: 0, 1: 4, 5: 18, 20: 70, 100: 280 };
+/** Don't let a tab that was backgrounded spiral; cap catch-up per frame. */
+const MAX_TICKS_PER_FRAME = 360;
+/** How often to notify React (ms). The canvas updates independently at 60fps. */
+const REACT_REFRESH_MS = 140;
+const AUTOSAVE_MS = 4000;
 
 export type DashboardTab =
   | 'none'
@@ -32,41 +46,46 @@ export type DashboardTab =
 interface GameStore {
   sim: Simulation;
   version: number;
-  /** Build mode: when set, clicking the map places this facility. */
   buildDefId: FacilityDefId | null;
   dashboard: DashboardTab;
+  /** Wall-clock ms at the last tick, exposed for render interpolation. */
+  lastTickAt: number;
+  tickIntervalMs: number;
 
-  // derived getters
   getState: () => GameState;
-
-  // engine control
   dispatch: (command: Command) => void;
   tickOnce: () => void;
   setSpeed: (speed: Speed) => void;
   togglePause: () => void;
 
-  // persistence
   newGame: (seed?: number) => void;
   save: () => void;
   load: () => void;
   hasSave: () => boolean;
 
-  // selection + UI
   select: (id: EntityId | null) => void;
   setBuildDef: (defId: FacilityDefId | null) => void;
   setDashboard: (tab: DashboardTab) => void;
 
-  // internal loop
   _start: () => void;
 }
 
-let loopHandle: ReturnType<typeof setInterval> | null = null;
+function initialState(): GameState {
+  const loaded = loadGame();
+  if (loaded) return loaded;
+  return createInitialState(DEFAULT_SEED);
+}
 
 export const useGameStore = create<GameStore>((set, get) => {
-  const sim = new Simulation(createInitialState(DEFAULT_SEED));
+  const sim = new Simulation(initialState());
 
-  function bump(): void {
-    set((s) => ({ version: s.version + 1 }));
+  let lastReactBump = 0;
+  function bump(force = false): void {
+    const now = performance.now();
+    if (force || now - lastReactBump >= REACT_REFRESH_MS) {
+      lastReactBump = now;
+      set((s) => ({ version: s.version + 1 }));
+    }
   }
 
   return {
@@ -74,46 +93,50 @@ export const useGameStore = create<GameStore>((set, get) => {
     version: 0,
     buildDefId: null,
     dashboard: 'none',
+    lastTickAt: performance.now(),
+    tickIntervalMs: 1000 / SPEED_TPS[1],
 
     getState: () => get().sim.getState(),
 
     dispatch: (command) => {
       get().sim.dispatch(command);
-      bump();
+      bump(true);
     },
 
     tickOnce: () => {
       get().sim.tick();
-      bump();
+      set({ lastTickAt: performance.now() });
+      bump(true);
     },
 
     setSpeed: (speed) => {
       get().sim.dispatch({ type: 'SET_SPEED', speed });
-      bump();
+      set({ tickIntervalMs: speed ? 1000 / SPEED_TPS[speed] : 0 });
+      bump(true);
     },
 
     togglePause: () => {
       const s = get().sim.getState();
       get().sim.dispatch({ type: s.paused ? 'RESUME' : 'PAUSE' });
-      bump();
+      bump(true);
     },
 
-    newGame: (seed = DEFAULT_SEED) => {
+    newGame: (seed = Math.floor(Math.random() * 1_000_000)) => {
       get().sim.setState(createInitialState(seed));
       set({ buildDefId: null });
-      bump();
+      bump(true);
     },
 
     save: () => {
       saveGame(get().sim.getState());
-      bump();
+      bump(true);
     },
 
     load: () => {
       const loaded = loadGame();
       if (loaded) {
         get().sim.setState(loaded);
-        bump();
+        bump(true);
       }
     },
 
@@ -121,26 +144,48 @@ export const useGameStore = create<GameStore>((set, get) => {
 
     select: (id) => {
       get().sim.dispatch({ type: 'SELECT_ENTITY', entityId: id });
-      bump();
+      bump(true);
     },
 
     setBuildDef: (defId) => set({ buildDefId: defId }),
     setDashboard: (tab) => set({ dashboard: tab }),
 
     _start: () => {
-      if (loopHandle) return;
-      loopHandle = setInterval(() => {
-        const { sim } = get();
-        const state = sim.getState();
-        if (state.paused || state.speed === 0) return;
-        // speed = ticks per frame.
-        const n = state.speed;
-        for (let i = 0; i < n; i++) sim.tick();
-        bump();
-      }, FRAME_MS);
+      if (typeof window === 'undefined') return;
+      let last = performance.now();
+      let acc = 0;
+      let lastAutosave = performance.now();
+
+      const frame = (now: number): void => {
+        const dt = Math.min(250, now - last); // clamp big gaps (tab switches)
+        last = now;
+        const state = get().sim.getState();
+        const tps = state.paused ? 0 : SPEED_TPS[state.speed];
+
+        if (tps > 0) {
+          acc += (dt / 1000) * tps;
+          let steps = Math.floor(acc);
+          acc -= steps;
+          if (steps > MAX_TICKS_PER_FRAME) steps = MAX_TICKS_PER_FRAME;
+          if (steps > 0) {
+            const sim = get().sim;
+            for (let i = 0; i < steps; i++) sim.tick();
+            set({ lastTickAt: now });
+            bump();
+          }
+        }
+
+        if (now - lastAutosave >= AUTOSAVE_MS) {
+          lastAutosave = now;
+          saveGame(get().sim.getState());
+        }
+        requestAnimationFrame(frame);
+      };
+      requestAnimationFrame(frame);
+
+      window.addEventListener('beforeunload', () => saveGame(get().sim.getState()));
     },
   };
 });
 
-// Start the driver loop once (module singleton).
 useGameStore.getState()._start();

@@ -199,7 +199,7 @@ export function createInitialState(
     rngState: seedToState(seed),
     tick: 0,
     speed: 1,
-    paused: true,
+    paused: false, // the world starts alive; the player can pause anytime
     config: { ...config },
     citizens: {},
     firms: {},
