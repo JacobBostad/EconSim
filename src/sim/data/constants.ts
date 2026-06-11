@@ -45,3 +45,6 @@ export const RND_QUALITY_GAIN_PER_1000 = 9;
 export const LOAN_CREDIT_LIMIT_MULTIPLE = 1.5;
 /** Minimum credit line (cents) regardless of net worth. */
 export const LOAN_MIN_CREDIT = dollars(5000);
+
+/** Objective: grow company valuation to this to "win" (sandbox continues). */
+export const OBJECTIVE_VALUATION = dollars(50000);

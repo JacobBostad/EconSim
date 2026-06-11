@@ -3,8 +3,9 @@ import { useGameStore, type DashboardTab } from '../store/useGameStore';
 import { computeTime } from '../sim/core/Tick';
 import { formatTime } from '../utils/formatTime';
 import { formatMoney } from '../utils/formatMoney';
-import { getPlayerFirm } from '../sim/selectors/companySelectors';
+import { getPlayerFirm, companyValuation, playerRank } from '../sim/selectors/companySelectors';
 import { populationStats } from '../sim/selectors/citizenSelectors';
+import { formatMoneyShort } from '../utils/formatMoney';
 
 const TABS: { id: DashboardTab; label: string }[] = [
   { id: 'company', label: 'Company' },
@@ -24,6 +25,8 @@ export function TopBar(): React.ReactElement {
   const player = getPlayerFirm(state);
   const pop = populationStats(state);
   const health = Math.round((pop.averageSatisfaction + pop.employmentRate * 100) / 2);
+  const val = companyValuation(state, state.playerFirmId);
+  const rank = playerRank(state);
 
   return (
     <div className="topbar">
@@ -39,7 +42,17 @@ export function TopBar(): React.ReactElement {
         </span>
       </div>
       <div className="stat">
-        <span className="label">Economy Health</span>
+        <span className="label">Company Value</span>
+        <span className="value mono">{formatMoneyShort(val.valuation)}</span>
+      </div>
+      <div className="stat">
+        <span className="label">Rank</span>
+        <span className="value mono" style={{ color: rank.rank === 1 ? 'var(--green)' : undefined }}>
+          #{rank.rank}/{rank.total}
+        </span>
+      </div>
+      <div className="stat">
+        <span className="label">Economy</span>
         <span className="value mono">{health}% · {pop.employed}/{pop.total} jobs</span>
       </div>
 

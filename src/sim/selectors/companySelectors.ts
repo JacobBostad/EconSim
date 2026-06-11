@@ -98,6 +98,7 @@ export function firmWarnings(state: GameState, firmId: FirmId): string[] {
   if (!firm) return [];
   const warnings: string[] = [];
   if (firm.cash < 0) warnings.push(`Cash is negative (${firm.cash}¢).`);
+  if (firm.debt > 0) warnings.push(`Carrying ${firm.debt}¢ of debt.`);
   if (firm.bankruptcyStatus === 'distressed') warnings.push('Firm is distressed.');
   if (firm.bankruptcyStatus === 'insolvent') warnings.push('Firm is insolvent — facilities are closing.');
   for (const fac of firmFacilities(state, firmId)) {
@@ -106,4 +107,77 @@ export function firmWarnings(state: GameState, firmId: FirmId): string[] {
     }
   }
   return warnings;
+}
+
+export interface Valuation {
+  cash: number;
+  inventoryValue: number;
+  assetValue: number; // book value of built facilities
+  debt: number;
+  netWorth: number; // cash + inventory + assets − debt
+  /** Enterprise value: net worth plus an earnings multiple on recent net profit. */
+  valuation: number;
+}
+
+const EARNINGS_MULTIPLE = 30;
+
+/**
+ * Company valuation — net worth plus a P/E-style premium on recent daily net
+ * profit. Profitable, well-capitalised firms are worth more, so growing
+ * valuation (not just cash) is the scoreboard metric.
+ */
+export function companyValuation(state: GameState, firmId: FirmId): Valuation {
+  const firm = state.firms[firmId];
+  if (!firm) {
+    return { cash: 0, inventoryValue: 0, assetValue: 0, debt: 0, netWorth: 0, valuation: 0 };
+  }
+  const inventoryValue = firmInventoryValue(state, firmId);
+  let assetValue = 0;
+  for (const fac of firmFacilities(state, firmId)) {
+    if (fac.type === 'home' || fac.status === 'closed') continue;
+    assetValue += fac.buildCost;
+  }
+  const netWorth = firm.cash + inventoryValue + assetValue - firm.debt;
+  const recent = firm.accounting.dailyHistory.slice(-7);
+  const avgNet = recent.length
+    ? recent.reduce((s, d) => s + d.netProfit, 0) / recent.length
+    : 0;
+  const valuation = Math.round(netWorth + Math.max(0, avgNet) * EARNINGS_MULTIPLE);
+  return { cash: firm.cash, inventoryValue, assetValue, debt: firm.debt, netWorth, valuation };
+}
+
+export interface RankEntry {
+  firmId: FirmId;
+  name: string;
+  ownerType: Firm['ownerType'];
+  valuation: number;
+  netWorth: number;
+  isPlayer: boolean;
+}
+
+/** Competitive standings of all real (player + AI) firms by valuation. */
+export function rankings(state: GameState): RankEntry[] {
+  const entries: RankEntry[] = [];
+  for (const id in state.firms) {
+    const f = state.firms[id]!;
+    if (f.ownerType !== 'player' && f.ownerType !== 'ai') continue;
+    const v = companyValuation(state, id);
+    entries.push({
+      firmId: id,
+      name: f.name,
+      ownerType: f.ownerType,
+      valuation: v.valuation,
+      netWorth: v.netWorth,
+      isPlayer: id === state.playerFirmId,
+    });
+  }
+  entries.sort((a, b) => b.valuation - a.valuation);
+  return entries;
+}
+
+/** 1-based rank of the player firm by valuation. */
+export function playerRank(state: GameState): { rank: number; total: number } {
+  const r = rankings(state);
+  const idx = r.findIndex((e) => e.isPlayer);
+  return { rank: idx < 0 ? r.length : idx + 1, total: r.length };
 }

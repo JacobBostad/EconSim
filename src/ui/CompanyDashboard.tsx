@@ -8,8 +8,12 @@ import {
   firmPnLToday,
   firmPnLLifetime,
   firmWarnings,
+  companyValuation,
+  rankings,
 } from '../sim/selectors/companySelectors';
 import { formatMoney } from '../utils/formatMoney';
+import { OBJECTIVE_VALUATION } from '../sim/data/constants';
+import { clamp } from '../utils/clamp';
 
 export function CompanyDashboard(): React.ReactElement {
   const sim = useGameStore((s) => s.sim);
@@ -21,9 +25,42 @@ export function CompanyDashboard(): React.ReactElement {
   const life = firmPnLLifetime(state, firm.id);
   const facilities = firmFacilities(state, firm.id);
   const history = firm.accounting.dailyHistory.slice(-14);
+  const val = companyValuation(state, firm.id);
+  const standings = rankings(state);
+  const objPct = clamp((val.valuation / OBJECTIVE_VALUATION) * 100, 0, 100);
 
   return (
     <div>
+      <div className="card" style={{ marginBottom: 10 }}>
+        <div className="row between">
+          <strong>Objective — grow company value to {formatMoney(OBJECTIVE_VALUATION)}</strong>
+          <span className="mono">{formatMoney(val.valuation)} ({objPct.toFixed(0)}%)</span>
+        </div>
+        <div className="bar" style={{ margin: '6px 0' }}>
+          <span style={{ width: `${objPct}%`, background: objPct >= 100 ? 'var(--green)' : 'var(--accent)' }} />
+        </div>
+        <div className="row" style={{ gap: 16, flexWrap: 'wrap' }}>
+          <span className="small">Net worth <span className="mono">{formatMoney(val.netWorth)}</span></span>
+          <span className="small muted">cash {formatMoney(val.cash)} · inventory {formatMoney(val.inventoryValue)} · assets {formatMoney(val.assetValue)} · debt {formatMoney(val.debt)}</span>
+        </div>
+      </div>
+
+      <h3 style={{ marginTop: 0 }}>Standings (company value)</h3>
+      <table>
+        <thead><tr><th>#</th><th>Company</th><th>Type</th><th>Valuation</th><th>Net worth</th></tr></thead>
+        <tbody>
+          {standings.map((e, i) => (
+            <tr key={e.firmId} style={{ fontWeight: e.isPlayer ? 700 : 400, color: e.isPlayer ? 'var(--accent)' : undefined }}>
+              <td>{i + 1}{i === 0 ? ' 🏆' : ''}</td>
+              <td>{e.name}{e.isPlayer ? ' (you)' : ''}</td>
+              <td>{e.ownerType}</td>
+              <td className="mono">{formatMoney(e.valuation)}</td>
+              <td className="mono">{formatMoney(e.netWorth)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+
       <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
         <Card label="Cash" value={formatMoney(firm.cash)} color={firm.cash < 0 ? 'var(--red)' : 'var(--green)'} />
         <Card label="Debt" value={formatMoney(firm.debt)} color={firm.debt > 0 ? 'var(--amber)' : undefined} />
