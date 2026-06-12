@@ -1,12 +1,17 @@
 /**
  * migrations.ts — forward-migrate older saves to the current SAVE_VERSION.
  *
- * Each migration takes the raw parsed object at version N and returns version
- * N+1. Add a new entry whenever GameState's shape changes in a breaking way.
+ * Two layers:
+ *  1. Versioned migrations (registry below) for breaking shape changes.
+ *  2. `normalize` — a defensive pass that fills in any missing fields with
+ *     defaults. Because the live site autosaves continuously, players can hold
+ *     saves from any deploy; normalization keeps every old save loadable as
+ *     the entity model grows (brand/quality/debt/shares, new P&L lines, ...).
  */
 
 import { SAVE_VERSION } from '../core/GameState';
 import type { GameState } from '../core/GameState';
+import type { AccountingPeriod } from '../entities/Accounting';
 
 type Raw = Record<string, unknown>;
 
@@ -28,5 +33,58 @@ export function migrate(raw: Raw): GameState {
     }
     version += 1;
   }
-  return current as unknown as GameState;
+  return normalize(current as unknown as GameState);
+}
+
+function normPeriod(p: Partial<AccountingPeriod> | undefined): AccountingPeriod {
+  return {
+    revenue: p?.revenue ?? 0,
+    costOfGoodsSold: p?.costOfGoodsSold ?? 0,
+    wages: p?.wages ?? 0,
+    maintenance: p?.maintenance ?? 0,
+    logisticsCost: p?.logisticsCost ?? 0,
+    variableProductionCost: p?.variableProductionCost ?? 0,
+    marketing: p?.marketing ?? 0,
+    rnd: p?.rnd ?? 0,
+    interest: p?.interest ?? 0,
+    buildSpend: p?.buildSpend ?? 0,
+  };
+}
+
+/** Fill any missing fields introduced after the save was written. */
+function normalize(state: GameState): GameState {
+  for (const id in state.firms) {
+    const f = state.firms[id]!;
+    f.brandByProduct = f.brandByProduct ?? {};
+    f.adBudgetByProduct = f.adBudgetByProduct ?? {};
+    f.qualityByProduct = f.qualityByProduct ?? {};
+    f.debt = f.debt ?? 0;
+    f.interestRatePerDay = f.interestRatePerDay ?? 0.0009;
+    f.sharesHeld = f.sharesHeld ?? {};
+    f.accounting.lifetime = normPeriod(f.accounting.lifetime);
+    f.accounting.today = normPeriod(f.accounting.today);
+    f.accounting.dailyHistory = (f.accounting.dailyHistory ?? []).map((d) => ({
+      ...d,
+      marketing: d.marketing ?? 0,
+      rnd: d.rnd ?? 0,
+      interest: d.interest ?? 0,
+      netProfit: d.netProfit ?? d.operatingProfit ?? 0,
+      debt: d.debt ?? 0,
+    }));
+    f.accounting.weeklyHistory = (f.accounting.weeklyHistory ?? []).map((d) => ({
+      ...d,
+      marketing: d.marketing ?? 0,
+      rnd: d.rnd ?? 0,
+      interest: d.interest ?? 0,
+      netProfit: d.netProfit ?? d.operatingProfit ?? 0,
+      debt: d.debt ?? 0,
+    }));
+  }
+  for (const id in state.citizens) {
+    const c = state.citizens[id]!;
+    c.lastShopTick = c.lastShopTick ?? -1000;
+    c.missedPaydays = c.missedPaydays ?? 0;
+    c.storeReliability = c.storeReliability ?? {};
+  }
+  return state;
 }

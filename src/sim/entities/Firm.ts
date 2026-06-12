@@ -63,4 +63,6 @@ export interface Firm {
   debt: number;
   /** Daily interest rate on debt (e.g. 0.0008 ≈ ~30%/yr). */
   interestRatePerDay: number;
+  /** Equity stakes in other firms: targetFirmId -> percent (0..49). */
+  sharesHeld: Record<FirmId, number>;
 }

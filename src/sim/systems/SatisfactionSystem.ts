@@ -11,6 +11,9 @@ import type { SimContext } from '../core/GameState';
 import { isDayBoundary } from '../core/Tick';
 import { clamp } from '../../utils/clamp';
 
+/** Needs never accumulate beyond this urgency. */
+const URGENCY_CAP = 3;
+
 export function runSatisfactionSystem(ctx: SimContext): void {
   if (!isDayBoundary(ctx.state.tick, ctx.config)) return;
   const { state, config } = ctx;
@@ -19,7 +22,7 @@ export function runSatisfactionSystem(ctx: SimContext): void {
     const cit = state.citizens[cid]!;
     let unmetPressure = 0;
     for (const need of cit.needs) {
-      need.urgency += need.urgencyGrowthPerDay;
+      need.urgency = Math.min(URGENCY_CAP, need.urgency + need.urgencyGrowthPerDay);
       if (need.urgency > config.needUrgentThreshold) {
         unmetPressure += need.urgency - config.needUrgentThreshold;
       }

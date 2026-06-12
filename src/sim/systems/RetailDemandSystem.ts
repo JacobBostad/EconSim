@@ -148,10 +148,12 @@ function attemptPurchase(
   const premium = 1 + brand / 250 + (qual - 50) / 300;
   const maxPrice = product.basePrice * need.maxAffordablePriceMultiplier * premium;
 
+  const wantQty = need.preferredQuantity;
+
   if (!open || stock <= 0) {
     // Stockout / store closed -> lost sale.
-    store.dailyStats.lostSales += need.preferredQuantity;
-    stat.unmetDemand += need.preferredQuantity;
+    store.dailyStats.lostSales += wantQty;
+    stat.unmetDemand += wantQty;
     stat.stockoutCount += 1;
     cit.dailyStats.unmetNeeds += 1;
     cit.satisfaction = clamp(cit.satisfaction - 2, 0, 100);
@@ -160,16 +162,16 @@ function attemptPurchase(
 
   if (price > maxPrice) {
     // Too expensive -> walk away unsatisfied.
-    stat.unmetDemand += need.preferredQuantity;
+    stat.unmetDemand += wantQty;
     cit.dailyStats.unmetNeeds += 1;
     cit.satisfaction = clamp(cit.satisfaction - 1, 0, 100);
     return;
   }
 
   const affordableQty = Math.floor(cit.cash / price);
-  const qty = Math.min(need.preferredQuantity, affordableQty, stock);
+  const qty = Math.min(wantQty, affordableQty, stock);
   if (qty <= 0) {
-    stat.unmetDemand += need.preferredQuantity;
+    stat.unmetDemand += wantQty;
     cit.dailyStats.unmetNeeds += 1;
     cit.satisfaction = clamp(cit.satisfaction - 1, 0, 100);
     return;
@@ -213,8 +215,8 @@ function attemptPurchase(
   if (stat.lowestPrice === 0 || price < stat.lowestPrice) stat.lowestPrice = price;
   if (price > stat.highestPrice) stat.highestPrice = price;
 
-  if (qty < need.preferredQuantity) {
-    const short = need.preferredQuantity - qty;
+  if (qty < wantQty) {
+    const short = wantQty - qty;
     stat.unmetDemand += short;
     store.dailyStats.lostSales += short;
   }

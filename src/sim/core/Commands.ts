@@ -66,6 +66,8 @@ export type Command =
   | { type: 'INVEST_RND'; firmId: FirmId; productId: ProductId; amount: number }
   | { type: 'TAKE_LOAN'; firmId: FirmId; amount: number }
   | { type: 'REPAY_LOAN'; firmId: FirmId; amount: number }
+  | { type: 'BUY_SHARES'; firmId: FirmId; targetFirmId: FirmId; percent: number }
+  | { type: 'SELL_SHARES'; firmId: FirmId; targetFirmId: FirmId; percent: number }
   | { type: 'SELECT_ENTITY'; entityId: EntityId | null };
 
 export type CommandType = Command['type'];

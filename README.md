@@ -286,4 +286,8 @@ for this).
 
 Already in (the Capitalism-Lab core loops): real supply chains, retail demand &
 pricing, **brand/advertising**, **quality/R&D**, **corporate finance/loans**,
-competing AI that expands, financial statements, bankruptcy, save/load.
+a **stock market** (buy up to 49% of rivals; 30% of their daily profit is paid
+out as dividends pro-rata), **town growth** (high satisfaction + a tight labor
+market attracts immigrants; the municipality builds new homes — creating jobs
+literally grows your market), competing AI that expands, financial statements,
+company valuation & standings, bankruptcy, save/load with migrations.

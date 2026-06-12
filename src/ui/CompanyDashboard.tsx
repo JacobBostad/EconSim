@@ -18,6 +18,7 @@ import { clamp } from '../utils/clamp';
 export function CompanyDashboard(): React.ReactElement {
   const sim = useGameStore((s) => s.sim);
   const select = useGameStore((s) => s.select);
+  const dispatch = useGameStore((s) => s.dispatch);
   const state = sim.getState();
   const firm = getPlayerFirm(state);
   if (!firm) return <div>No player firm.</div>;
@@ -45,21 +46,41 @@ export function CompanyDashboard(): React.ReactElement {
         </div>
       </div>
 
-      <h3 style={{ marginTop: 0 }}>Standings (company value)</h3>
+      <h3 style={{ marginTop: 0 }}>Standings &amp; Stock Market</h3>
       <table>
-        <thead><tr><th>#</th><th>Company</th><th>Type</th><th>Valuation</th><th>Net worth</th></tr></thead>
+        <thead><tr><th>#</th><th>Company</th><th>Valuation</th><th>Price / 1%</th><th>You own</th><th>Trade</th></tr></thead>
         <tbody>
-          {standings.map((e, i) => (
-            <tr key={e.firmId} style={{ fontWeight: e.isPlayer ? 700 : 400, color: e.isPlayer ? 'var(--accent)' : undefined }}>
-              <td>{i + 1}{i === 0 ? ' 🏆' : ''}</td>
-              <td>{e.name}{e.isPlayer ? ' (you)' : ''}</td>
-              <td>{e.ownerType}</td>
-              <td className="mono">{formatMoney(e.valuation)}</td>
-              <td className="mono">{formatMoney(e.netWorth)}</td>
-            </tr>
-          ))}
+          {standings.map((e, i) => {
+            const pricePerPct = Math.max(1, Math.round(e.valuation / 100));
+            const owned = firm.sharesHeld[e.firmId] ?? 0;
+            return (
+              <tr key={e.firmId} style={{ fontWeight: e.isPlayer ? 700 : 400, color: e.isPlayer ? 'var(--accent)' : undefined }}>
+                <td>{i + 1}{i === 0 ? ' 🏆' : ''}</td>
+                <td>{e.name}{e.isPlayer ? ' (you)' : ''}</td>
+                <td className="mono">{formatMoney(e.valuation)}</td>
+                <td className="mono">{e.isPlayer ? '—' : formatMoney(pricePerPct)}</td>
+                <td className="mono">{e.isPlayer ? '—' : `${owned}%`}</td>
+                <td>
+                  {!e.isPlayer && (
+                    <span className="row" style={{ gap: 4, justifyContent: 'flex-end' }}>
+                      <button onClick={() => dispatch({ type: 'BUY_SHARES', firmId: firm.id, targetFirmId: e.firmId, percent: 5 })}>
+                        Buy 5%
+                      </button>
+                      <button disabled={owned <= 0} onClick={() => dispatch({ type: 'SELL_SHARES', firmId: firm.id, targetFirmId: e.firmId, percent: 5 })}>
+                        Sell 5%
+                      </button>
+                    </span>
+                  )}
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
+      <p className="muted small" style={{ marginTop: 4 }}>
+        Owning a rival's shares pays you their percentage of a 30% daily profit
+        distribution. Stakes are capped at 49% (no takeovers — yet).
+      </p>
 
       <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
         <Card label="Cash" value={formatMoney(firm.cash)} color={firm.cash < 0 ? 'var(--red)' : 'var(--green)'} />

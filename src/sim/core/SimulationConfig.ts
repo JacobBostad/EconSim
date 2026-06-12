@@ -79,7 +79,7 @@ export const DEFAULT_CONFIG: SimulationConfig = {
   storeCloseHour: 22,
 
   payrollIntervalDays: 1,
-  subsistenceIncomePerDay: 700, // $7.00/day
+  subsistenceIncomePerDay: 900, // $9.00/day
 
   needUrgencyThreshold: 0.5,
   needUrgentThreshold: 1.1,

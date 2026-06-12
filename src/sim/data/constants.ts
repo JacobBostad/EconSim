@@ -48,3 +48,24 @@ export const LOAN_MIN_CREDIT = dollars(5000);
 
 /** Objective: grow company valuation to this to "win" (sandbox continues). */
 export const OBJECTIVE_VALUATION = dollars(50000);
+
+// --- Stock market ----------------------------------------------------------
+/** Fraction of a firm's positive daily net profit distributed as dividends. */
+export const DIVIDEND_PAYOUT_RATIO = 0.3;
+/** Max stake one firm may hold in another (control/M&A is future work). */
+export const MAX_STAKE_PCT = 49;
+
+// --- Immigration / town growth ---------------------------------------------
+/** New citizens move in only while average satisfaction is at least this. */
+export const IMMIGRATION_MIN_SATISFACTION = 60;
+/**
+ * ...and the labor market is tight: unemployed ≤ max(floor, rate × population).
+ * People move toward opportunity — creating jobs is what grows the town.
+ */
+export const IMMIGRATION_MAX_UNEMPLOYED_FLOOR = 5;
+export const IMMIGRATION_MAX_UNEMPLOYED_RATE = 0.15;
+/** Hard caps so the town grows but stays lean. */
+export const MAX_HOMES = 40;
+export const MAX_CITIZENS = 80;
+/** Cash a new arrival brings (paid from the world account; conserved). */
+export const IMMIGRANT_START_CASH = dollars(400);

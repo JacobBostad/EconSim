@@ -14,7 +14,7 @@ import type { SimulationConfig } from '../core/SimulationConfig';
 import { DEFAULT_CONFIG } from '../core/SimulationConfig';
 import { Rng, seedToState } from '../core/Random';
 import { nextId, type IdCounters } from '../core/Id';
-import type { Citizen, CitizenNeed } from '../entities/Citizen';
+import type { Citizen } from '../entities/Citizen';
 import type { Firm, FirmOwnerType } from '../entities/Firm';
 import { emptyStrategy } from '../entities/Firm';
 import type { Facility } from '../entities/Facility';
@@ -24,6 +24,7 @@ import type { Vec2 } from '../entities/Location';
 import { emptyAccounting } from '../entities/Accounting';
 import { emptyMarketStat } from '../entities/Market';
 import { addStock, type Inventory } from '../entities/Inventory';
+import { makeCitizenNeeds } from '../entities/factories';
 import { getFacilityDef } from './facilityDefinitions';
 import { getProduct, CONSUMER_PRODUCT_IDS, ALL_PRODUCT_IDS } from './products';
 import { FIRST_NAMES, LAST_NAMES } from './names';
@@ -109,31 +110,13 @@ function newFirm(
     qualityByProduct: {},
     debt: 0,
     interestRatePerDay: 0.0009,
+    sharesHeld: {},
   };
   b.state.firms[id] = firm;
   return firm;
 }
 
-function makeNeeds(rng: Rng): CitizenNeed[] {
-  return [
-    {
-      productId: 'bread',
-      urgency: rng.range(0.2, 0.9),
-      urgencyGrowthPerDay: rng.range(0.4, 0.55),
-      preferredQuantity: 2,
-      maxAffordablePriceMultiplier: rng.range(1.4, 1.8),
-      lastSatisfiedTick: 0,
-    },
-    {
-      productId: 'tools',
-      urgency: rng.range(0, 0.4),
-      urgencyGrowthPerDay: rng.range(0.3, 0.45),
-      preferredQuantity: 1,
-      maxAffordablePriceMultiplier: rng.range(1.3, 1.6),
-      lastSatisfiedTick: 0,
-    },
-  ];
-}
+// Needs generation is shared with runtime immigration — see entities/factories.
 
 function newCitizen(b: Builder, homeId: string, homeLoc: Vec2): Citizen {
   const id = nextId(b.counters, 'cit');
@@ -150,7 +133,7 @@ function newCitizen(b: Builder, homeId: string, homeLoc: Vec2): Citizen {
     role: 'unemployed',
     wage: 0,
     cash: CITIZEN_START_CASH,
-    needs: makeNeeds(b.rng),
+    needs: makeCitizenNeeds(b.rng),
     preferences: prefs,
     currentLocation: { ...homeLoc },
     targetLocation: { ...homeLoc },
