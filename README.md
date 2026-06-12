@@ -156,10 +156,11 @@ status = input-starved | labor-starved | inventory-full | active
 availability = inStock ? 1 : 0
 price        = clamp(referencePrice / actualPrice, 0, 2) / 2
 distance     = 1 - clamp(dist / maxShoppingDistance, 0, 1)
-quality      = quality / 100
+quality      = stockQuality / 100
+brand        = firmBrand / 100
 reliability  = prior successful purchases (capped)
-score = 0.30*availability + 0.25*price + 0.20*distance + 0.15*quality + 0.10*reliability
-        (+ small seeded jitter)
+score = 0.28*availability + 0.22*price + 0.18*distance
+      + 0.14*quality + 0.12*brand + 0.06*reliability   (+ small seeded jitter)
 ```
 A purchase happens only if the store is open & stocked, the citizen can afford
 it, the need is above threshold, and the price is within their willingness to pay.
