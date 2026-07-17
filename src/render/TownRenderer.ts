@@ -298,8 +298,55 @@ export class TownRenderer {
     this.updateFloaters(s, dt);
     this.drawFloaters();
     this.drawNightTint(time.hour);
+    this.drawWorldEventAmbiance(s, dt);
     this.drawHud(time);
     this.drawHover(s);
+  }
+
+  // --- world-event ambiance ---------------------------------------------
+  /** Full-canvas color washes per active world event (drought = dry sepia,
+   * recession = gray, boom = golden…), plus drifting smog during fuel spikes.
+   * Purely cosmetic; reads the same state.worldEvents the ticker shows. */
+  private static readonly EVENT_TINTS: Record<string, string> = {
+    drought: 'rgba(190,130,40,0.10)',
+    bumper_harvest: 'rgba(70,190,90,0.06)',
+    recession: 'rgba(110,115,125,0.13)',
+    boom: 'rgba(255,205,90,0.07)',
+    fuel_spike: 'rgba(80,70,55,0.12)',
+    mine_collapse: 'rgba(130,105,80,0.10)',
+    rich_vein: 'rgba(90,220,220,0.05)',
+    tariffs: 'rgba(70,110,170,0.06)',
+  };
+
+  private smogT = 0;
+
+  private drawWorldEventAmbiance(s: GameState, dt: number): void {
+    if (s.worldEvents.length === 0) return;
+    const ctx = this.ctx;
+    let smog = false;
+    for (const ev of s.worldEvents) {
+      const tint = TownRenderer.EVENT_TINTS[ev.defId];
+      if (tint) {
+        ctx.fillStyle = tint;
+        ctx.fillRect(0, 0, this.cssW, this.cssH);
+      }
+      if (ev.defId === 'fuel_spike') smog = true;
+    }
+    if (smog) {
+      this.smogT += dt;
+      ctx.save();
+      for (let i = 0; i < 5; i++) {
+        const px = ((this.smogT * (8 + i * 3)) / 1000 + i * 137) % (this.cssW + 240) - 120;
+        const py = this.cssH * (0.12 + 0.17 * i) + Math.sin(this.smogT / 2600 + i * 2) * 12;
+        ctx.globalAlpha = 0.05 + 0.02 * Math.sin(this.smogT / 1900 + i);
+        ctx.fillStyle = '#8a8070';
+        ctx.beginPath();
+        ctx.ellipse(px, py, 90 + i * 18, 22 + i * 4, 0, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+      ctx.globalAlpha = 1;
+    }
   }
 
   // --- layers -----------------------------------------------------------
