@@ -51,6 +51,8 @@ export interface DailySnapshot {
   cash: number;
   debt: number;
   inventoryValue: number;
+  /** End-of-day company valuation (for the trend chart). */
+  valuation: number;
 }
 
 export interface Accounting {

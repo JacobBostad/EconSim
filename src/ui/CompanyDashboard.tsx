@@ -14,6 +14,7 @@ import {
 import { formatMoney } from '../utils/formatMoney';
 import { OBJECTIVE_VALUATION } from '../sim/data/constants';
 import { clamp } from '../utils/clamp';
+import { TrendCard } from './Sparkline';
 
 export function CompanyDashboard(): React.ReactElement {
   const sim = useGameStore((s) => s.sim);
@@ -26,6 +27,7 @@ export function CompanyDashboard(): React.ReactElement {
   const life = firmPnLLifetime(state, firm.id);
   const facilities = firmFacilities(state, firm.id);
   const history = firm.accounting.dailyHistory.slice(-14);
+  const trend = firm.accounting.dailyHistory.slice(-60);
   const val = companyValuation(state, firm.id);
   const standings = rankings(state);
   const objPct = clamp((val.valuation / OBJECTIVE_VALUATION) * 100, 0, 100);
@@ -45,6 +47,37 @@ export function CompanyDashboard(): React.ReactElement {
           <span className="small muted">cash {formatMoney(val.cash)} · inventory {formatMoney(val.inventoryValue)} · assets {formatMoney(val.assetValue)} · debt {formatMoney(val.debt)}</span>
         </div>
       </div>
+
+      {trend.length >= 2 && (
+        <div className="row" style={{ gap: 8, flexWrap: 'wrap', marginBottom: 10 }}>
+          <TrendCard
+            label="Company value"
+            latest={formatMoney(val.valuation)}
+            points={trend.map((d) => d.valuation)}
+            color="var(--accent)"
+          />
+          <TrendCard
+            label="Net profit / day"
+            latest={formatMoney(trend[trend.length - 1]!.netProfit)}
+            points={trend.map((d) => d.netProfit)}
+            color={trend[trend.length - 1]!.netProfit < 0 ? 'var(--red)' : 'var(--green)'}
+            showZeroLine
+          />
+          <TrendCard
+            label="Cash"
+            latest={formatMoney(firm.cash)}
+            points={trend.map((d) => d.cash)}
+            color={firm.cash < 0 ? 'var(--red)' : 'var(--green)'}
+            showZeroLine
+          />
+          <TrendCard
+            label="Revenue / day"
+            latest={formatMoney(trend[trend.length - 1]!.revenue)}
+            points={trend.map((d) => d.revenue)}
+            color="var(--amber)"
+          />
+        </div>
+      )}
 
       <h3 style={{ marginTop: 0 }}>Standings &amp; Stock Market</h3>
       <table>

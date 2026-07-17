@@ -71,6 +71,7 @@ function normalize(state: GameState): GameState {
       interest: d.interest ?? 0,
       netProfit: d.netProfit ?? d.operatingProfit ?? 0,
       debt: d.debt ?? 0,
+      valuation: d.valuation ?? (d.cash ?? 0) + (d.inventoryValue ?? 0) - (d.debt ?? 0),
     }));
     f.accounting.weeklyHistory = (f.accounting.weeklyHistory ?? []).map((d) => ({
       ...d,
@@ -79,7 +80,12 @@ function normalize(state: GameState): GameState {
       interest: d.interest ?? 0,
       netProfit: d.netProfit ?? d.operatingProfit ?? 0,
       debt: d.debt ?? 0,
+      valuation: d.valuation ?? (d.cash ?? 0) + (d.inventoryValue ?? 0) - (d.debt ?? 0),
     }));
+  }
+  for (const pid in state.marketStats) {
+    const stat = state.marketStats[pid]!;
+    stat.history = stat.history ?? [];
   }
   for (const id in state.citizens) {
     const c = state.citizens[id]!;

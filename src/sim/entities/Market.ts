@@ -8,6 +8,18 @@
 
 import type { ProductId, FirmId } from '../core/Id';
 
+/** One finalized day of a product's market, kept for trend charts. */
+export interface MarketDaySnapshot {
+  day: number;
+  /** Sales-weighted average price that day (cents; 0 = no sales). */
+  averagePrice: number;
+  unitsSold: number;
+  unmetDemand: number;
+  totalInventory: number;
+  /** firmId -> share of units sold that day. */
+  sharesByFirm: Record<FirmId, number>;
+}
+
 export interface MarketStat {
   productId: ProductId;
   /** Total purchase attempts today (whether or not fulfilled). */
@@ -28,6 +40,8 @@ export interface MarketStat {
   /** Accumulators reset each day; revenue is used to compute averagePrice. */
   revenueAccum: number;
   qualityAccum: number;
+  /** Per-day finalized history (bounded by config.maxDailyHistory). */
+  history: MarketDaySnapshot[];
 }
 
 export function emptyMarketStat(productId: ProductId): MarketStat {
@@ -47,5 +61,6 @@ export function emptyMarketStat(productId: ProductId): MarketStat {
     marketShareByFirm: {},
     revenueAccum: 0,
     qualityAccum: 0,
+    history: [],
   };
 }

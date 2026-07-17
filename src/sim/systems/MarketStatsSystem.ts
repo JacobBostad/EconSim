@@ -58,6 +58,19 @@ function finalizeAndReset(ctx: SimContext): void {
       if (firm) firm.marketShareByProduct[pid] = shares[fid]!;
     }
 
+    // Keep a bounded per-day history for trend charts.
+    stat.history.push({
+      day: ctx.time.day - 1,
+      averagePrice: stat.averagePrice,
+      unitsSold: stat.unitsSold,
+      unmetDemand: stat.unmetDemand,
+      totalInventory: stat.totalInventory,
+      sharesByFirm: { ...shares },
+    });
+    if (stat.history.length > state.config.maxDailyHistory) {
+      stat.history.splice(0, stat.history.length - state.config.maxDailyHistory);
+    }
+
     // Reset daily accumulators for the new day.
     stat.demandAttempts = 0;
     stat.fulfilledDemand = 0;

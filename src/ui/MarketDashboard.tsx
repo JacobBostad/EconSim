@@ -3,10 +3,14 @@ import { useGameStore } from '../store/useGameStore';
 import { marketRows } from '../sim/selectors/marketSelectors';
 import { formatMoney } from '../utils/formatMoney';
 import { FormulaTooltip } from './FormulaTooltip';
+import { TrendCard } from './Sparkline';
+import { CONSUMER_PRODUCT_IDS, getProduct } from '../sim/data/products';
 
 export function MarketDashboard(): React.ReactElement {
   const sim = useGameStore((s) => s.sim);
-  const rows = marketRows(sim.getState(), false);
+  const state = sim.getState();
+  const rows = marketRows(state, false);
+  const playerId = state.playerFirmId;
 
   return (
     <div>
@@ -41,6 +45,43 @@ export function MarketDashboard(): React.ReactElement {
           ))}
         </tbody>
       </table>
+
+      <h3>Trends (last 60 days)</h3>
+      <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
+        {CONSUMER_PRODUCT_IDS.map((pid) => {
+          const stat = state.marketStats[pid];
+          const hist = (stat?.history ?? []).slice(-60);
+          if (hist.length < 2) return null;
+          const name = getProduct(pid).name;
+          const lastPrice = hist[hist.length - 1]!.averagePrice;
+          const lastShare = hist[hist.length - 1]!.sharesByFirm[playerId] ?? 0;
+          return (
+            <React.Fragment key={pid}>
+              <TrendCard
+                label={`${name} — avg price`}
+                latest={lastPrice ? formatMoney(lastPrice) : '—'}
+                points={hist.map((h) => h.averagePrice)}
+                color="var(--amber)"
+              />
+              <TrendCard
+                label={`${name} — your share`}
+                latest={`${(lastShare * 100).toFixed(0)}%`}
+                points={hist.map((h) => (h.sharesByFirm[playerId] ?? 0) * 100)}
+                color="var(--accent)"
+              />
+              <TrendCard
+                label={`${name} — unmet demand`}
+                latest={String(hist[hist.length - 1]!.unmetDemand)}
+                points={hist.map((h) => h.unmetDemand)}
+                color="var(--red)"
+              />
+            </React.Fragment>
+          );
+        })}
+      </div>
+      {CONSUMER_PRODUCT_IDS.every((pid) => (state.marketStats[pid]?.history ?? []).length < 2) && (
+        <p className="muted small">Trend charts appear after a couple of in-game days.</p>
+      )}
     </div>
   );
 }

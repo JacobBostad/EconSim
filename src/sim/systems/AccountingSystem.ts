@@ -23,6 +23,7 @@ import {
 } from '../entities/Accounting';
 import { emptyFacilityDailyStats } from '../entities/Facility';
 import { getProduct } from '../data/products';
+import { companyValuation } from '../selectors/companySelectors';
 
 export function runAccountingSystem(ctx: SimContext): void {
   if (!isDayBoundary(ctx.state.tick, ctx.config)) return;
@@ -68,6 +69,7 @@ export function runAccountingSystem(ctx: SimContext): void {
       cash: firm.cash,
       debt: firm.debt,
       inventoryValue: computeInventoryValue(ctx, firm.facilities),
+      valuation: companyValuation(state, firm.id).valuation,
     };
     firm.accounting.dailyHistory.push(snapshot);
     trim(firm.accounting.dailyHistory, state.config.maxDailyHistory);
@@ -131,6 +133,7 @@ function aggregateWeek(firm: import('../entities/Firm').Firm): void {
     cash: firm.cash,
     debt: firm.debt,
     inventoryValue: recent[recent.length - 1]!.inventoryValue,
+    valuation: recent[recent.length - 1]!.valuation,
   };
   for (const d of recent) {
     acc.revenue += d.revenue;
