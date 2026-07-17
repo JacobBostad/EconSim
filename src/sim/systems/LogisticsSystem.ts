@@ -30,7 +30,7 @@ import {
   TRANSPORT_FLAT_COST,
 } from '../data/constants';
 import { worldImportMult, worldTransportMult } from '../data/worldEvents';
-import { seasonTransportMult } from '../data/seasons';
+import { seasonTransportMult, seasonOf } from '../data/seasons';
 
 export function runLogisticsSystem(ctx: SimContext): void {
   processArrivals(ctx);
@@ -84,13 +84,28 @@ function processReorders(ctx: SimContext): void {
     if (!source || !dest) continue;
 
     const destHave = getQuantity(dest.inputInventory, contract.productId);
-    if (destHave >= contract.reorderPoint) continue;
+
+    // AI firms brace for winter: in autumn/winter their supply lines run
+    // deeper (reorder sooner, hold more) so the 65%-output season doesn't
+    // starve their chains. Player contracts are untouched — stockpiling is
+    // the player's own call.
+    const owner = state.firms[contract.ownerFirmId];
+    const season = seasonOf(state);
+    const bracing =
+      owner?.ownerType === 'ai' && (season === 'autumn' || season === 'winter');
+    const reorderPoint = bracing
+      ? Math.round(contract.reorderPoint * 1.4)
+      : contract.reorderPoint;
+    const maxInventory = bracing
+      ? Math.round(contract.maxInventory * 1.3)
+      : contract.maxInventory;
+    if (destHave >= reorderPoint) continue;
 
     // How much to bring in.
     const room = dest.storageCapacity - totalUnits(dest.inputInventory);
     const want = Math.min(
       contract.targetQuantity,
-      contract.maxInventory - destHave,
+      maxInventory - destHave,
       room,
     );
     if (want <= 0) continue;

@@ -12,6 +12,8 @@
 import type { GameState } from '../core/GameState';
 import { companyValuation } from '../selectors/companySelectors';
 import { activeWorldEvents } from './worldEvents';
+import { seasonOf, seasonOfDay } from './seasons';
+import { ticksPerDay } from '../core/Tick';
 import { dollars } from './constants';
 
 export interface AchievementDef {
@@ -210,6 +212,23 @@ export const ACHIEVEMENT_DEFS: AchievementDef[] = [
       return activeWorldEvents(s).some(
         (ev) => ev.def.severity === 'warning' || ev.def.severity === 'danger',
       );
+    },
+  },
+  {
+    id: 'winter_proof',
+    name: 'Winter-Proof',
+    icon: '⛄',
+    description: 'Ran profitably through an entire winter.',
+    hint: 'Stockpile ahead and keep every winter day in the black.',
+    check: (s) => {
+      if (seasonOf(s) !== 'spring') return false;
+      const day = Math.floor(s.tick / ticksPerDay(s.config));
+      if (day < 120) return false; // needs a full first winter behind it
+      const hist = player(s)?.accounting.dailyHistory ?? [];
+      const winter = hist.filter(
+        (d) => d.day >= day - 31 && seasonOfDay(d.day) === 'winter',
+      );
+      return winter.length >= 30 && winter.every((d) => d.netProfit > 0);
     },
   },
   {
