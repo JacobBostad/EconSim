@@ -27,6 +27,7 @@ import type { Contract } from '../entities/Contract';
 import { hireCitizen, findUnemployed } from './LaborSystem';
 import { clamp } from '../../utils/clamp';
 import { CENTS, RND_QUALITY_GAIN_PER_1000 } from '../data/constants';
+import { companyValuation } from '../selectors/companySelectors';
 
 export function runAIStrategySystem(ctx: SimContext): void {
   if (!isDayBoundary(ctx.state.tick, ctx.config)) return;
@@ -38,8 +39,10 @@ export function runAIStrategySystem(ctx: SimContext): void {
     if (firm.bankruptcyStatus !== 'insolvent') restaff(ctx, firm.id);
     adjustPrices(ctx, firm.id);
     if (firm.bankruptcyStatus === 'healthy') {
+      manageAdBudget(ctx, firm.id);
       maybeInvestQuality(ctx, firm.id);
       maybeExpand(ctx, firm.id);
+      maybeBuyShares(ctx, firm.id);
     }
 
     // Track loss streak.
@@ -48,17 +51,65 @@ export function runAIStrategySystem(ctx: SimContext): void {
   }
 }
 
-/** Occasionally invest in product quality when flush (diminishing returns). */
+/**
+ * Ad-budget counterplay: fight for attention when losing the market, save
+ * money when dominant or bleeding cash. Budgets move in small daily steps so
+ * the arms race reads as a campaign, not a switch.
+ */
+const AD_BUDGET_CAP = 40_00; // $40/day
+const AD_BUDGET_STEP = 4_00;
+const AD_BUDGET_FLOOR = 8_00;
+
+function manageAdBudget(ctx: SimContext, firmId: string): void {
+  const { state } = ctx;
+  const firm = state.firms[firmId]!;
+  for (const facId of firm.facilities) {
+    const fac = state.facilities[facId];
+    if (!fac || fac.type !== 'retail' || !fac.retailProductId) continue;
+    const pid = fac.retailProductId;
+    const share = firm.marketShareByProduct[pid] ?? 0;
+    const budget = firm.adBudgetByProduct[pid] ?? 0;
+    if (firm.strategy.lossStreak >= 3 || share > 0.7) {
+      // Bleeding or dominant: dial spend down toward the floor.
+      if (budget > AD_BUDGET_FLOOR) {
+        firm.adBudgetByProduct[pid] = Math.max(AD_BUDGET_FLOOR, budget - AD_BUDGET_STEP / 2);
+      }
+    } else if (share < 0.5 && firm.cash > 15000_00 && budget < AD_BUDGET_CAP) {
+      firm.adBudgetByProduct[pid] = Math.min(AD_BUDGET_CAP, budget + AD_BUDGET_STEP);
+      if (budget + AD_BUDGET_STEP >= AD_BUDGET_CAP) {
+        emitEvent(state, 'info', 'ai',
+          `${firm.name} is running a maximum ad campaign for ${getProduct(pid).name}.`, firm.id);
+      }
+    }
+  }
+}
+
+/** Best quality any OTHER firm has for a product (the bar to beat). */
+function bestRivalQuality(ctx: SimContext, firmId: string, pid: string): number {
+  let best = 0;
+  for (const fid in ctx.state.firms) {
+    if (fid === firmId) continue;
+    best = Math.max(best, ctx.state.firms[fid]!.qualityByProduct[pid] ?? 0);
+  }
+  return best;
+}
+
+/**
+ * Invest in product quality when flush — and always respond when a rival
+ * (usually the player) out-qualities them, up to a higher ceiling.
+ */
 function maybeInvestQuality(ctx: SimContext, firmId: string): void {
   const { state, rng } = ctx;
   const firm = state.firms[firmId]!;
-  if (firm.cash < 25000_00 /* $25k buffer */ || !rng.chance(0.15)) return;
+  if (firm.cash < 25000_00 /* $25k buffer */) return;
   for (const facId of firm.facilities) {
     const fac = state.facilities[facId];
     if (!fac || fac.type !== 'retail' || !fac.retailProductId) continue;
     const pid = fac.retailProductId;
     const cur = firm.qualityByProduct[pid] ?? getProduct(pid).defaultQuality;
-    if (cur >= 80) continue;
+    const behindRival = bestRivalQuality(ctx, firmId, pid) > cur + 5;
+    if (!behindRival && !rng.chance(0.15)) return;
+    if (cur >= (behindRival ? 88 : 80)) continue;
     const amount = 1200_00; // $1,200 R&D
     if (!canAfford(state, firmAccount(firmId), amount + 20000_00)) continue;
     recordTransaction(state, {
@@ -138,6 +189,52 @@ function maybeExpand(ctx: SimContext, firmId: string): void {
     state.contracts[id] = contract;
   }
   emitEvent(state, 'info', 'ai', `${firm.name} opened a new outlet to meet demand for ${getProduct(product).name}.`, fac.id);
+}
+
+/**
+ * When very flush, AI firms park spare cash in rival equity (including the
+ * player's!) for dividend income — 5% at a time, capped at a 25% stake, and
+ * never spending below a healthy cash buffer. Mirrors the pricing used by the
+ * player's BUY_SHARES command so the market feels consistent.
+ */
+const AI_SHARE_CASH_FLOOR = 35000_00; // keep at least $35k after buying
+const AI_MAX_STAKE = 25;
+
+function maybeBuyShares(ctx: SimContext, firmId: string): void {
+  const { state, rng } = ctx;
+  const firm = state.firms[firmId]!;
+  if (firm.cash < AI_SHARE_CASH_FLOOR || !rng.chance(0.12)) return;
+
+  // Target the most valuable other company still below our stake cap.
+  let target: string | null = null;
+  let targetVal = 0;
+  for (const fid in state.firms) {
+    if (fid === firmId) continue;
+    const other = state.firms[fid]!;
+    if (other.ownerType !== 'player' && other.ownerType !== 'ai') continue;
+    if ((firm.sharesHeld[fid] ?? 0) >= AI_MAX_STAKE) continue;
+    const val = companyValuation(state, fid).valuation;
+    if (val > targetVal) {
+      targetVal = val;
+      target = fid;
+    }
+  }
+  if (!target) return;
+
+  const pricePerPct = Math.max(1, Math.round(targetVal / 100));
+  const cost = 5 * pricePerPct;
+  if (firm.cash - cost < AI_SHARE_CASH_FLOOR) return;
+
+  recordTransaction(state, {
+    from: firmAccount(firmId), to: WORLD_ACCOUNT, amount: cost,
+    firmId: null, category: 'none',
+    note: `Bought 5% of ${state.firms[target]!.name}`,
+  });
+  firm.sharesHeld[target] = (firm.sharesHeld[target] ?? 0) + 5;
+  const targetName = state.firms[target]!.name;
+  emitEvent(state, 'info', 'ai',
+    `${firm.name} bought a 5% stake in ${targetName} (now ${firm.sharesHeld[target]}%).`,
+    target);
 }
 
 function restaff(ctx: SimContext, firmId: string): void {
