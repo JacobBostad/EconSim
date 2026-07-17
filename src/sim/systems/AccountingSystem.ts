@@ -70,6 +70,7 @@ export function runAccountingSystem(ctx: SimContext): void {
       debt: firm.debt,
       inventoryValue: computeInventoryValue(ctx, firm.facilities),
       valuation: companyValuation(state, firm.id).valuation,
+      buildSpend: today.buildSpend,
     };
     firm.accounting.dailyHistory.push(snapshot);
     trim(firm.accounting.dailyHistory, state.config.maxDailyHistory);
@@ -134,6 +135,7 @@ function aggregateWeek(firm: import('../entities/Firm').Firm): void {
     debt: firm.debt,
     inventoryValue: recent[recent.length - 1]!.inventoryValue,
     valuation: recent[recent.length - 1]!.valuation,
+    buildSpend: 0,
   };
   for (const d of recent) {
     acc.revenue += d.revenue;
@@ -148,6 +150,7 @@ function aggregateWeek(firm: import('../entities/Firm').Firm): void {
     acc.grossProfit += d.grossProfit;
     acc.operatingProfit += d.operatingProfit;
     acc.netProfit += d.netProfit;
+    acc.buildSpend += d.buildSpend;
   }
   firm.accounting.weeklyHistory.push(acc);
   trim(firm.accounting.weeklyHistory, 60);

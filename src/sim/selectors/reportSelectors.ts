@@ -104,13 +104,18 @@ export function quarterReport(state: GameState, quarter: number): QuarterReport 
     .filter((d) => !!d)
     .map((d) => `${d.icon} ${d.name}`);
 
-  // Grade: growth, profitability, and market presence.
+  // Grade: growth, profitability, and market presence. A quarter spent
+  // building (heavy buildSpend) is a growth phase, not failure — losses are
+  // judged gently while investing.
   const growth = (valuationEnd - valuationStart) / Math.max(1, valuationStart);
+  const buildSpend = hist.reduce((a, d) => a + d.buildSpend, 0);
+  const investing = buildSpend > Math.abs(netProfitTotal);
   const bestShare = Math.max(0, ...shares.map((s) => s.shareNow));
+  const shareGain = Math.max(0, ...shares.map((s) => s.shareNow - s.shareStart));
   let score = 50;
   score += clamp(growth * 100, -25, 25);
-  score += netProfitTotal > 0 ? 12 : netProfitTotal < 0 ? -12 : 0;
-  score += bestShare * 25;
+  score += netProfitTotal > 0 ? 12 : netProfitTotal < 0 ? (investing ? -4 : -12) : 0;
+  score += bestShare * 25 + shareGain * 15;
   score += clamp(achievementNames.length * 2, 0, 8);
   score = clamp(score, 0, 100);
 

@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { useGameStore } from '../store/useGameStore';
 import type { Speed } from '../sim/core/Commands';
+import { serialize, deserialize } from '../sim/persistence/saveLoad';
 import { isMuted, setMuted } from './sound';
 
 const SPEEDS: Speed[] = [1, 5, 20, 100];
@@ -38,7 +39,62 @@ export function Controls(): React.ReactElement {
         <button onClick={() => setShowNewGame(true)}>🔄 New</button>
         <MuteButton />
       </div>
+      <div className="row" style={{ marginTop: 6 }}>
+        <ExportImportButtons />
+      </div>
     </div>
+  );
+}
+
+/** Download the world as a JSON file / restore one — backups & sharing. */
+function ExportImportButtons(): React.ReactElement {
+  const sim = useGameStore((s) => s.sim);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const exportSave = (): void => {
+    const state = sim.getState();
+    const blob = new Blob([serialize(state)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const day = Math.floor(state.tick / (state.config.ticksPerHour * 24)) + 1;
+    a.href = url;
+    a.download = `econsim-day${day}-seed${state.seed}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const importSave = (file: File): void => {
+    void file.text().then((text) => {
+      try {
+        const loaded = deserialize(text);
+        sim.setState(loaded);
+        useGameStore.setState((s) => ({ version: s.version + 1 }));
+      } catch {
+        alert('That file is not a valid EconSim save.');
+      }
+    });
+  };
+
+  return (
+    <>
+      <button onClick={exportSave} title="Download this town as a JSON file">
+        ⬆ Export
+      </button>
+      <button onClick={() => fileRef.current?.click()} title="Restore a town from an exported JSON file">
+        ⬇ Import
+      </button>
+      <input
+        ref={fileRef}
+        type="file"
+        accept="application/json,.json"
+        style={{ display: 'none' }}
+        onChange={(e) => {
+          const f = e.target.files?.[0];
+          if (f) importSave(f);
+          e.target.value = '';
+        }}
+      />
+    </>
   );
 }
 
