@@ -24,6 +24,7 @@ import type { ProductId } from '../core/Id';
 import { getQuantity, getQuality, removeStock } from '../entities/Inventory';
 import { distance } from '../entities/Location';
 import { getProduct } from '../data/products';
+import { worldDemandMult, worldSpendingMult } from '../data/worldEvents';
 import { clamp } from '../../utils/clamp';
 
 /** Price a firm charges for a product (falls back to base price). */
@@ -146,9 +147,14 @@ function attemptPurchase(
   const brand = firm?.brandByProduct[productId] ?? 0;
   const qual = getQuality(store.inputInventory, productId);
   const premium = 1 + brand / 250 + (qual - 50) / 300;
-  const maxPrice = product.basePrice * need.maxAffordablePriceMultiplier * premium;
+  // Booms/recessions move what citizens will pay; fads move how much they buy.
+  const maxPrice =
+    product.basePrice * need.maxAffordablePriceMultiplier * premium * worldSpendingMult(state);
 
-  const wantQty = need.preferredQuantity;
+  const wantQty = Math.max(
+    1,
+    Math.round(need.preferredQuantity * worldDemandMult(state, productId)),
+  );
 
   if (!open || stock <= 0) {
     // Stockout / store closed -> lost sale.

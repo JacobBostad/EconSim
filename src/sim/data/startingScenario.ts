@@ -200,6 +200,7 @@ export function createInitialState(
     worldFirmId: '',
     events: [],
     transactions: [],
+    worldEvents: [],
     idCounters: counters,
     selectedEntityId: null,
     perf: { lastTickMs: 0, avgTickMs: 0, ticksSimulated: 0 },

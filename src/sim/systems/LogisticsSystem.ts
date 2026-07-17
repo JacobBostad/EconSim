@@ -29,6 +29,7 @@ import {
   TRANSPORT_COST_PER_UNIT_DISTANCE,
   TRANSPORT_FLAT_COST,
 } from '../data/constants';
+import { worldImportMult, worldTransportMult } from '../data/worldEvents';
 
 export function runLogisticsSystem(ctx: SimContext): void {
   processArrivals(ctx);
@@ -101,8 +102,9 @@ function processReorders(ctx: SimContext): void {
     if (isImporter) {
       qty = want;
       quality = product.defaultQuality;
-      // Pay the importer up front (cost of goods sold).
-      const price = Math.round(product.basePrice * IMPORT_MARKUP) * qty;
+      // Pay the importer up front (cost of goods sold). Tariff events raise it.
+      const price =
+        Math.round(product.basePrice * IMPORT_MARKUP * worldImportMult(state)) * qty;
       recordTransaction(state, {
         from: firmAccount(contract.ownerFirmId),
         to: firmAccount(source.ownerFirmId),
@@ -124,8 +126,11 @@ function processReorders(ctx: SimContext): void {
     source.dailyStats.unitsShipped += qty;
 
     const dist = distance(source.location, dest.location);
-    const transportCost =
-      TRANSPORT_FLAT_COST + Math.round(dist * qty * TRANSPORT_COST_PER_UNIT_DISTANCE);
+    // Fuel-price events scale the whole shipment cost.
+    const transportCost = Math.round(
+      (TRANSPORT_FLAT_COST + dist * qty * TRANSPORT_COST_PER_UNIT_DISTANCE) *
+        worldTransportMult(state),
+    );
     const ticks = Math.max(1, Math.ceil(dist / ctx.config.vehicleSpeed));
 
     const vehicle: Vehicle = {

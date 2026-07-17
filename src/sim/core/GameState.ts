@@ -45,6 +45,13 @@ export interface PerfMetrics {
   ticksSimulated: number;
 }
 
+/** A world event currently in effect (def lives in data/worldEvents.ts). */
+export interface ActiveWorldEvent {
+  defId: string;
+  startDay: number;
+  endDay: number;
+}
+
 export interface GameState {
   saveVersion: number;
   seed: number;
@@ -70,6 +77,8 @@ export interface GameState {
 
   events: GameEvent[];
   transactions: Transaction[];
+  /** Active world events (booms, droughts, fads...); rolled daily. */
+  worldEvents: ActiveWorldEvent[];
 
   idCounters: IdCounters;
   selectedEntityId: EntityId | null;

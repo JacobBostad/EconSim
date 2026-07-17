@@ -197,6 +197,16 @@ clamped to [floor, ceil] × basePrice
 The AI uses all three (advertises, invests in quality when flush, borrows to
 **open new outlets** where demand is unmet), so the world grows on its own.
 
+**World events** (`WorldEventSystem.ts`, defs in `data/worldEvents.ts`): once per
+day there is a 20% chance a news event starts (max 2 active, opposites never
+overlap). Events are temporary town-wide modifiers with a headline — economic
+booms/recessions move willingness-to-pay ×1.25/×0.75, droughts/bumper harvests
+scale farm output ×0.5/×1.6, mine collapses/rich veins scale mines, product
+crazes raise per-trip purchase quantity ×1.6, fuel spikes scale transport cost
+×2.2, and tariffs raise import prices ×1.5. Active events appear as chips on
+the map (hover for the playbook) and in the event log; they roll from the
+seeded rng, so a given seed always produces the same news history.
+
 ---
 
 ## Extending the simulation

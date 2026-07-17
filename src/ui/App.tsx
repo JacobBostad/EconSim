@@ -9,6 +9,7 @@ import { BottomBar } from './BottomBar';
 import { Dashboard } from './Dashboard';
 import { Intro } from './Intro';
 import { ObjectiveBanner } from './ObjectiveBanner';
+import { WorldEventTicker } from './WorldEventTicker';
 
 export function App(): React.ReactElement {
   // Subscribe to version so the whole tree re-renders as the sim advances.
@@ -26,6 +27,7 @@ export function App(): React.ReactElement {
       </div>
       <div className="center">
         <MapView />
+        <WorldEventTicker />
         <ObjectiveBanner />
         {dashboard !== 'none' && <Dashboard />}
       </div>

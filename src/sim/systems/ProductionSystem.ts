@@ -22,6 +22,7 @@ import {
   getQuantity,
   totalUnits,
 } from '../entities/Inventory';
+import { worldProductionMult } from '../data/worldEvents';
 
 const PRODUCING_TYPES = new Set(['farm', 'mine', 'factory', 'importer']);
 
@@ -82,7 +83,10 @@ export function runProductionSystem(ctx: SimContext): void {
     fac.bottleneckReason = null;
     fac.dailyStats.ticksActive += 1;
 
-    const efficiency = recipe.baseEfficiency * workerFactor; // inputAvailability == 1 here
+    // inputAvailability == 1 here; world events (droughts, rich veins...)
+    // scale output up or down while they last.
+    const efficiency =
+      recipe.baseEfficiency * workerFactor * worldProductionMult(state, fac.type);
     fac.productionProgress += efficiency;
 
     if (fac.productionProgress >= recipe.ticksRequired) {

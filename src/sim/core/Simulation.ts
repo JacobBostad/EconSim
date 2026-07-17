@@ -35,9 +35,11 @@ import {
   MAX_STAKE_PCT,
 } from '../data/constants';
 import { companyValuation } from '../selectors/companySelectors';
+import { worldImportMult } from '../data/worldEvents';
 import type { Contract } from '../entities/Contract';
 
 import { runTimeSystem } from '../systems/TimeSystem';
+import { runWorldEventSystem } from '../systems/WorldEventSystem';
 import { runMarketStatsSystem } from '../systems/MarketStatsSystem';
 import { runAIStrategySystem } from '../systems/AIStrategySystem';
 import { runEventLogSystem } from '../systems/EventLogSystem';
@@ -65,6 +67,7 @@ type SystemFn = (ctx: SimContext) => void;
 const SYSTEMS: SystemFn[] = [
   runTimeSystem,
   // --- daily roll-ups (each guards on the day boundary internally) ---
+  runWorldEventSystem, // roll/expire world events first so the day sees them
   runMarketStatsSystem, // finalize previous day's stats; hourly inventory totals
   runAIStrategySystem, // AI reacts using the finalized day (sets ad/R&D/loans)
   runEventLogSystem, // player-facing alerts (before daily stats are reset)
@@ -492,7 +495,7 @@ export class Simulation {
     if (!firm || !dest) return;
     const product = getProduct(command.productId);
     const importer = Object.values(s.firms).find((f) => f.ownerType === 'external');
-    const unitPrice = Math.round(product.basePrice * IMPORT_MARKUP);
+    const unitPrice = Math.round(product.basePrice * IMPORT_MARKUP * worldImportMult(s));
     const room = dest.storageCapacity - totalUnits(dest.inputInventory);
     const qty = Math.min(command.quantity, Math.max(0, room));
     if (qty <= 0) return;
