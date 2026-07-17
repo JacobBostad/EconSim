@@ -53,7 +53,7 @@ export function MapView(): React.ReactElement {
         style={{ width: '100%', height: '100%', cursor: buildDefId ? 'copy' : 'grab' }}
       />
       <div className="map-hint">
-        {buildDefId ? '🏗 Click to place · Esc/Cancel to stop' : '🖱 Drag to pan · Scroll to zoom · Click to inspect'}
+        {buildDefId ? '🏗 Click to place · Esc/Cancel to stop' : '🖱 Drag · Scroll zoom · Space pause · 1-4 speed · G gazette'}
         <button onClick={() => rendererRef.current?.resetView()}>Reset view</button>
       </div>
     </div>
