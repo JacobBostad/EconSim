@@ -29,6 +29,7 @@ import { getFacilityDef } from './facilityDefinitions';
 import { getProduct, CONSUMER_PRODUCT_IDS, ALL_PRODUCT_IDS } from './products';
 import { FIRST_NAMES, LAST_NAMES } from './names';
 import { dollars } from './constants';
+import { getScenario, DEFAULT_SCENARIO_ID } from './scenarios';
 import { SAVE_VERSION } from '../core/GameState';
 
 const NUM_HOMES = 20;
@@ -183,7 +184,9 @@ function stock(inv: Inventory, productId: string, qty: number): void {
 export function createInitialState(
   seed: number,
   config: SimulationConfig = DEFAULT_CONFIG,
+  scenarioId: string = DEFAULT_SCENARIO_ID,
 ): GameState {
+  const scenario = getScenario(scenarioId);
   const counters: IdCounters = {};
   const state: GameState = {
     saveVersion: SAVE_VERSION,
@@ -277,146 +280,7 @@ export function createInitialState(
   stock(importerFac.outputInventory, 'minerals', 100000);
   stock(importerFac.outputInventory, 'cotton', 100000);
 
-  // --- AI Foods: bread chain (farm -> bakery -> retail) ------------------
-  const aiFoods = newFirm(
-    b,
-    'Sunrise Foods',
-    'ai',
-    dollars(40000),
-    emptyStrategy('bread'),
-    DEFAULT_AI_WAGE,
-  );
-  aiFoods.pricesByProduct.bread = getProduct('bread').basePrice;
-  aiFoods.brandByProduct.bread = 22;
-  aiFoods.qualityByProduct.bread = getProduct('bread').defaultQuality;
-  aiFoods.adBudgetByProduct.bread = dollars(20);
-
-  const farm = newFacility(b, 'farm', aiFoods.id, { x: 26, y: 16 }, {
-    name: 'Sunrise Farm',
-    activeRecipeId: 'grow_grain',
-  });
-  stock(farm.outputInventory, 'grain', 60);
-
-  const bakery = newFacility(b, 'factory', aiFoods.id, { x: 48, y: 32 }, {
-    name: 'Sunrise Bakery',
-    activeRecipeId: 'bake_bread',
-  });
-  stock(bakery.inputInventory, 'grain', 30);
-  stock(bakery.outputInventory, 'bread', 24);
-
-  const breadShop = newFacility(b, 'retail', aiFoods.id, { x: 46, y: 48 }, {
-    name: 'Sunrise Bread Shop',
-    retailProductId: 'bread',
-  });
-  stock(breadShop.inputInventory, 'bread', 40);
-
-  // Staff the bread chain (lean: roughly at each recipe's labor requirement).
-  for (let i = 0; i < 2; i++) {
-    const w = takeWorker();
-    if (w) employ(b, w, aiFoods.id, farm.id, 'farmhand', DEFAULT_AI_WAGE);
-  }
-  for (let i = 0; i < 2; i++) {
-    const w = takeWorker();
-    if (w) employ(b, w, aiFoods.id, bakery.id, 'baker', DEFAULT_AI_WAGE);
-  }
-  for (let i = 0; i < 2; i++) {
-    const w = takeWorker();
-    if (w) employ(b, w, aiFoods.id, breadShop.id, 'clerk', DEFAULT_AI_WAGE);
-  }
-
-  // --- AI Industrial: tools chain (mine -> factory -> retail) ------------
-  const aiInd = newFirm(
-    b,
-    'Granite Industries',
-    'ai',
-    dollars(45000),
-    emptyStrategy('tools'),
-    DEFAULT_AI_WAGE,
-  );
-  aiInd.pricesByProduct.tools = getProduct('tools').basePrice;
-  aiInd.brandByProduct.tools = 22;
-  aiInd.qualityByProduct.tools = getProduct('tools').defaultQuality;
-  aiInd.adBudgetByProduct.tools = dollars(14);
-
-  const mine = newFacility(b, 'mine', aiInd.id, { x: 104, y: 16 }, {
-    name: 'Granite Mine',
-    activeRecipeId: 'mine_minerals',
-  });
-  stock(mine.outputInventory, 'minerals', 50);
-
-  const toolFactory = newFacility(b, 'factory', aiInd.id, { x: 86, y: 32 }, {
-    name: 'Granite Tool Works',
-    activeRecipeId: 'make_tools',
-  });
-  stock(toolFactory.inputInventory, 'minerals', 24);
-  stock(toolFactory.outputInventory, 'tools', 12);
-
-  const toolShop = newFacility(b, 'retail', aiInd.id, { x: 78, y: 48 }, {
-    name: 'Granite Hardware',
-    retailProductId: 'tools',
-  });
-  stock(toolShop.inputInventory, 'tools', 20);
-
-  for (let i = 0; i < 2; i++) {
-    const w = takeWorker();
-    if (w) employ(b, w, aiInd.id, mine.id, 'miner', DEFAULT_AI_WAGE);
-  }
-  for (let i = 0; i < 2; i++) {
-    const w = takeWorker();
-    if (w) employ(b, w, aiInd.id, toolFactory.id, 'machinist', DEFAULT_AI_WAGE);
-  }
-  for (let i = 0; i < 1; i++) {
-    const w = takeWorker();
-    if (w) employ(b, w, aiInd.id, toolShop.id, 'clerk', DEFAULT_AI_WAGE);
-  }
-
-  // --- AI Apparel: clothes chain (cotton farm -> tailor -> boutique) -----
-  const aiApparel = newFirm(
-    b,
-    'Loom & Thread',
-    'ai',
-    dollars(38000),
-    emptyStrategy('clothes'),
-    DEFAULT_AI_WAGE,
-  );
-  aiApparel.pricesByProduct.clothes = getProduct('clothes').basePrice;
-  aiApparel.brandByProduct.clothes = 20;
-  aiApparel.qualityByProduct.clothes = getProduct('clothes').defaultQuality;
-  aiApparel.adBudgetByProduct.clothes = dollars(12);
-
-  const cottonFarm = newFacility(b, 'farm', aiApparel.id, { x: 64, y: 14 }, {
-    name: 'Loom Cotton Farm',
-    activeRecipeId: 'grow_cotton',
-  });
-  stock(cottonFarm.outputInventory, 'cotton', 40);
-
-  const tailor = newFacility(b, 'factory', aiApparel.id, { x: 66, y: 32 }, {
-    name: 'Loom Tailor Works',
-    activeRecipeId: 'sew_clothes',
-  });
-  stock(tailor.inputInventory, 'cotton', 20);
-  stock(tailor.outputInventory, 'clothes', 12);
-
-  const boutique = newFacility(b, 'retail', aiApparel.id, { x: 62, y: 48 }, {
-    name: 'Loom Boutique',
-    retailProductId: 'clothes',
-  });
-  stock(boutique.inputInventory, 'clothes', 18);
-
-  for (let i = 0; i < 2; i++) {
-    const w = takeWorker();
-    if (w) employ(b, w, aiApparel.id, cottonFarm.id, 'farmhand', DEFAULT_AI_WAGE);
-  }
-  for (let i = 0; i < 2; i++) {
-    const w = takeWorker();
-    if (w) employ(b, w, aiApparel.id, tailor.id, 'tailor', DEFAULT_AI_WAGE);
-  }
-  for (let i = 0; i < 1; i++) {
-    const w = takeWorker();
-    if (w) employ(b, w, aiApparel.id, boutique.id, 'clerk', DEFAULT_AI_WAGE);
-  }
-
-  // --- AI supply contracts -----------------------------------------------
+  // --- AI chains (data-driven; see data/scenarios.ts) --------------------
   const addContract = (
     ownerFirmId: string,
     source: string,
@@ -443,12 +307,45 @@ export function createInitialState(
     return ctr;
   };
 
-  addContract(aiFoods.id, farm.id, bakery.id, 'grain', 40, 15, 80);
-  addContract(aiFoods.id, bakery.id, breadShop.id, 'bread', 60, 24, 110);
-  addContract(aiInd.id, mine.id, toolFactory.id, 'minerals', 30, 12, 60);
-  addContract(aiInd.id, toolFactory.id, toolShop.id, 'tools', 40, 14, 80);
-  addContract(aiApparel.id, cottonFarm.id, tailor.id, 'cotton', 30, 12, 60);
-  addContract(aiApparel.id, tailor.id, boutique.id, 'clothes', 36, 14, 80);
+  for (const spec of scenario.aiChains) {
+    const firm = newFirm(b, spec.firmName, 'ai', spec.cash, emptyStrategy(spec.product), DEFAULT_AI_WAGE);
+    firm.pricesByProduct[spec.product] = getProduct(spec.product).basePrice;
+    firm.brandByProduct[spec.product] = spec.brand;
+    firm.qualityByProduct[spec.product] = getProduct(spec.product).defaultQuality;
+    firm.adBudgetByProduct[spec.product] = spec.adBudget;
+
+    const producer = newFacility(b, spec.producerDef, firm.id, spec.loc.producer, {
+      name: spec.producerName,
+      activeRecipeId: spec.producerRecipe,
+    });
+    stock(producer.outputInventory, spec.inputProduct, spec.stocks.producerOut);
+
+    const factory = newFacility(b, 'factory', firm.id, spec.loc.factory, {
+      name: spec.factoryName,
+      activeRecipeId: spec.factoryRecipe,
+    });
+    stock(factory.inputInventory, spec.inputProduct, spec.stocks.factoryIn);
+    stock(factory.outputInventory, spec.product, spec.stocks.factoryOut);
+
+    const shop = newFacility(b, 'retail', firm.id, spec.loc.retail, {
+      name: spec.retailName,
+      retailProductId: spec.product,
+    });
+    stock(shop.inputInventory, spec.product, spec.stocks.shopIn);
+
+    const staffUp = (facId: string, count: number, role: string): void => {
+      for (let i = 0; i < count; i++) {
+        const w = takeWorker();
+        if (w) employ(b, w, firm.id, facId, role, DEFAULT_AI_WAGE);
+      }
+    };
+    staffUp(producer.id, spec.staff.producer, `${spec.producerDef} worker`);
+    staffUp(factory.id, spec.staff.factory, 'factory worker');
+    staffUp(shop.id, spec.staff.retail, 'clerk');
+
+    addContract(firm.id, producer.id, factory.id, spec.inputProduct, spec.pf.target, spec.pf.reorder, spec.pf.max);
+    addContract(firm.id, factory.id, shop.id, spec.product, spec.fs.target, spec.fs.reorder, spec.fs.max);
+  }
 
   return state;
 }

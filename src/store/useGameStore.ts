@@ -66,7 +66,7 @@ interface GameStore {
   setSpeed: (speed: Speed) => void;
   togglePause: () => void;
 
-  newGame: (seed?: number, difficulty?: Difficulty) => void;
+  newGame: (seed?: number, difficulty?: Difficulty, scenarioId?: string) => void;
   save: () => void;
   load: () => void;
   hasSave: () => boolean;
@@ -138,8 +138,8 @@ export const useGameStore = create<GameStore>((set, get) => {
       bump(true);
     },
 
-    newGame: (seed = Math.floor(Math.random() * 1_000_000), difficulty = 'standard') => {
-      get().sim.setState(createInitialState(seed, configForDifficulty(difficulty)));
+    newGame: (seed = Math.floor(Math.random() * 1_000_000), difficulty = 'standard', scenarioId = 'meadowbrook') => {
+      get().sim.setState(createInitialState(seed, configForDifficulty(difficulty), scenarioId));
       recordTownFounded();
       set({ buildDefId: null, showNewGame: false });
       bump(true);

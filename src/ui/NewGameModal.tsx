@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useGameStore } from '../store/useGameStore';
 import type { Difficulty } from '../sim/core/SimulationConfig';
 import { loadRecords } from './records';
+import { SCENARIOS, DEFAULT_SCENARIO_ID } from '../sim/data/scenarios';
 import { formatMoney } from '../utils/formatMoney';
 
 interface Preset {
@@ -42,6 +43,7 @@ export function NewGameModal(): React.ReactElement | null {
   const setShow = useGameStore((s) => s.setShowNewGame);
   const newGame = useGameStore((s) => s.newGame);
   const [difficulty, setDifficulty] = useState<Difficulty>('standard');
+  const [scenarioId, setScenarioId] = useState(DEFAULT_SCENARIO_ID);
   const [seedText, setSeedText] = useState('');
 
   if (!show) return null;
@@ -52,7 +54,7 @@ export function NewGameModal(): React.ReactElement | null {
     const seed = Number.isFinite(parsed)
       ? parsed
       : Math.floor(Math.random() * 1_000_000);
-    newGame(seed, difficulty);
+    newGame(seed, difficulty, scenarioId);
   };
 
   return (
@@ -73,6 +75,20 @@ export function NewGameModal(): React.ReactElement | null {
               <div style={{ fontWeight: 700 }}>{p.name}</div>
               <div className="mono small">{p.cash} start</div>
               <div className="small" style={{ opacity: 0.85 }}>{p.blurb}</div>
+            </button>
+          ))}
+        </div>
+        <div className="section-title">Town</div>
+        <div className="row" style={{ gap: 8, alignItems: 'stretch' }}>
+          {Object.values(SCENARIOS).map((sc) => (
+            <button
+              key={sc.id}
+              className={`difficulty-card ${scenarioId === sc.id ? 'active' : ''}`}
+              onClick={() => setScenarioId(sc.id)}
+            >
+              <div style={{ fontSize: 20 }}>{sc.icon}</div>
+              <div style={{ fontWeight: 700 }}>{sc.name}</div>
+              <div className="small" style={{ opacity: 0.85 }}>{sc.description}</div>
             </button>
           ))}
         </div>
