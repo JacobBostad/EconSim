@@ -203,6 +203,21 @@ export class Simulation {
       case 'CANCEL_SUPPLY_CONTRACT':
         delete s.contracts[command.contractId];
         return;
+      case 'UPDATE_SUPPLY_CONTRACT': {
+        const ctr = s.contracts[command.contractId];
+        if (!ctr) return;
+        if (command.targetQuantity !== undefined && command.targetQuantity > 0) {
+          ctr.targetQuantity = Math.round(command.targetQuantity);
+        }
+        if (command.reorderPoint !== undefined && command.reorderPoint >= 0) {
+          ctr.reorderPoint = Math.round(command.reorderPoint);
+        }
+        if (command.maxInventory !== undefined && command.maxInventory > 0) {
+          ctr.maxInventory = Math.round(command.maxInventory);
+        }
+        if (command.active !== undefined) ctr.active = command.active;
+        return;
+      }
       case 'BUY_FROM_IMPORTER':
         this.buyFromImporter(command);
         return;

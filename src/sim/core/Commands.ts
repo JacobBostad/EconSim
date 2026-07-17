@@ -65,6 +65,14 @@ export type Command =
     }
   | { type: 'CANCEL_SUPPLY_CONTRACT'; contractId: ContractId }
   | {
+      type: 'UPDATE_SUPPLY_CONTRACT';
+      contractId: ContractId;
+      targetQuantity?: number;
+      reorderPoint?: number;
+      maxInventory?: number;
+      active?: boolean;
+    }
+  | {
       type: 'BUY_FROM_IMPORTER';
       firmId: FirmId;
       destinationFacilityId: FacilityId;

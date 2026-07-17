@@ -191,13 +191,51 @@ export function FacilityActions({ fac }: { fac: Facility }): React.ReactElement 
       <div className="card">
         <div className="section-title" style={{ marginTop: 0 }}>Inbound Supply Contracts</div>
         {contractsByDestination(state, fac.id).map((c) => (
-          <div className="row between small" key={c.id}>
+          <div className="row between small" key={c.id} style={{ opacity: c.active ? 1 : 0.55 }}>
             <span>
-              {state.facilities[c.sourceFacilityId]?.name} → {getProduct(c.productId).name}{' '}
-              (reorder {c.reorderPoint})
+              {state.facilities[c.sourceFacilityId]?.name} → {getProduct(c.productId).name}
+              {!c.active && ' (paused)'}
             </span>
-            {isPlayer && (
-              <button onClick={() => dispatch({ type: 'CANCEL_SUPPLY_CONTRACT', contractId: c.id })}>×</button>
+            {isPlayer ? (
+              <span className="row" style={{ gap: 4 }}>
+                <label title="Reorder when stock falls below this">
+                  ↻<input
+                    type="number"
+                    defaultValue={c.reorderPoint}
+                    min={0}
+                    style={{ width: 46 }}
+                    onBlur={(e) => {
+                      const v = parseInt(e.target.value, 10);
+                      if (Number.isFinite(v)) {
+                        dispatch({ type: 'UPDATE_SUPPLY_CONTRACT', contractId: c.id, reorderPoint: v });
+                      }
+                    }}
+                  />
+                </label>
+                <label title="Units per shipment">
+                  📦<input
+                    type="number"
+                    defaultValue={c.targetQuantity}
+                    min={1}
+                    style={{ width: 46 }}
+                    onBlur={(e) => {
+                      const v = parseInt(e.target.value, 10);
+                      if (Number.isFinite(v)) {
+                        dispatch({ type: 'UPDATE_SUPPLY_CONTRACT', contractId: c.id, targetQuantity: v });
+                      }
+                    }}
+                  />
+                </label>
+                <button
+                  title={c.active ? 'Pause shipments' : 'Resume shipments'}
+                  onClick={() => dispatch({ type: 'UPDATE_SUPPLY_CONTRACT', contractId: c.id, active: !c.active })}
+                >
+                  {c.active ? '⏸' : '▶'}
+                </button>
+                <button title="Delete contract" onClick={() => dispatch({ type: 'CANCEL_SUPPLY_CONTRACT', contractId: c.id })}>×</button>
+              </span>
+            ) : (
+              <span className="muted">reorder {c.reorderPoint}</span>
             )}
           </div>
         ))}
