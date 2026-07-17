@@ -385,6 +385,47 @@ export class TownRenderer {
     winter: 'rgba(190,210,240,0.10)',
   };
 
+  private weatherT = 0;
+
+  /** Snow all winter; light drizzle on ~30% of spring days. Pure decoration. */
+  private drawWeather(s: GameState, dt: number): void {
+    const season = seasonOf(s);
+    const day = Math.floor(s.tick / (s.config.ticksPerHour * 24));
+    const rainy =
+      season === 'spring' && (Math.imul(day ^ s.seed, 2654435761) >>> 28) < 5;
+    if (season !== 'winter' && !rainy) return;
+    this.weatherT += dt;
+    const ctx = this.ctx;
+    ctx.save();
+    if (season === 'winter') {
+      ctx.fillStyle = 'rgba(235,242,255,0.75)';
+      for (let i = 0; i < 70; i++) {
+        const h = (Math.imul(i + 1, 2654435761) >>> 0) / 4294967296;
+        const speed = 18 + h * 26;
+        const x = (h * this.cssW + Math.sin(this.weatherT / 1400 + i) * 24 + this.cssW) % this.cssW;
+        const y = (h * 7919 + (this.weatherT / 1000) * speed) % (this.cssH + 8);
+        ctx.globalAlpha = 0.35 + h * 0.4;
+        ctx.beginPath();
+        ctx.arc(x, y, 1 + h * 1.4, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    } else {
+      ctx.strokeStyle = 'rgba(140,180,230,0.35)';
+      ctx.lineWidth = 1;
+      for (let i = 0; i < 45; i++) {
+        const h = (Math.imul(i + 7, 2654435761) >>> 0) / 4294967296;
+        const x = (h * this.cssW + this.weatherT / 90) % this.cssW;
+        const y = (h * 5417 + (this.weatherT / 1000) * (140 + h * 80)) % (this.cssH + 12);
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        ctx.lineTo(x - 1.5, y + 7);
+        ctx.stroke();
+      }
+    }
+    ctx.restore();
+    ctx.globalAlpha = 1;
+  }
+
   private drawWorldEventAmbiance(s: GameState, dt: number): void {
     const ctx = this.ctx;
     const seasonTint = TownRenderer.SEASON_TINTS[seasonOf(s)];
@@ -392,6 +433,7 @@ export class TownRenderer {
       ctx.fillStyle = seasonTint;
       ctx.fillRect(0, 0, this.cssW, this.cssH);
     }
+    this.drawWeather(s, dt);
     if (s.worldEvents.length === 0) return;
     let smog = false;
     for (const ev of s.worldEvents) {
