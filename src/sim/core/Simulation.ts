@@ -21,7 +21,8 @@ import { nextId } from './Id';
 import type { FirmId } from './Id';
 import { firmAccount, WORLD_ACCOUNT } from './Transactions';
 import { createInitialState } from '../data/startingScenario';
-import { createFacility } from '../entities/factories';
+import { createFacility, createCitizen } from '../entities/factories';
+import { Rng } from './Random';
 import { getFacilityDef } from '../data/facilityDefinitions';
 import { getRecipe } from '../data/recipes';
 import { getProduct } from '../data/products';
@@ -34,6 +35,11 @@ import {
   LOAN_MIN_CREDIT,
   MAX_STAKE_PCT,
   EXPORT_FREIGHT_FEE,
+  FESTIVAL_COST,
+  FUND_HOME_COST,
+  MAX_CITIZENS,
+  MAX_HOMES,
+  IMMIGRANT_START_CASH,
 } from '../data/constants';
 import { companyValuation } from '../selectors/companySelectors';
 import { worldImportMult } from '../data/worldEvents';
@@ -191,6 +197,9 @@ export class Simulation {
         return;
       case 'UPGRADE_FACILITY':
         upgradeFacility(s, command.firmId, command.facilityId);
+        return;
+      case 'CIVIC_ACTION':
+        this.civicAction(command.firmId, command.action);
         return;
       case 'SET_WAGE':
         this.setWage(command);
@@ -444,6 +453,83 @@ export class Simulation {
     firm.exportRevenue += revenue;
     emitEvent(s, 'success', 'logistics',
       `🚢 Exported ${qty} ${product.name} to Port Rosa for ${revenue}¢ (after freight).`, fac.id);
+  }
+
+  /**
+   * Civic actions: spend money on the town itself.
+   *  - festival: 3 days of boosted demand/spending (a command-started world
+   *    event; never rolls naturally).
+   *  - fund_home: build a home and move two new citizens in immediately,
+   *    bypassing the immigration gate (but not the hard caps).
+   */
+  private civicAction(firmId: FirmId, action: 'festival' | 'fund_home'): void {
+    const s = this.state;
+    const firm = s.firms[firmId];
+    if (!firm) return;
+    const day = Math.floor(s.tick / (s.config.ticksPerHour * 24));
+
+    if (action === 'festival') {
+      if (s.worldEvents.some((ev) => ev.defId === 'festival')) {
+        emitEvent(s, 'warning', 'player', 'The festival is already running.', firmId);
+        return;
+      }
+      if (!canAfford(s, firmAccount(firmId), FESTIVAL_COST)) {
+        emitEvent(s, 'danger', 'player', `Sponsoring the festival costs ${FESTIVAL_COST}¢.`, firmId);
+        return;
+      }
+      recordTransaction(s, {
+        from: firmAccount(firmId), to: WORLD_ACCOUNT, amount: FESTIVAL_COST,
+        firmId, category: 'marketing', note: 'Sponsored the town festival',
+      });
+      s.worldEvents.push({ defId: 'festival', startDay: day, endDay: day + 3 });
+      emitEvent(s, 'success', 'economy',
+        `🎪 ${firm.name} sponsors a three-day town festival — crowds pour into the shops!`, firmId);
+      return;
+    }
+
+    // fund_home
+    const citizens = Object.keys(s.citizens).length;
+    const homes = Object.values(s.facilities).filter((f) => f.type === 'home').length;
+    if (citizens >= MAX_CITIZENS || homes >= MAX_HOMES) {
+      emitEvent(s, 'warning', 'player', 'The town is at capacity — no room for another home.', firmId);
+      return;
+    }
+    if (!canAfford(s, firmAccount(firmId), FUND_HOME_COST)) {
+      emitEvent(s, 'danger', 'player', `Funding a home costs ${FUND_HOME_COST}¢.`, firmId);
+      return;
+    }
+    // Deterministic placement: scan the residential band for clear ground.
+    let loc: { x: number; y: number } | null = null;
+    for (let y = 60; y <= s.config.mapHeight - 4 && !loc; y += 8) {
+      for (let x = 14; x <= s.config.mapWidth - 8; x += 6) {
+        let clear = true;
+        for (const fid in s.facilities) {
+          const l = s.facilities[fid]!.location;
+          const dx = l.x - x, dy = l.y - y;
+          if (dx * dx + dy * dy < 30) { clear = false; break; }
+        }
+        if (clear) { loc = { x, y }; break; }
+      }
+    }
+    if (!loc) {
+      emitEvent(s, 'warning', 'player', 'No clear residential ground for a new home.', firmId);
+      return;
+    }
+    recordTransaction(s, {
+      from: firmAccount(firmId), to: WORLD_ACCOUNT, amount: FUND_HOME_COST,
+      firmId, category: 'buildSpend', note: 'Funded a new home',
+    });
+    const home = createFacility(s, 'home', s.worldFirmId, loc, { name: `Home ${homes + 1}` });
+    const rng = new Rng(s);
+    for (let i = 0; i < 2 && Object.keys(s.citizens).length < MAX_CITIZENS; i++) {
+      const cit = createCitizen(s, rng, home.id);
+      recordTransaction(s, {
+        from: WORLD_ACCOUNT, to: { kind: 'citizen', id: cit.id }, amount: IMMIGRANT_START_CASH,
+        firmId: null, category: 'none', note: 'New arrival settling in',
+      });
+    }
+    emitEvent(s, 'success', 'economy',
+      `🏡 ${firm.name} funded ${home.name} — two new citizens moved to town.`, home.id);
   }
 
   /** Net worth used for credit limits: cash + inventory value. */

@@ -77,6 +77,12 @@ export const TRADE_WALK_STEP = 0.12;
 export const TRADE_BOOM_MULT = 1.45;
 export const TRADE_GLUT_MULT = 0.7;
 
+// --- Civic actions ----------------------------------------------------------
+/** Sponsoring the 3-day town festival costs this much (paid to the town). */
+export const FESTIVAL_COST = dollars(1500);
+/** Funding a new home (2 residents move in) costs this much. */
+export const FUND_HOME_COST = dollars(3000);
+
 // --- Immigration / town growth ---------------------------------------------
 /** New citizens move in only while average satisfaction is at least this. */
 export const IMMIGRATION_MIN_SATISFACTION = 60;

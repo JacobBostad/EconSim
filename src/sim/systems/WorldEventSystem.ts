@@ -68,7 +68,7 @@ export function runWorldEventSystem(ctx: SimContext): void {
       .filter((g): g is string => g !== undefined),
   );
   const candidates = WORLD_EVENT_DEFS.filter(
-    (d) => day >= d.earliestDay && !activeGroups.has(d.exclusiveGroup),
+    (d) => d.weight > 0 && day >= d.earliestDay && !activeGroups.has(d.exclusiveGroup),
   );
   if (candidates.length === 0) return;
 

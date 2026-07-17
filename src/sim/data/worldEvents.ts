@@ -179,6 +179,24 @@ export const WORLD_EVENT_DEFS: WorldEventDef[] = [
     effects: { demand: { tools: 1.6 } },
   },
   {
+    id: 'festival',
+    name: 'Town Festival',
+    icon: '🎪',
+    headline: 'The town festival is on — streets are packed and wallets are open!',
+    description:
+      'Sponsored by a local business: citizens buy ~25% more of everything and pay a little more gladly while it lasts.',
+    severity: 'success',
+    minDays: 3,
+    maxDays: 3,
+    weight: 0, // never rolls naturally — started by the SPONSOR_FESTIVAL civic action
+    exclusiveGroup: 'civic',
+    earliestDay: 0,
+    effects: {
+      spending: 1.05,
+      demand: { bread: 1.25, tools: 1.25, clothes: 1.25, pastries: 1.4, jewelry: 1.4 },
+    },
+  },
+  {
     id: 'fashion_week',
     name: 'Fashion Week',
     icon: '👗',
