@@ -28,6 +28,7 @@ import { hireCitizen, findUnemployed } from './LaborSystem';
 import { clamp } from '../../utils/clamp';
 import { CENTS, RND_QUALITY_GAIN_PER_1000 } from '../data/constants';
 import { companyValuation } from '../selectors/companySelectors';
+import { acquisitionCost, performAcquisition } from '../core/Acquisition';
 
 export function runAIStrategySystem(ctx: SimContext): void {
   if (!isDayBoundary(ctx.state.tick, ctx.config)) return;
@@ -43,6 +44,7 @@ export function runAIStrategySystem(ctx: SimContext): void {
       maybeInvestQuality(ctx, firm.id);
       maybeExpand(ctx, firm.id);
       maybeBuyShares(ctx, firm.id);
+      if (maybeRescueAcquisition(ctx, firm.id)) continue; // firm map changed
     }
 
     // Track loss streak.
@@ -242,6 +244,30 @@ function maybeBuyShares(ctx: SimContext, firmId: string): void {
   emitEvent(state, 'info', 'ai',
     `${firm.name} bought a 5% stake in ${targetName} (now ${firm.sharesHeld[target]}%).`,
     target);
+}
+
+/**
+ * Rescue consolidation: a very flush AI absorbs a distressed/insolvent AI
+ * rival at the distressed discount instead of letting it die slowly. Keeps
+ * the town's chains running under new ownership — and means the player isn't
+ * the only consolidator in the market. Never targets the player.
+ */
+const RESCUE_CASH_FLOOR = 60000_00; // consider M&A above $60k cash
+const RESCUE_KEEP_BUFFER = 30000_00; // never drop below $30k doing it
+
+function maybeRescueAcquisition(ctx: SimContext, firmId: string): boolean {
+  const { state, rng } = ctx;
+  const firm = state.firms[firmId]!;
+  if (firm.cash < RESCUE_CASH_FLOOR || !rng.chance(0.25)) return false;
+  for (const fid in state.firms) {
+    if (fid === firmId) continue;
+    const other = state.firms[fid]!;
+    if (other.ownerType !== 'ai' || other.bankruptcyStatus === 'healthy') continue;
+    const cost = acquisitionCost(state, firmId, fid);
+    if (firm.cash - cost < RESCUE_KEEP_BUFFER) continue;
+    return performAcquisition(state, firmId, fid);
+  }
+  return false;
 }
 
 function restaff(ctx: SimContext, firmId: string): void {

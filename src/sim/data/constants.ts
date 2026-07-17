@@ -49,6 +49,13 @@ export const LOAN_MIN_CREDIT = dollars(5000);
 /** Objective: grow company valuation to this to "win" (sandbox continues). */
 export const OBJECTIVE_VALUATION = dollars(50000);
 
+/** Escalating objectives after the first win — the sandbox always has a goal. */
+export const OBJECTIVE_LADDER: { valuation: number; title: string }[] = [
+  { valuation: OBJECTIVE_VALUATION, title: 'Tycoon' },
+  { valuation: dollars(150000), title: 'Magnate' },
+  { valuation: dollars(400000), title: 'Business Empire' },
+];
+
 // --- Stock market ----------------------------------------------------------
 /** Fraction of a firm's positive daily net profit distributed as dividends. */
 export const DIVIDEND_PAYOUT_RATIO = 0.3;

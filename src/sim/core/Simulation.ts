@@ -33,12 +33,11 @@ import {
   LOAN_CREDIT_LIMIT_MULTIPLE,
   LOAN_MIN_CREDIT,
   MAX_STAKE_PCT,
-  ACQUISITION_PREMIUM_HEALTHY,
-  ACQUISITION_PREMIUM_DISTRESSED,
 } from '../data/constants';
 import { companyValuation } from '../selectors/companySelectors';
 import { worldImportMult } from '../data/worldEvents';
 import { CHAIN_BLUEPRINTS, chainCost } from '../data/chains';
+import { performAcquisition } from './Acquisition';
 import type { Contract } from '../entities/Contract';
 
 import { runTimeSystem } from '../systems/TimeSystem';
@@ -217,7 +216,7 @@ export class Simulation {
         this.repayLoan(command);
         return;
       case 'ACQUIRE_FIRM':
-        this.acquireFirm(command.firmId, command.targetFirmId);
+        performAcquisition(s, command.firmId, command.targetFirmId);
         return;
       case 'BUY_SHARES':
         this.tradeShares(command.firmId, command.targetFirmId, command.percent);
@@ -370,106 +369,6 @@ export class Simulation {
     emitEvent(s, 'success', 'player',
       `🪄 Built a full ${getProduct(bp.productId).name} chain: ${producer.name} → ${factory.name} → ${store.name}, wired and staffed.`,
       store.id);
-  }
-
-  /**
-   * Full takeover of an AI firm. The buyer pays a premium on valuation
-   * (discounted for distressed targets, reduced by any stake already held) to
-   * the outside shareholders (world account), then absorbs everything: cash,
-   * debt, facilities, employees, in-flight shipments, contracts, brand/quality/
-   * prices, and remaining share stakes. The target firm ceases to exist.
-   */
-  private acquireFirm(firmId: FirmId, targetFirmId: FirmId): void {
-    const s = this.state;
-    const buyer = s.firms[firmId];
-    const target = s.firms[targetFirmId];
-    if (!buyer || !target || firmId === targetFirmId) return;
-    if (target.ownerType !== 'ai') return; // only AI rivals can be bought out
-
-    const val = companyValuation(s, targetFirmId).valuation;
-    const premium =
-      target.bankruptcyStatus === 'healthy'
-        ? ACQUISITION_PREMIUM_HEALTHY
-        : ACQUISITION_PREMIUM_DISTRESSED;
-    const heldPct = buyer.sharesHeld[targetFirmId] ?? 0;
-    const cost = Math.max(1, Math.round((val * premium * (100 - heldPct)) / 100));
-
-    if (!canAfford(s, firmAccount(buyer.id), cost)) {
-      emitEvent(s, 'danger', 'finance',
-        `Not enough cash to acquire ${target.name} (needs ${cost}¢).`, buyer.id);
-      return;
-    }
-
-    // Pay the outside shareholders.
-    recordTransaction(s, {
-      from: firmAccount(buyer.id), to: WORLD_ACCOUNT, amount: cost,
-      firmId: null, category: 'none', note: `Acquired ${target.name}`,
-    });
-
-    // Absorb the target's cash position (positive or negative).
-    if (target.cash > 0) {
-      recordTransaction(s, {
-        from: firmAccount(target.id), to: firmAccount(buyer.id), amount: target.cash,
-        firmId: null, category: 'none', note: `Cash of acquired ${target.name}`,
-      });
-    } else if (target.cash < 0) {
-      recordTransaction(s, {
-        from: firmAccount(buyer.id), to: firmAccount(target.id), amount: -target.cash,
-        firmId: null, category: 'none', note: `Covered debts of acquired ${target.name}`,
-      });
-    }
-    buyer.debt += target.debt;
-
-    // Facilities, staff, shipments, contracts.
-    for (const facId of target.facilities) {
-      const fac = s.facilities[facId];
-      if (!fac) continue;
-      fac.ownerFirmId = buyer.id;
-      buyer.facilities.push(facId);
-    }
-    for (const cid of target.employees) {
-      const cit = s.citizens[cid];
-      if (!cit) continue;
-      cit.employerFirmId = buyer.id;
-      buyer.employees.push(cid);
-    }
-    for (const vid in s.vehicles) {
-      if (s.vehicles[vid]!.ownerFirmId === target.id) s.vehicles[vid]!.ownerFirmId = buyer.id;
-    }
-    for (const ctrId in s.contracts) {
-      if (s.contracts[ctrId]!.ownerFirmId === target.id) s.contracts[ctrId]!.ownerFirmId = buyer.id;
-    }
-
-    // Merge product state: keep the better brand/quality; adopt missing prices.
-    for (const pid in target.brandByProduct) {
-      buyer.brandByProduct[pid] = Math.max(buyer.brandByProduct[pid] ?? 0, target.brandByProduct[pid]!);
-    }
-    for (const pid in target.qualityByProduct) {
-      buyer.qualityByProduct[pid] = Math.max(buyer.qualityByProduct[pid] ?? 0, target.qualityByProduct[pid]!);
-    }
-    for (const pid in target.pricesByProduct) {
-      if (!buyer.pricesByProduct[pid]) buyer.pricesByProduct[pid] = target.pricesByProduct[pid]!;
-    }
-    for (const pid in target.adBudgetByProduct) {
-      if (!buyer.adBudgetByProduct[pid]) buyer.adBudgetByProduct[pid] = target.adBudgetByProduct[pid]!;
-    }
-
-    // Share bookkeeping: stakes IN the target vanish (bought out); the target's
-    // own stakes transfer to the buyer.
-    for (const hid in s.firms) delete s.firms[hid]!.sharesHeld[targetFirmId];
-    for (const tid in target.sharesHeld) {
-      if (tid === buyer.id) continue;
-      buyer.sharesHeld[tid] = Math.min(
-        MAX_STAKE_PCT,
-        (buyer.sharesHeld[tid] ?? 0) + target.sharesHeld[tid]!,
-      );
-    }
-
-    buyer.acquiredNames.push(target.name);
-    delete s.firms[targetFirmId];
-    emitEvent(s, 'success', 'finance',
-      `🤝 ${buyer.name} acquired ${target.name} for ${cost}¢ — facilities, staff, and brands absorbed.`,
-      buyer.id);
   }
 
   /** Net worth used for credit limits: cash + inventory value. */

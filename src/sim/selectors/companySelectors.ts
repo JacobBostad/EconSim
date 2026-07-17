@@ -10,6 +10,33 @@ import type { Citizen } from '../entities/Citizen';
 import type { FirmId } from '../core/Id';
 import { grossProfit, operatingProfit, netProfit } from '../entities/Accounting';
 import { getProduct } from '../data/products';
+import { OBJECTIVE_LADDER } from '../data/constants';
+
+export interface ObjectiveProgress {
+  /** Number of ladder tiers already reached (0..ladder length). */
+  reachedTiers: number;
+  /** Highest reached tier title, or null before the first win. */
+  reachedTitle: string | null;
+  /** The next target, or null when the ladder is complete. */
+  next: { valuation: number; title: string } | null;
+  valuation: number;
+}
+
+/** Where the player stands on the escalating objective ladder. */
+export function objectiveProgress(state: GameState): ObjectiveProgress {
+  const valuation = companyValuation(state, state.playerFirmId).valuation;
+  let reachedTiers = 0;
+  for (const tier of OBJECTIVE_LADDER) {
+    if (valuation >= tier.valuation) reachedTiers += 1;
+    else break;
+  }
+  return {
+    reachedTiers,
+    reachedTitle: reachedTiers > 0 ? OBJECTIVE_LADDER[reachedTiers - 1]!.title : null,
+    next: OBJECTIVE_LADDER[reachedTiers] ?? null,
+    valuation,
+  };
+}
 
 export function getFirm(state: GameState, firmId: FirmId): Firm | undefined {
   return state.firms[firmId];

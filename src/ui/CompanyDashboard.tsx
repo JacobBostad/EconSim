@@ -10,6 +10,7 @@ import {
   firmWarnings,
   companyValuation,
   rankings,
+  objectiveProgress,
 } from '../sim/selectors/companySelectors';
 import { formatMoney } from '../utils/formatMoney';
 import {
@@ -34,13 +35,20 @@ export function CompanyDashboard(): React.ReactElement {
   const trend = firm.accounting.dailyHistory.slice(-60);
   const val = companyValuation(state, firm.id);
   const standings = rankings(state);
-  const objPct = clamp((val.valuation / OBJECTIVE_VALUATION) * 100, 0, 100);
+  const objective = objectiveProgress(state);
+  const objTarget = objective.next?.valuation ?? OBJECTIVE_VALUATION;
+  const objPct = clamp((val.valuation / objTarget) * 100, 0, 100);
 
   return (
     <div>
       <div className="card" style={{ marginBottom: 10 }}>
         <div className="row between">
-          <strong>Objective — grow company value to {formatMoney(OBJECTIVE_VALUATION)}</strong>
+          <strong>
+            {objective.next
+              ? `Objective — grow company value to ${formatMoney(objective.next.valuation)} (${objective.next.title})`
+              : '🏆 All objectives complete — endless mode'}
+            {objective.reachedTitle && objective.next ? ` · rank earned: ${objective.reachedTitle}` : ''}
+          </strong>
           <span className="mono">{formatMoney(val.valuation)} ({objPct.toFixed(0)}%)</span>
         </div>
         <div className="bar" style={{ margin: '6px 0' }}>

@@ -1,28 +1,33 @@
 import React, { useState } from 'react';
 import { useGameStore } from '../store/useGameStore';
-import { companyValuation, playerRank } from '../sim/selectors/companySelectors';
-import { OBJECTIVE_VALUATION } from '../sim/data/constants';
+import { objectiveProgress, playerRank } from '../sim/selectors/companySelectors';
 import { formatMoney } from '../utils/formatMoney';
 
-/** Celebratory banner when the player hits the valuation objective. */
+/**
+ * Celebratory banner each time the player reaches a new tier on the objective
+ * ladder (Tycoon → Magnate → Business Empire). Dismissal is per-tier, so the
+ * next milestone celebrates again.
+ */
 export function ObjectiveBanner(): React.ReactElement | null {
   useGameStore((s) => s.version);
   const sim = useGameStore((s) => s.sim);
-  const [dismissed, setDismissed] = useState(false);
+  const [dismissedTier, setDismissedTier] = useState(0);
   const state = sim.getState();
-  const val = companyValuation(state, state.playerFirmId);
+  const prog = objectiveProgress(state);
   const rank = playerRank(state);
-  if (dismissed || val.valuation < OBJECTIVE_VALUATION) return null;
+  if (prog.reachedTiers === 0 || prog.reachedTiers <= dismissedTier) return null;
 
   const leader = rank.rank === 1;
   return (
     <div className="objective-banner">
       <span>
-        🏆 <strong>Objective reached</strong> — company value {formatMoney(val.valuation)}
-        {leader ? ' and you are the #1 firm in town!' : `. You rank #${rank.rank}/${rank.total} — overtake the leader!`}
-        {' '}Keep building, or start a new town.
+        🏆 <strong>{prog.reachedTitle}!</strong> — company value {formatMoney(prog.valuation)}
+        {leader ? ', and you are the #1 firm in town!' : `. You rank #${rank.rank}/${rank.total} — overtake the leader!`}
+        {prog.next
+          ? ` Next objective: ${formatMoney(prog.next.valuation)} (${prog.next.title}).`
+          : ' You have completed every objective — the town is yours.'}
       </span>
-      <button onClick={() => setDismissed(true)}>Dismiss</button>
+      <button onClick={() => setDismissedTier(prog.reachedTiers)}>Dismiss</button>
     </div>
   );
 }
