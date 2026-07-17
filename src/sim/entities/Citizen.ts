@@ -77,4 +77,9 @@ export interface Citizen {
   lastShopTick: number;
   /** Consecutive paydays the employer missed (drives quitting). */
   missedPaydays: number;
+  /**
+   * Productivity multiplier (~0.7..1.3). Grows with days worked, decays
+   * slightly while unemployed. Averaged per crew in ProductionSystem.
+   */
+  skill: number;
 }

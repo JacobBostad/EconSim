@@ -108,6 +108,7 @@ function CitizenView({ c, state }: { c: Citizen; state: GameState }): React.Reac
       </div>
       <div className="kv small"><span className="k">Employer</span><span>{employer?.name ?? 'unemployed'}</span></div>
       <div className="kv small"><span className="k">Wage / payday</span><span className="mono">{formatMoney(c.wage)}</span></div>
+      <div className="kv small"><span className="k">Skill</span><span className="mono">{c.skill.toFixed(2)}× {c.skill >= 1.2 ? '★' : ''}</span></div>
       <div className="kv small">
         <span className="k">
           <FormulaTooltip title="Satisfaction" explanation="Rises when employed and needs are met; falls with unmet needs and missed pay.">

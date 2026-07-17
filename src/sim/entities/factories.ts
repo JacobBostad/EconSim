@@ -47,6 +47,7 @@ export function createFacility(
     bottleneckReason: null,
     dailyStats: emptyFacilityDailyStats(),
     presentWorkers: 0,
+    presentSkill: 0,
     residentIds: [],
   };
   state.facilities[id] = fac;
@@ -142,6 +143,7 @@ export function createCitizen(
     dailyStats: { day: 0, wagesEarned: 0, spent: 0, purchases: 0, unmetNeeds: 0 },
     lastShopTick: -1000,
     missedPaydays: 0,
+    skill: rng.range(0.85, 1.05),
   };
   state.citizens[id] = cit;
   if (home) home.residentIds.push(id);

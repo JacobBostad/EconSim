@@ -85,6 +85,8 @@ export interface Facility {
   dailyStats: FacilityDailyStats;
   /** Workers physically present and working this tick (set by LaborSystem). */
   presentWorkers: number;
+  /** Sum of present workers' skill this tick (crew productivity). */
+  presentSkill: number;
   /** For homes: which citizen lives here (informational). */
   residentIds: CitizenId[];
 }

@@ -50,9 +50,16 @@ export function runProductionSystem(ctx: SimContext): void {
       }
     }
 
+    // Crew skill scales output: an experienced crew (avg skill up to 1.3)
+    // outproduces a green one. Falls back to neutral when skill is untracked.
+    const avgSkill =
+      fac.presentWorkers > 0 && fac.presentSkill > 0
+        ? fac.presentSkill / fac.presentWorkers
+        : 1;
     const workerFactor =
       recipe.laborRequired > 0
-        ? Math.min(1, fac.presentWorkers / recipe.laborRequired)
+        ? Math.min(1, fac.presentWorkers / recipe.laborRequired) *
+          Math.min(1.3, Math.max(0.7, avgSkill))
         : 1;
 
     // Output capacity check.

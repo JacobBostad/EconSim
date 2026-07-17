@@ -73,6 +73,7 @@ function newFacility(
     bottleneckReason: null,
     dailyStats: emptyFacilityDailyStats(),
     presentWorkers: 0,
+    presentSkill: 0,
     residentIds: [],
   };
   b.state.facilities[id] = fac;
@@ -147,6 +148,7 @@ function newCitizen(b: Builder, homeId: string, homeLoc: Vec2): Citizen {
     dailyStats: { day: 0, wagesEarned: 0, spent: 0, purchases: 0, unmetNeeds: 0 },
     lastShopTick: -1000,
     missedPaydays: 0,
+    skill: b.rng.range(0.85, 1.05),
   };
   b.state.citizens[id] = cit;
   b.state.facilities[homeId]!.residentIds.push(id);

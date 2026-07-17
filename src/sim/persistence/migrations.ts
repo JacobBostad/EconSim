@@ -103,6 +103,7 @@ function normalize(state: GameState): GameState {
     c.lastShopTick = c.lastShopTick ?? -1000;
     c.missedPaydays = c.missedPaydays ?? 0;
     c.storeReliability = c.storeReliability ?? {};
+    c.skill = c.skill ?? 1.0;
     // Products added after the save was written: give citizens the need.
     for (const pid of CONSUMER_PRODUCT_IDS) {
       if (!c.needs.some((n) => n.productId === pid)) {
@@ -111,6 +112,10 @@ function normalize(state: GameState): GameState {
       }
       c.preferences[pid] = c.preferences[pid] ?? 1;
     }
+  }
+  for (const id in state.facilities) {
+    const f = state.facilities[id]!;
+    f.presentSkill = f.presentSkill ?? 0;
   }
   // ...and give the market a stat entry for them.
   for (const pid of ALL_PRODUCT_IDS) {
