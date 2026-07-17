@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useGameStore } from '../store/useGameStore';
 import type { Speed } from '../sim/core/Commands';
+import { isMuted, setMuted } from './sound';
 
 const SPEEDS: Speed[] = [1, 5, 20, 100];
 
@@ -35,7 +36,23 @@ export function Controls(): React.ReactElement {
         <button onClick={save}>💾 Save</button>
         <button onClick={load} disabled={!hasSaveFn()}>📂 Load</button>
         <button onClick={() => setShowNewGame(true)}>🔄 New</button>
+        <MuteButton />
       </div>
     </div>
+  );
+}
+
+function MuteButton(): React.ReactElement {
+  const [muted, setMutedState] = useState(isMuted());
+  return (
+    <button
+      title={muted ? 'Unmute sound effects' : 'Mute sound effects'}
+      onClick={() => {
+        setMuted(!muted);
+        setMutedState(!muted);
+      }}
+    >
+      {muted ? '🔇' : '🔊'}
+    </button>
   );
 }
