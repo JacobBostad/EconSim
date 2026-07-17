@@ -601,6 +601,16 @@ export class TownRenderer {
         ctx.fillStyle = 'rgba(88,166,255,0.22)'; ctx.fill();
       }
       this.drawBuildingIcon(sp.x, sp.y, size, f.type, BUILDING_FILL[f.type], f.status === 'closed');
+      // Upgrade pips: one gold dot per level above 1, along the icon's top edge.
+      if (f.level > 1) {
+        const ctx2 = this.ctx;
+        ctx2.fillStyle = '#f0c040';
+        for (let li = 0; li < f.level - 1; li++) {
+          ctx2.beginPath();
+          ctx2.arc(sp.x - size * 0.35 + li * size * 0.35, sp.y - size * 1.05, Math.max(1.4, size * 0.13), 0, Math.PI * 2);
+          ctx2.fill();
+        }
+      }
 
       // lit windows at night (life after dark)
       if (night > 0.05 && f.status !== 'closed') {
