@@ -66,6 +66,7 @@ function finalizeAndReset(ctx: SimContext): void {
       unmetDemand: stat.unmetDemand,
       totalInventory: stat.totalInventory,
       sharesByFirm: { ...shares },
+      tradePrice: state.tradeCity.pricesByProduct[pid] ?? 0,
     });
     if (stat.history.length > state.config.maxDailyHistory) {
       stat.history.splice(0, stat.history.length - state.config.maxDailyHistory);

@@ -18,6 +18,8 @@ export interface MarketDaySnapshot {
   totalInventory: number;
   /** firmId -> share of units sold that day. */
   sharesByFirm: Record<FirmId, number>;
+  /** Port Rosa's export price that day (cents). */
+  tradePrice: number;
 }
 
 export interface MarketStat {

@@ -101,7 +101,10 @@ function normalize(state: GameState): GameState {
   }
   for (const pid in state.marketStats) {
     const stat = state.marketStats[pid]!;
-    stat.history = stat.history ?? [];
+    stat.history = (stat.history ?? []).map((h) => ({
+      ...h,
+      tradePrice: h.tradePrice ?? getProduct(pid).basePrice,
+    }));
   }
   for (const id in state.citizens) {
     const c = state.citizens[id]!;

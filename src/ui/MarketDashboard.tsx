@@ -86,6 +86,12 @@ export function MarketDashboard(): React.ReactElement {
                 points={hist.map((h) => h.unmetDemand)}
                 color="var(--red)"
               />
+              <TrendCard
+                label={`${name} — Port Rosa`}
+                latest={formatMoney(hist[hist.length - 1]!.tradePrice)}
+                points={hist.map((h) => h.tradePrice)}
+                color="var(--purple, #d2a8ff)"
+              />
             </React.Fragment>
           );
         })}
