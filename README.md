@@ -200,6 +200,19 @@ clamped to [floor, ceil] × basePrice
 The AI uses all three (advertises, invests in quality when flush, borrows to
 **open new outlets** where demand is unmet), so the world grows on its own.
 
+**Land value** (`core/LandValue.ts`): ground near homes (foot traffic) costs
+0.8×–1.6× to build on and rent, shown as a green→red heatmap while placing.
+Downtown premiums buy real customers via the distance term in store scoring.
+
+**Labor market** (`LaborSystem.ts`): workers carry a skill multiplier
+(~0.85→1.3 with tenure; crews produce at average skill) and jump to firms
+paying ≥15% more — wage policy poaches veterans or loses yours.
+
+**M&A** (`core/Acquisition.ts`): buy out AI rivals at 1.3× valuation (0.9×
+distressed, credit for held shares) and absorb everything; flush AI firms
+rescue-acquire dying rivals too. Objectives escalate on a ladder (Tycoon
+$50k → Magnate $150k → Business Empire $400k).
+
 **World events** (`WorldEventSystem.ts`, defs in `data/worldEvents.ts`): once per
 day there is a 20% chance a news event starts (max 2 active, opposites never
 overlap). Events are temporary town-wide modifiers with a headline — economic

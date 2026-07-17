@@ -116,11 +116,23 @@ function processReorders(ctx: SimContext): void {
         note: `Imported ${qty} ${product.name}`,
       });
     } else {
-      const avail = getQuantity(source.outputInventory, contract.productId);
+      // Producers ship finished goods (output inventory). Warehouses are
+      // relays: deliveries land in their INPUT inventory, so they ship from
+      // whichever bag holds the product — otherwise a warehouse could receive
+      // goods but never forward them.
+      let bag = source.outputInventory;
+      if (
+        source.type === 'warehouse' &&
+        getQuantity(bag, contract.productId) <= 0 &&
+        getQuantity(source.inputInventory, contract.productId) > 0
+      ) {
+        bag = source.inputInventory;
+      }
+      const avail = getQuantity(bag, contract.productId);
       qty = Math.min(want, avail);
       if (qty <= 0) continue;
-      quality = source.outputInventory[contract.productId]?.quality ?? product.defaultQuality;
-      removeStock(source.outputInventory, contract.productId, qty);
+      quality = bag[contract.productId]?.quality ?? product.defaultQuality;
+      removeStock(bag, contract.productId, qty);
     }
 
     source.dailyStats.unitsShipped += qty;
