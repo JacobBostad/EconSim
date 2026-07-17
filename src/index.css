@@ -100,6 +100,19 @@ canvas { display: block; width: 100%; height: 100%; }
 
 .report-grade { font-size: 34px; font-weight: 800; line-height: 1; }
 
+.gazette { max-width: 760px; margin: 0 auto; }
+.gazette-masthead { text-align: center; border-bottom: 3px double var(--border); padding-bottom: 8px; margin-bottom: 12px; }
+.gazette-title { font-family: Georgia, 'Times New Roman', serif; font-size: 26px; font-weight: 700; letter-spacing: 1px; }
+.gazette-dateline { color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: 1.2px; margin-bottom: 4px; }
+.gazette-lead { font-family: Georgia, 'Times New Roman', serif; font-size: 16px; font-weight: 600; line-height: 1.35; }
+.gazette-ticker { border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); padding: 4px 0; margin: 8px 0; color: var(--muted); overflow-x: auto; white-space: nowrap; }
+.gazette-briefs { margin: 6px 0 0; padding-left: 18px; }
+.gazette-briefs li { margin-bottom: 2px; }
+.gazette .sev-success { color: var(--green); }
+.gazette .sev-warning { color: var(--amber); }
+.gazette .sev-danger { color: var(--red); }
+.gazette .sev-info { color: var(--text); }
+
 .difficulty-card {
   flex: 1; display: flex; flex-direction: column; gap: 4px; align-items: flex-start;
   text-align: left; padding: 10px 12px; border-radius: 8px; min-width: 150px;
