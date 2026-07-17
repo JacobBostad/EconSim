@@ -14,6 +14,7 @@ import { AchievementToast } from './AchievementToast';
 import { NewGameModal } from './NewGameModal';
 import { MissionPanel } from './MissionPanel';
 import { SoundDirector } from './SoundDirector';
+import { ReportCardModal } from './ReportCardModal';
 
 export function App(): React.ReactElement {
   // Subscribe to version so the whole tree re-renders as the sim advances.
@@ -45,6 +46,7 @@ export function App(): React.ReactElement {
       </div>
       <Intro />
       <NewGameModal />
+      <ReportCardModal />
       <SoundDirector />
     </div>
   );
