@@ -58,6 +58,12 @@ export interface UnlockedAchievement {
   day: number;
 }
 
+/** A completed guided mission (def lives in data/missions.ts). */
+export interface CompletedMission {
+  id: string;
+  day: number;
+}
+
 export interface GameState {
   saveVersion: number;
   seed: number;
@@ -87,6 +93,8 @@ export interface GameState {
   worldEvents: ActiveWorldEvent[];
   /** Unlocked achievements (permanent). */
   achievements: UnlockedAchievement[];
+  /** Completed guided missions (ordered chain; see data/missions.ts). */
+  missions: CompletedMission[];
 
   idCounters: IdCounters;
   selectedEntityId: EntityId | null;

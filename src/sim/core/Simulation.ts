@@ -41,6 +41,7 @@ import type { Contract } from '../entities/Contract';
 import { runTimeSystem } from '../systems/TimeSystem';
 import { runWorldEventSystem } from '../systems/WorldEventSystem';
 import { runAchievementSystem } from '../systems/AchievementSystem';
+import { runMissionSystem } from '../systems/MissionSystem';
 import { runMarketStatsSystem } from '../systems/MarketStatsSystem';
 import { runAIStrategySystem } from '../systems/AIStrategySystem';
 import { runEventLogSystem } from '../systems/EventLogSystem';
@@ -88,6 +89,7 @@ const SYSTEMS: SystemFn[] = [
   runLogisticsSystem,
   runRetailDemandSystem,
   runAchievementSystem, // hourly; sees the fully-updated tick
+  runMissionSystem, // hourly; guided chain advances after achievements
 ];
 
 export class Simulation {

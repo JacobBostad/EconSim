@@ -58,6 +58,7 @@ function normPeriod(p: Partial<AccountingPeriod> | undefined): AccountingPeriod 
 function normalize(state: GameState): GameState {
   state.worldEvents = state.worldEvents ?? [];
   state.achievements = state.achievements ?? [];
+  state.missions = state.missions ?? [];
   // Difficulty knobs (older saves predate presets -> standard values).
   state.config.difficulty = state.config.difficulty ?? 'standard';
   state.config.playerStartCash = state.config.playerStartCash ?? 15000 * 100;

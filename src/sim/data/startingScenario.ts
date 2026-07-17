@@ -201,6 +201,7 @@ export function createInitialState(
     transactions: [],
     worldEvents: [],
     achievements: [],
+    missions: [],
     idCounters: counters,
     selectedEntityId: null,
     perf: { lastTickMs: 0, avgTickMs: 0, ticksSimulated: 0 },
