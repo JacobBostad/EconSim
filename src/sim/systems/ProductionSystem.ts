@@ -93,9 +93,11 @@ export function runProductionSystem(ctx: SimContext): void {
 
     // inputAvailability == 1 here; seasons cycle farm output and world events
     // (droughts, rich veins...) scale it further while they last.
+    const levelMult = 1 + 0.15 * (fac.level - 1);
     const efficiency =
       recipe.baseEfficiency *
       workerFactor *
+      levelMult *
       worldProductionMult(state, fac.type) *
       seasonProductionMult(state, fac.type);
     fac.productionProgress += efficiency;

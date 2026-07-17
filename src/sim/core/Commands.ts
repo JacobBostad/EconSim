@@ -43,6 +43,7 @@ export type Command =
   | { type: 'SET_PRICE'; firmId: FirmId; productId: ProductId; price: number }
   | { type: 'SET_AUTO_PRICE'; firmId: FirmId; productId: ProductId; enabled: boolean }
   | { type: 'BUILD_CHAIN'; firmId: FirmId; productId: ProductId }
+  | { type: 'UPGRADE_FACILITY'; firmId: FirmId; facilityId: FacilityId }
   | {
       type: 'EXPORT_GOODS';
       firmId: FirmId;

@@ -30,6 +30,7 @@ import { CENTS, RND_QUALITY_GAIN_PER_1000 } from '../data/constants';
 import { companyValuation } from '../selectors/companySelectors';
 import { acquisitionCost, performAcquisition } from '../core/Acquisition';
 import { landCostMultiplier, landValueAt } from '../core/LandValue';
+import { MAX_FACILITY_LEVEL, upgradeCost, upgradeFacility } from '../core/Upgrades';
 
 export function runAIStrategySystem(ctx: SimContext): void {
   if (!isDayBoundary(ctx.state.tick, ctx.config)) return;
@@ -46,6 +47,7 @@ export function runAIStrategySystem(ctx: SimContext): void {
       maybeExpand(ctx, firm.id);
       maybeBuyShares(ctx, firm.id);
       maybeExportSurplus(ctx, firm.id);
+      maybeUpgrade(ctx, firm.id);
       if (maybeRescueAcquisition(ctx, firm.id)) continue; // firm map changed
     }
 
@@ -318,18 +320,33 @@ function maybeExportSurplus(ctx: SimContext, firmId: string): void {
   }
 }
 
+/** Flush AI firms level up a production facility now and then. */
+function maybeUpgrade(ctx: SimContext, firmId: string): void {
+  const { state, rng } = ctx;
+  const firm = state.firms[firmId]!;
+  if (firm.cash < 45000_00 || !rng.chance(0.08)) return;
+  for (const facId of firm.facilities) {
+    const fac = state.facilities[facId];
+    if (!fac || (fac.type !== 'farm' && fac.type !== 'mine' && fac.type !== 'factory')) continue;
+    if (fac.level >= MAX_FACILITY_LEVEL) continue;
+    const cost = upgradeCost(state, facId);
+    if (firm.cash - cost < 30000_00) continue;
+    upgradeFacility(state, firmId, facId);
+    return;
+  }
+}
+
 function restaff(ctx: SimContext, firmId: string): void {
   const { state } = ctx;
   const firm = state.firms[firmId]!;
   for (const facId of firm.facilities) {
     const fac = state.facilities[facId];
     if (!fac || fac.status === 'closed') continue;
-    const def = getFacilityDef(fac.defId);
-    let desired = Math.min(def.workerCapacity, 2);
+    let desired = Math.min(fac.workerCapacity, 2);
     if (fac.activeRecipeId) {
-      desired = Math.min(def.workerCapacity, getRecipe(fac.activeRecipeId).laborRequired);
+      desired = Math.min(fac.workerCapacity, getRecipe(fac.activeRecipeId).laborRequired);
     } else if (fac.type === 'retail') {
-      desired = Math.min(def.workerCapacity, 2);
+      desired = Math.min(fac.workerCapacity, 2);
     }
     while (fac.employees.length < desired) {
       // Only hire if the firm can cover a few days of wages.

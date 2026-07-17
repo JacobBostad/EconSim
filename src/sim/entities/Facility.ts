@@ -87,6 +87,10 @@ export interface Facility {
   presentWorkers: number;
   /** Sum of present workers' skill this tick (crew productivity). */
   presentSkill: number;
+  /** Upgrade level (1..3): +40% storage, +15% efficiency, +1 worker cap each. */
+  level: number;
+  /** Effective worker capacity (base def capacity + upgrades). */
+  workerCapacity: number;
   /** For homes: which citizen lives here (informational). */
   residentIds: CitizenId[];
 }

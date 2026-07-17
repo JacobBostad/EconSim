@@ -16,6 +16,7 @@ import { CONSUMER_PRODUCT_IDS, ALL_PRODUCT_IDS } from '../data/products';
 import { emptyMarketStat } from '../entities/Market';
 import { defaultNeedFor } from '../entities/factories';
 import { getProduct } from '../data/products';
+import { getFacilityDef } from '../data/facilityDefinitions';
 
 type Raw = Record<string, unknown>;
 
@@ -124,6 +125,8 @@ function normalize(state: GameState): GameState {
   for (const id in state.facilities) {
     const f = state.facilities[id]!;
     f.presentSkill = f.presentSkill ?? 0;
+    f.level = f.level ?? 1;
+    f.workerCapacity = f.workerCapacity ?? getFacilityDef(f.defId).workerCapacity;
   }
   // ...and give the market a stat entry for them.
   state.tradeCity = state.tradeCity ?? { pricesByProduct: {} };

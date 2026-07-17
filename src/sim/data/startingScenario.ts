@@ -75,6 +75,8 @@ function newFacility(
     dailyStats: emptyFacilityDailyStats(),
     presentWorkers: 0,
     presentSkill: 0,
+    level: 1,
+    workerCapacity: def.workerCapacity,
     residentIds: [],
   };
   b.state.facilities[id] = fac;

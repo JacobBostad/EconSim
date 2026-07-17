@@ -12,7 +12,6 @@
 import type { GameState, SimContext } from '../core/GameState';
 import { emitEvent } from '../core/GameState';
 import { isDayBoundary } from '../core/Tick';
-import { getFacilityDef } from '../data/facilityDefinitions';
 import type { FacilityId, CitizenId } from '../core/Id';
 import { clamp } from '../../utils/clamp';
 
@@ -41,8 +40,7 @@ export function hireCitizen(
   if (!firm) return false;
   const cit = state.citizens[citizenId];
   if (!cit || cit.employmentStatus === 'employed') return false;
-  const def = getFacilityDef(fac.defId);
-  if (fac.employees.length >= def.workerCapacity) return false;
+  if (fac.employees.length >= fac.workerCapacity) return false;
 
   cit.employerFirmId = firm.id;
   cit.workplaceFacilityId = fac.id;
@@ -139,8 +137,7 @@ function runJobMarket(ctx: SimContext): void {
       const firm = state.firms[fac.ownerFirmId];
       if (!firm || (firm.ownerType !== 'player' && firm.ownerType !== 'ai')) continue;
       if (firm.id === cit.employerFirmId) continue;
-      const def = getFacilityDef(fac.defId);
-      if (def.workerCapacity <= 0 || fac.employees.length >= def.workerCapacity) continue;
+      if (fac.workerCapacity <= 0 || fac.employees.length >= fac.workerCapacity) continue;
       if (firm.wagePolicy.baseWage >= bestWage) {
         bestWage = firm.wagePolicy.baseWage;
         best = fac.id;

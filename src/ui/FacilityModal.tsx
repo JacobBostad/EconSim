@@ -18,6 +18,7 @@ import { contractsByDestination } from '../sim/selectors/supplyChainSelectors';
 import { getQuantity } from '../sim/entities/Inventory';
 import { formatMoney } from '../utils/formatMoney';
 import { CENTS } from '../sim/data/constants';
+import { upgradeCost } from '../sim/core/Upgrades';
 
 export function FacilityActions({ fac }: { fac: Facility }): React.ReactElement {
   const sim = useGameStore((s) => s.sim);
@@ -159,15 +160,35 @@ export function FacilityActions({ fac }: { fac: Facility }): React.ReactElement 
         </div>
       )}
 
+      {/* Upgrade */}
+      {isPlayer && def.buildCost > 0 && (
+        <div className="card">
+          <div className="row between">
+            <span className="section-title" style={{ margin: 0 }}>
+              Level {fac.level}{fac.level >= 3 ? ' (max)' : ''}
+            </span>
+            {fac.level < 3 && (
+              <button
+                disabled={(firm?.cash ?? 0) < upgradeCost(state, fac.id)}
+                title="+40% storage, +15% production speed, +1 worker slot"
+                onClick={() => dispatch({ type: 'UPGRADE_FACILITY', firmId: fac.ownerFirmId, facilityId: fac.id })}
+              >
+                ⬆ Upgrade to L{fac.level + 1} — {formatMoney(upgradeCost(state, fac.id))}
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Workers */}
       <div className="card">
         <div className="section-title" style={{ marginTop: 0 }}>
-          Workers {employees.length}/{def.workerCapacity} · present {fac.presentWorkers}
+          Workers {employees.length}/{fac.workerCapacity} · present {fac.presentWorkers}
         </div>
         {isPlayer && (
           <div className="row" style={{ marginBottom: 6 }}>
             <button
-              disabled={employees.length >= def.workerCapacity}
+              disabled={employees.length >= fac.workerCapacity}
               onClick={() => dispatch({ type: 'HIRE_WORKER', facilityId: fac.id, citizenId: null })}
             >
               + Hire unemployed
