@@ -41,6 +41,8 @@ export type Command =
       productId: ProductId | null;
     }
   | { type: 'SET_PRICE'; firmId: FirmId; productId: ProductId; price: number }
+  | { type: 'SET_AUTO_PRICE'; firmId: FirmId; productId: ProductId; enabled: boolean }
+  | { type: 'BUILD_CHAIN'; firmId: FirmId; productId: ProductId }
   | { type: 'SET_WAGE'; firmId: FirmId; wage: number }
   | { type: 'HIRE_WORKER'; facilityId: FacilityId; citizenId: CitizenId | null }
   | { type: 'FIRE_WORKER'; facilityId: FacilityId; citizenId: CitizenId }

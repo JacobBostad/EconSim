@@ -49,6 +49,13 @@ export function runAIStrategySystem(ctx: SimContext): void {
     const op = operatingProfit(firm.accounting.today);
     firm.strategy.lossStreak = op < 0 ? firm.strategy.lossStreak + 1 : 0;
   }
+
+  // Player QoL: the same mean-reverting price controller manages any player
+  // product with auto-price enabled.
+  const player = state.firms[state.playerFirmId];
+  if (player && Object.values(player.autoPriceByProduct).some(Boolean)) {
+    adjustPrices(ctx, player.id, true);
+  }
 }
 
 /**
@@ -260,7 +267,7 @@ function restaff(ctx: SimContext, firmId: string): void {
   }
 }
 
-function adjustPrices(ctx: SimContext, firmId: string): void {
+function adjustPrices(ctx: SimContext, firmId: string, onlyAutoPriced = false): void {
   const { state, config, rng } = ctx;
   const firm = state.firms[firmId]!;
   const losing = firm.strategy.lossStreak >= 3;
@@ -269,6 +276,7 @@ function adjustPrices(ctx: SimContext, firmId: string): void {
     const fac = state.facilities[facId];
     if (!fac || fac.type !== 'retail' || !fac.retailProductId) continue;
     const pid = fac.retailProductId;
+    if (onlyAutoPriced && !firm.autoPriceByProduct[pid]) continue;
     const product = getProduct(pid);
     const base = product.basePrice;
     const stock = getQuantity(fac.inputInventory, pid);

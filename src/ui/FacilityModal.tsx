@@ -101,6 +101,23 @@ export function FacilityActions({ fac }: { fac: Facility }): React.ReactElement 
               editable={isPlayer}
             />
           )}
+          {fac.retailProductId && firm && isPlayer && (
+            <label className="row small" style={{ marginTop: 4, cursor: 'pointer' }}>
+              <input
+                type="checkbox"
+                checked={firm.autoPriceByProduct[fac.retailProductId] ?? false}
+                onChange={(e) =>
+                  dispatch({
+                    type: 'SET_AUTO_PRICE',
+                    firmId: firm.id,
+                    productId: fac.retailProductId!,
+                    enabled: e.target.checked,
+                  })
+                }
+              />
+              Auto-price (daily controller: raise on sellouts, cut on surplus)
+            </label>
+          )}
           {fac.retailProductId && firm && (
             <MarketingControls firm={firm} productId={fac.retailProductId} editable={isPlayer} />
           )}

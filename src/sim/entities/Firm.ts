@@ -67,4 +67,6 @@ export interface Firm {
   sharesHeld: Record<FirmId, number>;
   /** Names of firms this firm has fully acquired (M&A history). */
   acquiredNames: string[];
+  /** Products whose retail price the daily auto-pricer manages (player QoL). */
+  autoPriceByProduct: Record<ProductId, boolean>;
 }

@@ -112,6 +112,7 @@ function newFirm(
     interestRatePerDay: 0.0009,
     sharesHeld: {},
     acquiredNames: [],
+    autoPriceByProduct: {},
   };
   b.state.firms[id] = firm;
   return firm;

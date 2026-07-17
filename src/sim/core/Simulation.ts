@@ -38,6 +38,7 @@ import {
 } from '../data/constants';
 import { companyValuation } from '../selectors/companySelectors';
 import { worldImportMult } from '../data/worldEvents';
+import { CHAIN_BLUEPRINTS, chainCost } from '../data/chains';
 import type { Contract } from '../entities/Contract';
 
 import { runTimeSystem } from '../systems/TimeSystem';
@@ -173,6 +174,14 @@ export class Simulation {
       case 'SET_PRICE':
         this.setPrice(command);
         return;
+      case 'SET_AUTO_PRICE': {
+        const firm = s.firms[command.firmId];
+        if (firm) firm.autoPriceByProduct[command.productId] = command.enabled;
+        return;
+      }
+      case 'BUILD_CHAIN':
+        this.buildChain(command.firmId, command.productId);
+        return;
       case 'SET_WAGE':
         this.setWage(command);
         return;
@@ -272,6 +281,95 @@ export class Simulation {
       else firm.sharesHeld[targetFirmId] = remaining;
       emitEvent(s, 'info', 'finance', `${firm.name} sold ${-applied}% of ${target.name} for ${cost}¢.`, targetFirmId);
     }
+  }
+
+  /**
+   * Chain wizard: build producer → factory → store for a consumer product in
+   * one command, wire the two supply contracts, staff every stage from the
+   * unemployed pool, select recipes, and seed the retail price. Deterministic
+   * placement scans fixed rows for clear ground.
+   */
+  private buildChain(firmId: FirmId, productId: string): void {
+    const s = this.state;
+    const firm = s.firms[firmId];
+    const bp = CHAIN_BLUEPRINTS[productId];
+    if (!firm || !bp) return;
+
+    const cost = chainCost(bp);
+    if (!canAfford(s, firmAccount(firmId), cost)) {
+      emitEvent(s, 'danger', 'player', `A full ${getProduct(bp.productId).name} chain costs ${cost}¢ — not enough cash.`, firmId);
+      return;
+    }
+
+    const findSpot = (y: number): { x: number; y: number } | null => {
+      for (let x = 12; x <= s.config.mapWidth - 8; x += 6) {
+        let clear = true;
+        for (const fid in s.facilities) {
+          const loc = s.facilities[fid]!.location;
+          const dx = loc.x - x;
+          const dy = loc.y - y;
+          if (dx * dx + dy * dy < 36) {
+            clear = false;
+            break;
+          }
+        }
+        if (clear) return { x, y };
+      }
+      return null;
+    };
+    const spots = [findSpot(20), findSpot(33), findSpot(51)];
+    if (spots.some((p) => p === null)) {
+      emitEvent(s, 'warning', 'player', 'No clear ground for a full chain — build the stages manually.', firmId);
+      return;
+    }
+
+    const build = (defId: string, loc: { x: number; y: number }) => {
+      const fac = createFacility(s, defId, firmId, loc);
+      const def = getFacilityDef(defId);
+      if (def.buildCost > 0) {
+        recordTransaction(s, {
+          from: firmAccount(firmId), to: WORLD_ACCOUNT, amount: def.buildCost,
+          firmId, category: 'buildSpend', note: `Built ${def.name}`,
+        });
+      }
+      return fac;
+    };
+    const producer = build(bp.producerDefId, spots[0]!);
+    const factory = build('factory', spots[1]!);
+    const store = build('retail', spots[2]!);
+
+    producer.activeRecipeId = bp.producerRecipeId;
+    factory.activeRecipeId = bp.factoryRecipeId;
+    store.retailProductId = bp.productId;
+    if (!firm.pricesByProduct[bp.productId]) {
+      firm.pricesByProduct[bp.productId] = getProduct(bp.productId).basePrice;
+    }
+
+    const staff = (facilityId: string, count: number): void => {
+      for (let i = 0; i < count; i++) {
+        const cid = findUnemployed(s);
+        if (!cid || !hireCitizen(s, facilityId, cid)) break;
+      }
+    };
+    staff(producer.id, getRecipe(bp.producerRecipeId).laborRequired);
+    staff(factory.id, getRecipe(bp.factoryRecipeId).laborRequired);
+    staff(store.id, 1);
+
+    const wire = (sourceId: string, destId: string, pid: string): void => {
+      const id = nextId(s.idCounters, 'ctr');
+      s.contracts[id] = {
+        id, ownerFirmId: firmId, sourceFacilityId: sourceId,
+        destinationFacilityId: destId, productId: pid,
+        targetQuantity: 40, reorderPoint: 16, maxInventory: 80,
+        transportCost: 0, active: true,
+      };
+    };
+    wire(producer.id, factory.id, bp.inputProductId);
+    wire(factory.id, store.id, bp.productId);
+
+    emitEvent(s, 'success', 'player',
+      `🪄 Built a full ${getProduct(bp.productId).name} chain: ${producer.name} → ${factory.name} → ${store.name}, wired and staffed.`,
+      store.id);
   }
 
   /**
