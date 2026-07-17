@@ -11,6 +11,7 @@ import { Intro } from './Intro';
 import { ObjectiveBanner } from './ObjectiveBanner';
 import { WorldEventTicker } from './WorldEventTicker';
 import { AchievementToast } from './AchievementToast';
+import { NewGameModal } from './NewGameModal';
 
 export function App(): React.ReactElement {
   // Subscribe to version so the whole tree re-renders as the sim advances.
@@ -40,6 +41,7 @@ export function App(): React.ReactElement {
         <BottomBar />
       </div>
       <Intro />
+      <NewGameModal />
     </div>
   );
 }

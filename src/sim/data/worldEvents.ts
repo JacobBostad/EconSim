@@ -233,8 +233,6 @@ export function getWorldEventDef(id: string): WorldEventDef | undefined {
   return DEF_BY_ID[id];
 }
 
-/** Chance per day that a new world event starts (when below the cap). */
-export const WORLD_EVENT_DAILY_CHANCE = 0.2;
 /** At most this many events are active at once. */
 export const MAX_ACTIVE_WORLD_EVENTS = 2;
 

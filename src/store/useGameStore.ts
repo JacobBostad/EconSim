@@ -20,6 +20,7 @@
 import { create } from 'zustand';
 import { Simulation } from '../sim/core/Simulation';
 import { createInitialState } from '../sim/data/startingScenario';
+import { configForDifficulty, type Difficulty } from '../sim/core/SimulationConfig';
 import type { GameState } from '../sim/core/GameState';
 import type { Command, Speed } from '../sim/core/Commands';
 import type { EntityId, FacilityDefId } from '../sim/core/Id';
@@ -51,6 +52,8 @@ interface GameStore {
   dashboard: DashboardTab;
   showIntro: boolean;
   setShowIntro: (v: boolean) => void;
+  showNewGame: boolean;
+  setShowNewGame: (v: boolean) => void;
   /** Wall-clock ms at the last tick, exposed for render interpolation. */
   lastTickAt: number;
   tickIntervalMs: number;
@@ -61,7 +64,7 @@ interface GameStore {
   setSpeed: (speed: Speed) => void;
   togglePause: () => void;
 
-  newGame: (seed?: number) => void;
+  newGame: (seed?: number, difficulty?: Difficulty) => void;
   save: () => void;
   load: () => void;
   hasSave: () => boolean;
@@ -103,6 +106,8 @@ export const useGameStore = create<GameStore>((set, get) => {
       if (!v) { try { localStorage.setItem('econsim.introSeen', '1'); } catch { /* ignore */ } }
       set({ showIntro: v });
     },
+    showNewGame: false,
+    setShowNewGame: (v) => set({ showNewGame: v }),
     lastTickAt: performance.now(),
     tickIntervalMs: 1000 / SPEED_TPS[1],
 
@@ -131,9 +136,9 @@ export const useGameStore = create<GameStore>((set, get) => {
       bump(true);
     },
 
-    newGame: (seed = Math.floor(Math.random() * 1_000_000)) => {
-      get().sim.setState(createInitialState(seed));
-      set({ buildDefId: null });
+    newGame: (seed = Math.floor(Math.random() * 1_000_000), difficulty = 'standard') => {
+      get().sim.setState(createInitialState(seed, configForDifficulty(difficulty)));
+      set({ buildDefId: null, showNewGame: false });
       bump(true);
     },
 

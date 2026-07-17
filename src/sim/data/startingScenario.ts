@@ -33,7 +33,6 @@ import { SAVE_VERSION } from '../core/GameState';
 
 const NUM_HOMES = 20;
 const CITIZENS_PER_HOME = 2;
-const PLAYER_START_CASH = dollars(15000);
 const CITIZEN_START_CASH = dollars(400);
 const DEFAULT_AI_WAGE = dollars(14);
 const PLAYER_DEFAULT_WAGE = dollars(15);
@@ -245,7 +244,7 @@ export function createInitialState(
     b,
     'Player Holdings',
     'player',
-    PLAYER_START_CASH,
+    state.config.playerStartCash,
     emptyStrategy('none'),
     PLAYER_DEFAULT_WAGE,
   );

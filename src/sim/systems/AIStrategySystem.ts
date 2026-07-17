@@ -94,7 +94,7 @@ function maybeExpand(ctx: SimContext, firmId: string): void {
   if (!product) return;
   const stat = state.marketStats[product]!;
   if (stat.unmetDemand < 14 || lost < 6) return; // only under real shortage
-  if (!rng.chance(0.5)) return; // not every eligible day
+  if (!rng.chance(ctx.config.aiExpandChance)) return; // not every eligible day
 
   const def = getFacilityDef('retail');
   const cost = def.buildCost;

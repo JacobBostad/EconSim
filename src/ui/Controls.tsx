@@ -10,7 +10,7 @@ export function Controls(): React.ReactElement {
   const togglePause = useGameStore((s) => s.togglePause);
   const save = useGameStore((s) => s.save);
   const load = useGameStore((s) => s.load);
-  const newGame = useGameStore((s) => s.newGame);
+  const setShowNewGame = useGameStore((s) => s.setShowNewGame);
   const hasSaveFn = useGameStore((s) => s.hasSave);
   const state = sim.getState();
 
@@ -34,15 +34,7 @@ export function Controls(): React.ReactElement {
       <div className="row" style={{ marginTop: 6 }}>
         <button onClick={save}>💾 Save</button>
         <button onClick={load} disabled={!hasSaveFn()}>📂 Load</button>
-        <button
-          onClick={() => {
-            if (confirm('Start a new economy? Unsaved progress will be lost.')) {
-              newGame(Math.floor(Math.random() * 1_000_000));
-            }
-          }}
-        >
-          🔄 New
-        </button>
+        <button onClick={() => setShowNewGame(true)}>🔄 New</button>
       </div>
     </div>
   );

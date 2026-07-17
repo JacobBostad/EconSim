@@ -19,7 +19,6 @@ import { isDayBoundary } from '../core/Tick';
 import {
   WORLD_EVENT_DEFS,
   getWorldEventDef,
-  WORLD_EVENT_DAILY_CHANCE,
   MAX_ACTIVE_WORLD_EVENTS,
   type WorldEventDef,
 } from '../data/worldEvents';
@@ -45,7 +44,7 @@ export function runWorldEventSystem(ctx: SimContext): void {
 
   // 2) Maybe start a new one.
   if (state.worldEvents.length >= MAX_ACTIVE_WORLD_EVENTS) return;
-  if (!ctx.rng.chance(WORLD_EVENT_DAILY_CHANCE)) return;
+  if (!ctx.rng.chance(ctx.config.worldEventDailyChance)) return;
 
   const activeGroups = new Set(
     state.worldEvents
