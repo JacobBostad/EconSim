@@ -422,6 +422,7 @@ export class Simulation {
       note: `Exported ${qty} ${product.name} to Port Rosa`,
     });
     fac.dailyStats.unitsShipped += qty;
+    firm.exportRevenue += revenue;
     emitEvent(s, 'success', 'logistics',
       `🚢 Exported ${qty} ${product.name} to Port Rosa for ${revenue}¢ (after freight).`, fac.id);
   }

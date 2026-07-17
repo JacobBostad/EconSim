@@ -113,6 +113,7 @@ function newFirm(
     sharesHeld: {},
     acquiredNames: [],
     autoPriceByProduct: {},
+    exportRevenue: 0,
   };
   b.state.firms[id] = firm;
   return firm;

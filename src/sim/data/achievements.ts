@@ -213,6 +213,14 @@ export const ACHIEVEMENT_DEFS: AchievementDef[] = [
     },
   },
   {
+    id: 'trade_baron',
+    name: 'Trade Baron',
+    icon: '🚢',
+    description: 'Earned $2,000 exporting goods to Port Rosa.',
+    hint: 'Stage goods in a warehouse and export when Port Rosa prices spike.',
+    check: (s) => (player(s)?.exportRevenue ?? 0) >= dollars(2000),
+  },
+  {
     id: 'boomtown',
     name: 'Boomtown',
     icon: '🏘️',

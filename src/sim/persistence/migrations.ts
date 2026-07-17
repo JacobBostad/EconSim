@@ -75,6 +75,7 @@ function normalize(state: GameState): GameState {
     f.sharesHeld = f.sharesHeld ?? {};
     f.acquiredNames = f.acquiredNames ?? [];
     f.autoPriceByProduct = f.autoPriceByProduct ?? {};
+    f.exportRevenue = f.exportRevenue ?? 0;
     f.accounting.lifetime = normPeriod(f.accounting.lifetime);
     f.accounting.today = normPeriod(f.accounting.today);
     f.accounting.dailyHistory = (f.accounting.dailyHistory ?? []).map((d) => ({

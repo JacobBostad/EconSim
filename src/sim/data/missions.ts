@@ -132,6 +132,14 @@ export const MISSION_DEFS: MissionDef[] = [
     },
   },
   {
+    id: 'first_export',
+    name: 'Open the Trade Route',
+    icon: '🚢',
+    description: 'Export goods to Port Rosa: build a warehouse, stage goods there via a contract, and hit Export in its inspector.',
+    reward: dollars(2500),
+    check: (s) => (player(s)?.exportRevenue ?? 0) > 0,
+  },
+  {
     id: 'valuation_30k',
     name: 'On the Map',
     icon: '🏢',
