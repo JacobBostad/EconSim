@@ -34,8 +34,8 @@ import { SAVE_VERSION } from '../core/GameState';
 const NUM_HOMES = 20;
 const CITIZENS_PER_HOME = 2;
 const CITIZEN_START_CASH = dollars(400);
-const DEFAULT_AI_WAGE = dollars(14);
-const PLAYER_DEFAULT_WAGE = dollars(15);
+const DEFAULT_AI_WAGE = dollars(16);
+const PLAYER_DEFAULT_WAGE = dollars(16);
 
 interface Builder {
   state: GameState;
@@ -436,11 +436,11 @@ export function createInitialState(
   };
 
   addContract(aiFoods.id, farm.id, bakery.id, 'grain', 40, 15, 80);
-  addContract(aiFoods.id, bakery.id, breadShop.id, 'bread', 50, 20, 90);
+  addContract(aiFoods.id, bakery.id, breadShop.id, 'bread', 60, 24, 110);
   addContract(aiInd.id, mine.id, toolFactory.id, 'minerals', 30, 12, 60);
-  addContract(aiInd.id, toolFactory.id, toolShop.id, 'tools', 24, 8, 50);
+  addContract(aiInd.id, toolFactory.id, toolShop.id, 'tools', 40, 14, 80);
   addContract(aiApparel.id, cottonFarm.id, tailor.id, 'cotton', 30, 12, 60);
-  addContract(aiApparel.id, tailor.id, boutique.id, 'clothes', 20, 8, 45);
+  addContract(aiApparel.id, tailor.id, boutique.id, 'clothes', 36, 14, 80);
 
   return state;
 }

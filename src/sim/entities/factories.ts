@@ -69,7 +69,9 @@ export function makeCitizenNeeds(rng: Rng): CitizenNeed[] {
     {
       productId: 'tools',
       urgency: rng.range(0, 0.4),
-      urgencyGrowthPerDay: rng.range(0.3, 0.45),
+      // Durables are wanted every ~4 days; keep demand near what the
+      // town's production capacity can actually satisfy (see balance notes).
+      urgencyGrowthPerDay: rng.range(0.18, 0.28),
       preferredQuantity: 1,
       maxAffordablePriceMultiplier: rng.range(1.3, 1.6),
       lastSatisfiedTick: 0,
@@ -77,7 +79,7 @@ export function makeCitizenNeeds(rng: Rng): CitizenNeed[] {
     {
       productId: 'clothes',
       urgency: rng.range(0, 0.5),
-      urgencyGrowthPerDay: rng.range(0.22, 0.35),
+      urgencyGrowthPerDay: rng.range(0.16, 0.26),
       preferredQuantity: 1,
       maxAffordablePriceMultiplier: rng.range(1.35, 1.65),
       lastSatisfiedTick: 0,
@@ -94,7 +96,7 @@ export function defaultNeedFor(productId: string): CitizenNeed | null {
     return {
       productId: 'clothes',
       urgency: 0.25,
-      urgencyGrowthPerDay: 0.28,
+      urgencyGrowthPerDay: 0.21,
       preferredQuantity: 1,
       maxAffordablePriceMultiplier: 1.5,
       lastSatisfiedTick: 0,
