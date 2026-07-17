@@ -16,10 +16,11 @@ export function Intro(): React.ReactElement | null {
         <div className="intro-grid">
           <div>
             <h4>The world runs itself</h4>
-            <p>40 citizens work, earn wages, and shop. Two AI companies run a
-              <strong> bread chain</strong> (farm → bakery → store) and a
-              <strong> tools chain</strong> (mine → factory → store). Trucks move
-              goods; <strong>+$</strong> popups show real sales.</p>
+            <p>40 citizens work, earn wages, and shop. Three AI companies run
+              <strong> bread</strong>, <strong>tools</strong>, and
+              <strong> clothes</strong> chains (farm/mine → factory → store).
+              World events — booms, droughts, crazes — shake things up; watch
+              the news chips on the map.</p>
           </div>
           <div>
             <h4>Inspect anything</h4>
@@ -29,17 +30,18 @@ export function Intro(): React.ReactElement | null {
           </div>
           <div>
             <h4>Run your company</h4>
-            <p>Start with <strong>$15,000</strong>. <strong>Build</strong> a Farm →
-              Factory → Store, pick recipes, set prices, hire workers, and wire
-              <strong> supply contracts</strong>. Compete on price, location and more.</p>
+            <p>Follow the <strong>Missions</strong> panel (left) — it walks you
+              from first build to market dominance and pays cash rewards. Build,
+              pick recipes, set prices, hire, and wire <strong>supply
+              contracts</strong>. Earn <strong>Awards</strong> along the way.</p>
           </div>
           <div>
             <h4>Compete on three levers</h4>
             <p><strong>Brand</strong> — advertise to make customers pay more &amp;
               choose you. <strong>Quality</strong> — invest in R&amp;D for better
-              goods. <strong>Finance</strong> — borrow to expand, repay before
-              interest bites. (All on a store's inspector.) The AI uses these too —
-              and will open new outlets where demand is unmet.</p>
+              goods. <strong>Finance</strong> — borrow to expand, buy rival
+              shares, or <strong>acquire competitors outright</strong>. The AI
+              fights back with new outlets where demand is unmet.</p>
           </div>
         </div>
 

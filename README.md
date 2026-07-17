@@ -90,9 +90,11 @@ in a **fixed order**. Daily roll-up systems run first (so the day that just
 ended is finalized before the new day's per-tick systems run):
 
 ```
-TimeSystem → MarketStats → AIStrategy → EventLog → Bankruptcy →
-Satisfaction → Accounting → Payroll →                       (daily roll-ups)
-CitizenSchedule → Movement → Labor → Production → Logistics → Retail  (every tick)
+TimeSystem → WorldEvents → MarketStats → AIStrategy → EventLog → Marketing →
+Finance → Dividends → Bankruptcy → Satisfaction → Immigration →
+Accounting → Payroll →                                      (daily roll-ups)
+CitizenSchedule → Movement → Labor → Production → Logistics → Retail →
+Achievements → Missions                                     (every tick / hourly)
 ```
 
 Each system is a function `(ctx: SimContext) => void` that mutates the live
@@ -270,9 +272,13 @@ income, etc. Config is part of saved state.
   is not gated on a clerk being physically present (production *is* gated on
   present workers). This abstraction avoids dead stores during the shopping
   window. See `storeIsOpen`.
-- **Subsistence income** (`config.subsistenceIncomePerDay`, default $7/day) is
+- **Subsistence income** (`config.subsistenceIncomePerDay`, default $12/day) is
   paid to unemployed citizens from the world account so the consumer economy
   keeps functioning at high unemployment. Set to 0 for a harsher world.
+- **Satisfaction is an equilibrium**, not a counter: it drifts toward a level
+  set by employment and whether needs are met (≈85 employed & provided, ≈60 on
+  subsistence, far lower under chronic shortage), so the town reads as healthy
+  by default and reacts to shocks. A 120-day no-player balance test guards this.
 - **Starting scenario**: 40 citizens / 20 homes; three AI firms (bread, tools,
   and clothes chains); an external importer; a player firm with $15,000 and no
   facilities (buildable land). Lean staffing so the AI chains are roughly
@@ -280,21 +286,19 @@ income, etc. Config is part of saved state.
 
 ## Known limitations
 
-- One city; product catalog is grain/bread/minerals/tools; one AI strategy
-  archetype per chain.
+- One city; product catalog is three consumer chains (bread, tools, clothes);
+  one AI strategy archetype per chain.
 - Labor market is "instant hire from the unemployed"; no wage-driven poaching
   yet (the architecture leaves room for it).
-- One city; product catalog is grain/bread/minerals/tools.
 - AI expansion currently opens retail outlets only (capped); it doesn't yet add
-  upstream capacity or new product lines.
+  upstream capacity or new product lines, and the AI never initiates M&A.
 
 ## Roadmap
 
-More products & chains · multiple cities & inter-city trade · stock market /
-IPOs & company valuation · taxes & subsidies · inflation & macro policy · deeper
-AI (upstream expansion, M&A) · imports/exports · land values & rent · a scenario
-editor & mod support · LLM-driven strategic agents (the command API is designed
-for this).
+Multiple cities & inter-city trade · taxes & subsidies · inflation & macro
+policy · deeper AI (upstream expansion, AI-initiated M&A) · land values & rent ·
+a scenario editor & mod support · LLM-driven strategic agents (the command API
+is designed for this).
 
 Already in (the Capitalism-Lab core loops): real supply chains, retail demand &
 pricing, **brand/advertising**, **quality/R&D**, **corporate finance/loans**,
