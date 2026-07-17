@@ -17,6 +17,10 @@ export function BuildPanel(): React.ReactElement {
   return (
     <div>
       <div className="section-title">Build (click a building, then click the map)</div>
+      <div className="small muted" style={{ marginBottom: 4 }}>
+        Land near homes costs up to 1.6× to build and rent (0.8× on the outskirts) —
+        but that's where the customers are.
+      </div>
       {buildDefId && (
         <div className="card small">
           Placing <strong>{BUILDABLE_DEFS.find((d) => d.id === buildDefId)?.name}</strong>. Click an

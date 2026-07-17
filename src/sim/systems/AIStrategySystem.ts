@@ -29,6 +29,7 @@ import { clamp } from '../../utils/clamp';
 import { CENTS, RND_QUALITY_GAIN_PER_1000 } from '../data/constants';
 import { companyValuation } from '../selectors/companySelectors';
 import { acquisitionCost, performAcquisition } from '../core/Acquisition';
+import { landCostMultiplier, landValueAt } from '../core/LandValue';
 
 export function runAIStrategySystem(ctx: SimContext): void {
   if (!isDayBoundary(ctx.state.tick, ctx.config)) return;
@@ -157,7 +158,13 @@ function maybeExpand(ctx: SimContext, firmId: string): void {
   if (!rng.chance(ctx.config.aiExpandChance)) return; // not every eligible day
 
   const def = getFacilityDef('retail');
-  const cost = def.buildCost;
+  // Location + land premium: AI pays market rates like everyone else.
+  const loc = {
+    x: clamp(54 + stores.length * 12 + rng.jitter(5), 8, state.config.mapWidth - 8),
+    y: clamp(50 + rng.jitter(6), 8, state.config.mapHeight - 8),
+  };
+  const mult = landCostMultiplier(landValueAt(state, loc));
+  const cost = Math.round(def.buildCost * mult);
   // Fund: borrow if short of cash.
   if (firm.cash < cost * 1.3) {
     const need = Math.round(cost * 1.3 - firm.cash);
@@ -179,10 +186,10 @@ function maybeExpand(ctx: SimContext, firmId: string): void {
     }
   }
 
-  // Place near the commercial belt with deterministic jitter.
-  const loc = { x: clamp(54 + stores.length * 12 + rng.jitter(5), 8, state.config.mapWidth - 8), y: clamp(50 + rng.jitter(6), 8, state.config.mapHeight - 8) };
   const fac = createFacility(state, 'retail', firmId, loc, { name: `${firm.name.split(' ')[0]} Outlet ${stores.length + 1}` });
   fac.retailProductId = product;
+  fac.buildCost = cost;
+  fac.operatingCostPerDay = Math.round(def.maintenanceCostPerDay * mult);
   recordTransaction(state, { from: firmAccount(firmId), to: WORLD_ACCOUNT, amount: cost, firmId, category: 'buildSpend', note: 'Built store' });
 
   // Staff it.

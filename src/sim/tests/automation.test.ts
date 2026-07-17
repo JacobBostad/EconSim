@@ -11,14 +11,21 @@ describe('Chain wizard & auto-pricing', () => {
     const sim = newSim(1);
     const state = sim.getState();
     const player = state.firms[state.playerFirmId]!;
-    const cost = chainCost(CHAIN_BLUEPRINTS['bread']!);
+    const listCost = chainCost(CHAIN_BLUEPRINTS['bread']!);
     const cashBefore = player.cash;
     const supplyBefore = totalMoneySupply(state);
 
     sim.dispatch({ type: 'BUILD_CHAIN', firmId: player.id, productId: 'bread' });
 
     expect(player.facilities.length).toBe(3);
-    expect(player.cash).toBe(cashBefore - cost);
+    // Land value scales each stage's price within [0.8, 1.6]× of list.
+    const paid = player.facilities.reduce(
+      (a, id) => a + state.facilities[id]!.buildCost,
+      0,
+    );
+    expect(player.cash).toBe(cashBefore - paid);
+    expect(paid).toBeGreaterThanOrEqual(listCost * 0.8);
+    expect(paid).toBeLessThanOrEqual(listCost * 1.6);
     expect(totalMoneySupply(state)).toBe(supplyBefore);
 
     const facs = player.facilities.map((id) => state.facilities[id]!);

@@ -38,6 +38,7 @@ import { companyValuation } from '../selectors/companySelectors';
 import { worldImportMult } from '../data/worldEvents';
 import { CHAIN_BLUEPRINTS, chainCost } from '../data/chains';
 import { performAcquisition } from './Acquisition';
+import { landCostMultiplier, landValueAt } from './LandValue';
 import type { Contract } from '../entities/Contract';
 
 import { runTimeSystem } from '../systems/TimeSystem';
@@ -294,9 +295,10 @@ export class Simulation {
     const bp = CHAIN_BLUEPRINTS[productId];
     if (!firm || !bp) return;
 
-    const cost = chainCost(bp);
+    // Wizard placements sit in mid-value rows; budget for a modest premium.
+    const cost = Math.round(chainCost(bp) * 1.2);
     if (!canAfford(s, firmAccount(firmId), cost)) {
-      emitEvent(s, 'danger', 'player', `A full ${getProduct(bp.productId).name} chain costs ${cost}¢ — not enough cash.`, firmId);
+      emitEvent(s, 'danger', 'player', `A full ${getProduct(bp.productId).name} chain costs about ${cost}¢ — not enough cash.`, firmId);
       return;
     }
 
@@ -323,11 +325,15 @@ export class Simulation {
     }
 
     const build = (defId: string, loc: { x: number; y: number }) => {
-      const fac = createFacility(s, defId, firmId, loc);
       const def = getFacilityDef(defId);
-      if (def.buildCost > 0) {
+      const mult = landCostMultiplier(landValueAt(s, loc));
+      const price = Math.round(def.buildCost * mult);
+      const fac = createFacility(s, defId, firmId, loc);
+      fac.buildCost = price;
+      fac.operatingCostPerDay = Math.round(def.maintenanceCostPerDay * mult);
+      if (price > 0) {
         recordTransaction(s, {
-          from: firmAccount(firmId), to: WORLD_ACCOUNT, amount: def.buildCost,
+          from: firmAccount(firmId), to: WORLD_ACCOUNT, amount: price,
           firmId, category: 'buildSpend', note: `Built ${def.name}`,
         });
       }
@@ -478,22 +484,30 @@ export class Simulation {
     const firm = s.firms[command.firmId];
     if (!firm) return;
     const def = getFacilityDef(command.defId);
-    if (!canAfford(s, firmAccount(firm.id), def.buildCost)) {
-      emitEvent(s, 'danger', 'player', `Cannot afford to build ${def.name}.`, firm.id);
+    // Location economics: pricier ground (and rent) near the homes.
+    const mult = landCostMultiplier(landValueAt(s, command.location));
+    const cost = Math.round(def.buildCost * mult);
+    if (!canAfford(s, firmAccount(firm.id), cost)) {
+      emitEvent(s, 'danger', 'player', `Cannot afford to build ${def.name} here (${cost}¢ with land premium).`, firm.id);
       return;
     }
     const fac = createFacility(s, command.defId, firm.id, command.location);
-    if (def.buildCost > 0) {
+    fac.buildCost = cost;
+    fac.operatingCostPerDay = Math.round(def.maintenanceCostPerDay * mult);
+    if (cost > 0) {
       recordTransaction(s, {
         from: firmAccount(firm.id),
         to: WORLD_ACCOUNT,
-        amount: def.buildCost,
+        amount: cost,
         firmId: firm.id,
         category: 'buildSpend',
         note: `Built ${def.name}`,
       });
     }
-    emitEvent(s, 'success', 'player', `Built ${fac.name}.`, fac.id);
+    const pct = Math.round((mult - 1) * 100);
+    emitEvent(s, 'success', 'player',
+      `Built ${fac.name}${pct !== 0 ? ` (land ${pct > 0 ? '+' : ''}${pct}% → rent ${fac.operatingCostPerDay}¢/day)` : ''}.`,
+      fac.id);
   }
 
   private selectRecipe(
