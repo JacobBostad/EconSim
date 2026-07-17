@@ -33,7 +33,7 @@ describe('Quarterly report card', () => {
     expect(report.valuationEnd).toBeGreaterThan(0);
     // Idle player: no revenue, flat-ish valuation, mid-band grade.
     expect(report.revenueTotal).toBe(0);
-    expect(report.shares.length).toBe(3);
+    expect(report.shares.length).toBe(5); // three staples + two luxury goods
     expect(['C', 'D', 'B'].includes(report.grade)).toBe(true);
     expect(report.score).toBeGreaterThan(0);
     expect(report.score).toBeLessThan(100);

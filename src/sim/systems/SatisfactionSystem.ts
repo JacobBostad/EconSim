@@ -15,10 +15,18 @@ import { clamp } from '../../utils/clamp';
 /** Needs never accumulate beyond this urgency. */
 const URGENCY_CAP = 3;
 
-/** Going hungry hurts much more than missing a new tool or outfit. */
+/** Going hungry hurts much more than missing a new tool or outfit; a missed
+ * luxury barely registers. */
 function needWeight(productId: string): number {
-  return getProduct(productId).needType === 'food' ? 1.4 : 0.55;
+  const t = getProduct(productId).needType;
+  if (t === 'food') return 1.4;
+  if (t === 'luxury') return 0.2;
+  return 0.55;
 }
+
+/** Luxury cravings only grow in comfortable lives. */
+const LUXURY_MIN_SATISFACTION = 70;
+const LUXURY_MIN_CASH = 600_00;
 
 /** Whether any staffed store in town currently sells the product. */
 function soldSomewhere(state: import('../core/GameState').GameState, productId: string): boolean {
@@ -39,7 +47,15 @@ export function runSatisfactionSystem(ctx: SimContext): void {
     const cit = state.citizens[cid]!;
     let unmetPressure = 0;
     for (const need of cit.needs) {
-      need.urgency = Math.min(URGENCY_CAP, need.urgency + need.urgencyGrowthPerDay);
+      if (getProduct(need.productId).needType === 'luxury') {
+        const aspiring =
+          cit.satisfaction >= LUXURY_MIN_SATISFACTION && cit.cash >= LUXURY_MIN_CASH;
+        need.urgency = aspiring
+          ? Math.min(URGENCY_CAP, need.urgency + need.urgencyGrowthPerDay)
+          : Math.max(0, need.urgency - 0.1);
+      } else {
+        need.urgency = Math.min(URGENCY_CAP, need.urgency + need.urgencyGrowthPerDay);
+      }
       if (need.urgency > config.needUrgentThreshold) {
         // Resigned demand: if nobody in town sells it at all, the longing
         // stings half as much — and becomes a market opportunity instead.

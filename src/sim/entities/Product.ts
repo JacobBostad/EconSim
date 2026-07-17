@@ -8,10 +8,10 @@
 
 import type { ProductId } from '../core/Id';
 
-export type ProductCategory = 'food' | 'durable' | 'raw' | 'intermediate' | 'apparel';
+export type ProductCategory = 'food' | 'durable' | 'raw' | 'intermediate' | 'apparel' | 'luxury';
 
 /** What kind of citizen need this product satisfies (raw goods satisfy none). */
-export type NeedType = 'food' | 'goods' | 'clothing' | 'none';
+export type NeedType = 'food' | 'goods' | 'clothing' | 'luxury' | 'none';
 
 export interface Product {
   id: ProductId;

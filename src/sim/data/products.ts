@@ -94,6 +94,32 @@ export const PRODUCTS: Record<ProductId, Product> = {
     defaultQuality: 60,
     unitSize: 2,
   },
+  pastries: {
+    id: 'pastries',
+    name: 'Pastries',
+    category: 'luxury',
+    basePrice: dollars(8.0),
+    perishability: 0.1,
+    qualityWeight: 0.3,
+    priceWeight: 0.1,
+    brandWeight: 0.25,
+    needType: 'luxury',
+    defaultQuality: 70,
+    unitSize: 1,
+  },
+  jewelry: {
+    id: 'jewelry',
+    name: 'Jewelry',
+    category: 'luxury',
+    basePrice: dollars(30.0),
+    perishability: 0,
+    qualityWeight: 0.32,
+    priceWeight: 0.08,
+    brandWeight: 0.3,
+    needType: 'luxury',
+    defaultQuality: 70,
+    unitSize: 1,
+  },
 };
 
 export function getProduct(id: ProductId): Product {

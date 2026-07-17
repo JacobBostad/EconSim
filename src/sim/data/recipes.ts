@@ -84,6 +84,32 @@ export const RECIPES: Record<RecipeId, Recipe> = {
     variableCost: dollars(2.2),
   },
 
+  // --- Luxury tier (requires mastery — see minQuality) -------------------
+  bake_pastries: {
+    id: 'bake_pastries',
+    name: 'Bake Pastries',
+    facilityType: 'factory',
+    inputs: [{ productId: 'grain', quantity: 2 }],
+    outputs: [{ productId: 'pastries', quantity: 6 }],
+    laborRequired: 2,
+    ticksRequired: 3,
+    baseEfficiency: 1,
+    variableCost: dollars(3.0),
+    minQuality: 75,
+  },
+  craft_jewelry: {
+    id: 'craft_jewelry',
+    name: 'Craft Jewelry',
+    facilityType: 'factory',
+    inputs: [{ productId: 'minerals', quantity: 3 }],
+    outputs: [{ productId: 'jewelry', quantity: 4 }],
+    laborRequired: 2,
+    ticksRequired: 4,
+    baseEfficiency: 1,
+    variableCost: dollars(5.0),
+    minQuality: 75,
+  },
+
   // --- Importer (extraction from the outside world) ----------------------
   import_grain: {
     id: 'import_grain',

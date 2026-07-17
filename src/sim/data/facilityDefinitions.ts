@@ -58,11 +58,11 @@ export const FACILITY_DEFS: Record<FacilityDefId, FacilityDefinition> = {
     maintenanceCostPerDay: dollars(18),
     workerCapacity: 6,
     storageCapacity: 240,
-    allowedRecipes: ['bake_bread', 'make_tools', 'sew_clothes'],
+    allowedRecipes: ['bake_bread', 'make_tools', 'sew_clothes', 'bake_pastries', 'craft_jewelry'],
     allowedProductsForSale: [],
     footprint: 4,
     description:
-      'Manufactures goods from inputs. Can bake bread, make tools, or sew clothes depending on the selected recipe.',
+      'Manufactures goods from inputs: bread, tools, clothes — or luxury pastries and jewelry once your craft quality reaches 75.',
   },
   warehouse: {
     id: 'warehouse',
@@ -86,7 +86,7 @@ export const FACILITY_DEFS: Record<FacilityDefId, FacilityDefinition> = {
     workerCapacity: 4,
     storageCapacity: 160,
     allowedRecipes: [],
-    allowedProductsForSale: ['bread', 'tools', 'clothes'],
+    allowedProductsForSale: ['bread', 'tools', 'clothes', 'pastries', 'jewelry'],
     footprint: 3,
     description: 'Sells one consumer product to citizens. Needs staff to operate.',
   },

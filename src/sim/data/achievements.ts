@@ -215,6 +215,19 @@ export const ACHIEVEMENT_DEFS: AchievementDef[] = [
     },
   },
   {
+    id: 'house_of_luxury',
+    name: 'House of Luxury',
+    icon: '💎',
+    description: 'Sold luxury goods (pastries or jewelry) to the town.',
+    hint: 'R&D a product to quality 75, run a luxury recipe, and sell it.',
+    check: (s) => {
+      const p = player(s);
+      if (!p) return false;
+      return (p.marketShareByProduct['pastries'] ?? 0) > 0 ||
+        (p.marketShareByProduct['jewelry'] ?? 0) > 0;
+    },
+  },
+  {
     id: 'winter_proof',
     name: 'Winter-Proof',
     icon: '⛄',

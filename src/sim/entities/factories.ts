@@ -87,6 +87,24 @@ export function makeCitizenNeeds(rng: Rng): CitizenNeed[] {
       maxAffordablePriceMultiplier: rng.range(1.35, 1.65),
       lastSatisfiedTick: 0,
     },
+    // Luxury cravings only grow for satisfied, well-off citizens
+    // (gated in SatisfactionSystem).
+    {
+      productId: 'pastries',
+      urgency: 0,
+      urgencyGrowthPerDay: rng.range(0.1, 0.18),
+      preferredQuantity: 1,
+      maxAffordablePriceMultiplier: rng.range(1.2, 1.6),
+      lastSatisfiedTick: 0,
+    },
+    {
+      productId: 'jewelry',
+      urgency: 0,
+      urgencyGrowthPerDay: rng.range(0.03, 0.07),
+      preferredQuantity: 1,
+      maxAffordablePriceMultiplier: rng.range(1.1, 1.4),
+      lastSatisfiedTick: 0,
+    },
   ];
 }
 
@@ -102,6 +120,26 @@ export function defaultNeedFor(productId: string): CitizenNeed | null {
       urgencyGrowthPerDay: 0.21,
       preferredQuantity: 1,
       maxAffordablePriceMultiplier: 1.5,
+      lastSatisfiedTick: 0,
+    };
+  }
+  if (productId === 'pastries') {
+    return {
+      productId: 'pastries',
+      urgency: 0,
+      urgencyGrowthPerDay: 0.14,
+      preferredQuantity: 1,
+      maxAffordablePriceMultiplier: 1.4,
+      lastSatisfiedTick: 0,
+    };
+  }
+  if (productId === 'jewelry') {
+    return {
+      productId: 'jewelry',
+      urgency: 0,
+      urgencyGrowthPerDay: 0.05,
+      preferredQuantity: 1,
+      maxAffordablePriceMultiplier: 1.25,
       lastSatisfiedTick: 0,
     };
   }

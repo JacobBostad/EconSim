@@ -40,6 +40,19 @@ export function runProductionSystem(ctx: SimContext): void {
     }
     const recipe = getRecipe(fac.activeRecipeId);
 
+    // Mastery gate: luxury recipes need the firm's craft quality first.
+    if (recipe.minQuality !== undefined) {
+      const outPid = recipe.outputs[0]?.productId;
+      const firmQ = outPid
+        ? state.firms[fac.ownerFirmId]?.qualityByProduct[outPid] ?? getProduct(outPid).defaultQuality
+        : 0;
+      if (firmQ < recipe.minQuality) {
+        fac.status = 'idle';
+        fac.bottleneckReason = `Needs quality ≥ ${recipe.minQuality} (invest R&D in ${outPid ? getProduct(outPid).name : 'product'})`;
+        continue;
+      }
+    }
+
     // Input availability.
     let inputsAvailable = true;
     let missingInput = '';
