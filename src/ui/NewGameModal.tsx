@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { useGameStore } from '../store/useGameStore';
 import type { Difficulty } from '../sim/core/SimulationConfig';
+import { loadRecords } from './records';
+import { formatMoney } from '../utils/formatMoney';
 
 interface Preset {
   id: Difficulty;
@@ -43,6 +45,7 @@ export function NewGameModal(): React.ReactElement | null {
   const [seedText, setSeedText] = useState('');
 
   if (!show) return null;
+  const records = loadRecords();
 
   const start = (): void => {
     const parsed = parseInt(seedText, 10);
@@ -73,6 +76,14 @@ export function NewGameModal(): React.ReactElement | null {
             </button>
           ))}
         </div>
+        {records.townsFounded > 0 && (
+          <p className="muted small" style={{ marginTop: 10, marginBottom: 0 }}>
+            🏅 Your records — towns founded: {records.townsFounded}
+            {records.highestValuation > 0 && <> · best valuation: {formatMoney(records.highestValuation)}</>}
+            {records.fastestTycoonDay !== null && <> · fastest Tycoon: day {records.fastestTycoonDay + 1}</>}
+            {records.mostAchievements > 0 && <> · most awards: {records.mostAchievements}</>}
+          </p>
+        )}
         <div className="row" style={{ marginTop: 12, gap: 8 }}>
           <label className="small muted" htmlFor="seed-input">Seed (optional)</label>
           <input

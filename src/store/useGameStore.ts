@@ -25,6 +25,7 @@ import type { GameState } from '../sim/core/GameState';
 import type { Command, Speed } from '../sim/core/Commands';
 import type { EntityId, FacilityDefId } from '../sim/core/Id';
 import { saveGame, loadGame, hasSave } from '../sim/persistence/saveLoad';
+import { recordTownFounded } from '../ui/records';
 
 const DEFAULT_SEED = 20260601;
 
@@ -139,6 +140,7 @@ export const useGameStore = create<GameStore>((set, get) => {
 
     newGame: (seed = Math.floor(Math.random() * 1_000_000), difficulty = 'standard') => {
       get().sim.setState(createInitialState(seed, configForDifficulty(difficulty)));
+      recordTownFounded();
       set({ buildDefId: null, showNewGame: false });
       bump(true);
     },
