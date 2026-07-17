@@ -1,6 +1,7 @@
 import React from 'react';
 import { useGameStore, type DashboardTab } from '../store/useGameStore';
 import { computeTime } from '../sim/core/Tick';
+import { seasonOf, daysLeftInSeason, SEASON_META } from '../sim/data/seasons';
 import { formatTime } from '../utils/formatTime';
 import { formatMoney } from '../utils/formatMoney';
 import { getPlayerFirm, companyValuation, playerRank } from '../sim/selectors/companySelectors';
@@ -36,6 +37,10 @@ export function TopBar(): React.ReactElement {
       <div className="stat">
         <span className="label">Time</span>
         <span className="value mono">{formatTime(time)}</span>
+      </div>
+      <div className="stat" title={`${SEASON_META[seasonOf(state)].name} — ${daysLeftInSeason(state)} days left. Farms slow in winter; clothes sell hot.`}>
+        <span className="label">Season</span>
+        <span className="value">{SEASON_META[seasonOf(state)].icon} {SEASON_META[seasonOf(state)].name}</span>
       </div>
       <div className="stat">
         <span className="label">Your Cash</span>

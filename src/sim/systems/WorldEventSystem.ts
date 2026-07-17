@@ -22,11 +22,27 @@ import {
   MAX_ACTIVE_WORLD_EVENTS,
   type WorldEventDef,
 } from '../data/worldEvents';
+import { SEASON_LENGTH_DAYS, SEASON_META, seasonOfDay } from '../data/seasons';
 
 export function runWorldEventSystem(ctx: SimContext): void {
   const { state } = ctx;
   if (!isDayBoundary(state.tick, ctx.config)) return;
   const day = ctx.time.day;
+
+  // Season turnover announcement (cyclical layer under the random events).
+  if (day > 0 && day % SEASON_LENGTH_DAYS === 0) {
+    const season = seasonOfDay(day);
+    const meta = SEASON_META[season];
+    const note =
+      season === 'winter'
+        ? 'Farms slow to 65% and freight costs +25% — stockpile and bundle up (clothes sell hot).'
+        : season === 'summer'
+          ? 'Farms run at 120% — a good time to build grain reserves.'
+          : season === 'spring'
+            ? 'Fields wake up (farms 110%).'
+            : 'Harvest season winds down; clothes demand starts climbing.';
+    emitEvent(state, 'info', 'economy', `${meta.icon} ${meta.name} begins. ${note}`);
+  }
 
   // 1) Expire finished events.
   const stillActive: typeof state.worldEvents = [];

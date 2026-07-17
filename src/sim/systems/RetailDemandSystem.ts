@@ -25,6 +25,7 @@ import { getQuantity, getQuality, removeStock } from '../entities/Inventory';
 import { distance } from '../entities/Location';
 import { getProduct } from '../data/products';
 import { worldDemandMult, worldSpendingMult } from '../data/worldEvents';
+import { seasonDemandMult } from '../data/seasons';
 import { clamp } from '../../utils/clamp';
 
 /** Price a firm charges for a product (falls back to base price). */
@@ -153,7 +154,11 @@ function attemptPurchase(
 
   const wantQty = Math.max(
     1,
-    Math.round(need.preferredQuantity * worldDemandMult(state, productId)),
+    Math.round(
+      need.preferredQuantity *
+        worldDemandMult(state, productId) *
+        seasonDemandMult(state, productId),
+    ),
   );
 
   if (!open || stock <= 0) {

@@ -18,6 +18,7 @@ import type { FacilityType } from '../sim/entities/Facility';
 import type { CitizenActivity } from '../sim/entities/Citizen';
 import { computeTime } from '../sim/core/Tick';
 import { landValueAt } from '../sim/core/LandValue';
+import { seasonOf } from '../sim/data/seasons';
 import { getProduct } from '../sim/data/products';
 import { formatMoney } from '../utils/formatMoney';
 
@@ -376,9 +377,22 @@ export class TownRenderer {
 
   private smogT = 0;
 
+  /** Subtle seasonal ground wash (under the event tints). */
+  private static readonly SEASON_TINTS: Record<string, string> = {
+    spring: 'rgba(110,200,110,0.05)',
+    summer: 'rgba(240,220,110,0.05)',
+    autumn: 'rgba(220,150,70,0.07)',
+    winter: 'rgba(190,210,240,0.10)',
+  };
+
   private drawWorldEventAmbiance(s: GameState, dt: number): void {
-    if (s.worldEvents.length === 0) return;
     const ctx = this.ctx;
+    const seasonTint = TownRenderer.SEASON_TINTS[seasonOf(s)];
+    if (seasonTint) {
+      ctx.fillStyle = seasonTint;
+      ctx.fillRect(0, 0, this.cssW, this.cssH);
+    }
+    if (s.worldEvents.length === 0) return;
     let smog = false;
     for (const ev of s.worldEvents) {
       const tint = TownRenderer.EVENT_TINTS[ev.defId];

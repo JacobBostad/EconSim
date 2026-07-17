@@ -30,6 +30,7 @@ import {
   TRANSPORT_FLAT_COST,
 } from '../data/constants';
 import { worldImportMult, worldTransportMult } from '../data/worldEvents';
+import { seasonTransportMult } from '../data/seasons';
 
 export function runLogisticsSystem(ctx: SimContext): void {
   processArrivals(ctx);
@@ -141,7 +142,8 @@ function processReorders(ctx: SimContext): void {
     // Fuel-price events scale the whole shipment cost.
     const transportCost = Math.round(
       (TRANSPORT_FLAT_COST + dist * qty * TRANSPORT_COST_PER_UNIT_DISTANCE) *
-        worldTransportMult(state),
+        worldTransportMult(state) *
+        seasonTransportMult(state),
     );
     const ticks = Math.max(1, Math.ceil(dist / ctx.config.vehicleSpeed));
 
