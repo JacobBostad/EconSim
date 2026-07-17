@@ -65,4 +65,6 @@ export interface Firm {
   interestRatePerDay: number;
   /** Equity stakes in other firms: targetFirmId -> percent (0..49). */
   sharesHeld: Record<FirmId, number>;
+  /** Names of firms this firm has fully acquired (M&A history). */
+  acquiredNames: string[];
 }

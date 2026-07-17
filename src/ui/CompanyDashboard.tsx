@@ -12,7 +12,11 @@ import {
   rankings,
 } from '../sim/selectors/companySelectors';
 import { formatMoney } from '../utils/formatMoney';
-import { OBJECTIVE_VALUATION } from '../sim/data/constants';
+import {
+  OBJECTIVE_VALUATION,
+  ACQUISITION_PREMIUM_HEALTHY,
+  ACQUISITION_PREMIUM_DISTRESSED,
+} from '../sim/data/constants';
 import { clamp } from '../utils/clamp';
 import { TrendCard } from './Sparkline';
 
@@ -86,6 +90,15 @@ export function CompanyDashboard(): React.ReactElement {
           {standings.map((e, i) => {
             const pricePerPct = Math.max(1, Math.round(e.valuation / 100));
             const owned = firm.sharesHeld[e.firmId] ?? 0;
+            const targetFirm = state.firms[e.firmId];
+            const premium =
+              targetFirm?.bankruptcyStatus === 'healthy'
+                ? ACQUISITION_PREMIUM_HEALTHY
+                : ACQUISITION_PREMIUM_DISTRESSED;
+            const buyoutCost = Math.max(
+              1,
+              Math.round((e.valuation * premium * (100 - owned)) / 100),
+            );
             return (
               <tr key={e.firmId} style={{ fontWeight: e.isPlayer ? 700 : 400, color: e.isPlayer ? 'var(--accent)' : undefined }}>
                 <td>{i + 1}{i === 0 ? ' 🏆' : ''}</td>
@@ -102,6 +115,17 @@ export function CompanyDashboard(): React.ReactElement {
                       <button disabled={owned <= 0} onClick={() => dispatch({ type: 'SELL_SHARES', firmId: firm.id, targetFirmId: e.firmId, percent: 5 })}>
                         Sell 5%
                       </button>
+                      <button
+                        disabled={firm.cash < buyoutCost}
+                        title={`Full takeover: absorb all facilities, staff, and brands${targetFirm?.bankruptcyStatus !== 'healthy' ? ' (distressed discount)' : ''}`}
+                        onClick={() => {
+                          if (confirm(`Acquire ${e.name} outright for ${formatMoney(buyoutCost)}? You absorb their facilities, staff, debt, and brands.`)) {
+                            dispatch({ type: 'ACQUIRE_FIRM', firmId: firm.id, targetFirmId: e.firmId });
+                          }
+                        }}
+                      >
+                        🤝 Buy out {formatMoney(buyoutCost)}
+                      </button>
                     </span>
                   )}
                 </td>
@@ -112,8 +136,15 @@ export function CompanyDashboard(): React.ReactElement {
       </table>
       <p className="muted small" style={{ marginTop: 4 }}>
         Owning a rival's shares pays you their percentage of a 30% daily profit
-        distribution. Stakes are capped at 49% (no takeovers — yet).
+        distribution (partial stakes cap at 49%). A full buyout costs 1.3× valuation
+        (0.9× if they're distressed), minus credit for shares you already hold — you
+        absorb everything, including their debt.
       </p>
+      {firm.acquiredNames.length > 0 && (
+        <p className="small" style={{ marginTop: 2 }}>
+          🤝 Acquired: {firm.acquiredNames.join(', ')}
+        </p>
+      )}
 
       <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
         <Card label="Cash" value={formatMoney(firm.cash)} color={firm.cash < 0 ? 'var(--red)' : 'var(--green)'} />

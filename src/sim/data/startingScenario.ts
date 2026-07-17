@@ -110,6 +110,7 @@ function newFirm(
     debt: 0,
     interestRatePerDay: 0.0009,
     sharesHeld: {},
+    acquiredNames: [],
   };
   b.state.firms[id] = firm;
   return firm;

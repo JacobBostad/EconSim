@@ -52,8 +52,12 @@ export const OBJECTIVE_VALUATION = dollars(50000);
 // --- Stock market ----------------------------------------------------------
 /** Fraction of a firm's positive daily net profit distributed as dividends. */
 export const DIVIDEND_PAYOUT_RATIO = 0.3;
-/** Max stake one firm may hold in another (control/M&A is future work). */
+/** Max partial stake one firm may hold in another (full takeover is separate). */
 export const MAX_STAKE_PCT = 49;
+/** Full takeover price multiple on valuation for a healthy target. */
+export const ACQUISITION_PREMIUM_HEALTHY = 1.3;
+/** Distressed/insolvent targets sell at a discount to valuation. */
+export const ACQUISITION_PREMIUM_DISTRESSED = 0.9;
 
 // --- Immigration / town growth ---------------------------------------------
 /** New citizens move in only while average satisfaction is at least this. */

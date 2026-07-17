@@ -191,6 +191,14 @@ export const ACHIEVEMENT_DEFS: AchievementDef[] = [
     },
   },
   {
+    id: 'shark',
+    name: 'The Shark',
+    icon: '🦈',
+    description: 'Acquired a rival company outright.',
+    hint: 'Buy out an entire AI competitor from the Company dashboard.',
+    check: (s) => (player(s)?.acquiredNames.length ?? 0) > 0,
+  },
+  {
     id: 'storm_rider',
     name: 'Storm Rider',
     icon: '⛈️',
