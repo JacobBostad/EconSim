@@ -20,7 +20,7 @@ import { isDayBoundary } from '../core/Tick';
 import { operatingProfit } from '../entities/Accounting';
 import { getProduct } from '../data/products';
 import { getRecipe } from '../data/recipes';
-import { getQuantity } from '../entities/Inventory';
+import { getQuantity, removeStock } from '../entities/Inventory';
 import { getFacilityDef } from '../data/facilityDefinitions';
 import { createFacility } from '../entities/factories';
 import type { Contract } from '../entities/Contract';
@@ -45,6 +45,7 @@ export function runAIStrategySystem(ctx: SimContext): void {
       maybeInvestQuality(ctx, firm.id);
       maybeExpand(ctx, firm.id);
       maybeBuyShares(ctx, firm.id);
+      maybeExportSurplus(ctx, firm.id);
       if (maybeRescueAcquisition(ctx, firm.id)) continue; // firm map changed
     }
 
@@ -275,6 +276,46 @@ function maybeRescueAcquisition(ctx: SimContext, firmId: string): boolean {
     return performAcquisition(state, firmId, fid);
   }
   return false;
+}
+
+/**
+ * AI trade: when a production facility is glutted with finished goods and
+ * Port Rosa pays ≥1.2× base, sell surplus through a broker (steeper 15% fee
+ * than the player's warehouse route — the player's logistics edge is real).
+ * Keeps AI chains from stalling inventory-full and gives them trade income.
+ */
+const AI_EXPORT_FEE = 0.15;
+const AI_EXPORT_MIN_MULT = 1.2;
+const AI_EXPORT_KEEP = 20; // units kept as working stock
+
+function maybeExportSurplus(ctx: SimContext, firmId: string): void {
+  const { state } = ctx;
+  const firm = state.firms[firmId]!;
+  for (const facId of firm.facilities) {
+    const fac = state.facilities[facId];
+    if (!fac || (fac.type !== 'farm' && fac.type !== 'mine' && fac.type !== 'factory')) continue;
+    for (const pid in fac.outputInventory) {
+      const have = getQuantity(fac.outputInventory, pid);
+      if (have <= AI_EXPORT_KEEP + 10) continue;
+      const product = getProduct(pid);
+      const tradePrice = state.tradeCity.pricesByProduct[pid] ?? product.basePrice;
+      if (tradePrice < product.basePrice * AI_EXPORT_MIN_MULT) continue;
+      const qty = Math.min(have - AI_EXPORT_KEEP, 40);
+      const revenue = Math.round(qty * tradePrice * (1 - AI_EXPORT_FEE));
+      removeStock(fac.outputInventory, pid, qty);
+      recordTransaction(state, {
+        from: WORLD_ACCOUNT, to: firmAccount(firmId), amount: revenue,
+        firmId, category: 'revenue', productId: pid, quantity: qty,
+        note: `Exported ${qty} ${product.name} to Port Rosa (brokered)`,
+      });
+      firm.exportRevenue += revenue;
+      if (revenue >= 200_00) {
+        emitEvent(state, 'info', 'ai',
+          `${firm.name} exported ${qty} ${product.name} to Port Rosa for ${revenue}¢.`, fac.id);
+      }
+      return; // one export per firm per day
+    }
+  }
 }
 
 function restaff(ctx: SimContext, firmId: string): void {
