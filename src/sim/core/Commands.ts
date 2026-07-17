@@ -43,6 +43,13 @@ export type Command =
   | { type: 'SET_PRICE'; firmId: FirmId; productId: ProductId; price: number }
   | { type: 'SET_AUTO_PRICE'; firmId: FirmId; productId: ProductId; enabled: boolean }
   | { type: 'BUILD_CHAIN'; firmId: FirmId; productId: ProductId }
+  | {
+      type: 'EXPORT_GOODS';
+      firmId: FirmId;
+      facilityId: FacilityId;
+      productId: ProductId;
+      quantity: number;
+    }
   | { type: 'SET_WAGE'; firmId: FirmId; wage: number }
   | { type: 'HIRE_WORKER'; facilityId: FacilityId; citizenId: CitizenId | null }
   | { type: 'FIRE_WORKER'; facilityId: FacilityId; citizenId: CitizenId }

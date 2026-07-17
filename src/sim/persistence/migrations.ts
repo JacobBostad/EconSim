@@ -15,6 +15,7 @@ import type { AccountingPeriod } from '../entities/Accounting';
 import { CONSUMER_PRODUCT_IDS, ALL_PRODUCT_IDS } from '../data/products';
 import { emptyMarketStat } from '../entities/Market';
 import { defaultNeedFor } from '../entities/factories';
+import { getProduct } from '../data/products';
 
 type Raw = Record<string, unknown>;
 
@@ -121,8 +122,11 @@ function normalize(state: GameState): GameState {
     f.presentSkill = f.presentSkill ?? 0;
   }
   // ...and give the market a stat entry for them.
+  state.tradeCity = state.tradeCity ?? { pricesByProduct: {} };
   for (const pid of ALL_PRODUCT_IDS) {
     state.marketStats[pid] = state.marketStats[pid] ?? emptyMarketStat(pid);
+    state.tradeCity.pricesByProduct[pid] =
+      state.tradeCity.pricesByProduct[pid] ?? getProduct(pid).basePrice;
   }
   return state;
 }

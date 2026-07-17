@@ -25,7 +25,7 @@ import { createFacility } from '../entities/factories';
 import { getFacilityDef } from '../data/facilityDefinitions';
 import { getRecipe } from '../data/recipes';
 import { getProduct } from '../data/products';
-import { addStock, totalUnits } from '../entities/Inventory';
+import { addStock, removeStock, totalUnits, getQuantity as totalOf } from '../entities/Inventory';
 import {
   IMPORT_MARKUP,
   CENTS,
@@ -33,6 +33,7 @@ import {
   LOAN_CREDIT_LIMIT_MULTIPLE,
   LOAN_MIN_CREDIT,
   MAX_STAKE_PCT,
+  EXPORT_FREIGHT_FEE,
 } from '../data/constants';
 import { companyValuation } from '../selectors/companySelectors';
 import { worldImportMult } from '../data/worldEvents';
@@ -43,6 +44,7 @@ import type { Contract } from '../entities/Contract';
 
 import { runTimeSystem } from '../systems/TimeSystem';
 import { runWorldEventSystem } from '../systems/WorldEventSystem';
+import { runTradeCitySystem } from '../systems/TradeCitySystem';
 import { runAchievementSystem } from '../systems/AchievementSystem';
 import { runMissionSystem } from '../systems/MissionSystem';
 import { runMarketStatsSystem } from '../systems/MarketStatsSystem';
@@ -73,6 +75,7 @@ const SYSTEMS: SystemFn[] = [
   runTimeSystem,
   // --- daily roll-ups (each guards on the day boundary internally) ---
   runWorldEventSystem, // roll/expire world events first so the day sees them
+  runTradeCitySystem, // Port Rosa price walk (daily)
   runMarketStatsSystem, // finalize previous day's stats; hourly inventory totals
   runAIStrategySystem, // AI reacts using the finalized day (sets ad/R&D/loans)
   runEventLogSystem, // player-facing alerts (before daily stats are reset)
@@ -181,6 +184,9 @@ export class Simulation {
       }
       case 'BUILD_CHAIN':
         this.buildChain(command.firmId, command.productId);
+        return;
+      case 'EXPORT_GOODS':
+        this.exportGoods(command);
         return;
       case 'SET_WAGE':
         this.setWage(command);
@@ -375,6 +381,49 @@ export class Simulation {
     emitEvent(s, 'success', 'player',
       `🪄 Built a full ${getProduct(bp.productId).name} chain: ${producer.name} → ${factory.name} → ${store.name}, wired and staffed.`,
       store.id);
+  }
+
+  /**
+   * Export goods staged in a warehouse to Port Rosa at the trade city's
+   * current price minus the freight fee. Revenue arrives from the world
+   * account (Port Rosa is off-map), so money stays conserved.
+   */
+  private exportGoods(command: Extract<Command, { type: 'EXPORT_GOODS' }>): void {
+    const s = this.state;
+    const firm = s.firms[command.firmId];
+    const fac = s.facilities[command.facilityId];
+    if (!firm || !fac || fac.ownerFirmId !== firm.id) return;
+    if (fac.type !== 'warehouse') {
+      emitEvent(s, 'warning', 'logistics', 'Exports ship from warehouses — stage goods there first.', fac.id);
+      return;
+    }
+    const product = getProduct(command.productId);
+    const inInput = totalOf(fac.inputInventory, command.productId);
+    const inOutput = totalOf(fac.outputInventory, command.productId);
+    const qty = Math.min(Math.max(0, Math.round(command.quantity)), inInput + inOutput);
+    if (qty <= 0) return;
+
+    const price = s.tradeCity.pricesByProduct[command.productId] ?? product.basePrice;
+    const revenue = Math.round(qty * price * (1 - EXPORT_FREIGHT_FEE));
+
+    // Remove from input first (the relay bag), then output.
+    const fromInput = Math.min(qty, inInput);
+    if (fromInput > 0) removeStock(fac.inputInventory, command.productId, fromInput);
+    if (qty - fromInput > 0) removeStock(fac.outputInventory, command.productId, qty - fromInput);
+
+    recordTransaction(s, {
+      from: WORLD_ACCOUNT,
+      to: firmAccount(firm.id),
+      amount: revenue,
+      firmId: firm.id,
+      category: 'revenue',
+      productId: command.productId,
+      quantity: qty,
+      note: `Exported ${qty} ${product.name} to Port Rosa`,
+    });
+    fac.dailyStats.unitsShipped += qty;
+    emitEvent(s, 'success', 'logistics',
+      `🚢 Exported ${qty} ${product.name} to Port Rosa for ${revenue}¢ (after freight).`, fac.id);
   }
 
   /** Net worth used for credit limits: cash + inventory value. */

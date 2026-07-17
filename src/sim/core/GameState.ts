@@ -95,6 +95,8 @@ export interface GameState {
   achievements: UnlockedAchievement[];
   /** Completed guided missions (ordered chain; see data/missions.ts). */
   missions: CompletedMission[];
+  /** Port Rosa — the distant trade city's per-product export prices. */
+  tradeCity: { pricesByProduct: Record<ProductId, number> };
 
   idCounters: IdCounters;
   selectedEntityId: EntityId | null;

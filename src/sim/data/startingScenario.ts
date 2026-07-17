@@ -206,13 +206,17 @@ export function createInitialState(
     worldEvents: [],
     achievements: [],
     missions: [],
+    tradeCity: { pricesByProduct: {} },
     idCounters: counters,
     selectedEntityId: null,
     perf: { lastTickMs: 0, avgTickMs: 0, ticksSimulated: 0 },
   };
   const b: Builder = { state, rng: new Rng(state), counters };
 
-  for (const pid of ALL_PRODUCT_IDS) state.marketStats[pid] = emptyMarketStat(pid);
+  for (const pid of ALL_PRODUCT_IDS) {
+    state.marketStats[pid] = emptyMarketStat(pid);
+    state.tradeCity.pricesByProduct[pid] = getProduct(pid).basePrice;
+  }
 
   // --- World firm (owns homes; sink for external costs) ------------------
   const world = newFirm(b, 'Municipality', 'world', 0, emptyStrategy('none'), 0);

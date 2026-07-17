@@ -213,6 +213,12 @@ distressed, credit for held shares) and absorb everything; flush AI firms
 rescue-acquire dying rivals too. Objectives escalate on a ladder (Tycoon
 $50k → Magnate $150k → Business Empire $400k).
 
+**Inter-city trade** (`TradeCitySystem.ts`): Port Rosa, a distant trade city,
+prices every product on a bounded daily random walk (0.6×–1.8× base). Stage
+goods in a warehouse and EXPORT them at Port Rosa's price minus 8% freight —
+stockpile cheap, ship on spikes. Booms/gluts make the news; the Market
+dashboard shows live Port Rosa prices.
+
 **World events** (`WorldEventSystem.ts`, defs in `data/worldEvents.ts`): once per
 day there is a 20% chance a news event starts (max 2 active, opposites never
 overlap). Events are temporary town-wide modifiers with a headline — economic

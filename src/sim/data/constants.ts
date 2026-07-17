@@ -66,6 +66,17 @@ export const ACQUISITION_PREMIUM_HEALTHY = 1.3;
 /** Distressed/insolvent targets sell at a discount to valuation. */
 export const ACQUISITION_PREMIUM_DISTRESSED = 0.9;
 
+// --- Inter-city trade (Port Rosa) -------------------------------------------
+/** Fraction of export revenue lost to freight/handling. */
+export const EXPORT_FREIGHT_FEE = 0.08;
+/** Port Rosa price random-walk bounds and daily step (× base price). */
+export const TRADE_PRICE_MIN_MULT = 0.6;
+export const TRADE_PRICE_MAX_MULT = 1.8;
+export const TRADE_WALK_STEP = 0.12;
+/** News thresholds: export boom above, glut below (× base price). */
+export const TRADE_BOOM_MULT = 1.45;
+export const TRADE_GLUT_MULT = 0.7;
+
 // --- Immigration / town growth ---------------------------------------------
 /** New citizens move in only while average satisfaction is at least this. */
 export const IMMIGRATION_MIN_SATISFACTION = 60;

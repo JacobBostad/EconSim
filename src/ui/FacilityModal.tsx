@@ -67,6 +67,41 @@ export function FacilityActions({ fac }: { fac: Facility }): React.ReactElement 
         </div>
       )}
 
+      {/* Warehouse: export to Port Rosa */}
+      {fac.type === 'warehouse' && isPlayer && (
+        <div className="card">
+          <div className="section-title" style={{ marginTop: 0 }}>🚢 Export to Port Rosa</div>
+          <p className="muted small" style={{ margin: '0 0 6px' }}>
+            Port Rosa's prices drift daily (0.6×–1.8× base); freight takes 8%.
+            Stage goods here via supply contracts, then sell when prices spike.
+          </p>
+          {ALL_PRODUCT_IDS.map((pid) => {
+            const qty = getQuantity(fac.inputInventory, pid) + getQuantity(fac.outputInventory, pid);
+            const price = state.tradeCity.pricesByProduct[pid] ?? getProduct(pid).basePrice;
+            const mult = price / getProduct(pid).basePrice;
+            if (qty <= 0) return null;
+            return (
+              <div className="row between small" key={pid} style={{ marginBottom: 4 }}>
+                <span>{getProduct(pid).name} × {qty}</span>
+                <span className="mono" style={{ color: mult >= 1.3 ? 'var(--green)' : mult <= 0.75 ? 'var(--red)' : undefined }}>
+                  {formatMoney(price)} ({mult.toFixed(2)}×)
+                </span>
+                <button
+                  onClick={() =>
+                    dispatch({ type: 'EXPORT_GOODS', firmId: fac.ownerFirmId, facilityId: fac.id, productId: pid, quantity: qty })
+                  }
+                >
+                  Export all
+                </button>
+              </div>
+            );
+          })}
+          {ALL_PRODUCT_IDS.every(
+            (pid) => getQuantity(fac.inputInventory, pid) + getQuantity(fac.outputInventory, pid) <= 0,
+          ) && <div className="muted small">Nothing staged — wire a supply contract into this warehouse.</div>}
+        </div>
+      )}
+
       {/* Retail product + price */}
       {fac.type === 'retail' && (
         <div className="card">

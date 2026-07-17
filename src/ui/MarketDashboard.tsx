@@ -24,7 +24,9 @@ export function MarketDashboard(): React.ReactElement {
             <th>Product</th><th>Base</th><th>Avg price</th>
             <th><FormulaTooltip title="Demand attempts" explanation="Shopping visits today, fulfilled or not.">Attempts</FormulaTooltip></th>
             <th>Fulfilled</th><th>Unmet</th><th>Units sold</th><th>Stockouts</th>
-            <th>Avg quality</th><th>Total inventory</th><th>Leader</th>
+            <th>Avg quality</th><th>Total inventory</th>
+            <th><FormulaTooltip title="Port Rosa price" explanation="The distant trade city's current price. Export from a warehouse; freight takes 8%. Green = lucrative (≥1.3× base).">Port Rosa</FormulaTooltip></th>
+            <th>Leader</th>
           </tr>
         </thead>
         <tbody>
@@ -40,6 +42,15 @@ export function MarketDashboard(): React.ReactElement {
               <td className="mono">{r.stockoutCount}</td>
               <td className="mono">{r.averageQuality.toFixed(0)}</td>
               <td className="mono">{r.totalInventory}</td>
+              {(() => {
+                const tradePrice = state.tradeCity.pricesByProduct[r.productId] ?? r.basePrice;
+                const mult = tradePrice / r.basePrice;
+                return (
+                  <td className="mono" style={{ color: mult >= 1.3 ? 'var(--green)' : mult <= 0.75 ? 'var(--red)' : undefined }}>
+                    {formatMoney(tradePrice)}
+                  </td>
+                );
+              })()}
               <td>{r.topFirmName ? `${r.topFirmName} ${(r.topFirmShare * 100).toFixed(0)}%` : '—'}</td>
             </tr>
           ))}
