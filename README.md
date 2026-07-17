@@ -2,7 +2,8 @@
 
 A deterministic, inspectable, browser-based economic simulation. A small town of
 citizens earns wages, shops, and consumes; firms run real supply chains (farm →
-bakery → store; mine → tool works → store); prices move with supply and demand;
+bakery → store; mine → tool works → store; cotton farm → tailor → boutique);
+prices move with supply and demand;
 firms make or lose money; an AI competitor reacts; and **you** run a company —
 building facilities, setting prices and wages, hiring workers, and wiring up
 supply contracts.
@@ -272,8 +273,8 @@ income, etc. Config is part of saved state.
 - **Subsistence income** (`config.subsistenceIncomePerDay`, default $7/day) is
   paid to unemployed citizens from the world account so the consumer economy
   keeps functioning at high unemployment. Set to 0 for a harsher world.
-- **Starting scenario**: 40 citizens / 20 homes; two AI firms (a bread chain and
-  a tools chain); an external importer; a player firm with $15,000 and no
+- **Starting scenario**: 40 citizens / 20 homes; three AI firms (bread, tools,
+  and clothes chains); an external importer; a player firm with $15,000 and no
   facilities (buildable land). Lean staffing so the AI chains are roughly
   break-even and there's room for the player to compete.
 

@@ -179,6 +179,21 @@ export const WORLD_EVENT_DEFS: WorldEventDef[] = [
     effects: { demand: { tools: 1.6 } },
   },
   {
+    id: 'fashion_week',
+    name: 'Fashion Week',
+    icon: '👗',
+    headline: 'Fashion week fever — everyone wants a new outfit!',
+    description:
+      'Citizens buy about 60% more clothes per trip while it lasts. Stock the boutiques.',
+    severity: 'info',
+    minDays: 3,
+    maxDays: 6,
+    weight: 8,
+    exclusiveGroup: 'fad',
+    earliestDay: 4,
+    effects: { demand: { clothes: 1.6 } },
+  },
+  {
     id: 'fuel_spike',
     name: 'Fuel Price Spike',
     icon: '⛽',

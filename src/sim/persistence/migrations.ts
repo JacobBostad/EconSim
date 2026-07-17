@@ -12,6 +12,9 @@
 import { SAVE_VERSION } from '../core/GameState';
 import type { GameState } from '../core/GameState';
 import type { AccountingPeriod } from '../entities/Accounting';
+import { CONSUMER_PRODUCT_IDS, ALL_PRODUCT_IDS } from '../data/products';
+import { emptyMarketStat } from '../entities/Market';
+import { defaultNeedFor } from '../entities/factories';
 
 type Raw = Record<string, unknown>;
 
@@ -93,6 +96,18 @@ function normalize(state: GameState): GameState {
     c.lastShopTick = c.lastShopTick ?? -1000;
     c.missedPaydays = c.missedPaydays ?? 0;
     c.storeReliability = c.storeReliability ?? {};
+    // Products added after the save was written: give citizens the need.
+    for (const pid of CONSUMER_PRODUCT_IDS) {
+      if (!c.needs.some((n) => n.productId === pid)) {
+        const need = defaultNeedFor(pid);
+        if (need) c.needs.push(need);
+      }
+      c.preferences[pid] = c.preferences[pid] ?? 1;
+    }
+  }
+  // ...and give the market a stat entry for them.
+  for (const pid of ALL_PRODUCT_IDS) {
+    state.marketStats[pid] = state.marketStats[pid] ?? emptyMarketStat(pid);
   }
   return state;
 }

@@ -60,6 +60,30 @@ export const RECIPES: Record<RecipeId, Recipe> = {
     variableCost: dollars(2.5),
   },
 
+  // --- Apparel chain -----------------------------------------------------
+  grow_cotton: {
+    id: 'grow_cotton',
+    name: 'Grow Cotton',
+    facilityType: 'farm',
+    inputs: [],
+    outputs: [{ productId: 'cotton', quantity: 8 }],
+    laborRequired: 2,
+    ticksRequired: 3,
+    baseEfficiency: 1,
+    variableCost: dollars(2.2),
+  },
+  sew_clothes: {
+    id: 'sew_clothes',
+    name: 'Sew Clothes',
+    facilityType: 'factory',
+    inputs: [{ productId: 'cotton', quantity: 3 }],
+    outputs: [{ productId: 'clothes', quantity: 7 }],
+    laborRequired: 2,
+    ticksRequired: 3,
+    baseEfficiency: 1,
+    variableCost: dollars(2.2),
+  },
+
   // --- Importer (extraction from the outside world) ----------------------
   import_grain: {
     id: 'import_grain',
@@ -82,6 +106,17 @@ export const RECIPES: Record<RecipeId, Recipe> = {
     ticksRequired: 2,
     baseEfficiency: 1,
     variableCost: dollars(3.4),
+  },
+  import_cotton: {
+    id: 'import_cotton',
+    name: 'Import Cotton',
+    facilityType: 'importer',
+    inputs: [],
+    outputs: [{ productId: 'cotton', quantity: 8 }],
+    laborRequired: 0,
+    ticksRequired: 2,
+    baseEfficiency: 1,
+    variableCost: dollars(3.6),
   },
 };
 

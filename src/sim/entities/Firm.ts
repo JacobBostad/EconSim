@@ -21,7 +21,7 @@ export interface WagePolicy {
 
 /** Lightweight AI strategy memory used by AIStrategySystem. */
 export interface FirmStrategy {
-  kind: 'none' | 'bread' | 'tools' | 'retail';
+  kind: 'none' | 'bread' | 'tools' | 'clothes' | 'retail';
   /** Per-product count of consecutive days the firm sold out (drives price up). */
   selloutStreak: Record<ProductId, number>;
   /** Per-product count of consecutive days of excess inventory (drives price down). */

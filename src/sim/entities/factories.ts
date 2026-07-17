@@ -74,7 +74,33 @@ export function makeCitizenNeeds(rng: Rng): CitizenNeed[] {
       maxAffordablePriceMultiplier: rng.range(1.3, 1.6),
       lastSatisfiedTick: 0,
     },
+    {
+      productId: 'clothes',
+      urgency: rng.range(0, 0.5),
+      urgencyGrowthPerDay: rng.range(0.22, 0.35),
+      preferredQuantity: 1,
+      maxAffordablePriceMultiplier: rng.range(1.35, 1.65),
+      lastSatisfiedTick: 0,
+    },
   ];
+}
+
+/**
+ * Default need used when normalizing old saves that predate a product
+ * (mid-range values, no rng so migration stays deterministic).
+ */
+export function defaultNeedFor(productId: string): CitizenNeed | null {
+  if (productId === 'clothes') {
+    return {
+      productId: 'clothes',
+      urgency: 0.25,
+      urgencyGrowthPerDay: 0.28,
+      preferredQuantity: 1,
+      maxAffordablePriceMultiplier: 1.5,
+      lastSatisfiedTick: 0,
+    };
+  }
+  return null;
 }
 
 /** Create a citizen at runtime (used by immigration). Cash starts at 0 —

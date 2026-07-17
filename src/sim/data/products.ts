@@ -5,9 +5,10 @@
  * recipe in recipes.ts and reference it from a facility definition. Nothing
  * else in the engine needs to change.
  *
- * Chains shipped in v1:
+ * Chains shipped:
  *   grain  -> bread  (food, sold to citizens)
  *   minerals -> tools (durable, sold to citizens)
+ *   cotton -> clothes (apparel, sold to citizens)
  */
 
 import type { Product } from '../entities/Product';
@@ -65,6 +66,32 @@ export const PRODUCTS: Record<ProductId, Product> = {
     brandWeight: 0.15,
     needType: 'goods',
     defaultQuality: 65,
+    unitSize: 2,
+  },
+  cotton: {
+    id: 'cotton',
+    name: 'Cotton',
+    category: 'raw',
+    basePrice: dollars(2.2),
+    perishability: 0.02,
+    qualityWeight: 0,
+    priceWeight: 0,
+    brandWeight: 0,
+    needType: 'none',
+    defaultQuality: 50,
+    unitSize: 1,
+  },
+  clothes: {
+    id: 'clothes',
+    name: 'Clothes',
+    category: 'apparel',
+    basePrice: dollars(12.0),
+    perishability: 0,
+    qualityWeight: 0.22,
+    priceWeight: 0.18,
+    brandWeight: 0.2,
+    needType: 'clothing',
+    defaultQuality: 60,
     unitSize: 2,
   },
 };

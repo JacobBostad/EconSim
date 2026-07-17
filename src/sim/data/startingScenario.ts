@@ -1,8 +1,8 @@
 /**
  * startingScenario.ts — Builds the initial, immediately-playable GameState.
  *
- * The town has 40 citizens in 20 homes, two AI competitors running full supply
- * chains (a bread chain and a tools chain), an external importer, and a player
+ * The town has 40 citizens in 20 homes, three AI competitors running full supply
+ * chains (bread, tools, and clothes), an external importer, and a player
  * firm with starting cash but no facilities (buildable empty land). Initial
  * inventories and employment are seeded so the economy starts moving on tick 0.
  *
@@ -266,6 +266,7 @@ export function createInitialState(
   // Importer holds a large buffer so contract-based sourcing always succeeds.
   stock(importerFac.outputInventory, 'grain', 100000);
   stock(importerFac.outputInventory, 'minerals', 100000);
+  stock(importerFac.outputInventory, 'cotton', 100000);
 
   // --- AI Foods: bread chain (farm -> bakery -> retail) ------------------
   const aiFoods = newFirm(
@@ -360,6 +361,52 @@ export function createInitialState(
     if (w) employ(b, w, aiInd.id, toolShop.id, 'clerk', DEFAULT_AI_WAGE);
   }
 
+  // --- AI Apparel: clothes chain (cotton farm -> tailor -> boutique) -----
+  const aiApparel = newFirm(
+    b,
+    'Loom & Thread',
+    'ai',
+    dollars(38000),
+    emptyStrategy('clothes'),
+    DEFAULT_AI_WAGE,
+  );
+  aiApparel.pricesByProduct.clothes = getProduct('clothes').basePrice;
+  aiApparel.brandByProduct.clothes = 20;
+  aiApparel.qualityByProduct.clothes = getProduct('clothes').defaultQuality;
+  aiApparel.adBudgetByProduct.clothes = dollars(12);
+
+  const cottonFarm = newFacility(b, 'farm', aiApparel.id, { x: 64, y: 14 }, {
+    name: 'Loom Cotton Farm',
+    activeRecipeId: 'grow_cotton',
+  });
+  stock(cottonFarm.outputInventory, 'cotton', 40);
+
+  const tailor = newFacility(b, 'factory', aiApparel.id, { x: 66, y: 32 }, {
+    name: 'Loom Tailor Works',
+    activeRecipeId: 'sew_clothes',
+  });
+  stock(tailor.inputInventory, 'cotton', 20);
+  stock(tailor.outputInventory, 'clothes', 12);
+
+  const boutique = newFacility(b, 'retail', aiApparel.id, { x: 62, y: 48 }, {
+    name: 'Loom Boutique',
+    retailProductId: 'clothes',
+  });
+  stock(boutique.inputInventory, 'clothes', 18);
+
+  for (let i = 0; i < 2; i++) {
+    const w = takeWorker();
+    if (w) employ(b, w, aiApparel.id, cottonFarm.id, 'farmhand', DEFAULT_AI_WAGE);
+  }
+  for (let i = 0; i < 2; i++) {
+    const w = takeWorker();
+    if (w) employ(b, w, aiApparel.id, tailor.id, 'tailor', DEFAULT_AI_WAGE);
+  }
+  for (let i = 0; i < 1; i++) {
+    const w = takeWorker();
+    if (w) employ(b, w, aiApparel.id, boutique.id, 'clerk', DEFAULT_AI_WAGE);
+  }
+
   // --- AI supply contracts -----------------------------------------------
   const addContract = (
     ownerFirmId: string,
@@ -391,6 +438,8 @@ export function createInitialState(
   addContract(aiFoods.id, bakery.id, breadShop.id, 'bread', 50, 20, 90);
   addContract(aiInd.id, mine.id, toolFactory.id, 'minerals', 30, 12, 60);
   addContract(aiInd.id, toolFactory.id, toolShop.id, 'tools', 24, 8, 50);
+  addContract(aiApparel.id, cottonFarm.id, tailor.id, 'cotton', 30, 12, 60);
+  addContract(aiApparel.id, tailor.id, boutique.id, 'clothes', 20, 8, 45);
 
   return state;
 }
