@@ -17,6 +17,7 @@ import type { GameState } from '../sim/core/GameState';
 import type { FacilityType } from '../sim/entities/Facility';
 import type { CitizenActivity } from '../sim/entities/Citizen';
 import { computeTime } from '../sim/core/Tick';
+import { landValueAt } from '../sim/core/LandValue';
 import { getProduct } from '../sim/data/products';
 import { formatMoney } from '../utils/formatMoney';
 
@@ -299,8 +300,63 @@ export class TownRenderer {
     this.drawFloaters();
     this.drawNightTint(time.hour);
     this.drawWorldEventAmbiance(s, dt);
+    if (this.cb.getBuildMode()) this.drawLandValueOverlay(s);
     this.drawHud(time);
     this.drawHover(s);
+  }
+
+  // --- land-value overlay (placement mode) -------------------------------
+  private landGrid: { key: string; step: number; cols: number; rows: number; v: Float32Array } | null = null;
+
+  /** Sampled land-value grid, cached until homes/residents change. */
+  private landValues(s: GameState): NonNullable<TownRenderer['landGrid']> {
+    let homes = 0, residents = 0;
+    for (const fid in s.facilities) {
+      const f = s.facilities[fid]!;
+      if (f.type === 'home') { homes += 1; residents += f.residentIds.length; }
+    }
+    const key = `${homes}:${residents}:${s.seed}`;
+    if (this.landGrid && this.landGrid.key === key) return this.landGrid;
+    const step = 4;
+    const cols = Math.ceil(s.config.mapWidth / step) + 1;
+    const rows = Math.ceil(s.config.mapHeight / step) + 1;
+    const v = new Float32Array(cols * rows);
+    for (let gy = 0; gy < rows; gy++) {
+      for (let gx = 0; gx < cols; gx++) {
+        v[gy * cols + gx] = landValueAt(s, { x: gx * step, y: gy * step });
+      }
+    }
+    this.landGrid = { key, step, cols, rows, v };
+    return this.landGrid;
+  }
+
+  /** Green (cheap) → red (premium) wash while the player is placing a building. */
+  private drawLandValueOverlay(s: GameState): void {
+    const grid = this.landValues(s);
+    const ctx = this.ctx;
+    const sc = this.effScale();
+    ctx.save();
+    for (let gy = 0; gy < grid.rows; gy++) {
+      for (let gx = 0; gx < grid.cols; gx++) {
+        const lv = grid.v[gy * grid.cols + gx]!;
+        const p = this.w2s(s, { x: gx * grid.step, y: gy * grid.step });
+        const size = grid.step * sc;
+        if (p.x < -size || p.y < -size || p.x > this.cssW + size || p.y > this.cssH + size) continue;
+        // Hue 120 (green) → 0 (red); stronger alpha where pricier.
+        ctx.fillStyle = `hsla(${120 - lv * 120}, 75%, 45%, ${0.08 + lv * 0.16})`;
+        ctx.fillRect(p.x - size / 2, p.y - size / 2, size, size);
+      }
+    }
+    ctx.restore();
+    // Legend chip.
+    ctx.save();
+    ctx.fillStyle = 'rgba(13,17,23,0.8)';
+    ctx.fillRect(this.cssW / 2 - 130, 8, 260, 22);
+    ctx.fillStyle = '#e6edf3';
+    ctx.font = '11px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Land value: green = cheap (0.8×) · red = premium (1.6×)', this.cssW / 2, 23);
+    ctx.restore();
   }
 
   // --- world-event ambiance ---------------------------------------------
