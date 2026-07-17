@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { newSim, findFacilityByName } from './helpers';
+import { newSim } from './helpers';
 import { ticksPerDay } from '../core/Tick';
 import { getQuantity } from '../entities/Inventory';
 
