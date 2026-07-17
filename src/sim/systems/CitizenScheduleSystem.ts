@@ -27,14 +27,16 @@ export function isShopTime(ctx: SimContext): boolean {
   return h >= ctx.config.shopStartHour && h < ctx.config.shopEndHour;
 }
 
-/** The citizen's most urgent need that is above the shopping threshold. */
-function topUrgentNeed(ctx: SimContext, cit: Citizen): Citizen['needs'][number] | null {
-  let best: Citizen['needs'][number] | null = null;
-  for (const need of cit.needs) {
-    if (need.urgency < ctx.config.needUrgencyThreshold) continue;
-    if (!best || need.urgency > best.urgency) best = need;
-  }
-  return best;
+/**
+ * Needs above the shopping threshold, most urgent first. The schedule tries
+ * them in order and takes the first one an open store actually sells — an
+ * unservable craving (nobody in town sells clothes) must never block a
+ * citizen from buying bread.
+ */
+function shoppableNeeds(ctx: SimContext, cit: Citizen): Citizen['needs'] {
+  return cit.needs
+    .filter((n) => n.urgency >= ctx.config.needUrgencyThreshold)
+    .sort((a, b) => b.urgency - a.urgency);
 }
 
 export function runCitizenScheduleSystem(ctx: SimContext): void {
@@ -72,21 +74,21 @@ export function runCitizenScheduleSystem(ctx: SimContext): void {
     }
 
     // 2) Shopping: in the window, or whenever a need is urgent (and not at work).
-    const urgent = topUrgentNeed(ctx, cit);
     const offCooldown =
       state.tick - cit.lastShopTick >= ctx.config.shoppingCooldownTicks;
-    const canShopNow =
-      urgent != null &&
-      offCooldown &&
-      (isShopTime(ctx) || urgent.urgency >= ctx.config.needUrgentThreshold) &&
-      !(employed && isWorkTime(ctx));
-    if (canShopNow && urgent) {
-      const store = chooseBestStore(ctx, cit, urgent.productId);
-      if (store) {
-        cit.lastShopTick = state.tick;
-        startCommute(cit, store.id, store.location, 'commuting-to-shop');
-        continue;
+    if (offCooldown && !(employed && isWorkTime(ctx))) {
+      let commuting = false;
+      for (const need of shoppableNeeds(ctx, cit)) {
+        if (!isShopTime(ctx) && need.urgency < ctx.config.needUrgentThreshold) continue;
+        const store = chooseBestStore(ctx, cit, need.productId);
+        if (store) {
+          cit.lastShopTick = state.tick;
+          startCommute(cit, store.id, store.location, 'commuting-to-shop');
+          commuting = true;
+          break;
+        }
       }
+      if (commuting) continue;
     }
 
     // 3) Default: be at home (sleeping before work, home otherwise).

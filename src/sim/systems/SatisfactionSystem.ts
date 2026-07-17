@@ -20,6 +20,17 @@ function needWeight(productId: string): number {
   return getProduct(productId).needType === 'food' ? 1.4 : 0.55;
 }
 
+/** Whether any staffed store in town currently sells the product. */
+function soldSomewhere(state: import('../core/GameState').GameState, productId: string): boolean {
+  for (const fid in state.facilities) {
+    const f = state.facilities[fid]!;
+    if (f.retailProductId === productId && f.status !== 'closed' && f.employees.length > 0) {
+      return true;
+    }
+  }
+  return false;
+}
+
 export function runSatisfactionSystem(ctx: SimContext): void {
   if (!isDayBoundary(ctx.state.tick, ctx.config)) return;
   const { state, config } = ctx;
@@ -30,8 +41,13 @@ export function runSatisfactionSystem(ctx: SimContext): void {
     for (const need of cit.needs) {
       need.urgency = Math.min(URGENCY_CAP, need.urgency + need.urgencyGrowthPerDay);
       if (need.urgency > config.needUrgentThreshold) {
+        // Resigned demand: if nobody in town sells it at all, the longing
+        // stings half as much — and becomes a market opportunity instead.
+        const anySeller = soldSomewhere(state, need.productId);
         unmetPressure +=
-          (need.urgency - config.needUrgentThreshold) * needWeight(need.productId);
+          (need.urgency - config.needUrgentThreshold) *
+          needWeight(need.productId) *
+          (anySeller ? 1 : 0.5);
       }
     }
 
