@@ -52,6 +52,12 @@ export interface ActiveWorldEvent {
   endDay: number;
 }
 
+/** A permanently unlocked achievement (def lives in data/achievements.ts). */
+export interface UnlockedAchievement {
+  id: string;
+  day: number;
+}
+
 export interface GameState {
   saveVersion: number;
   seed: number;
@@ -79,6 +85,8 @@ export interface GameState {
   transactions: Transaction[];
   /** Active world events (booms, droughts, fads...); rolled daily. */
   worldEvents: ActiveWorldEvent[];
+  /** Unlocked achievements (permanent). */
+  achievements: UnlockedAchievement[];
 
   idCounters: IdCounters;
   selectedEntityId: EntityId | null;

@@ -40,6 +40,7 @@ import type { Contract } from '../entities/Contract';
 
 import { runTimeSystem } from '../systems/TimeSystem';
 import { runWorldEventSystem } from '../systems/WorldEventSystem';
+import { runAchievementSystem } from '../systems/AchievementSystem';
 import { runMarketStatsSystem } from '../systems/MarketStatsSystem';
 import { runAIStrategySystem } from '../systems/AIStrategySystem';
 import { runEventLogSystem } from '../systems/EventLogSystem';
@@ -86,6 +87,7 @@ const SYSTEMS: SystemFn[] = [
   runProductionSystem,
   runLogisticsSystem,
   runRetailDemandSystem,
+  runAchievementSystem, // hourly; sees the fully-updated tick
 ];
 
 export class Simulation {

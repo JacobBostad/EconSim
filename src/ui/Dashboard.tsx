@@ -5,6 +5,7 @@ import { MarketDashboard } from './MarketDashboard';
 import { SupplyChainDashboard } from './SupplyChainDashboard';
 import { PopulationDashboard } from './PopulationDashboard';
 import { DebugPanel } from './DebugPanel';
+import { AwardsDashboard } from './AwardsDashboard';
 
 export function Dashboard(): React.ReactElement {
   const dashboard = useGameStore((s) => s.dashboard);
@@ -21,6 +22,7 @@ export function Dashboard(): React.ReactElement {
         {dashboard === 'market' && <MarketDashboard />}
         {dashboard === 'supply' && <SupplyChainDashboard />}
         {dashboard === 'population' && <PopulationDashboard />}
+        {dashboard === 'awards' && <AwardsDashboard />}
         {dashboard === 'debug' && <DebugPanel />}
       </div>
     </div>

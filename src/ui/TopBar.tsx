@@ -12,6 +12,7 @@ const TABS: { id: DashboardTab; label: string }[] = [
   { id: 'market', label: 'Market' },
   { id: 'supply', label: 'Supply Chain' },
   { id: 'population', label: 'Population' },
+  { id: 'awards', label: 'Awards' },
   { id: 'debug', label: 'Debug' },
 ];
 

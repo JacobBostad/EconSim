@@ -54,6 +54,7 @@ function normPeriod(p: Partial<AccountingPeriod> | undefined): AccountingPeriod 
 /** Fill any missing fields introduced after the save was written. */
 function normalize(state: GameState): GameState {
   state.worldEvents = state.worldEvents ?? [];
+  state.achievements = state.achievements ?? [];
   for (const id in state.firms) {
     const f = state.firms[id]!;
     f.brandByProduct = f.brandByProduct ?? {};

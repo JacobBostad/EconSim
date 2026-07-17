@@ -41,6 +41,7 @@ export type DashboardTab =
   | 'market'
   | 'supply'
   | 'population'
+  | 'awards'
   | 'debug';
 
 interface GameStore {
