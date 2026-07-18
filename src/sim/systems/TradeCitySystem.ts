@@ -32,6 +32,7 @@ import { clamp } from '../../utils/clamp';
 import { getQuantity } from '../entities/Inventory';
 import { performExport, pickBestCity } from '../core/Trade';
 import { worldTradePriceMult } from '../data/worldEvents';
+import { tradeAnnouncementMult } from './TradeAnnouncementSystem';
 import { TRADE_CITY_IDS, getTradeCity, cityBias } from '../data/tradeCities';
 
 /** Daily reversion strength toward the (event-shifted) price center. */
@@ -60,11 +61,18 @@ function updatePrices(ctx: SimContext): void {
       // Random walk with a gentle pull toward the event-shifted, city-biased
       // center: a drought makes ports pay up for grain, a recession discounts
       // everything — so world news is also trade news.
-      const center = base * worldTradePriceMult(state, pid) * bias;
+      const annMult = tradeAnnouncementMult(state, cid, pid, ctx.time.day);
+      const center = base * worldTradePriceMult(state, pid) * bias * annMult;
       const walked = prev * (1 + jitter * city.walkSign);
+      // Markets react to NEWS much faster than they drift: while an
+      // announced shock is in effect, the pull is strong enough that the
+      // quote reaches most of the headline move within a couple of days —
+      // otherwise a "1.5×" tender would deliver ~1.2× and informed trading
+      // couldn't beat round-trip friction (probed).
+      const pull = annMult !== 1 ? 0.4 : TRADE_CENTER_PULL;
       const next = Math.round(
         clamp(
-          walked + (center - walked) * TRADE_CENTER_PULL,
+          walked + (center - walked) * pull,
           base * bias * TRADE_PRICE_MIN_MULT,
           base * bias * TRADE_PRICE_MAX_MULT,
         ),

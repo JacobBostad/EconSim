@@ -77,6 +77,7 @@ function normalize(state: GameState): GameState {
     d.affluent = d.affluent ?? 0;
   }
   state.rushOrder = state.rushOrder ?? null;
+  state.tradeAnnouncement = state.tradeAnnouncement ?? null;
   state.rushOrdersCompleted = state.rushOrdersCompleted ?? 0;
   state.rushOrdersMissed = state.rushOrdersMissed ?? 0;
   state.facilityOffer = state.facilityOffer ?? null;

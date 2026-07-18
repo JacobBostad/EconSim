@@ -58,6 +58,21 @@ export interface ActiveWorldEvent {
  * from wherever it lands) before `deadlineDay` ends for a cash bonus on top
  * of the normal export revenue. At most one is active at a time.
  */
+/**
+ * A pre-announced trade shock: the Gazette breaks the news days before a
+ * city's price center actually moves, so reading the paper becomes a
+ * trading edge (see docs/design/commodity-market.md).
+ */
+export interface TradeAnnouncement {
+  cityId: string;
+  productId: ProductId;
+  /** Center multiplier while in effect (>1 tender/surge, <1 glut/slump). */
+  mult: number;
+  announcedDay: number;
+  effectDay: number;
+  durationDays: number;
+}
+
 export interface RushOrder {
   /** Flavor + bonus payer: which city's buyer placed the call. */
   cityId: string;
@@ -138,6 +153,8 @@ export interface GameState {
   tradeCities: Record<string, { pricesByProduct: Record<ProductId, number> }>;
   /** Active rush order (timed bulk-export contract), if any. */
   rushOrder: RushOrder | null;
+  /** Pre-announced city price shock, if one is pending or in effect. */
+  tradeAnnouncement: TradeAnnouncement | null;
   /** Lifetime rush orders completed / let expire (player-facing counters). */
   rushOrdersCompleted: number;
   rushOrdersMissed: number;

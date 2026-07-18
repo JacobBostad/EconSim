@@ -233,6 +233,7 @@ export function createInitialState(
     missions: [],
     tradeCities: {},
     rushOrder: null,
+    tradeAnnouncement: null,
     rushOrdersCompleted: 0,
     rushOrdersMissed: 0,
     facilityOffer: null,

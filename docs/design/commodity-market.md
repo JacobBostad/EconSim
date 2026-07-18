@@ -82,8 +82,30 @@ Greed loses, craft earns a modest sideline, and the 4-seed unattended
 town probe is byte-identical to baseline (AI trade sizes round below
 impact). That's a market.
 
+## Phase 3 — announced shocks (SHIPPED)
+
+Reading the Gazette is now a trading skill: every ~2 weeks a city
+pre-announces a price shock 3 days ahead ("📯 Ironvale announces a tool
+tender — buyers expected to pay up from day N, ~1.5× for 5 days"). The
+shock multiplies the city's price CENTER for the window; a strengthened
+center-pull (0.4/day vs the normal 0.12) makes the quote reach most of
+the headline move within a couple of days — probed necessity, not
+flavor: at the normal pull a "1.5×" tender delivered ~1.2× real movement
+and informed trading couldn't beat the ~21% round-trip friction. Rolls
+ride their own (seed, day) hash stream — zero ctx.rng draws, insertion
+re-deals nothing. Surfaced in the ticker (📯 chip with countdown) and
+the event feed at both announcement and effect.
+
+**Informed-trader probe** (280 live days, 60-unit plays, buy the cheapest
+city pre-effect, sell into the surge late-window): **+$1,109 trade-only
+P&L across 11 plays (~$100/play)** — a real, repeatable edge for players
+who read the news, bounded by price impact (loading up moves the quote
+against you) and small enough that it never rivals running a business.
+Warehouse fixed costs are the entry fee: a dedicated speculation-only
+warehouse does NOT pay for itself on announcements alone (−$1.5k
+all-in) — the desk belongs inside a working logistics operation.
+
 ## Later phases
 
-- Market-moving world events with pre-announcements ("Ironvale tool
-  tender next week") so reading the news becomes a trading skill.
 - Gazette coverage of big player trades.
+- Slump-side plays (short via forwards into an announced glut).

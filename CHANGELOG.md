@@ -157,6 +157,14 @@ hireable managers, a real commodity market, and shared daily play.
   200. The deterministic engine makes it serverless: every player worldwide
   races the *same* town, and the leaderboard + share string recognize daily
   runs from the seed alone (📅 2026-07-18 beats "seed 20260718").
+- **Announced trade shocks**: every couple of weeks a city pre-announces a
+  price move three days ahead — "📯 Ironvale announces a tool tender,
+  ~1.5× from day N" — and the quote races to the headline once it begins
+  (markets react to news fast; the normal drift resumes after). Reading
+  the Gazette is now a trading skill: the probed informed-trader edge is
+  ~$100 per play — real, repeatable, bounded by price impact, and not
+  worth building a warehouse for on its own. Ticker chip counts down to
+  the move.
 - **Follow mode**: a 🎥 Follow button on any citizen puts the camera on
   their day — commute, shopping trips, and, if you've been paying them
   well, the day they earn their gold circlet. Esc or grabbing the map

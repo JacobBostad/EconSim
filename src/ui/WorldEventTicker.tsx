@@ -20,15 +20,30 @@ export function WorldEventTicker(): React.ReactElement | null {
   const active = activeWorldEvents(state);
   const rush = state.rushOrder;
   const offer = state.facilityOffer;
+  const ann = state.tradeAnnouncement;
   const offerFac = offer ? state.facilities[offer.facilityId] : null;
   const offerSeller = offer ? state.firms[offer.sellerFirmId] : null;
   const playerCash = state.firms[state.playerFirmId]?.cash ?? 0;
-  if (active.length === 0 && !rush && !offer) return null;
+  if (active.length === 0 && !rush && !offer && !ann) return null;
 
   const day = computeTime(state.tick, state.config).day;
 
   return (
     <div className="world-events">
+      {ann && (
+        <div
+          className={`world-event ${ann.mult > 1 ? 'sev-success' : 'sev-warning'}`}
+          title={`${getTradeCity(ann.cityId).name} ${ann.mult > 1 ? 'tender' : 'glut'}: ${getProduct(ann.productId).name}\n\n${day < ann.effectDay ? `Announced — prices expected to move to ~${ann.mult}× from day ${ann.effectDay + 1} for ${ann.durationDays} days. Position on the commodity desk or lock a forward before the move.` : `In effect through day ${ann.effectDay + ann.durationDays}. The city's quote is being pulled toward ${ann.mult}× its normal center.`}`}
+        >
+          <span className="icon">📯</span>
+          <span className="name">
+            {getTradeCity(ann.cityId).emoji} {getProduct(ann.productId).name} {ann.mult > 1 ? '▲' : '▼'} {ann.mult}×
+          </span>
+          <span className="days">
+            {day < ann.effectDay ? `in ${ann.effectDay - day}d` : `${Math.max(0, ann.effectDay + ann.durationDays - day)}d left`}
+          </span>
+        </div>
+      )}
       {rush && (
         <div
           className="world-event sev-success"
