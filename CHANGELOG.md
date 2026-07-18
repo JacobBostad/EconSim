@@ -217,6 +217,14 @@ engine tests), probed with headless balance runs, and guarded by CI.
   (seed, day) instead of the shared sim rng stream, so bolting the system on
   didn't re-deal any long-calibrated outcome (every playtest-bot floor
   passed untouched). New 🚚 Beat the Clock achievement.
+  *Tuned by playthrough probe*: the first cut drew products from everything
+  a player's facilities *could* switch to, so 17 of 19 probed offers were
+  for goods nobody was making (2/19 completed). Offers now draw only from
+  goods actually staged or actively produced, and quantities dropped to
+  30–90 (a single staffed line makes ~10–13/day, so six days plus staged
+  stock covers the top of the range). Re-probed, 3 seeds × 120 days: every
+  offer targeted a live product line and even a passive bot with one
+  standing order completed 7/19 — an attentive player clears most.
 - **Ambient soundtrack**: a quiet generative lo-fi bed — a slow maj7 chord
   pad through a lowpass with a sparse pentatonic music-box line echoing over
   it. Nothing loops verbatim, so it never grates. Daytime is brighter and

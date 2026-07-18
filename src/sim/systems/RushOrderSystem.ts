@@ -61,8 +61,10 @@ function candidateProducts(state: GameState): ProductId[] {
         }
       }
     }
-    for (const rid of f.recipes) {
-      for (const out of getRecipe(rid).outputs) produced.add(out.productId);
+    // Only what the facility is actually running — a factory *could* switch
+    // to jewelry, but an offer for it would just lapse as noise.
+    if (f.activeRecipeId) {
+      for (const out of getRecipe(f.activeRecipeId).outputs) produced.add(out.productId);
     }
   }
   const list = [...staged, ...[...produced].filter((p) => !staged.has(p))];
@@ -95,8 +97,10 @@ export function runRushOrderSystem(ctx: SimContext): void {
   const candidates = candidateProducts(state);
   const productId = candidates[Math.floor(rushRoll(state.seed, day, 1) * candidates.length)]!;
   const cityId = TRADE_CITY_IDS[Math.floor(rushRoll(state.seed, day, 2) * TRADE_CITY_IDS.length)]!;
-  // 40–120 units in steps of 5 — a real haul, not a rounding error.
-  const quantity = 40 + Math.floor(rushRoll(state.seed, day, 3) * 17) * 5;
+  // 30–90 units in steps of 5 — a real haul, but fillable: a single staffed
+  // production line makes ~10-13/day, so six days plus staged stock covers
+  // the top of the range without demanding a second line.
+  const quantity = 30 + Math.floor(rushRoll(state.seed, day, 3) * 13) * 5;
   const quote = pickBestCity(state, productId);
   const bonusCents = Math.round(quantity * quote.price * RUSH_BONUS_RATE);
 
