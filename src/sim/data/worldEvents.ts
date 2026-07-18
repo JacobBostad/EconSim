@@ -214,7 +214,9 @@ export const WORLD_EVENT_DEFS: WorldEventDef[] = [
     earliestDay: 0,
     effects: {
       spending: 1.05,
-      demand: { bread: 1.25, tools: 1.25, clothes: 1.25, pastries: 1.4, jewelry: 1.4 },
+      // Coffee joined the catalog after this event was written — festival
+      // crowds drink it like everything else.
+      demand: { bread: 1.25, tools: 1.25, clothes: 1.25, coffee: 1.25, pastries: 1.4, jewelry: 1.4 },
     },
   },
   {

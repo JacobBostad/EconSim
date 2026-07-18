@@ -16,6 +16,7 @@ describe('Civic actions', () => {
     expect(player.cash).toBe(cashBefore - FESTIVAL_COST);
     expect(state.worldEvents.some((ev) => ev.defId === 'festival')).toBe(true);
     expect(worldDemandMult(state, 'bread')).toBeCloseTo(1.25);
+    expect(worldDemandMult(state, 'coffee')).toBeCloseTo(1.25);
     expect(worldSpendingMult(state)).toBeCloseTo(1.05);
     expect(totalMoneySupply(state)).toBe(supply0);
 

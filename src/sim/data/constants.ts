@@ -105,7 +105,14 @@ export const APARTMENT_RENT_PER_DAY = dollars(2.5);
 /** Satisfaction equilibrium bonus for living in premium housing. */
 export const APARTMENT_SATISFACTION_BONUS = 5;
 
-export const FESTIVAL_COST = dollars(1500);
+/**
+ * Measured (6 seeds, paired 100-day runs): the festival's direct revenue
+ * lift for a typical single-chain player is tiny (~$50-200) — its value is
+ * the town-wide moment, not the till. At $1,500 it was a trap dressed as a
+ * business play; $800 prices it as the civic splurge it actually is, and a
+ * large multi-store empire can still break even on volume.
+ */
+export const FESTIVAL_COST = dollars(800);
 /** Funding a new home (2 residents move in) costs this much. */
 export const FUND_HOME_COST = dollars(3000);
 

@@ -235,6 +235,15 @@ engine tests), probed with headless balance runs, and guarded by CI.
 
 ## Measured findings (kept as design, documented in code)
 
+- **The festival was a trap at $1,500** (probed: 6 seeds, paired 100-day
+  runs, world events silenced): its direct revenue lift for a typical
+  single-chain player is ~$50–200 — the 25% demand bump for 3 days just
+  isn't much till money at town scale. Repriced to $800, where it reads as
+  the civic splurge it actually is (a large multi-store empire can still
+  break even on volume), and festival crowds now drink coffee too — the
+  event predated the product and had skipped it. Fund-home measured as
+  what its framing says: philanthropy with a long-horizon payoff (+5 pop
+  per 3 homes by day 100, direct cash ROI negative) — kept as designed.
 - **Challenge scores are scenario-fair enough for one leaderboard** (probed:
   identical bread-chain-plus-exports play, 200 days, all six scenarios × two
   seeds): scenario means ranged 212 (Gold Rush Gulch) to 289 (Mill Country /
