@@ -84,6 +84,7 @@ function newFacility(
     workerCapacity: def.workerCapacity,
     exportOrders: {},
     residentIds: [],
+    wholesaleEnabled: true,
   };
   b.state.facilities[id] = fac;
   b.state.firms[ownerFirmId]!.facilities.push(id);

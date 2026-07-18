@@ -228,6 +228,11 @@ export class Simulation {
       case 'SET_WAGE':
         this.setWage(command);
         return;
+      case 'TOGGLE_WHOLESALE': {
+        const fac = s.facilities[command.facilityId];
+        if (fac) fac.wholesaleEnabled = command.enabled;
+        return;
+      }
       case 'HIRE_WORKER':
         this.hire(command);
         return;

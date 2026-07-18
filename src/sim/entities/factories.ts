@@ -55,6 +55,7 @@ export function createFacility(
     workerCapacity: def.workerCapacity,
     exportOrders: {},
     residentIds: [],
+    wholesaleEnabled: true,
   };
   state.facilities[id] = fac;
   const firm = state.firms[ownerFirmId];

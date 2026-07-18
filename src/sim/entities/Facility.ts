@@ -127,6 +127,12 @@ export interface Facility {
   workerCapacity: number;
   /** For homes: which citizen lives here (informational). */
   residentIds: CitizenId[];
+  /**
+   * Whether other firms may buy this facility's surplus wholesale. Defaults
+   * on; a player staging stock for an export spike can switch it off so AI
+   * buyers can't force a sale at the wholesale discount.
+   */
+  wholesaleEnabled: boolean;
 }
 
 /** Static template for a buildable facility. */

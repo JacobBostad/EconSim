@@ -161,6 +161,7 @@ function normalize(state: GameState): GameState {
     f.yesterdayStats.transferOutValue = f.yesterdayStats.transferOutValue ?? 0;
     f.yesterdayStats.transferInValue = f.yesterdayStats.transferInValue ?? 0;
     f.pnlEma = f.pnlEma ?? { revenue: 0, cost: 0, net: 0 };
+    f.wholesaleEnabled = f.wholesaleEnabled ?? true;
     // Multi-product retail: wrap the legacy single retailProductId.
     if (!Array.isArray(f.retailProductIds)) {
       const legacy = (f as unknown as { retailProductId?: string | null }).retailProductId;

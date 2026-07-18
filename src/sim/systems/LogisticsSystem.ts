@@ -165,6 +165,7 @@ function processReorders(ctx: SimContext): void {
       // goods at ship time — sellers are never raided below what their own
       // supply lines need, and buyers who can't pay don't get shipped to.
       const crossFirm = source.ownerFirmId !== dest.ownerFirmId;
+      if (crossFirm && source.wholesaleEnabled === false) continue; // seller opted out
       if (crossFirm) {
         let reserved = 0;
         for (const cid2 in state.contracts) {

@@ -35,7 +35,9 @@ engine tests), probed with headless balance runs, and guarded by CI.
   contracts too: import lines switch to any local firm (the player included)
   holding a real surplus when wholesale beats the importer, and revert if
   the supplier runs dry. Overproduce intermediates and AI customers come to
-  you.
+  you. Seller agency: every producing facility has a "sell wholesale"
+  toggle (protect an export stockpile from forced sales) and lists its
+  customers; AI buyers never shop from warehouses.
 - **Port Rosa follows world news**: trade prices mean-revert toward
   event-shifted centers (droughts raise grain there too); fuel spikes scale
   export freight. Exporters never ship stock their own shelves are waiting on.

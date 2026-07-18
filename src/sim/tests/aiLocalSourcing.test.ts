@@ -55,6 +55,28 @@ describe('AI local sourcing', () => {
     expect(totalMoneySupply(state)).toBe(supply0);
   });
 
+  it('never sources from a facility whose owner opted out of wholesale', () => {
+    const { sim, state, farm, aiImportContract } = setup();
+    sim.dispatch({ type: 'TOGGLE_WHOLESALE', facilityId: farm.id, enabled: false });
+    sim.run(ticksPerDay(state.config) * 3);
+    expect(state.facilities[aiImportContract!.sourceFacilityId]?.type).toBe('importer');
+  });
+
+  it('disabling wholesale stops shipments and the AI reverts once its stock runs out', () => {
+    const { sim, state, farm, aiImportContract } = setup();
+    sim.run(ticksPerDay(state.config) * 2);
+    expect(state.facilities[aiImportContract!.sourceFacilityId]?.id).toBe(farm.id);
+
+    sim.dispatch({ type: 'TOGGLE_WHOLESALE', facilityId: farm.id, enabled: false });
+    const dest = state.facilities[aiImportContract!.destinationFacilityId]!;
+    dest.inputInventory = {}; // burn through the runway immediately
+    sim.run(ticksPerDay(state.config) * 2);
+
+    expect(state.facilities[aiImportContract!.sourceFacilityId]?.type).toBe('importer');
+    // The farm kept its stock — no shipments left after the opt-out + revert.
+    expect(getQuantity(farm.outputInventory, 'grain')).toBeGreaterThan(0);
+  });
+
   it('reverts to the importer when the local source runs dry and the chain starves', () => {
     const { sim, state, farm, aiImportContract } = setup();
     sim.run(ticksPerDay(state.config) * 2);

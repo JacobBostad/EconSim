@@ -658,6 +658,9 @@ function manageSourcing(ctx: SimContext, firmId: string): void {
       for (const fid in state.facilities) {
         const fac = state.facilities[fid]!;
         if (fac.ownerFirmId === firmId || fac.type === 'importer' || fac.status === 'closed') continue;
+        // Warehouses are staging areas (often export stockpiles) — never
+        // treat them as shops; and respect the owner's wholesale opt-out.
+        if (fac.type === 'warehouse' || fac.wholesaleEnabled === false) continue;
         const sellerType = state.firms[fac.ownerFirmId]?.ownerType;
         if (sellerType !== 'ai' && sellerType !== 'player') continue;
         if (localSurplus(state, fac, pid) < LOCAL_SOURCE_MIN_SURPLUS) continue;
@@ -668,10 +671,12 @@ function manageSourcing(ctx: SimContext, firmId: string): void {
         return; // one switch per firm per day
       }
     } else if (source.ownerFirmId !== firmId) {
-      // Cross-firm source dried up and the destination is starving: go back
-      // to the importer rather than let the chain die of loyalty.
+      // Cross-firm source opted out of wholesale (revert immediately — that
+      // source will never ship again) or dried up while the destination
+      // starves: go back to the importer rather than die of loyalty.
+      const cutOff = source.wholesaleEnabled === false;
       const destHave = getQuantity(dest.inputInventory, pid);
-      if (destHave > 0 || localSurplus(state, source, pid) >= 10) continue;
+      if (!cutOff && (destHave > 0 || localSurplus(state, source, pid) >= 10)) continue;
       const importer = Object.values(state.facilities).find((f) => f.type === 'importer');
       if (!importer) continue;
       contract.sourceFacilityId = importer.id;

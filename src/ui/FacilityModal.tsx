@@ -73,6 +73,51 @@ export function FacilityActions({ fac }: { fac: Facility }): React.ReactElement 
         </div>
       )}
 
+      {/* Wholesale: seller-side controls for facilities that can hold stock */}
+      {isPlayer && (producing || fac.type === 'warehouse') && (
+        <div className="card">
+          <div className="section-title" style={{ marginTop: 0 }}>🤝 Wholesale</div>
+          <label className="small row" style={{ gap: 6 }}>
+            <input
+              type="checkbox"
+              checked={fac.wholesaleEnabled !== false}
+              onChange={(e) =>
+                dispatch({ type: 'TOGGLE_WHOLESALE', facilityId: fac.id, enabled: e.target.checked })
+              }
+            />
+            Sell surplus to other firms (~70% of market, paid per shipment)
+          </label>
+          {(() => {
+            const customers = Object.values(state.contracts).filter(
+              (c) => c.active && c.sourceFacilityId === fac.id
+                && state.facilities[c.destinationFacilityId]?.ownerFirmId !== fac.ownerFirmId,
+            );
+            if (customers.length === 0) {
+              return (
+                <p className="muted small" style={{ margin: '4px 0 0' }}>
+                  No wholesale customers. Keep a surplus here and AI firms whose
+                  imports cost more will come to you. Turn it off to protect an
+                  export stockpile.
+                </p>
+              );
+            }
+            return (
+              <div className="small" style={{ marginTop: 4 }}>
+                {customers.map((c) => (
+                  <div key={c.id} className="row between">
+                    <span>
+                      {state.firms[state.facilities[c.destinationFacilityId]?.ownerFirmId ?? '']?.name ?? '?'}
+                      {' buys '}{getProduct(c.productId).name}
+                    </span>
+                    <span className="mono muted">target {c.targetQuantity}</span>
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
+        </div>
+      )}
+
       {/* Warehouse: export to the trade cities */}
       {fac.type === 'warehouse' && isPlayer && (
         <div className="card">

@@ -65,6 +65,7 @@ export type Command =
       cityId?: string;
     }
   | { type: 'SET_WAGE'; firmId: FirmId; wage: number }
+  | { type: 'TOGGLE_WHOLESALE'; facilityId: FacilityId; enabled: boolean }
   | { type: 'HIRE_WORKER'; facilityId: FacilityId; citizenId: CitizenId | null }
   | { type: 'FIRE_WORKER'; facilityId: FacilityId; citizenId: CitizenId }
   | {
