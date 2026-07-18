@@ -46,8 +46,9 @@ describe('morningBriefing', () => {
     const player = state.firms[state.playerFirmId]!;
     sim.dispatch({ type: 'BUILD_CHAIN', firmId: player.id, productId: 'bread' });
     const farm = player.facilities.map((id) => state.facilities[id]!).find((f) => f.type === 'farm')!;
-    farm.dailyStats.ticksActive = 0;
-    farm.dailyStats.bottleneck = 'No workers present (need 2)';
+    // The advisor reads the closed-day snapshot, not mid-day partials.
+    farm.yesterdayStats.ticksActive = 0;
+    farm.yesterdayStats.bottleneck = 'No workers present (need 2)';
     const rival = Object.values(state.firms).find((f) => f.name === 'Sunrise Foods')!;
     rival.wagePolicy.baseWage = Math.round(player.wagePolicy.baseWage * 1.3);
 

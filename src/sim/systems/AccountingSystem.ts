@@ -84,9 +84,12 @@ export function runAccountingSystem(ctx: SimContext): void {
     }
   }
 
-  // Reset per-day facility and citizen stats.
+  // Snapshot then reset per-day facility stats (yesterdayStats is what the
+  // UI and advisors read — dailyStats is partial for most of the day).
   for (const facId in state.facilities) {
-    state.facilities[facId]!.dailyStats = emptyFacilityDailyStats();
+    const fac = state.facilities[facId]!;
+    fac.yesterdayStats = fac.dailyStats;
+    fac.dailyStats = emptyFacilityDailyStats();
   }
   for (const cid in state.citizens) {
     const cit = state.citizens[cid]!;

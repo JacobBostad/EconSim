@@ -45,6 +45,13 @@ export interface FacilityDailyStats {
   lostSales: number; // demand attempts that failed due to stockout
   /** Would-be purchases abandoned because the price exceeded willingness to pay. */
   pricedOut: number;
+  /**
+   * Internal shipments valued at market price when they left / arrived.
+   * Lets per-facility P&L credit producers for goods they made (whose cash
+   * revenue is only realized downstream at retail) and debit receivers.
+   */
+  transferOutValue: number; // cents
+  transferInValue: number; // cents
   ticksActive: number;
   /** Last binding constraint seen during work hours (null = ran clean). */
   bottleneck: string | null;
@@ -60,6 +67,8 @@ export function emptyFacilityDailyStats(): FacilityDailyStats {
     variableCost: 0,
     lostSales: 0,
     pricedOut: 0,
+    transferOutValue: 0,
+    transferInValue: 0,
     ticksActive: 0,
     bottleneck: null,
   };
@@ -90,6 +99,11 @@ export interface Facility {
   status: FacilityStatus;
   bottleneckReason: string | null;
   dailyStats: FacilityDailyStats;
+  /**
+   * The last fully closed day's stats, snapshotted at the daily reset. UI and
+   * advisors read this instead of the mid-day partial dailyStats.
+   */
+  yesterdayStats: FacilityDailyStats;
   /** Workers physically present and working this tick (set by LaborSystem). */
   presentWorkers: number;
   /** Sum of present workers' skill this tick (crew productivity). */

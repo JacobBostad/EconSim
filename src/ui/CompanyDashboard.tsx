@@ -11,6 +11,7 @@ import {
   companyValuation,
   rankings,
   objectiveProgress,
+  facilityPnL,
 } from '../sim/selectors/companySelectors';
 import { formatMoney } from '../utils/formatMoney';
 import {
@@ -201,21 +202,31 @@ export function CompanyDashboard(): React.ReactElement {
         </div>
       )}
 
-      <h3>Facilities</h3>
+      <h3>Facilities — yesterday's P&L</h3>
       <table>
-        <thead><tr><th>Facility</th><th>Type</th><th>Status</th><th>Sold today</th><th>Produced</th><th>Lost</th></tr></thead>
+        <thead><tr><th>Facility</th><th>Type</th><th>Staff</th><th>Sold</th><th>Made</th><th>Earned</th><th>Cost</th><th>Net</th></tr></thead>
         <tbody>
-          {facilities.map((f) => (
-            <tr key={f.id} style={{ cursor: 'pointer' }} onClick={() => select(f.id)}>
-              <td>{f.name}</td><td>{f.type}</td><td>{f.status}</td>
-              <td className="mono">{f.dailyStats.unitsSold}</td>
-              <td className="mono">{f.dailyStats.unitsProduced}</td>
-              <td className="mono">{f.dailyStats.lostSales}</td>
+          {facilityPnL(state, firm.id).map((r) => (
+            <tr key={r.facilityId} style={{ cursor: 'pointer' }} onClick={() => select(r.facilityId)}>
+              <td>{r.name}{r.status === 'closed' ? ' 🚫' : ''}</td><td>{r.type}</td>
+              <td className="mono">{r.staff}</td>
+              <td className="mono">{r.unitsSold}</td>
+              <td className="mono">{r.unitsProduced}</td>
+              <td className="mono">{formatMoney(r.revenue)}</td>
+              <td className="mono">{formatMoney(r.cost)}</td>
+              <td className="mono" style={{ color: r.net < 0 ? 'var(--red)' : 'var(--green)' }}>{formatMoney(r.net)}</td>
             </tr>
           ))}
-          {facilities.length === 0 && <tr><td colSpan={6} className="muted">No facilities — build some from the left panel.</td></tr>}
+          {facilities.length === 0 && <tr><td colSpan={8} className="muted">No facilities — build some from the left panel.</td></tr>}
         </tbody>
       </table>
+      <p className="muted small" style={{ marginTop: 4 }}>
+        Internal shipments are credited to the shipper and debited to the
+        receiver at market price, so factories and farms show the value they
+        create. Wages and upkeep are per-facility; firm-wide spend (ads, R&D,
+        interest, freight) isn't attributed. A red bottom row is your money
+        pit — click it to restaff, reprice, or sell.
+      </p>
 
       <h3>Daily History (last {history.length} days)</h3>
       <div className="scroll">

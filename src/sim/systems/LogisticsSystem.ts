@@ -32,6 +32,13 @@ import {
 import { worldImportMult, worldTransportMult } from '../data/worldEvents';
 import { seasonTransportMult, seasonOf } from '../data/seasons';
 
+/** Value of an internal shipment at today's market price (base as fallback). */
+function transferValue(state: SimContext['state'], productId: string, qty: number): number {
+  const avg = state.marketStats[productId]?.averagePrice ?? 0;
+  const price = avg > 0 ? avg : getProduct(productId).basePrice;
+  return Math.round(qty * price);
+}
+
 export function runLogisticsSystem(ctx: SimContext): void {
   processArrivals(ctx);
   if (isHourBoundary(ctx.state.tick, ctx.config)) {
@@ -50,6 +57,7 @@ function processArrivals(ctx: SimContext): void {
     if (dest) {
       addStock(dest.inputInventory, v.cargo.productId, v.cargo.quantity, v.cargo.quality);
       dest.dailyStats.unitsReceived += v.cargo.quantity;
+      dest.dailyStats.transferInValue += transferValue(state, v.cargo.productId, v.cargo.quantity);
     }
     if (v.transportCost > 0) {
       recordTransaction(state, {
@@ -152,6 +160,7 @@ function processReorders(ctx: SimContext): void {
     }
 
     source.dailyStats.unitsShipped += qty;
+    source.dailyStats.transferOutValue += transferValue(state, contract.productId, qty);
 
     const dist = distance(source.location, dest.location);
     // Fuel-price events scale the whole shipment cost.

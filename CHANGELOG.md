@@ -64,6 +64,11 @@ engine tests), probed with headless balance runs, and guarded by CI.
   charts with a live phase badge (Hiring boom / Absorbing arrivals).
 - **Spending power**: household money flows, per-product spend, hungry-market
   callouts. **Yesterday chip**: last closed day's net in the top bar.
+- **Facility P&L**: every facility's last closed day — cash earnings plus
+  internal shipments valued at market price (producers show the value they
+  create), minus wages, upkeep, and inputs. Best-first table in Company;
+  the advisor names your money pit. Facility stats are now snapshotted at
+  the daily reset, so advisors read full days instead of mid-day partials.
 - **Supply-chain flow overlay (F)**: animated contract routes, volume-scaled,
   plus Port Rosa export lanes.
 - **Daily digests fixed**: production/bottleneck alerts read yesterday's stats

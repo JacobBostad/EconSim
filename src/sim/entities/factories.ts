@@ -46,6 +46,7 @@ export function createFacility(
     status: 'idle',
     bottleneckReason: null,
     dailyStats: emptyFacilityDailyStats(),
+    yesterdayStats: emptyFacilityDailyStats(),
     presentWorkers: 0,
     presentSkill: 0,
     builtAtTick: state.tick,

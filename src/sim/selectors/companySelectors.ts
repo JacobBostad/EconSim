@@ -231,6 +231,55 @@ export function companyValuation(state: GameState, firmId: FirmId): Valuation {
   return { cash: firm.cash, inventoryValue, assetValue, debt: firm.debt, netWorth, valuation };
 }
 
+export interface FacilityPnLRow {
+  facilityId: string;
+  name: string;
+  type: string;
+  status: string;
+  staff: number;
+  unitsSold: number;
+  unitsProduced: number;
+  revenue: number;
+  cost: number; // wages + maintenance + variable production cost
+  net: number;
+}
+
+/**
+ * Per-facility P&L for the last closed day. Cash revenue (retail sales, rent,
+ * exports) comes from the facility's yesterday snapshot; internal shipments
+ * are credited to the shipper and debited to the receiver at market price, so
+ * producers show the value they created instead of reading as pure cost.
+ * Wages (headcount × base wage) and maintenance are attributed per facility.
+ * Firm-wide spends (marketing, R&D, interest, logistics) are not attributed,
+ * so rows won't sum exactly to the company's net — this is a tool for finding
+ * money pits, not an audit. Sorted best-first: the pit is the bottom row.
+ */
+export function facilityPnL(state: GameState, firmId: FirmId): FacilityPnLRow[] {
+  const firm = state.firms[firmId];
+  if (!firm) return [];
+  const rows: FacilityPnLRow[] = [];
+  for (const fac of firmFacilities(state, firmId)) {
+    const y = fac.yesterdayStats;
+    const wages = fac.employees.length * firm.wagePolicy.baseWage;
+    const revenue = y.revenue + y.transferOutValue;
+    const cost = wages + fac.operatingCostPerDay + y.variableCost + y.transferInValue;
+    rows.push({
+      facilityId: fac.id,
+      name: fac.name,
+      type: fac.type,
+      status: fac.status,
+      staff: fac.employees.length,
+      unitsSold: y.unitsSold,
+      unitsProduced: y.unitsProduced,
+      revenue,
+      cost,
+      net: revenue - cost,
+    });
+  }
+  rows.sort((a, b) => b.net - a.net);
+  return rows;
+}
+
 export interface RankEntry {
   firmId: FirmId;
   name: string;

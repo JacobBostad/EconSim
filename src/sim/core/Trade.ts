@@ -59,6 +59,7 @@ export function performExport(
     note: `${note}: ${qty} ${product.name}`,
   });
   fac.dailyStats.unitsShipped += qty;
+  fac.dailyStats.revenue += revenue; // exports are the warehouse's earnings
   firm.exportRevenue += revenue;
   emitEvent(state, 'success', 'logistics',
     `🚢 ${note}: ${qty} ${product.name} for ${revenue}¢ (after freight).`, fac.id);

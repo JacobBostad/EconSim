@@ -8,7 +8,8 @@
  */
 
 import type { GameState } from '../core/GameState';
-import { dailyInsight, rivalTopWage } from './companySelectors';
+import { dailyInsight, rivalTopWage, facilityPnL } from './companySelectors';
+import { computeTime } from '../core/Tick';
 import { spendingPower } from './citizenSelectors';
 import { getProduct } from '../data/products';
 import { getQuantity } from '../entities/Inventory';
@@ -48,17 +49,32 @@ export function morningBriefing(state: GameState): Advice[] {
     });
   }
 
-  // 2. Production blocked all day (stamped during work hours only).
+  // 2. Production blocked all day. Reads the closed-day snapshot, not the
+  // mid-day partial stats — otherwise the alert only appeared late in the day.
   for (const facId of player.facilities) {
     const fac = state.facilities[facId];
     if (!fac || fac.status === 'closed') continue;
-    if (fac.activeRecipeId && fac.dailyStats.ticksActive === 0 && fac.dailyStats.bottleneck) {
+    if (fac.activeRecipeId && fac.yesterdayStats.ticksActive === 0 && fac.yesterdayStats.bottleneck) {
       items.push({
         icon: '🏭',
         severity: 'warning',
-        text: `${fac.name} produced nothing yesterday — ${fac.dailyStats.bottleneck}.`,
+        text: `${fac.name} produced nothing yesterday — ${fac.yesterdayStats.bottleneck}.`,
       });
       break; // one production alert is enough for a briefing
+    }
+  }
+
+  // 2b. The money pit: the worst facility by yesterday's attributed P&L.
+  // Day ≥ 2 so freshly built towns aren't scolded before the economy runs.
+  if (computeTime(state.tick, state.config).day >= 2) {
+    const rows = facilityPnL(state, player.id);
+    const worst = rows[rows.length - 1];
+    if (worst && worst.net <= -20_00 && worst.status !== 'closed') {
+      items.push({
+        icon: '💸',
+        severity: 'warning',
+        text: `${worst.name} is your money pit — lost ${formatMoney(-worst.net)} yesterday after wages and upkeep. Restaff, reprice, or sell it (see Company → Facilities).`,
+      });
     }
   }
 

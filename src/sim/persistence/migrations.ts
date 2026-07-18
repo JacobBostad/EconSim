@@ -15,6 +15,7 @@ import type { AccountingPeriod } from '../entities/Accounting';
 import { CONSUMER_PRODUCT_IDS, ALL_PRODUCT_IDS } from '../data/products';
 import { emptyMarketStat } from '../entities/Market';
 import { defaultNeedFor } from '../entities/factories';
+import { emptyFacilityDailyStats } from '../entities/Facility';
 import { getProduct } from '../data/products';
 import { getFacilityDef } from '../data/facilityDefinitions';
 import { defaultPersonalityFor, defaultCeoFor, type PersonalityId } from '../data/personalities';
@@ -150,6 +151,11 @@ function normalize(state: GameState): GameState {
     f.builtAtTick = f.builtAtTick ?? 0;
     f.dailyStats.bottleneck = f.dailyStats.bottleneck ?? null;
     f.dailyStats.pricedOut = f.dailyStats.pricedOut ?? 0;
+    f.dailyStats.transferOutValue = f.dailyStats.transferOutValue ?? 0;
+    f.dailyStats.transferInValue = f.dailyStats.transferInValue ?? 0;
+    f.yesterdayStats = f.yesterdayStats ?? emptyFacilityDailyStats();
+    f.yesterdayStats.transferOutValue = f.yesterdayStats.transferOutValue ?? 0;
+    f.yesterdayStats.transferInValue = f.yesterdayStats.transferInValue ?? 0;
     // Multi-product retail: wrap the legacy single retailProductId.
     if (!Array.isArray(f.retailProductIds)) {
       const legacy = (f as unknown as { retailProductId?: string | null }).retailProductId;
