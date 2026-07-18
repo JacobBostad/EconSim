@@ -103,7 +103,9 @@ engine tests), probed with headless balance runs, and guarded by CI.
   Gold Rush Gulch, Harvest Valley — and **Mill Country**, where every AI
   factory imports its raw goods, so the player's opening is to become the
   whole town's supplier (verified: a staffed farm lands its first AI
-  customer within 40 days).
+  customer within 40 days; unattended, all three mills survive 300 days on
+  every probed seed — the price controller passes the import premium
+  through, so the town works but pays for it until someone builds farms).
 - Missions, achievements, intro, README, and media all teach the new systems.
 - Sound stings: receivership, challenge fanfare, rival openings, poach alerts.
 - Chronicle viewable anytime; apartments/roasteries visually distinct.
