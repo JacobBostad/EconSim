@@ -26,7 +26,8 @@ import { createFacility } from '../entities/factories';
 import type { Contract } from '../entities/Contract';
 import { hireCitizen, fireCitizen, findUnemployed } from './LaborSystem';
 import { clamp } from '../../utils/clamp';
-import { CENTS, RND_QUALITY_GAIN_PER_1000, MAX_RETAIL_PRODUCTS } from '../data/constants';
+import { CENTS, RND_QUALITY_GAIN_PER_1000, MAX_RETAIL_PRODUCTS, IMPORT_MARKUP, WHOLESALE_DISCOUNT } from '../data/constants';
+import { worldImportMult } from '../data/worldEvents';
 import { companyValuation } from '../selectors/companySelectors';
 import { acquisitionCost, performAcquisition } from '../core/Acquisition';
 import { landCostMultiplier, landValueAt } from '../core/LandValue';
@@ -51,6 +52,7 @@ export function runAIStrategySystem(ctx: SimContext): void {
     adjustPrices(ctx, firm.id);
     if (firm.bankruptcyStatus === 'healthy') {
       manageDebt(ctx, firm.id);
+      manageSourcing(ctx, firm.id);
       manageAdBudget(ctx, firm.id);
       maybeInvestQuality(ctx, firm.id);
       maybeExpand(ctx, firm.id);
@@ -606,6 +608,79 @@ function manageDebt(ctx: SimContext, firmId: string): void {
     category: 'loanRepay',
     note: 'Deleveraging',
   });
+}
+
+/**
+ * Local sourcing: AI firms shop their input contracts. If a local firm (the
+ * player included) holds a sustained surplus of something this firm imports,
+ * and wholesale (~70% of market) meaningfully beats the importer's premium,
+ * the contract is repointed at the local supplier — so a player who
+ * overproduces intermediates gets real AI customers. The reverse guard: a
+ * cross-firm-sourced contract whose destination has starved AND whose source
+ * has no surplus left reverts to the dependable importer.
+ * Deterministic (no rng): conditions, not coin flips.
+ */
+const LOCAL_SOURCE_MIN_SURPLUS = 40;
+const LOCAL_SOURCE_SAVINGS = 0.9; // switch only if wholesale < importer × this
+
+function localSurplus(state: SimContext['state'], fac: import('../entities/Facility').Facility, productId: string): number {
+  let reserved = 0;
+  for (const cid in state.contracts) {
+    const c = state.contracts[cid]!;
+    if (!c.active || c.sourceFacilityId !== fac.id || c.productId !== productId) continue;
+    if (state.facilities[c.destinationFacilityId]?.ownerFirmId !== fac.ownerFirmId) continue;
+    reserved += c.targetQuantity;
+  }
+  return Math.max(0, getQuantity(fac.outputInventory, productId) - reserved);
+}
+
+function manageSourcing(ctx: SimContext, firmId: string): void {
+  const { state } = ctx;
+  const firm = state.firms[firmId]!;
+
+  for (const cid in state.contracts) {
+    const contract = state.contracts[cid]!;
+    if (!contract.active || contract.ownerFirmId !== firmId) continue;
+    const source = state.facilities[contract.sourceFacilityId];
+    const dest = state.facilities[contract.destinationFacilityId];
+    if (!source || !dest || dest.ownerFirmId !== firmId) continue;
+    const pid = contract.productId;
+
+    if (source.type === 'importer') {
+      // Consider switching to a cheaper local supplier.
+      const product = getProduct(pid);
+      const importerUnit = Math.round(product.basePrice * IMPORT_MARKUP * worldImportMult(state));
+      const stat = state.marketStats[pid];
+      const wholesaleUnit = Math.round(
+        (stat && stat.averagePrice > 0 ? stat.averagePrice : product.basePrice) * WHOLESALE_DISCOUNT,
+      );
+      if (wholesaleUnit >= importerUnit * LOCAL_SOURCE_SAVINGS) continue;
+      for (const fid in state.facilities) {
+        const fac = state.facilities[fid]!;
+        if (fac.ownerFirmId === firmId || fac.type === 'importer' || fac.status === 'closed') continue;
+        const sellerType = state.firms[fac.ownerFirmId]?.ownerType;
+        if (sellerType !== 'ai' && sellerType !== 'player') continue;
+        if (localSurplus(state, fac, pid) < LOCAL_SOURCE_MIN_SURPLUS) continue;
+        contract.sourceFacilityId = fac.id;
+        emitEvent(state, 'info', 'ai',
+          `${firm.name} now sources ${product.name} locally from ${state.firms[fac.ownerFirmId]!.name} — wholesale beats the importer.`,
+          dest.id);
+        return; // one switch per firm per day
+      }
+    } else if (source.ownerFirmId !== firmId) {
+      // Cross-firm source dried up and the destination is starving: go back
+      // to the importer rather than let the chain die of loyalty.
+      const destHave = getQuantity(dest.inputInventory, pid);
+      if (destHave > 0 || localSurplus(state, source, pid) >= 10) continue;
+      const importer = Object.values(state.facilities).find((f) => f.type === 'importer');
+      if (!importer) continue;
+      contract.sourceFacilityId = importer.id;
+      emitEvent(state, 'info', 'ai',
+        `${firm.name} switched ${getProduct(pid).name} sourcing back to the importer — the local supplier ran dry.`,
+        dest.id);
+      return;
+    }
+  }
 }
 
 /**

@@ -31,7 +31,11 @@ engine tests), probed with headless balance runs, and guarded by CI.
   sources but nothing charged for them.) Measured: at 85% a wholesale
   storefront's margin couldn't cover wages; at 70% it roughly breaks even
   until you add ads, sharper prices, or scale. A Local Sourcing mission and
-  an advisor buy-local hint teach it.
+  an advisor buy-local hint teach it — and AI firms shop their own input
+  contracts too: import lines switch to any local firm (the player included)
+  holding a real surplus when wholesale beats the importer, and revert if
+  the supplier runs dry. Overproduce intermediates and AI customers come to
+  you.
 - **Port Rosa follows world news**: trade prices mean-revert toward
   event-shifted centers (droughts raise grain there too); fuel spikes scale
   export freight. Exporters never ship stock their own shelves are waiting on.
