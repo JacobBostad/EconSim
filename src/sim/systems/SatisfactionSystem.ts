@@ -18,7 +18,9 @@ const URGENCY_CAP = 3;
 /** Going hungry hurts much more than missing a new tool or outfit; a missed
  * luxury barely registers. */
 function needWeight(productId: string): number {
-  const t = getProduct(productId).needType;
+  const p = getProduct(productId);
+  if (p.satisfactionWeight !== undefined) return p.satisfactionWeight;
+  const t = p.needType;
   if (t === 'food') return 1.4;
   if (t === 'luxury') return 0.2;
   return 0.55;
@@ -73,7 +75,10 @@ export function runSatisfactionSystem(ctx: SimContext): void {
     // lower. Purchases/stockouts still nudge it intraday (RetailDemandSystem).
     let target = 50;
     target += cit.employmentStatus === 'employed' ? 20 : -5;
-    target += unmetPressure === 0 ? 15 : -unmetPressure * 10;
+    // Smooth provisioning curve: fully provided = +15, and small chronic
+    // cravings (a coffee craze with no café in town) erode it gradually
+    // instead of a cliff from +15 to negative the moment any need is unmet.
+    target += clamp(15 - unmetPressure * 12, -30, 15);
     cit.satisfaction = clamp(
       cit.satisfaction + (clamp(target, 0, 100) - cit.satisfaction) * 0.12,
       0,

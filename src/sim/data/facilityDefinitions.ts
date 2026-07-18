@@ -58,7 +58,7 @@ export const FACILITY_DEFS: Record<FacilityDefId, FacilityDefinition> = {
     maintenanceCostPerDay: dollars(11),
     workerCapacity: 6,
     storageCapacity: 240,
-    allowedRecipes: ['bake_bread', 'make_tools', 'sew_clothes', 'bake_pastries', 'craft_jewelry'],
+    allowedRecipes: ['bake_bread', 'roast_coffee', 'make_tools', 'sew_clothes', 'bake_pastries', 'craft_jewelry'],
     allowedProductsForSale: [],
     footprint: 4,
     description:
@@ -86,7 +86,7 @@ export const FACILITY_DEFS: Record<FacilityDefId, FacilityDefinition> = {
     workerCapacity: 4,
     storageCapacity: 160,
     allowedRecipes: [],
-    allowedProductsForSale: ['bread', 'tools', 'clothes', 'pastries', 'jewelry'],
+    allowedProductsForSale: ['bread', 'coffee', 'tools', 'clothes', 'pastries', 'jewelry'],
     footprint: 3,
     description: 'Sells one consumer product to citizens. Needs staff to operate.',
   },

@@ -367,7 +367,7 @@ income, etc. Config is part of saved state.
 ## Known limitations
 
 - One city; the consumer catalog is three staple chains (bread, tools,
-  clothes) plus the two luxury crafts.
+  clothes), everyday coffee, and the two luxury crafts.
 - AI stores are deliberately single-product (running a general store is a
   player edge); AI expansion opens retail outlets only (capped) and AI-initiated
   M&A is limited to rescue takeovers of distressed rivals.

@@ -29,6 +29,12 @@ export interface Product {
   brandWeight: number;
   /** Which citizen need this product satisfies. */
   needType: NeedType;
+  /**
+   * Override for how much an unmet need for this product hurts satisfaction
+   * (defaults per needType: food 1.4, luxury 0.2, else 0.55). Lets a small
+   * craving (coffee) matter less than a missing staple at the same needType.
+   */
+  satisfactionWeight?: number;
   /** Default quality (0..100) for freshly produced units. */
   defaultQuality: number;
   /** Logical size per unit (used for storage/transport accounting). */

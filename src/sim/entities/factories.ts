@@ -82,6 +82,17 @@ export function makeCitizenNeeds(rng: Rng): CitizenNeed[] {
       lastSatisfiedTick: 0,
     },
     {
+      // A cheap daily ritual: small ticket, high frequency — the demand sink
+      // that soaks up idle citizen cash. Nobody sells it at start; first
+      // mover owns the morning rush.
+      productId: 'coffee',
+      urgency: rng.range(0.1, 0.6),
+      urgencyGrowthPerDay: rng.range(0.45, 0.65),
+      preferredQuantity: 2,
+      maxAffordablePriceMultiplier: rng.range(1.5, 1.9),
+      lastSatisfiedTick: 0,
+    },
+    {
       productId: 'clothes',
       urgency: rng.range(0, 0.5),
       urgencyGrowthPerDay: rng.range(0.2, 0.3),
@@ -122,6 +133,16 @@ export function defaultNeedFor(productId: string): CitizenNeed | null {
       urgencyGrowthPerDay: 0.21,
       preferredQuantity: 1,
       maxAffordablePriceMultiplier: 1.5,
+      lastSatisfiedTick: 0,
+    };
+  }
+  if (productId === 'coffee') {
+    return {
+      productId: 'coffee',
+      urgency: 0.3,
+      urgencyGrowthPerDay: 0.5,
+      preferredQuantity: 2,
+      maxAffordablePriceMultiplier: 1.7,
       lastSatisfiedTick: 0,
     };
   }

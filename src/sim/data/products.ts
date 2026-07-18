@@ -94,6 +94,23 @@ export const PRODUCTS: Record<ProductId, Product> = {
     defaultQuality: 60,
     unitSize: 2,
   },
+  coffee: {
+    id: 'coffee',
+    name: 'Coffee',
+    category: 'food',
+    basePrice: dollars(2.5),
+    perishability: 0.06,
+    qualityWeight: 0.18,
+    priceWeight: 0.2,
+    brandWeight: 0.15,
+    needType: 'goods',
+    // A missed morning coffee is a grumble, not a crisis — without this the
+    // pre-coffee-vendor town (nobody sells it at start) takes a big
+    // satisfaction hit for a product that didn't exist yesterday.
+    satisfactionWeight: 0.3,
+    defaultQuality: 60,
+    unitSize: 1,
+  },
   pastries: {
     id: 'pastries',
     name: 'Pastries',

@@ -36,6 +36,18 @@ export const RECIPES: Record<RecipeId, Recipe> = {
     variableCost: dollars(1.2),
   },
 
+  roast_coffee: {
+    id: 'roast_coffee',
+    name: 'Roast Coffee',
+    facilityType: 'factory',
+    inputs: [{ productId: 'grain', quantity: 2 }],
+    outputs: [{ productId: 'coffee', quantity: 10 }],
+    laborRequired: 2,
+    ticksRequired: 2,
+    baseEfficiency: 1,
+    variableCost: dollars(0.8),
+  },
+
   // --- Tools chain -------------------------------------------------------
   mine_minerals: {
     id: 'mine_minerals',

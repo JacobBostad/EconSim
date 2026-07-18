@@ -103,7 +103,10 @@ describe('Scripted 250-day playtest (bot v3)', () => {
     expect(stage).toBeGreaterThanOrEqual(3);
     expect(maxVal).toBeGreaterThanOrEqual(28000_00);
     expect(finalVal).toBeGreaterThanOrEqual(18000_00);
-    expect(player.exportRevenue).toBeGreaterThan(5000_00);
+    // Port Rosa's event-driven mean reversion (task #54) shortened the long
+    // boom windows this bot's fixed strategy used to ride; ~$3.5k+ still
+    // proves the export loop works end-to-end.
+    expect(player.exportRevenue).toBeGreaterThan(3500_00);
     expect(player.marketShareByProduct['bread'] ?? 0).toBeGreaterThan(0.25);
   }, 30000);
 });
