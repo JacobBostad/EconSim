@@ -276,7 +276,10 @@ engine tests), probed with headless balance runs, and guarded by CI.
   owning *everything*. Re-priced: Tycoon stays $50k (a real stretch above
   strong play), Magnate $100k (out-value every incumbent), Business Empire
   $200k (approach whole-town scale — epic, but achievable in a long
-  Bustling game). The chronicle finale is live content again.
+  Bustling game). The chronicle finale is live content again — verified in
+  a real browser: crossing $200k mid-play pops the Town Chronicle with the
+  valuation sparkline, the milestone timeline, and the endless-mode note,
+  and the objective banner flips to "All objectives complete".
 - **The festival was a trap at $1,500** (probed: 6 seeds, paired 100-day
   runs, world events silenced): its direct revenue lift for a typical
   single-chain player is ~$50–200 — the 25% demand bump for 3 days just
