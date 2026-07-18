@@ -24,6 +24,7 @@ import { seasonOf } from '../sim/data/seasons';
 import { getProduct } from '../sim/data/products';
 import { formatMoney } from '../utils/formatMoney';
 import { drawBuilding } from './buildings';
+import { buildRoute, routePose, type Route } from './roadRoute';
 
 interface Vec { x: number; y: number }
 interface Floater { x: number; y: number; vy: number; life: number; maxLife: number; text: string; color: string }
@@ -331,11 +332,21 @@ export class TownRenderer {
   }
 
   // --- main loop --------------------------------------------------------
+  private loggedDrawError = false;
+
   private loop = (): void => {
     const now = performance.now();
     const dt = Math.min(0.1, (now - this.lastFrame) / 1000);
     this.lastFrame = now;
-    try { this.render(dt); } catch { /* never let a draw error kill the loop */ }
+    try {
+      this.render(dt);
+    } catch (err) {
+      // Never let a draw error kill the loop — but never hide it either.
+      if (!this.loggedDrawError) {
+        this.loggedDrawError = true;
+        console.error('TownRenderer draw error (logged once):', err);
+      }
+    }
     this.raf = requestAnimationFrame(this.loop);
   };
 
@@ -828,15 +839,24 @@ export class TownRenderer {
     ctx.fillRect(0, 0, this.cssW, this.cssH);
   }
 
+  /** The street grid in world coordinates — single source of truth for road
+   * drawing, streetlamps, and truck routing. */
+  private roadGrid(): { x0: number; x1: number; y0: number; y1: number; hYs: number[]; vXs: number[] } {
+    const { minX, minY, maxX, maxY } = this.view;
+    const insetX = (maxX - minX) * 0.08, insetY = (maxY - minY) * 0.08;
+    const x0 = minX + insetX, x1 = maxX - insetX, y0 = minY + insetY, y1 = maxY - insetY;
+    return {
+      x0, x1, y0, y1,
+      hYs: [y0, (y0 + y1) / 2, y1],
+      vXs: [x0, x0 + (x1 - x0) / 3, x0 + (2 * (x1 - x0)) / 3, x1],
+    };
+  }
+
   private drawRoads(s: GameState): void {
     const ctx = this.ctx;
     const sc = this.effScale();
     const roadW = Math.max(3, sc * 2.2);
-    const { minX, minY, maxX, maxY } = this.view;
-    const insetX = (maxX - minX) * 0.08, insetY = (maxY - minY) * 0.08;
-    const x0 = minX + insetX, x1 = maxX - insetX, y0 = minY + insetY, y1 = maxY - insetY;
-    const hYs = [y0, (y0 + y1) / 2, y1];
-    const vXs = [x0, x0 + (x1 - x0) / 3, x0 + (2 * (x1 - x0)) / 3, x1];
+    const { x0, x1, y0, y1, hYs, vXs } = this.roadGrid();
 
     const road = (ax: number, ay: number, bx: number, by: number) => {
       const a = this.w2s(s, { x: ax, y: ay }), b = this.w2s(s, { x: bx, y: by });
@@ -984,12 +1004,10 @@ export class TownRenderer {
     ctx.globalCompositeOperation = 'screen';
 
     // streetlamps along the three avenues
-    const { minX, minY, maxX, maxY } = this.view;
-    const insetX = (maxX - minX) * 0.08, insetY = (maxY - minY) * 0.08;
-    const y0 = minY + insetY, y1 = maxY - insetY;
+    const g = this.roadGrid();
     const lampR = Math.max(14, sc * 2.4);
-    for (const ly of [y0, (y0 + y1) / 2, y1]) {
-      for (let lx = minX + insetX + 6; lx < maxX - insetX; lx += 14) {
+    for (const ly of g.hYs) {
+      for (let lx = g.x0 + 6; lx < g.x1; lx += 14) {
         const lp = this.w2s(s, { x: lx, y: ly });
         const g = ctx.createRadialGradient(lp.x, lp.y, 0, lp.x, lp.y, lampR);
         g.addColorStop(0, `rgba(255,214,130,${0.34 * night})`);
@@ -1025,20 +1043,50 @@ export class TownRenderer {
     ctx.restore();
   }
 
+  // --- road-following truck routes ----------------------------------------
+  /** Cached Manhattan polyline per vehicle (see roadRoute.ts). Purely
+   * cosmetic — the engine moves vehicles in a straight line; we map its
+   * progress fraction onto this road path so trucks drive the streets. */
+  private routeCache = new Map<string, Route & { key: string }>();
+
+  private vehicleRoute(s: GameState, id: string, o: Vec, d: Vec): Route {
+    const g = this.roadGrid();
+    const key = `${o.x},${o.y}|${d.x},${d.y}|${g.y0.toFixed(1)},${g.y1.toFixed(1)},${g.x0.toFixed(1)}`;
+    const hit = this.routeCache.get(id);
+    if (hit && hit.key === key) return hit;
+    const route = { ...buildRoute(o, d, g), key };
+    this.routeCache.set(id, route);
+    if (this.routeCache.size > 300) {
+      for (const rid of this.routeCache.keys()) if (!s.vehicles[rid]) this.routeCache.delete(rid);
+    }
+    return route;
+  }
+
   private drawShipments(s: GameState, dt: number): void {
     const ctx = this.ctx;
     const k = Math.min(1, dt * 8);
     for (const id in s.vehicles) {
       const v = s.vehicles[id]!;
       if (v.status !== 'enroute') continue;
-      const p = this.ease(id, v.currentLocation, k);
+      const origin = s.facilities[v.originFacilityId]?.location ?? v.currentLocation;
+      const straight = Math.max(1e-6, Math.hypot(v.targetLocation.x - origin.x, v.targetLocation.y - origin.y));
+      const done = Math.hypot(v.currentLocation.x - origin.x, v.currentLocation.y - origin.y);
+      const route = this.vehicleRoute(s, id, origin, v.targetLocation);
+      const pose = routePose(route, done / straight);
+      const p = this.ease(id, pose.p, k);
       const sp = this.w2s(s, p);
-      const dest = this.w2s(s, v.targetLocation);
-      // route line
+      // remaining route line along the streets
       ctx.strokeStyle = 'rgba(210,168,255,0.30)'; ctx.lineWidth = 1.5; ctx.setLineDash([4, 5]);
-      ctx.beginPath(); ctx.moveTo(sp.x, sp.y); ctx.lineTo(dest.x, dest.y); ctx.stroke(); ctx.setLineDash([]);
+      ctx.beginPath(); ctx.moveTo(sp.x, sp.y);
+      const doneLen = Math.max(0, Math.min(1, done / straight)) * route.total;
+      for (let i = 1; i < route.pts.length; i++) {
+        if (route.cum[i]! <= doneLen) continue;
+        const q = this.w2s(s, route.pts[i]!);
+        ctx.lineTo(q.x, q.y);
+      }
+      ctx.stroke(); ctx.setLineDash([]);
       // box truck: shadow, cargo box tinted by product, cab with windshield, wheels
-      const ang = Math.atan2(dest.y - sp.y, dest.x - sp.x);
+      const ang = Math.atan2(pose.dir.y, pose.dir.x);
       const tk = Math.min(2.2, Math.max(1, this.effScale() / 7));
       ctx.save(); ctx.translate(sp.x, sp.y); ctx.rotate(ang); ctx.scale(tk, tk);
       ctx.fillStyle = 'rgba(20,30,20,0.3)';
