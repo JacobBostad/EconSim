@@ -201,6 +201,13 @@ engine tests), probed with headless balance runs, and guarded by CI.
 
 ## Measured findings (kept as design, documented in code)
 
+- **Personality spread** (300 days × 4 seeds, Meadowbrook): Brand Builders
+  spend 2.5× a Price Fighter's ad budget ($81 vs $32/day) and hold the
+  highest prices (1.29× base vs 1.22×); Expansionists end with the most
+  facilities and valuations. The tilt is real but deliberately modest —
+  personalities shade a shared strategy rather than fork it, and the knobs
+  feed a tuned equilibrium (amplifying them requires a full re-probe).
+
 - **Poverty trap**: some seeds' incumbents can't profitably serve a poor town,
   so it stagnates below the immigration gate — deliberately preserved as the
   player's opening (the anatomy panel names it).
