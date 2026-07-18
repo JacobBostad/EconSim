@@ -186,6 +186,12 @@ share the same controller drifts prices toward a market-power premium (up to
 labor requirement scales output (up to 2.5×) — hiring is a growth lever, and
 full employment unlocks immigration.
 
+**Chain wizard** (`BUILD_CHAIN`): one click stands up a wired, staffed
+producer → factory → store near the town's homes — with auto-pricing on and a
+starter ad budget, because entering a market where the incumbent has brand and
+loyal customers takes penetration pricing *and* advertising (the AI's own
+playbook). Both defaults are single toggles in the store inspector.
+
 **Accounting** (`AccountingSystem.ts`, `entities/Accounting.ts`)
 ```
 grossProfit     = revenue − costOfGoodsSold

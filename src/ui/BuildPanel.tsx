@@ -90,8 +90,9 @@ export function BuildPanel(): React.ReactElement {
         <small>2 new citizens move in (labor + customers)</small>
       </button>
       <div className="small muted" style={{ marginTop: 6 }}>
-        Tip: the wizard is a starting point — tune prices, wages, ads, and R&amp;D
-        in each facility's inspector to actually win the market.
+        Tip: wizard chains come auto-priced with a starter ad budget. To grow
+        past break-even, add products to the store, export surplus from a
+        warehouse, or invest R&amp;D — all in each facility's inspector.
       </div>
     </div>
   );
