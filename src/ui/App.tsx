@@ -17,6 +17,7 @@ import { SoundDirector } from './SoundDirector';
 import { ReportCardModal } from './ReportCardModal';
 import { RecordsTracker } from './RecordsTracker';
 import { KeyboardShortcuts } from './KeyboardShortcuts';
+import { ChronicleModal } from './ChronicleModal';
 
 export function App(): React.ReactElement {
   // Subscribe to version so the whole tree re-renders as the sim advances.
@@ -52,6 +53,7 @@ export function App(): React.ReactElement {
       <SoundDirector />
       <RecordsTracker />
       <KeyboardShortcuts />
+      <ChronicleModal />
     </div>
   );
 }

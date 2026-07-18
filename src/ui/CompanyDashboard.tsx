@@ -20,6 +20,7 @@ import {
 } from '../sim/data/constants';
 import { clamp } from '../utils/clamp';
 import { TrendCard } from './Sparkline';
+import { SHOW_CHRONICLE_EVENT } from './ChronicleModal';
 
 export function CompanyDashboard(): React.ReactElement {
   const sim = useGameStore((s) => s.sim);
@@ -49,7 +50,14 @@ export function CompanyDashboard(): React.ReactElement {
               : '🏆 All objectives complete — endless mode'}
             {objective.reachedTitle && objective.next ? ` · rank earned: ${objective.reachedTitle}` : ''}
           </strong>
-          <span className="mono">{formatMoney(val.valuation)} ({objPct.toFixed(0)}%)</span>
+          <span className="row" style={{ gap: 8 }}>
+            <span className="mono">{formatMoney(val.valuation)} ({objPct.toFixed(0)}%)</span>
+            {!objective.next && (
+              <button onClick={() => window.dispatchEvent(new Event(SHOW_CHRONICLE_EVENT))}>
+                📜 Chronicle
+              </button>
+            )}
+          </span>
         </div>
         <div className="bar" style={{ margin: '6px 0' }}>
           <span style={{ width: `${objPct}%`, background: objPct >= 100 ? 'var(--green)' : 'var(--accent)' }} />
