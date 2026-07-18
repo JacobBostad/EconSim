@@ -48,6 +48,7 @@ export function runAIStrategySystem(ctx: SimContext): void {
       maybeBuyShares(ctx, firm.id);
       maybeExportSurplus(ctx, firm.id);
       maybeUpgrade(ctx, firm.id);
+      maybeEnterLuxury(ctx, firm.id);
       if (maybeRescueAcquisition(ctx, firm.id)) continue; // firm map changed
     }
 
@@ -318,6 +319,93 @@ function maybeExportSurplus(ctx: SimContext, firmId: string): void {
       return; // one export per firm per day
     }
   }
+}
+
+/**
+ * Late-game luxury entry: once the town is mature (day 60+) and a firm is
+ * very flush, it masters a luxury craft matched to its supply base (grain →
+ * pastries, minerals → jewelry), builds a dedicated workshop + boutique,
+ * wires supply (own producer or the importer), and competes. One entry per
+ * firm — the luxury market stops being the player's uncontested blue ocean.
+ */
+const LUXURY_ENTRY_DAY = 60;
+const LUXURY_ENTRY_CASH = 38000_00; // reachable when business is genuinely good
+const LUXURY_ENTRY_CHANCE = 0.05;
+const LUXURY_RND_COST = 6000_00;
+
+function maybeEnterLuxury(ctx: SimContext, firmId: string): void {
+  const { state, rng } = ctx;
+  const firm = state.firms[firmId]!;
+  if (ctx.time.day < LUXURY_ENTRY_DAY || firm.cash < LUXURY_ENTRY_CASH) return;
+  // Already in luxury? One entry per firm.
+  for (const facId of firm.facilities) {
+    const pid = state.facilities[facId]?.retailProductId;
+    if (pid && getProduct(pid).needType === 'luxury') return;
+  }
+  if (!rng.chance(LUXURY_ENTRY_CHANCE)) return;
+
+  // Match the craft to the firm's supply base.
+  let hasGrainFarm = false;
+  let hasMine = false;
+  let producerId: string | null = null;
+  for (const facId of firm.facilities) {
+    const fac = state.facilities[facId];
+    if (!fac) continue;
+    if (fac.activeRecipeId === 'grow_grain') { hasGrainFarm = true; producerId = producerId ?? fac.id; }
+    if (fac.type === 'mine') { hasMine = true; producerId = hasGrainFarm ? producerId : fac.id; }
+  }
+  const luxury = hasMine && !hasGrainFarm ? 'jewelry' : 'pastries';
+  const input = luxury === 'jewelry' ? 'minerals' : 'grain';
+  const recipe = luxury === 'jewelry' ? 'craft_jewelry' : 'bake_pastries';
+
+  // Costs: R&D to mastery + workshop + boutique (land-adjusted).
+  const wsLoc = { x: clamp(70 + rng.jitter(10), 8, state.config.mapWidth - 8), y: clamp(30 + rng.jitter(4), 8, state.config.mapHeight - 8) };
+  const shopLoc = { x: clamp(60 + rng.jitter(12), 8, state.config.mapWidth - 8), y: clamp(49 + rng.jitter(5), 8, state.config.mapHeight - 8) };
+  const wsCost = Math.round(getFacilityDef('factory').buildCost * landCostMultiplier(landValueAt(state, wsLoc)));
+  const shopCost = Math.round(getFacilityDef('retail').buildCost * landCostMultiplier(landValueAt(state, shopLoc)));
+  const total = LUXURY_RND_COST + wsCost + shopCost;
+  if (firm.cash - total < 18000_00) return;
+
+  recordTransaction(state, {
+    from: firmAccount(firmId), to: WORLD_ACCOUNT, amount: LUXURY_RND_COST,
+    firmId, category: 'rnd', productId: luxury, note: 'Luxury craft mastery program',
+  });
+  firm.qualityByProduct[luxury] = Math.max(firm.qualityByProduct[luxury] ?? 0, 76);
+  firm.pricesByProduct[luxury] = getProduct(luxury).basePrice;
+  firm.adBudgetByProduct[luxury] = 10_00;
+
+  const workshop = createFacility(state, 'factory', firmId, wsLoc, { name: `${firm.name.split(' ')[0]} Atelier` });
+  workshop.activeRecipeId = recipe;
+  workshop.buildCost = wsCost;
+  recordTransaction(state, { from: firmAccount(firmId), to: WORLD_ACCOUNT, amount: wsCost, firmId, category: 'buildSpend', note: 'Built atelier' });
+
+  const boutique = createFacility(state, 'retail', firmId, shopLoc, { name: `${firm.name.split(' ')[0]} Luxury Boutique` });
+  boutique.retailProductId = luxury;
+  boutique.buildCost = shopCost;
+  recordTransaction(state, { from: firmAccount(firmId), to: WORLD_ACCOUNT, amount: shopCost, firmId, category: 'buildSpend', note: 'Built boutique' });
+
+  for (let i = 0; i < 2; i++) { const c = findUnemployed(state); if (c) hireCitizen(state, workshop.id, c); }
+  { const c = findUnemployed(state); if (c) hireCitizen(state, boutique.id, c); }
+
+  // Wire input supply: own producer if compatible, otherwise the importer.
+  let sourceId = producerId;
+  if (!sourceId || (luxury === 'jewelry' && !hasMine) || (luxury === 'pastries' && !hasGrainFarm)) {
+    sourceId = Object.values(state.facilities).find((f) => f.type === 'importer')?.id ?? null;
+  }
+  const wire = (src: string, dest: string, pid: string, t: number, r: number, m: number): void => {
+    const id = nextId(state.idCounters, 'ctr');
+    const contract: Contract = {
+      id, ownerFirmId: firmId, sourceFacilityId: src, destinationFacilityId: dest,
+      productId: pid, targetQuantity: t, reorderPoint: r, maxInventory: m,
+      transportCost: 0, active: true,
+    };
+    state.contracts[id] = contract;
+  };
+  if (sourceId) wire(sourceId, workshop.id, input, 24, 10, 50);
+  wire(workshop.id, boutique.id, luxury, 20, 8, 45);
+
+  emitEvent(state, 'warning', 'ai',
+    `💎 ${firm.name} enters the luxury market: ${getProduct(luxury).name} at ${boutique.name}!`, boutique.id);
 }
 
 /** Flush AI firms level up a production facility now and then. */
