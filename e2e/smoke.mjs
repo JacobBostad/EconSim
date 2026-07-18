@@ -16,18 +16,18 @@ await page.waitForTimeout(1200);
 const intro = page.locator('.intro-go');
 if (await intro.count()) await intro.first().click();
 await page.waitForTimeout(400);
-await page.screenshot({ path: 'shot-main.png' });
+await page.screenshot({ path: 'e2e/.artifacts/shot-main.png' });
 
 await page.getByRole('button', { name: /New/ }).first().click();
 await page.waitForTimeout(300);
-await page.screenshot({ path: 'shot-newgame.png' });
+await page.screenshot({ path: 'e2e/.artifacts/shot-newgame.png' });
 await page.locator('.difficulty-card').nth(2).click();
 await page.getByRole('button', { name: 'Start town' }).click();
 await page.waitForTimeout(500);
 
 await page.getByRole('button', { name: /Bread chain/ }).click();
 await page.waitForTimeout(300);
-await page.screenshot({ path: 'shot-wizard.png' });
+await page.screenshot({ path: 'e2e/.artifacts/shot-wizard.png' });
 
 for (const tab of ['Company', 'Market', 'Awards']) {
   await page.getByRole('button', { name: tab, exact: true }).click();
@@ -38,7 +38,7 @@ for (const tab of ['Company', 'Market', 'Awards']) {
 
 await page.getByRole('button', { name: '100×' }).click();
 await page.waitForTimeout(6000);
-await page.screenshot({ path: 'shot-running.png' });
+await page.screenshot({ path: 'e2e/.artifacts/shot-running.png' });
 
 console.log(JSON.stringify({ errors, title: await page.title() }, null, 2));
 await browser.close();
