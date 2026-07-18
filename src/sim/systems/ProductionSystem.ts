@@ -24,6 +24,7 @@ import {
 } from '../entities/Inventory';
 import { worldProductionMult } from '../data/worldEvents';
 import { seasonProductionMult } from '../data/seasons';
+import { isWorkTime } from './CitizenScheduleSystem';
 
 const PRODUCING_TYPES = new Set(['farm', 'mine', 'factory', 'importer']);
 
@@ -90,11 +91,18 @@ export function runProductionSystem(ctx: SimContext): void {
       continue;
     }
     if (workerFactor <= 0) {
-      fac.status = 'labor-starved';
-      fac.bottleneckReason =
-        recipe.laborRequired > 0
-          ? `No workers present (need ${recipe.laborRequired})`
-          : null;
+      // Off-hours with a hired crew is a shift break, not a staffing problem —
+      // only unstaffed facilities alarm around the clock.
+      if (fac.employees.length > 0 && !isWorkTime(ctx)) {
+        fac.status = 'idle';
+        fac.bottleneckReason = null;
+      } else {
+        fac.status = 'labor-starved';
+        fac.bottleneckReason =
+          recipe.laborRequired > 0
+            ? `No workers present (need ${recipe.laborRequired})`
+            : null;
+      }
       continue;
     }
     if (storageFull) {

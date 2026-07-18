@@ -49,9 +49,34 @@ describe('ProductionSystem', () => {
     bakery.outputInventory = {};
     addStock(bakery.inputInventory, 'grain', 30, 50);
 
+    // Mid-morning: an empty floor during the shift is a real staffing alarm.
+    state.tick = state.config.ticksPerHour * 10;
     for (let i = 0; i < 10; i++) runProductionSystem(makeContext(state));
 
     expect(getQuantity(bakery.outputInventory, 'bread')).toBe(0);
+    expect(bakery.status).toBe('labor-starved');
+  });
+
+  it('a staffed facility reads idle overnight, not labor-starved', () => {
+    const sim = newSim(7);
+    const state = sim.getState();
+    const bakery = findFacilityByName(state, 'Sunrise Bakery');
+    bakery.activeRecipeId = 'bake_bread';
+    bakery.presentWorkers = 0;
+    bakery.inputInventory = {};
+    bakery.outputInventory = {};
+    addStock(bakery.inputInventory, 'grain', 30, 50);
+    expect(bakery.employees.length).toBeGreaterThan(0);
+
+    // Midnight: the crew is home in bed — that's a shift break, no alarm.
+    state.tick = 0;
+    runProductionSystem(makeContext(state));
+    expect(bakery.status).toBe('idle');
+    expect(bakery.bottleneckReason).toBeNull();
+
+    // An unstaffed facility is a real problem at any hour.
+    bakery.employees = [];
+    runProductionSystem(makeContext(state));
     expect(bakery.status).toBe('labor-starved');
   });
 
