@@ -43,6 +43,11 @@ describe('Chain wizard & auto-pricing', () => {
     const contracts = Object.values(state.contracts).filter((c) => mine.has(c.destinationFacilityId));
     expect(contracts.length).toBe(2);
 
+    // Market entry defaults: penetration pricing + ads (the AI's own playbook)
+    // are on, so an unattended chain is a viable business, not a money pit.
+    expect(player.autoPriceByProduct['bread']).toBe(true);
+    expect(player.adBudgetByProduct['bread']!).toBeGreaterThan(0);
+
     // The chain actually produces and sells within a few days.
     sim.run(ticksPerDay(state.config) * 4 + 1);
     expect(player.accounting.lifetime.revenue).toBeGreaterThan(0);

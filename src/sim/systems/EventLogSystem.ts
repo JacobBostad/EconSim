@@ -25,14 +25,21 @@ export function runEventLogSystem(ctx: SimContext): void {
     const fac = state.facilities[facId];
     if (!fac || fac.status === 'closed') continue;
 
-    if (fac.status === 'input-starved' && fac.bottleneckReason) {
-      emitEvent(state, 'warning', 'production', `${fac.name}: ${fac.bottleneckReason}.`, fac.id);
-    }
-    if (fac.status === 'labor-starved') {
-      emitEvent(state, 'warning', 'production', `${fac.name} has no workers present.`, fac.id);
-    }
-    if (fac.status === 'inventory-full') {
-      emitEvent(state, 'warning', 'production', `${fac.name}: workers idle — output storage is full.`, fac.id);
+    // Daily production digest from yesterday's stats (EventLog runs before the
+    // accounting reset). Instantaneous status is useless here: this pass runs
+    // at midnight, when every facility is off-shift.
+    if (fac.activeRecipeId && fac.dailyStats.ticksActive === 0 && fac.dailyStats.bottleneck) {
+      emitEvent(
+        state, 'warning', 'production',
+        `${fac.name} produced nothing yesterday — ${fac.dailyStats.bottleneck}.`,
+        fac.id,
+      );
+    } else if (fac.dailyStats.bottleneck === 'Output storage full') {
+      emitEvent(
+        state, 'info', 'production',
+        `${fac.name} is producing more than you sell — export the surplus from a warehouse, or add products to your store.`,
+        fac.id,
+      );
     }
 
     for (const pid of fac.type === 'retail' ? fac.retailProductIds : []) {

@@ -82,6 +82,14 @@ export const MAX_RETAIL_PRODUCTS = 3;
 
 // --- Civic actions ----------------------------------------------------------
 /** Sponsoring the 3-day town festival costs this much (paid to the town). */
+/**
+ * Daily ad budget the chain wizard sets on its product. Measured over 200
+ * unattended days: without ads + auto-pricing a fresh chain never escapes
+ * ~10% share (the incumbent's brand + loyalty outweigh any price cut) and
+ * bleeds money forever; with them it reaches 30–45% share and break-even.
+ */
+export const WIZARD_AD_BUDGET = dollars(15);
+
 export const FESTIVAL_COST = dollars(1500);
 /** Funding a new home (2 residents move in) costs this much. */
 export const FUND_HOME_COST = dollars(3000);

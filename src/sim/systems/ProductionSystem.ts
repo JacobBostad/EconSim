@@ -85,9 +85,16 @@ export function runProductionSystem(ctx: SimContext): void {
     const projected = totalUnits(fac.outputInventory) + outUnits;
     const storageFull = projected > fac.storageCapacity;
 
+    // Yesterday's binding constraint feeds the daily digest — only what blocks
+    // the facility during the shift counts (overnight lulls are not news).
+    const stamp = (reason: string | null) => {
+      if (reason && isWorkTime(ctx)) fac.dailyStats.bottleneck = reason;
+    };
+
     if (!inputsAvailable) {
       fac.status = 'input-starved';
       fac.bottleneckReason = `Missing input: ${missingInput}`;
+      stamp(fac.bottleneckReason);
       continue;
     }
     if (workerFactor <= 0) {
@@ -102,12 +109,14 @@ export function runProductionSystem(ctx: SimContext): void {
           recipe.laborRequired > 0
             ? `No workers present (need ${recipe.laborRequired})`
             : null;
+        stamp(fac.bottleneckReason);
       }
       continue;
     }
     if (storageFull) {
       fac.status = 'inventory-full';
       fac.bottleneckReason = 'Output storage full';
+      stamp(fac.bottleneckReason);
       continue;
     }
 

@@ -40,6 +40,7 @@ import {
   MAX_CITIZENS,
   MAX_HOMES,
   IMMIGRANT_START_CASH,
+  WIZARD_AD_BUDGET,
 } from '../data/constants';
 import { companyValuation } from '../selectors/companySelectors';
 import { worldImportMult } from '../data/worldEvents';
@@ -414,6 +415,16 @@ export class Simulation {
     if (!firm.pricesByProduct[bp.productId]) {
       firm.pricesByProduct[bp.productId] = getProduct(bp.productId).basePrice;
     }
+    // Entering a market where an incumbent has brand and loyal customers takes
+    // penetration pricing AND advertising — the AI's own playbook. Default
+    // both on so the wizard hands over a viable business, not a money pit;
+    // either is one toggle to undo in the store inspector.
+    if (firm.autoPriceByProduct[bp.productId] === undefined) {
+      firm.autoPriceByProduct[bp.productId] = true;
+    }
+    if (!firm.adBudgetByProduct[bp.productId]) {
+      firm.adBudgetByProduct[bp.productId] = WIZARD_AD_BUDGET;
+    }
 
     const staff = (facilityId: string, count: number): void => {
       for (let i = 0; i < count; i++) {
@@ -438,7 +449,7 @@ export class Simulation {
     wire(factory.id, store.id, bp.productId);
 
     emitEvent(s, 'success', 'player',
-      `🪄 Built a full ${getProduct(bp.productId).name} chain: ${producer.name} → ${factory.name} → ${store.name}, wired and staffed.`,
+      `🪄 Built a full ${getProduct(bp.productId).name} chain: ${producer.name} → ${factory.name} → ${store.name} — wired, staffed, auto-priced, and advertised. Tune any of it in the store inspector.`,
       store.id);
   }
 
