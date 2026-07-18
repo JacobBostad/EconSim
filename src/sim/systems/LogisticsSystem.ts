@@ -201,6 +201,8 @@ function processReorders(ctx: SimContext): void {
           counterparty: { firmId: source.ownerFirmId, category: 'revenue' },
         });
         buyer.wholesaleSpend += wholesalePaid;
+        const wholesaler = state.firms[source.ownerFirmId];
+        if (wholesaler) wholesaler.wholesaleEarned += wholesalePaid;
       }
       removeStock(bag, contract.productId, qty);
     }

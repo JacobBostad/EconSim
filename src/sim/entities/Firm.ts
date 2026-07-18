@@ -81,4 +81,6 @@ export interface Firm {
   exportRevenueByCity: Record<string, number>;
   /** Lifetime spend on wholesale purchases from other local firms (cents). */
   wholesaleSpend: number;
+  /** Lifetime revenue earned selling wholesale to other local firms (cents). */
+  wholesaleEarned: number;
 }

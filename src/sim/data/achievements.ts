@@ -253,6 +253,14 @@ export const ACHIEVEMENT_DEFS: AchievementDef[] = [
     check: (s) => (player(s)?.exportRevenue ?? 0) >= dollars(2000),
   },
   {
+    id: 'towns_supplier',
+    name: "The Town's Supplier",
+    icon: '🌾',
+    description: 'Earned $1,000 selling wholesale to other firms.',
+    hint: 'Overproduce intermediates (grain, minerals) — AI firms switch their import lines to any local surplus that beats the importer price.',
+    check: (s) => (player(s)?.wholesaleEarned ?? 0) >= dollars(1000),
+  },
+  {
     id: 'arbitrageur',
     name: 'Arbitrageur',
     icon: '⚖️',

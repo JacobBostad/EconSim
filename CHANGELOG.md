@@ -113,6 +113,11 @@ engine tests), probed with headless balance runs, and guarded by CI.
   "fixed" again.
 - **Single-stage expansion backfires**: a second bakery on one farm's grain
   starves both — hence whole-sub-chain duplication.
+- **Pure grain supply is a sideline, not an empire**: AI roasteries really do
+  switch their import lines to a player's farm surplus (measured: first
+  customer by day ~51–126 across seeds, ~$1k of wholesale revenue), but
+  cheap grain against real wages is cashflow-marginal — deliberate; supply
+  works as a ramp or side business (bot v5 guards the loop).
 - **Phantom night demand**: urgent needs used to send shoppers to closed
   stores all night; every bounce counted as a "lost sale" (~25/day per store
   on full shelves) and fed the AI's expansion signals. Urgency no longer
