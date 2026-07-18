@@ -180,7 +180,13 @@ function attemptPurchase(
   );
 
   if (!open || stock <= 0) {
-    // Stockout / store closed -> lost sale.
+    // Stockout / store closed -> lost sale. Both cases keep feeding
+    // lostSales — the shelf-widening and pricing equilibrium was measured
+    // with after-hours arrivals included, and removing them was probed to
+    // starve the whole town (immigration stalls at ~42). But the closed-door
+    // share is tracked separately so the daily digest can tell the player
+    // the truth instead of reporting "stockouts" at a fully stocked store.
+    if (!open) store.dailyStats.closedDoorVisits = (store.dailyStats.closedDoorVisits ?? 0) + wantQty;
     store.dailyStats.lostSales += wantQty;
     stat.unmetDemand += wantQty;
     stat.stockoutCount += 1;

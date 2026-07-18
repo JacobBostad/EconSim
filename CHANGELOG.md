@@ -115,6 +115,13 @@ engine tests), probed with headless balance runs, and guarded by CI.
   lanes running off toward the trade cities.
 - **Daily digests fixed**: production/bottleneck alerts read yesterday's stats
   (the old midnight-status checks could only ever emit false labor alarms).
+- **Closed doors aren't stockouts**: shoppers arriving after closing time
+  are tracked separately, so the digest reports "missed N shoppers who
+  arrived after closing — shelves were stocked" instead of phantom
+  stockouts at a full store. The underlying lostSales signal is unchanged
+  (probed: removing after-hours arrivals from it starves shelf-widening and
+  stalls immigration at ~42 citizens — the equilibrium was measured with
+  them in).
 - **Cash runway countdown**: when the 7-day average burn would empty the
   till within 15 days, the Advisor leads with "~N days of cash left" (danger
   at ≤5) — missed payroll and receivership used to arrive with no countdown.

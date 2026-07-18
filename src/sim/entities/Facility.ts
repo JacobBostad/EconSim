@@ -43,6 +43,9 @@ export interface FacilityDailyStats {
   revenue: number; // cents
   variableCost: number; // cents
   lostSales: number; // demand attempts that failed due to stockout
+  /** Portion of lostSales from shoppers arriving after closing time —
+   * friction, not scarcity, so the digest can name it honestly. */
+  closedDoorVisits: number;
   /** Would-be purchases abandoned because the price exceeded willingness to pay. */
   pricedOut: number;
   /**
@@ -66,6 +69,7 @@ export function emptyFacilityDailyStats(): FacilityDailyStats {
     revenue: 0,
     variableCost: 0,
     lostSales: 0,
+    closedDoorVisits: 0,
     pricedOut: 0,
     transferOutValue: 0,
     transferInValue: 0,

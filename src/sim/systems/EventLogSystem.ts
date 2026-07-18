@@ -49,11 +49,17 @@ export function runEventLogSystem(ctx: SimContext): void {
     for (const pid of fac.type === 'retail' ? fac.retailProductIds : []) {
       const product = getProduct(pid);
       if (fac.dailyStats.lostSales > 0) {
+        // Tell the truth about WHY: an empty shelf is a supply problem, a
+        // shopper at a closed door is just the clock.
+        const closed = fac.dailyStats.closedDoorVisits ?? 0;
+        const stockout = fac.dailyStats.lostSales - closed;
         emitEvent(
           state,
-          'warning',
+          stockout > 0 ? 'warning' : 'info',
           'retail',
-          `${fac.name} lost ${fac.dailyStats.lostSales} ${product.name} sales to stockouts today.`,
+          stockout > 0
+            ? `${fac.name} lost ${stockout} ${product.name} sales to stockouts today${closed > 0 ? ` (+${closed} shoppers arrived after closing)` : ''}.`
+            : `${fac.name} missed ${closed} ${product.name} shoppers who arrived after closing time — shelves were stocked.`,
           fac.id,
         );
       }
