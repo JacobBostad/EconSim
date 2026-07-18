@@ -28,16 +28,19 @@ export function runEventLogSystem(ctx: SimContext): void {
     // Daily production digest from yesterday's stats (EventLog runs before the
     // accounting reset). Instantaneous status is useless here: this pass runs
     // at midnight, when every facility is off-shift.
-    if (fac.activeRecipeId && fac.dailyStats.ticksActive === 0 && fac.dailyStats.bottleneck) {
+    // A full output buffer is a saturation signal, not a failure — even when
+    // it idled the facility all day. The harsh "produced nothing" alarm is
+    // reserved for real starvation (missing inputs, no workers).
+    if (fac.dailyStats.bottleneck === 'Output storage full') {
+      emitEvent(
+        state, 'info', 'production',
+        `${fac.name} is producing more than you sell — it pauses until stock moves. Sell the surplus wholesale, export from a warehouse, or grow your store's sales.`,
+        fac.id,
+      );
+    } else if (fac.activeRecipeId && fac.dailyStats.ticksActive === 0 && fac.dailyStats.bottleneck) {
       emitEvent(
         state, 'warning', 'production',
         `${fac.name} produced nothing yesterday — ${fac.dailyStats.bottleneck}.`,
-        fac.id,
-      );
-    } else if (fac.dailyStats.bottleneck === 'Output storage full') {
-      emitEvent(
-        state, 'info', 'production',
-        `${fac.name} is producing more than you sell — export the surplus from a warehouse, or add products to your store.`,
         fac.id,
       );
     }

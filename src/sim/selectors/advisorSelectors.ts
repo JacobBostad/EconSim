@@ -57,10 +57,15 @@ export function morningBriefing(state: GameState): Advice[] {
     const fac = state.facilities[facId];
     if (!fac || fac.status === 'closed') continue;
     if (fac.activeRecipeId && fac.yesterdayStats.ticksActive === 0 && fac.yesterdayStats.bottleneck) {
+      // Saturation reads differently from starvation: a full output buffer
+      // means the chain sells less than it makes, not that something broke.
+      const saturated = fac.yesterdayStats.bottleneck === 'Output storage full';
       items.push({
-        icon: '🏭',
-        severity: 'warning',
-        text: `${fac.name} produced nothing yesterday — ${fac.yesterdayStats.bottleneck}.`,
+        icon: saturated ? '📦' : '🏭',
+        severity: saturated ? 'info' : 'warning',
+        text: saturated
+          ? `${fac.name} is ahead of your sales — output is piling up. Sell the surplus wholesale, export it, or grow the store's share before adding capacity.`
+          : `${fac.name} produced nothing yesterday — ${fac.yesterdayStats.bottleneck}.`,
       });
       break; // one production alert is enough for a briefing
     }
@@ -73,10 +78,19 @@ export function morningBriefing(state: GameState): Advice[] {
     const rows = facilityPnL(state, player.id);
     const worst = rows[rows.length - 1];
     if (worst && worst.emaNet <= -20_00 && worst.status !== 'closed') {
+      // A producer drowning in its own output isn't broken — it's oversized
+      // for the chain's sales. "Sell it" is terrible advice for that case.
+      const fac = state.facilities[worst.facilityId];
+      let full = 0;
+      if (fac) for (const pid in fac.outputInventory) full += fac.outputInventory[pid]!.quantity;
+      const saturated =
+        fac && fac.type !== 'retail' && fac.storageCapacity > 0 && full >= fac.storageCapacity * 0.8;
       items.push({
         icon: '💸',
         severity: 'warning',
-        text: `${worst.name} is your money pit — averaging ${formatMoney(-worst.emaNet)}/day of losses after wages and upkeep (7-day view). Restaff, reprice, or sell it (see Company → Facilities).`,
+        text: saturated
+          ? `${worst.name} costs ${formatMoney(-worst.emaNet)}/day (7-day view) while its output sits unsold — find a buyer: sell wholesale, export from a warehouse, or push the store's share up. Trim staff if the surplus persists.`
+          : `${worst.name} is your money pit — averaging ${formatMoney(-worst.emaNet)}/day of losses after wages and upkeep (7-day view). Restaff, reprice, or sell it (see Company → Facilities).`,
       });
     }
   }

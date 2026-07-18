@@ -115,6 +115,12 @@ engine tests), probed with headless balance runs, and guarded by CI.
   lanes running off toward the trade cities.
 - **Daily digests fixed**: production/bottleneck alerts read yesterday's stats
   (the old midnight-status checks could only ever emit false labor alarms).
+- **Saturation ≠ starvation**: a producer idled by a full output buffer no
+  longer triggers the harsh "produced nothing" alarm or the "money pit —
+  sell it" advisor line. Both now say what's true and what to do: the chain
+  makes more than it sells — sell the surplus wholesale, export it, or grow
+  the store's share (a fresh player following the wizard path used to be
+  scolded daily for a working launchpad chain).
 
 ## Art — the city looks like a city
 
