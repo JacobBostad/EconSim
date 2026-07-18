@@ -38,6 +38,9 @@ export interface Personality {
   rndChance: number;
   /** Multiplier on the stock an exporter keeps at home (lower = ships more). */
   exportKeepMult: number;
+  /** Lowest wholesale asking price (fraction of market) this CEO will cut to
+   * when hunting customers. */
+  wholesaleFloor: number;
   ceoNames: string[];
 }
 
@@ -53,6 +56,7 @@ export const NEUTRAL: Personality = {
   expandChanceMult: 1,
   rndChance: 0.15,
   exportKeepMult: 1,
+  wholesaleFloor: 0.7,
   ceoNames: [],
   quotes: {},
 };
@@ -69,6 +73,7 @@ export const PERSONALITIES: Record<PersonalityId, Personality> = {
     expandChanceMult: 1,
     rndChance: 0.08,
     exportKeepMult: 1,
+    wholesaleFloor: 0.55,
     ceoNames: ['Vera Stone', 'Otto Krieg', 'Sal Marchetti'],
     quotes: {
       price: ['Nobody undersells us. Nobody.', 'Margins are for cowards.'],
@@ -88,6 +93,7 @@ export const PERSONALITIES: Record<PersonalityId, Personality> = {
     expandChanceMult: 1,
     rndChance: 0.2,
     exportKeepMult: 1,
+    wholesaleFloor: 0.68,
     ceoNames: ['Mara Voss', 'Julian Bright', 'Coco Delacroix'],
     quotes: {
       ads: ['Quality speaks. We just turn up the volume.', 'A brand is a promise — we advertise ours.'],
@@ -107,6 +113,7 @@ export const PERSONALITIES: Record<PersonalityId, Personality> = {
     expandChanceMult: 2.5,
     rndChance: 0.12,
     exportKeepMult: 1,
+    wholesaleFloor: 0.62,
     ceoNames: ['Ada Sterling', 'Ray Calloway', 'Petra Lindqvist'],
     quotes: {
       expand: ['Growth is the only moat.', 'See a queue? Build a door.'],
@@ -126,6 +133,7 @@ export const PERSONALITIES: Record<PersonalityId, Personality> = {
     expandChanceMult: 1,
     rndChance: 0.12,
     exportKeepMult: 0.5,
+    wholesaleFloor: 0.72,
     ceoNames: ['Ines Marlowe', 'Dmitri Volkov', 'June Okafor'],
     quotes: {
       export: ['Port Rosa pays better than nostalgia.', 'The tide waits for no warehouse.'],

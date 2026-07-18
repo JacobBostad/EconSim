@@ -26,7 +26,7 @@ import { createFacility } from '../entities/factories';
 import type { Contract } from '../entities/Contract';
 import { hireCitizen, fireCitizen, findUnemployed } from './LaborSystem';
 import { clamp } from '../../utils/clamp';
-import { CENTS, RND_QUALITY_GAIN_PER_1000, MAX_RETAIL_PRODUCTS, IMPORT_MARKUP } from '../data/constants';
+import { CENTS, RND_QUALITY_GAIN_PER_1000, MAX_RETAIL_PRODUCTS, IMPORT_MARKUP, WHOLESALE_DISCOUNT } from '../data/constants';
 import { wholesaleUnitPrice } from '../core/Wholesale';
 import { worldImportMult } from '../data/worldEvents';
 import { companyValuation } from '../selectors/companySelectors';
@@ -54,6 +54,7 @@ export function runAIStrategySystem(ctx: SimContext): void {
     if (firm.bankruptcyStatus === 'healthy') {
       manageDebt(ctx, firm.id);
       manageSourcing(ctx, firm.id);
+      manageWholesalePricing(ctx, firm.id);
       manageAdBudget(ctx, firm.id);
       maybeInvestQuality(ctx, firm.id);
       maybeExpand(ctx, firm.id);
@@ -660,6 +661,49 @@ function localSurplus(state: SimContext['state'], fac: import('../entities/Facil
   return Math.max(0, getQuantity(fac.outputInventory, productId) - reserved);
 }
 
+/**
+ * Seller-side wholesale pricing: with paying customers on the line, creep the
+ * asking price up (capped well under import parity so nobody walks); sitting
+ * on unsold surplus, cut toward the personality's floor to win the next
+ * cheapest-supplier scan. Together with buyers shopping around, this makes
+ * wholesale a living market — Price Fighters dive to 55% and start wars,
+ * Exporters barely discount because their surplus has a ship to catch.
+ */
+const WHOLESALE_MILK_CAP = 0.85;
+const WHOLESALE_PRICE_STEP = 0.02;
+
+function manageWholesalePricing(ctx: SimContext, firmId: string): void {
+  const { state } = ctx;
+  const firm = state.firms[firmId]!;
+  const floor = getPersonality(firm.personalityId).wholesaleFloor;
+
+  for (const facId of firm.facilities) {
+    const fac = state.facilities[facId];
+    if (!fac || fac.type === 'retail' || fac.type === 'home' || fac.type === 'warehouse') continue;
+    if (fac.wholesaleEnabled === false || fac.status === 'closed') continue;
+
+    let customers = 0;
+    for (const cid in state.contracts) {
+      const c = state.contracts[cid]!;
+      if (!c.active || c.sourceFacilityId !== fac.id) continue;
+      if (state.facilities[c.destinationFacilityId]?.ownerFirmId !== firmId) customers++;
+    }
+    const mult = fac.wholesalePriceMult ?? WHOLESALE_DISCOUNT;
+    if (customers > 0) {
+      if (mult < WHOLESALE_MILK_CAP) {
+        fac.wholesalePriceMult = Math.round(Math.min(WHOLESALE_MILK_CAP, mult + WHOLESALE_PRICE_STEP) * 100) / 100;
+      }
+    } else if (mult > floor) {
+      // Only bother cutting when there is actually something to sell.
+      let surplus = 0;
+      for (const pid in fac.outputInventory) surplus += fac.outputInventory[pid]!.quantity;
+      if (surplus >= 30) {
+        fac.wholesalePriceMult = Math.round(Math.max(floor, mult - WHOLESALE_PRICE_STEP) * 100) / 100;
+      }
+    }
+  }
+}
+
 function manageSourcing(ctx: SimContext, firmId: string): void {
   const { state } = ctx;
   const firm = state.firms[firmId]!;
@@ -708,9 +752,29 @@ function manageSourcing(ctx: SimContext, firmId: string): void {
       const importerUnit = Math.round(
         getProduct(pid).basePrice * IMPORT_MARKUP * worldImportMult(state),
       );
-      const gouged = wholesaleUnitPrice(state, source, pid) > importerUnit;
+      const curUnit = wholesaleUnitPrice(state, source, pid);
+      const gouged = curUnit > importerUnit;
       const destHave = getQuantity(dest.inputInventory, pid);
-      if (!cutOff && !gouged && (destHave > 0 || localSurplus(state, source, pid) >= 10)) continue;
+      if (!cutOff && !gouged && (destHave > 0 || localSurplus(state, source, pid) >= 10)) {
+        // Healthy relationship — but loyalty has a price. If a rival supplier
+        // undercuts the current one by 10%+, take the better deal.
+        for (const fid in state.facilities) {
+          const fac = state.facilities[fid]!;
+          if (fac.id === source.id || fac.ownerFirmId === firmId) continue;
+          if (fac.type === 'importer' || fac.type === 'warehouse' || fac.status === 'closed') continue;
+          if (fac.wholesaleEnabled === false) continue;
+          const sellerType = state.firms[fac.ownerFirmId]?.ownerType;
+          if (sellerType !== 'ai' && sellerType !== 'player') continue;
+          if (localSurplus(state, fac, pid) < LOCAL_SOURCE_MIN_SURPLUS) continue;
+          if (wholesaleUnitPrice(state, fac, pid) > curUnit * 0.9) continue;
+          contract.sourceFacilityId = fac.id;
+          emitEvent(state, 'info', 'ai',
+            `${firm.name} moved its ${getProduct(pid).name} order to ${state.firms[fac.ownerFirmId]!.name} — a sharper wholesale price.`,
+            dest.id);
+          return; // one switch per firm per day
+        }
+        continue;
+      }
       const importer = Object.values(state.facilities).find((f) => f.type === 'importer');
       if (!importer) continue;
       contract.sourceFacilityId = importer.id;

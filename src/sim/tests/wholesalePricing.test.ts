@@ -101,6 +101,67 @@ describe('Wholesale pricing lever', () => {
     expect(standard).toBeGreaterThan(cheap);
   });
 
+  it('an AI seller sitting on unsold surplus cuts its price toward the personality floor', () => {
+    const sim = newSim(3);
+    const state = sim.getState();
+    // Give an AI producer a fat surplus and nobody buying it wholesale.
+    const aiProducer = Object.values(state.facilities).find(
+      (f) => (f.type === 'farm' || f.type === 'mine') && state.firms[f.ownerFirmId]?.ownerType === 'ai',
+    )!;
+    addStock(aiProducer.outputInventory, 'grain', 200, 60);
+    const before = aiProducer.wholesalePriceMult ?? WHOLESALE_DISCOUNT;
+
+    sim.run(ticksPerDay(state.config) * 6);
+
+    const after = aiProducer.wholesalePriceMult ?? WHOLESALE_DISCOUNT;
+    expect(after).toBeLessThan(before);
+  });
+
+  it('an AI seller with a paying customer creeps its price up (never past the milk cap)', () => {
+    const sim = newSim(3);
+    const state = sim.getState();
+    // AI producer sells to ANOTHER AI firm's factory: seller has a customer.
+    const aiProducer = Object.values(state.facilities).find(
+      (f) => (f.type === 'farm' || f.type === 'mine') && state.firms[f.ownerFirmId]?.ownerType === 'ai',
+    )!;
+    addStock(aiProducer.outputInventory, 'grain', 400, 60);
+    const buyerFactory = Object.values(state.facilities).find(
+      (f) => f.type === 'factory' && state.firms[f.ownerFirmId]?.ownerType === 'ai'
+        && f.ownerFirmId !== aiProducer.ownerFirmId,
+    )!;
+    sim.dispatch({
+      type: 'CREATE_SUPPLY_CONTRACT', ownerFirmId: buyerFactory.ownerFirmId,
+      sourceFacilityId: aiProducer.id, destinationFacilityId: buyerFactory.id,
+      productId: 'grain', targetQuantity: 10, reorderPoint: 5, maxInventory: 20,
+    });
+
+    sim.run(ticksPerDay(state.config) * 6);
+
+    const after = aiProducer.wholesalePriceMult ?? WHOLESALE_DISCOUNT;
+    expect(after).toBeGreaterThan(WHOLESALE_DISCOUNT);
+    expect(after).toBeLessThanOrEqual(0.85);
+  });
+
+  it('a locked-in buyer defects to a rival supplier 10%+ cheaper', () => {
+    const sim = newSim(3);
+    const state = sim.getState();
+    const farmA = setupFarm(sim, 100);
+    const contract = giveAiImportContract(sim);
+    const tpd = ticksPerDay(state.config);
+    sim.run(tpd * 3);
+    expect(contract.sourceFacilityId).toBe(farmA.id); // locked in at 70%
+
+    // A second farm undercuts hard. Keep A's stock topped up so the buyer
+    // never leaves for starvation reasons — only price can move it.
+    const farmB = setupFarm(sim, 108);
+    sim.dispatch({ type: 'SET_WHOLESALE_PRICE', facilityId: farmB.id, mult: 0.5 });
+    addStock(farmA.outputInventory, 'grain', 300, 60);
+
+    sim.run(tpd * 3);
+
+    expect(contract.sourceFacilityId).toBe(farmB.id);
+  });
+
   it('buyers walk when the supplier prices above import parity', () => {
     const sim = newSim(3);
     const state = sim.getState();

@@ -30,6 +30,11 @@ engine tests), probed with headless balance runs, and guarded by CI.
   Sellers set their own price (50–100% of market, default 70%): AI buyers
   pick the cheapest qualifying supplier, so undercutting wins the customer —
   and anyone priced above import parity gets dropped for the importer.
+- **Wholesale price wars**: AI sellers work the same lever — cut toward a
+  personality floor while surplus sits unsold (Price Fighters dive to 55%),
+  creep up to 85% while customers pay — and locked-in buyers defect to any
+  rival supplier 10%+ cheaper. Probed 300 days on six scenario/seed combos:
+  live price spreads of 0.55–0.85, every AI firm solvent, money conserved.
   (Also fixes what was a free-goods exploit: the UI offered cross-firm
   sources but nothing charged for them.) Measured: at 85% a wholesale
   storefront's margin couldn't cover wages; at 70% it roughly breaks even
