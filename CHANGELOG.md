@@ -115,6 +115,9 @@ engine tests), probed with headless balance runs, and guarded by CI.
   lanes running off toward the trade cities.
 - **Daily digests fixed**: production/bottleneck alerts read yesterday's stats
   (the old midnight-status checks could only ever emit false labor alarms).
+- **Cash runway countdown**: when the 7-day average burn would empty the
+  till within 15 days, the Advisor leads with "~N days of cash left" (danger
+  at ≤5) — missed payroll and receivership used to arrive with no countdown.
 - **Saturation ≠ starvation**: a producer idled by a full output buffer no
   longer triggers the harsh "produced nothing" alarm or the "money pit —
   sell it" advisor line. Both now say what's true and what to do: the chain

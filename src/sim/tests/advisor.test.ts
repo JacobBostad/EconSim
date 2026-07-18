@@ -5,6 +5,42 @@ import { addStock } from '../entities/Inventory';
 import { getProduct } from '../data/products';
 
 describe('morningBriefing', () => {
+  const snap = (day: number, operatingProfit: number, cash: number) => ({
+    day, revenue: 0, costOfGoodsSold: 0, wages: -Math.min(0, operatingProfit), maintenance: 0,
+    logisticsCost: 0, variableProductionCost: 0, marketing: 0, rnd: 0, interest: 0,
+    grossProfit: 0, operatingProfit, netProfit: operatingProfit,
+    cash, debt: 0, inventoryValue: 0, valuation: 100000, buildSpend: 0,
+  });
+
+  it('counts down the cash runway when the firm burns money', () => {
+    const sim = newSim(1);
+    const state = sim.getState();
+    const player = state.firms[state.playerFirmId]!;
+    player.cash = 100_00; // $100 left
+    for (let d = 1; d <= 5; d++) player.accounting.dailyHistory.push(snap(d, -20_00, 200_00));
+
+    const advice = morningBriefing(state);
+    const runway = advice.find((a) => a.icon === '⏳')!;
+    expect(runway).toBeTruthy();
+    expect(runway.severity).toBe('danger'); // 5 days left
+    expect(runway.text).toContain('5 days of cash left');
+  });
+
+  it('stays quiet about runway when the firm is profitable or flush', () => {
+    const sim = newSim(1);
+    const state = sim.getState();
+    const player = state.firms[state.playerFirmId]!;
+    player.cash = 100000_00;
+    for (let d = 1; d <= 5; d++) player.accounting.dailyHistory.push(snap(d, -20_00, 100000_00));
+    // Flush: 5000 days of runway — no line.
+    expect(morningBriefing(state).find((a) => a.icon === '⏳')).toBeUndefined();
+
+    player.accounting.dailyHistory.length = 0;
+    for (let d = 1; d <= 5; d++) player.accounting.dailyHistory.push(snap(d, 50_00, 100000_00));
+    // Profitable — no line.
+    expect(morningBriefing(state).find((a) => a.icon === '⏳')).toBeUndefined();
+  });
+
   it('flags a losing day with its dominant cost', () => {
     const sim = newSim(1);
     const state = sim.getState();

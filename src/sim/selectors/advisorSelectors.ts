@@ -30,6 +30,25 @@ export function morningBriefing(state: GameState): Advice[] {
   if (!player) return [];
   const items: Advice[] = [];
 
+  // 0. Runway: at the recent burn rate, when does the cash hit zero? The
+  // most important number a struggling firm never computes for itself —
+  // missed payroll and receivership used to arrive with no countdown.
+  const hist = player.accounting.dailyHistory;
+  if (hist.length >= 3 && player.cash > 0) {
+    const recent = hist.slice(-7);
+    const avgNet = recent.reduce((sum, d) => sum + d.operatingProfit, 0) / recent.length;
+    if (avgNet < -1_00) {
+      const days = Math.floor(player.cash / -avgNet);
+      if (days <= 15) {
+        items.push({
+          icon: '⏳',
+          severity: days <= 5 ? 'danger' : 'warning',
+          text: `~${days} day${days === 1 ? '' : 's'} of cash left at the current burn (${formatMoney(-avgNet)}/day average). Cut costs, raise prices, or borrow before payroll bounces.`,
+        });
+      }
+    }
+  }
+
   // 1. Money: yesterday's loss and its dominant cost.
   const insight = dailyInsight(state, player.id);
   if (insight && insight.net < 0 && insight.topCostAmount > 0) {
