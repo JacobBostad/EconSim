@@ -24,3 +24,19 @@ export function wholesaleUnitPrice(state: GameState, source: Facility, productId
   const mult = source.wholesalePriceMult ?? WHOLESALE_DISCOUNT;
   return Math.round(base * mult);
 }
+
+/**
+ * Units a facility can actually sell wholesale: output stock minus what its
+ * own firm's supply contracts have spoken for. Sellers are never raided
+ * below what their own chains reserve.
+ */
+export function localSurplus(state: GameState, fac: Facility, productId: string): number {
+  let reserved = 0;
+  for (const cid in state.contracts) {
+    const c = state.contracts[cid]!;
+    if (!c.active || c.sourceFacilityId !== fac.id || c.productId !== productId) continue;
+    if (state.facilities[c.destinationFacilityId]?.ownerFirmId !== fac.ownerFirmId) continue;
+    reserved += c.targetQuantity;
+  }
+  return Math.max(0, (fac.outputInventory[productId]?.quantity ?? 0) - reserved);
+}

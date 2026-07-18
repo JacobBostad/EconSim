@@ -27,7 +27,7 @@ import type { Contract } from '../entities/Contract';
 import { hireCitizen, fireCitizen, findUnemployed } from './LaborSystem';
 import { clamp } from '../../utils/clamp';
 import { CENTS, RND_QUALITY_GAIN_PER_1000, MAX_RETAIL_PRODUCTS, IMPORT_MARKUP, WHOLESALE_DISCOUNT } from '../data/constants';
-import { wholesaleUnitPrice } from '../core/Wholesale';
+import { wholesaleUnitPrice, localSurplus } from '../core/Wholesale';
 import { worldImportMult } from '../data/worldEvents';
 import { companyValuation } from '../selectors/companySelectors';
 import { acquisitionCost, performAcquisition } from '../core/Acquisition';
@@ -650,16 +650,6 @@ function manageDebt(ctx: SimContext, firmId: string): void {
 const LOCAL_SOURCE_MIN_SURPLUS = 40;
 const LOCAL_SOURCE_SAVINGS = 0.9; // switch only if wholesale < importer × this
 
-function localSurplus(state: SimContext['state'], fac: import('../entities/Facility').Facility, productId: string): number {
-  let reserved = 0;
-  for (const cid in state.contracts) {
-    const c = state.contracts[cid]!;
-    if (!c.active || c.sourceFacilityId !== fac.id || c.productId !== productId) continue;
-    if (state.facilities[c.destinationFacilityId]?.ownerFirmId !== fac.ownerFirmId) continue;
-    reserved += c.targetQuantity;
-  }
-  return Math.max(0, getQuantity(fac.outputInventory, productId) - reserved);
-}
 
 /**
  * Seller-side wholesale pricing: with paying customers on the line, creep the

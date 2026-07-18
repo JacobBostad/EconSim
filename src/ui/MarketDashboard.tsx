@@ -7,6 +7,7 @@ import { TrendCard } from './Sparkline';
 import { CONSUMER_PRODUCT_IDS, getProduct } from '../sim/data/products';
 import { pickBestCity } from '../sim/core/Trade';
 import { getTradeCity } from '../sim/data/tradeCities';
+import { wholesaleBoard } from '../sim/selectors/wholesaleSelectors';
 
 export function MarketDashboard(): React.ReactElement {
   const sim = useGameStore((s) => s.sim);
@@ -62,6 +63,56 @@ export function MarketDashboard(): React.ReactElement {
           ))}
         </tbody>
       </table>
+
+      <h3>Wholesale board</h3>
+      {(() => {
+        const board = wholesaleBoard(state);
+        if (board.length === 0) {
+          return (
+            <p className="muted small">
+              No wholesale sellers yet. Any producing facility with surplus (and
+              wholesale enabled) appears here — undercut the cheapest row and AI
+              buyers come to you.
+            </p>
+          );
+        }
+        return (
+          <>
+            <p className="muted small">
+              Suppliers sorted cheapest-first per product. AI buyers take the
+              cheapest qualifying row, defect to anyone 10%+ cheaper than their
+              current supplier, and walk when a price beats importing no longer.
+            </p>
+            <table>
+              <thead>
+                <tr>
+                  <th>Product</th><th>Supplier</th><th>Asking</th>
+                  <th><FormulaTooltip title="Unit price" explanation="Asking % × today's market average (base price when the product has no retail market).">Unit</FormulaTooltip></th>
+                  <th><FormulaTooltip title="Importer benchmark" explanation="Base price × 1.5 import markup (× world events). The bar every local price is judged against.">vs importer</FormulaTooltip></th>
+                  <th>Surplus</th><th>Customers</th>
+                </tr>
+              </thead>
+              <tbody>
+                {board.flatMap((p) =>
+                  p.rows.map((r, i) => (
+                    <tr key={r.facilityId + p.productId} style={r.isPlayer ? { color: 'var(--accent, #58a6ff)' } : undefined}>
+                      <td>{i === 0 ? p.productName : ''}</td>
+                      <td>{r.facilityName} · {r.firmName}{r.isPlayer ? ' (you)' : ''}</td>
+                      <td className="mono">{Math.round(r.mult * 100)}%</td>
+                      <td className="mono">{formatMoney(r.unitPrice)}</td>
+                      <td className="mono" style={{ color: r.unitPrice < p.importerUnit ? 'var(--green)' : 'var(--red)' }}>
+                        {formatMoney(p.importerUnit)}
+                      </td>
+                      <td className="mono">{r.surplus}</td>
+                      <td className="mono">{r.customers}</td>
+                    </tr>
+                  )),
+                )}
+              </tbody>
+            </table>
+          </>
+        );
+      })()}
 
       <h3>Trends (last 60 days)</h3>
       <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
