@@ -21,6 +21,7 @@ export function MapView(): React.ReactElement {
         onPick: (id) => useGameStore.getState().select(id),
         getSelectedId: () => useGameStore.getState().sim.getState().selectedEntityId,
         getBuildMode: () => useGameStore.getState().buildDefId != null,
+        getFlowOverlay: () => useGameStore.getState().flowOverlay,
         onBuildAt: (world) => {
           const store = useGameStore.getState();
           const defId = store.buildDefId;
@@ -53,7 +54,7 @@ export function MapView(): React.ReactElement {
         style={{ width: '100%', height: '100%', cursor: buildDefId ? 'copy' : 'grab' }}
       />
       <div className="map-hint">
-        {buildDefId ? '🏗 Click to place · Esc/Cancel to stop' : '🖱 Drag · Scroll zoom · Space pause · 1-4 speed · G gazette'}
+        {buildDefId ? '🏗 Click to place · Esc/Cancel to stop' : '🖱 Drag · Scroll zoom · Space pause · 1-4 speed · G gazette · F flows'}
         <button onClick={() => rendererRef.current?.resetView()}>Reset view</button>
       </div>
     </div>

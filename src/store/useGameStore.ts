@@ -77,6 +77,9 @@ interface GameStore {
   select: (id: EntityId | null) => void;
   setBuildDef: (defId: FacilityDefId | null) => void;
   setDashboard: (tab: DashboardTab) => void;
+  /** Supply-chain flow overlay on the map (toggled with F). */
+  flowOverlay: boolean;
+  toggleFlowOverlay: () => void;
 
   _start: () => void;
 }
@@ -184,6 +187,8 @@ export const useGameStore = create<GameStore>((set, get) => {
 
     setBuildDef: (defId) => set({ buildDefId: defId }),
     setDashboard: (tab) => set({ dashboard: tab }),
+    flowOverlay: false,
+    toggleFlowOverlay: () => set((s) => ({ flowOverlay: !s.flowOverlay })),
 
     _start: () => {
       if (typeof window === 'undefined') return;

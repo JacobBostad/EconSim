@@ -29,6 +29,10 @@ export function KeyboardShortcuts(): React.ReactElement | null {
         store.setSpeed(speed);
         return;
       }
+      if (e.key.toLowerCase() === 'f' && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        store.toggleFlowOverlay();
+        return;
+      }
       const tabByKey: Record<string, 'gazette' | 'company' | 'market' | 'awards'> = {
         g: 'gazette', c: 'company', m: 'market', a: 'awards',
       };

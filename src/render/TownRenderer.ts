@@ -60,6 +60,7 @@ export interface RendererCallbacks {
   onPick: (id: string | null) => void;
   getSelectedId: () => string | null;
   getBuildMode: () => boolean;
+  getFlowOverlay: () => boolean;
   onBuildAt: (world: Vec) => void;
 }
 
@@ -294,6 +295,7 @@ export class TownRenderer {
     const time = computeTime(s.tick, s.config);
     this.drawGround(s, time.hour);
     this.drawRoads(s);
+    if (this.cb.getFlowOverlay()) this.drawFlowOverlay(s, dt);
     this.drawFacilities(s, time.hour);
     this.drawShipments(s, dt);
     this.drawCitizens(s, dt);
@@ -304,6 +306,81 @@ export class TownRenderer {
     if (this.cb.getBuildMode()) this.drawLandValueOverlay(s);
     this.drawHud(time);
     this.drawHover(s);
+  }
+
+  // --- supply-chain flow overlay (F) --------------------------------------
+  private flowDash = 0;
+
+  /**
+   * Every active contract as a curved arrow, width scaled by shipment volume,
+   * player routes in accent blue and AI routes muted; warehouses with export
+   * activity get a dashed lane running off the east edge toward Port Rosa.
+   */
+  private drawFlowOverlay(s: GameState, dt: number): void {
+    const ctx = this.ctx;
+    this.flowDash = (this.flowDash + dt * 0.012) % 24;
+
+    const route = (
+      from: Vec, to: Vec, width: number, color: string, dashed: boolean,
+    ): void => {
+      const a = this.w2s(s, from);
+      const b = this.w2s(s, to);
+      // Curve control point: perpendicular offset so parallel routes separate.
+      const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+      const dx = b.x - a.x, dy = b.y - a.y;
+      const len = Math.max(1, Math.hypot(dx, dy));
+      const cxp = mx - (dy / len) * Math.min(30, len * 0.18);
+      const cyp = my + (dx / len) * Math.min(30, len * 0.18);
+      ctx.strokeStyle = color;
+      ctx.lineWidth = width;
+      ctx.lineCap = 'round';
+      ctx.setLineDash(dashed ? [8, 8] : [12, 12]);
+      ctx.lineDashOffset = -this.flowDash;
+      ctx.beginPath();
+      ctx.moveTo(a.x, a.y);
+      ctx.quadraticCurveTo(cxp, cyp, b.x, b.y);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      // Arrowhead at the destination.
+      const tx = b.x - cxp, ty = b.y - cyp;
+      const tlen = Math.max(1, Math.hypot(tx, ty));
+      const ux = tx / tlen, uy = ty / tlen;
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.moveTo(b.x, b.y);
+      ctx.lineTo(b.x - ux * 8 - uy * 4, b.y - uy * 8 + ux * 4);
+      ctx.lineTo(b.x - ux * 8 + uy * 4, b.y - uy * 8 - ux * 4);
+      ctx.closePath();
+      ctx.fill();
+    };
+
+    for (const cid in s.contracts) {
+      const c = s.contracts[cid]!;
+      if (!c.active) continue;
+      const src = s.facilities[c.sourceFacilityId];
+      const dst = s.facilities[c.destinationFacilityId];
+      if (!src || !dst) continue;
+      const isPlayer = c.ownerFirmId === s.playerFirmId;
+      const width = Math.min(4.5, 1.2 + c.targetQuantity / 25);
+      const color = isPlayer ? 'rgba(90,170,255,0.75)' : 'rgba(170,180,200,0.35)';
+      route(src.location, dst.location, width, color, false);
+    }
+
+    // Export lanes: any warehouse with a standing order or shipped units today.
+    for (const fid in s.facilities) {
+      const f = s.facilities[fid]!;
+      if (f.type !== 'warehouse') continue;
+      const exporting = Object.keys(f.exportOrders).length > 0 || f.dailyStats.unitsShipped > 0;
+      if (!exporting) continue;
+      const isPlayer = f.ownerFirmId === s.playerFirmId;
+      route(
+        f.location,
+        { x: s.config.mapWidth + 6, y: Math.min(f.location.y, 20) },
+        1.8,
+        isPlayer ? 'rgba(120,220,180,0.7)' : 'rgba(150,190,170,0.35)',
+        true,
+      );
+    }
   }
 
   // --- land-value overlay (placement mode) -------------------------------
