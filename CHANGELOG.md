@@ -126,6 +126,11 @@ engine tests), probed with headless balance runs, and guarded by CI.
 - **Build-mode ghost**: placing a facility shows the actual 2.5D building
   translucent under the cursor with the land-adjusted price at that spot
   (red when unaffordable), so location cost is felt before the click.
+- **Placement clearance**: manual builds reject ground within 3 world units
+  of an existing facility — the ghost turns red and names what's in the way,
+  and a blocked click keeps build mode active instead of eating the money on
+  two stacked buildings (the wizard already planned with its own clearance;
+  AI jitter placement is exempt so rival expansion never deadlocks).
 
 ## Content & polish
 

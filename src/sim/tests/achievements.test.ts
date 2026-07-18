@@ -90,7 +90,7 @@ describe('New-system achievements', () => {
     p.cash = 60000_00;
     const def = getAchievementDef('landlord_baron')!;
     for (let i = 0; i < 3; i++) {
-      sim.dispatch({ type: 'BUILD_FACILITY', firmId: p.id, defId: 'apartment', location: { x: 30 + i * 8, y: 62 } });
+      sim.dispatch({ type: 'BUILD_FACILITY', firmId: p.id, defId: 'apartment', location: { x: 30 + i * 8, y: 64 } });
     }
     expect(def.check(state)).toBe(false); // vacant
     const cids = Object.keys(state.citizens);

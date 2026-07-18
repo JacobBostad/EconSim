@@ -37,8 +37,14 @@ await clearOverlays();
 await page.getByRole('button', { name: /Bread chain/ }).click();
 await page.getByRole('button', { name: /Coffee chain/ }).click();
 await page.getByRole('button', { name: /Apartment/ }).click();
-await page.mouse.click(700, 620); // place apartment on the map
-await page.waitForTimeout(300);
+// The placement guard keeps build mode active over blocked ground, so walk
+// candidate spots until one is accepted (the "Placing …" card disappears).
+for (const [x, y] of [[700, 620], [745, 600], [660, 645], [780, 630], [630, 600]]) {
+  await page.mouse.click(x, y);
+  await page.waitForTimeout(250);
+  if (!(await page.getByText(/^Placing /).count())) break;
+}
+if (await page.getByText(/^Placing /).count()) throw new Error('apartment placement never accepted');
 
 // ~150 in-game days at 100x.
 await page.getByRole('button', { name: '100×' }).click();

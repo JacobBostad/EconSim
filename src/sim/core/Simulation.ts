@@ -48,6 +48,7 @@ import { upgradeFacility } from './Upgrades';
 import { sellFacility } from './Demolition';
 import { performExport, pickBestCity } from './Trade';
 import { landCostMultiplier, landValueAt } from './LandValue';
+import { placementBlocker } from './Placement';
 import type { Contract } from '../entities/Contract';
 
 import { runTimeSystem } from '../systems/TimeSystem';
@@ -667,6 +668,11 @@ export class Simulation {
     const firm = s.firms[command.firmId];
     if (!firm) return;
     const def = getFacilityDef(command.defId);
+    const blocker = placementBlocker(s, command.location);
+    if (blocker) {
+      emitEvent(s, 'warning', 'player', `Too close to ${blocker.name} — pick clearer ground.`, firm.id);
+      return;
+    }
     // Location economics: pricier ground (and rent) near the homes.
     const mult = landCostMultiplier(landValueAt(s, command.location));
     const cost = Math.round(def.buildCost * mult);

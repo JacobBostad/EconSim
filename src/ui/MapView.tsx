@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { useGameStore } from '../store/useGameStore';
 import { TownRenderer } from '../render/TownRenderer';
+import { placementBlocker } from '../sim/core/Placement';
 
 /**
  * MapView mounts the self-contained TownRenderer once. The renderer runs its own
@@ -27,6 +28,9 @@ export function MapView(): React.ReactElement {
           const store = useGameStore.getState();
           const defId = store.buildDefId;
           if (!defId) return;
+          // Blocked ground: stay in build mode so the player can just move
+          // the cursor — the ghost is already explaining why.
+          if (placementBlocker(store.sim.getState(), world)) return;
           store.dispatch({
             type: 'BUILD_FACILITY',
             firmId: store.sim.getState().playerFirmId,

@@ -25,8 +25,8 @@ describe('Land value & location economics', () => {
     const supply0 = totalMoneySupply(state);
     const def = getFacilityDef('retail');
 
-    sim.dispatch({ type: 'BUILD_FACILITY', firmId: player.id, defId: 'retail', location: { x: 40, y: 58 } });
-    sim.dispatch({ type: 'BUILD_FACILITY', firmId: player.id, defId: 'retail', location: { x: 120, y: 8 } });
+    sim.dispatch({ type: 'BUILD_FACILITY', firmId: player.id, defId: 'retail', location: { x: 43, y: 57 } });
+    sim.dispatch({ type: 'BUILD_FACILITY', firmId: player.id, defId: 'retail', location: { x: 124, y: 4 } });
 
     const [downtown, remote] = player.facilities.map((id) => state.facilities[id]!);
     expect(downtown!.buildCost).toBeGreaterThan(remote!.buildCost);

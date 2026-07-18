@@ -18,6 +18,7 @@ import type { FacilityType } from '../sim/entities/Facility';
 import type { CitizenActivity } from '../sim/entities/Citizen';
 import { computeTime } from '../sim/core/Tick';
 import { landValueAt, landCostMultiplier } from '../sim/core/LandValue';
+import { placementBlocker } from '../sim/core/Placement';
 import { getFacilityDef } from '../sim/data/facilityDefinitions';
 import { seasonOf } from '../sim/data/seasons';
 import { getProduct } from '../sim/data/products';
@@ -484,10 +485,11 @@ export class TownRenderer {
     const sp = this.mouse;
     const cost = Math.round(def.buildCost * landCostMultiplier(landValueAt(s, world)));
     const cash = s.firms[s.playerFirmId]?.cash ?? 0;
-    const affordable = cash >= cost;
+    const blocker = placementBlocker(s, world);
+    const affordable = cash >= cost && !blocker;
 
     ctx.save();
-    ctx.globalAlpha = 0.65;
+    ctx.globalAlpha = blocker ? 0.4 : 0.65;
     ctx.fillStyle = 'rgba(28,38,32,0.28)';
     ctx.beginPath();
     ctx.ellipse(sp.x + size * 0.25, sp.y + size * 0.42, size * 1.15, size * 0.4, 0, 0, Math.PI * 2);
@@ -505,8 +507,8 @@ export class TownRenderer {
     });
     ctx.restore();
 
-    // price chip under the ghost — red when the firm can't cover it
-    const label = formatMoney(cost);
+    // price chip under the ghost — red when blocked or unaffordable
+    const label = blocker ? `Too close to ${blocker.name}` : formatMoney(cost);
     ctx.font = '700 12px system-ui, sans-serif';
     ctx.textAlign = 'center'; ctx.textBaseline = 'top';
     const tw = ctx.measureText(label).width;

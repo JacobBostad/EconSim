@@ -11,7 +11,7 @@ function withApartment(seed: number) {
   const sim = newSim(seed);
   const state = sim.getState();
   const player = state.firms[state.playerFirmId]!;
-  sim.dispatch({ type: 'BUILD_FACILITY', firmId: player.id, defId: 'apartment', location: { x: 40, y: 62 } });
+  sim.dispatch({ type: 'BUILD_FACILITY', firmId: player.id, defId: 'apartment', location: { x: 43, y: 64 } });
   const apt = state.facilities[player.facilities[0]!]!;
   // Move two existing citizens in.
   const tenants = Object.values(state.citizens).slice(0, 2);
