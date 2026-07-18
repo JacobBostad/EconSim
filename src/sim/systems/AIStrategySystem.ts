@@ -68,11 +68,13 @@ export function runAIStrategySystem(ctx: SimContext): void {
     firm.strategy.lossStreak = op < 0 ? firm.strategy.lossStreak + 1 : 0;
   }
 
-  // Player QoL: the same mean-reverting price controller manages any player
-  // product with auto-price enabled.
+  // Player QoL: auto-priced products are "managed" — the same mean-reverting
+  // price controller sets their prices, and the same shelf-widening keeps
+  // their supply contracts sized to demand as the town grows.
   const player = state.firms[state.playerFirmId];
   if (player && Object.values(player.autoPriceByProduct).some(Boolean)) {
     adjustPrices(ctx, player.id, true);
+    maybeWidenShelves(ctx, player.id, true);
   }
 }
 
@@ -811,12 +813,18 @@ function buildSiblingChain(ctx: SimContext, firmId: string, factoryId: string): 
  * feeding the stores stay sized for the old volume — the surplus just piles
  * up (or ships to Port Rosa) while shelves stock out. When a store keeps
  * losing sales, widen its inbound contracts.
+ *
+ * Also runs for the player's auto-priced ("managed") products: wizard chains
+ * ship with 40-unit contracts, and once demand outgrows them the store
+ * famine-feasts on alternate-day deliveries while the factory drowns in
+ * stock (measured: 95/100 days with lostSales>5 AND factory backlog ≥40).
+ * `managedOnly` keeps hands off any product the player prices manually.
  */
 const SHELF_WIDEN_LOST_SALES = 5;
 const SHELF_TARGET_STEP = 10;
 const SHELF_TARGET_CAP = 120;
 
-function maybeWidenShelves(ctx: SimContext, firmId: string): void {
+function maybeWidenShelves(ctx: SimContext, firmId: string, managedOnly = false): void {
   const { state } = ctx;
   const firm = state.firms[firmId]!;
   for (const facId of firm.facilities) {
@@ -826,6 +834,7 @@ function maybeWidenShelves(ctx: SimContext, firmId: string): void {
     for (const cid in state.contracts) {
       const c = state.contracts[cid]!;
       if (!c.active || c.destinationFacilityId !== facId) continue;
+      if (managedOnly && !firm.autoPriceByProduct[c.productId]) continue;
       if (c.targetQuantity >= SHELF_TARGET_CAP) continue;
       c.targetQuantity = Math.min(SHELF_TARGET_CAP, c.targetQuantity + SHELF_TARGET_STEP);
       c.maxInventory = Math.max(c.maxInventory, Math.round(c.targetQuantity * 1.8));

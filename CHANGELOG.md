@@ -99,6 +99,12 @@ engine tests), probed with headless balance runs, and guarded by CI.
   "fixed" again.
 - **Single-stage expansion backfires**: a second bakery on one farm's grain
   starves both — hence whole-sub-chain duplication.
+- **Phantom night demand**: urgent needs used to send shoppers to closed
+  stores all night; every bounce counted as a "lost sale" (~25/day per store
+  on full shelves) and fed the AI's expansion signals. Urgency no longer
+  overrides store hours; wizard chains also get the AI's shelf-widening on
+  auto-priced products (their 40-unit contracts famine-feasted once demand
+  grew).
 
 ## Infrastructure
 

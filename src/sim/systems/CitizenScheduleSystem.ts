@@ -77,10 +77,17 @@ export function runCitizenScheduleSystem(ctx: SimContext): void {
       cit.activity = 'home';
     }
 
-    // 2) Shopping: in the window, or whenever a need is urgent (and not at work).
+    // 2) Shopping: in the window, or whenever a need is urgent (and not at
+    // work). Urgency never overrides store hours: a 3am trip just bounces off
+    // a closed door — measured as ~25 phantom "lost sales"/day per store and a
+    // nightly satisfaction drain, all retry inflation. The need keeps its
+    // urgency and the citizen shops at opening time instead.
+    const storesOpenNow =
+      ctx.time.hour >= ctx.config.storeOpenHour &&
+      ctx.time.hour < ctx.config.storeCloseHour;
     const offCooldown =
       state.tick - cit.lastShopTick >= ctx.config.shoppingCooldownTicks;
-    if (offCooldown && !(employed && isWorkTime(ctx))) {
+    if (offCooldown && storesOpenNow && !(employed && isWorkTime(ctx))) {
       let commuting = false;
       for (const need of shoppableNeeds(ctx, cit)) {
         if (!isShopTime(ctx) && need.urgency < ctx.config.needUrgentThreshold) continue;
