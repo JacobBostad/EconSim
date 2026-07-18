@@ -38,7 +38,10 @@ engine tests), probed with headless balance runs, and guarded by CI.
   The Market dashboard's **Wholesale board** makes the war legible: every
   supplier's asking price, surplus, and customer count, sorted cheapest-first
   against the importer benchmark — undercut the top row and the next AI
-  sourcing pass is yours.
+  sourcing pass is yours. The 🔪 Undercutter achievement rewards serving an
+  AI customer at 60% or less (an achievement, not a mission — the mission
+  chain is sequential, and a niche-strategy gate would block mainstream
+  players from everything after it).
   (Also fixes what was a free-goods exploit: the UI offered cross-firm
   sources but nothing charged for them.) Measured: at 85% a wholesale
   storefront's margin couldn't cover wages; at 70% it roughly breaks even

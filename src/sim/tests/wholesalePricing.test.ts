@@ -6,6 +6,7 @@ import { addStock } from '../entities/Inventory';
 import { wholesaleUnitPrice, WHOLESALE_MULT_MIN, WHOLESALE_MULT_MAX } from '../core/Wholesale';
 import { WHOLESALE_DISCOUNT } from '../data/constants';
 import { getProduct } from '../data/products';
+import { ACHIEVEMENT_DEFS } from '../data/achievements';
 
 /**
  * Sellers set their own wholesale price (fraction of market average).
@@ -160,6 +161,24 @@ describe('Wholesale pricing lever', () => {
     sim.run(tpd * 3);
 
     expect(contract.sourceFacilityId).toBe(farmB.id);
+  });
+
+  it('the Undercutter achievement needs a deep cut AND a live AI customer', () => {
+    const sim = newSim(3);
+    const state = sim.getState();
+    const farm = setupFarm(sim, 100);
+    const badge = ACHIEVEMENT_DEFS.find((a) => a.id === 'undercutter')!;
+
+    expect(badge.check(state)).toBe(false);
+    // Deep cut alone isn't enough — someone has to actually buy at it.
+    sim.dispatch({ type: 'SET_WHOLESALE_PRICE', facilityId: farm.id, mult: 0.6 });
+    expect(badge.check(state)).toBe(false);
+    const contract = giveAiImportContract(sim);
+    contract.sourceFacilityId = farm.id;
+    expect(badge.check(state)).toBe(true);
+    // A shallow cut with a customer doesn't count either.
+    sim.dispatch({ type: 'SET_WHOLESALE_PRICE', facilityId: farm.id, mult: 0.7 });
+    expect(badge.check(state)).toBe(false);
   });
 
   it('buyers walk when the supplier prices above import parity', () => {

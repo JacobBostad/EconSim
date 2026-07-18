@@ -261,6 +261,27 @@ export const ACHIEVEMENT_DEFS: AchievementDef[] = [
     check: (s) => (player(s)?.wholesaleEarned ?? 0) >= dollars(1000),
   },
   {
+    id: 'undercutter',
+    name: 'Undercutter',
+    icon: '🔪',
+    description: 'Served an AI customer while asking 60% of market or less.',
+    hint: 'Cut a facility\'s wholesale asking price (facility inspector) — AI buyers always take the cheapest qualifying supplier, and defect to anyone 10%+ cheaper.',
+    check: (s) => {
+      const p = player(s);
+      if (!p) return false;
+      for (const fid of p.facilities) {
+        const fac = s.facilities[fid];
+        if (!fac || (fac.wholesalePriceMult ?? 1) > 0.6) continue;
+        for (const cid in s.contracts) {
+          const c = s.contracts[cid]!;
+          if (!c.active || c.sourceFacilityId !== fac.id) continue;
+          if (s.facilities[c.destinationFacilityId]?.ownerFirmId !== p.id) return true;
+        }
+      }
+      return false;
+    },
+  },
+  {
     id: 'arbitrageur',
     name: 'Arbitrageur',
     icon: '⚖️',

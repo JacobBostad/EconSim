@@ -137,7 +137,7 @@ export const MISSION_DEFS: MissionDef[] = [
     id: 'local_sourcing',
     name: 'Local Sourcing',
     icon: '🤝',
-    description: 'Spend $200 buying wholesale from another firm: create a supply contract whose source is a rival\'s facility (marked "wholesale" in the picker) — ~70% of market price, cheaper than importing.',
+    description: 'Spend $200 buying wholesale from another firm: create a supply contract whose source is a rival\'s facility (marked "wholesale" in the picker) — you pay their asking price (~70% of market by default), cheaper than importing.',
     reward: dollars(1500),
     check: (s) => (player(s)?.wholesaleSpend ?? 0) >= dollars(200),
   },
