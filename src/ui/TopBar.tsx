@@ -7,6 +7,7 @@ import { formatMoney } from '../utils/formatMoney';
 import { getPlayerFirm, companyValuation, playerRank, dailyInsight } from '../sim/selectors/companySelectors';
 import { populationStats } from '../sim/selectors/citizenSelectors';
 import { formatMoneyShort } from '../utils/formatMoney';
+import { dailyDateFromSeed } from './records';
 
 const TABS: { id: DashboardTab; label: string }[] = [
   { id: 'company', label: 'Company' },
@@ -83,6 +84,21 @@ export function TopBar(): React.ReactElement {
         <span className="label">Economy</span>
         <span className="value mono">{health}% · {pop.employed}/{pop.total} jobs</span>
       </div>
+      {state.config.challengeMode && (
+        <div
+          className="stat"
+          title={
+            dailyDateFromSeed(state.seed)
+              ? `Daily challenge ${dailyDateFromSeed(state.seed)} — everyone worldwide races this exact town today. Scored at day 200.`
+              : `Challenge run — final score at day 200, recorded on your leaderboard (seed ${state.seed}).`
+          }
+        >
+          <span className="label">{dailyDateFromSeed(state.seed) ? 'Daily' : 'Challenge'}</span>
+          <span className="value mono" style={{ color: 'var(--amber)' }}>
+            {dailyDateFromSeed(state.seed) ? `📅 ${dailyDateFromSeed(state.seed)}` : '🏁'} · d{Math.min(200, time.day + 1)}/200
+          </span>
+        </div>
+      )}
 
       <span className="spacer" />
 
