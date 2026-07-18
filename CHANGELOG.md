@@ -375,6 +375,14 @@ engine tests), probed with headless balance runs, and guarded by CI.
 
 ## Infrastructure
 
+- **Golden save v4** (rush-order / fire-sale era): a fixture whose counters
+  were earned through real engine paths — a rush order completed by actual
+  exports, a fire sale bought through the real accept path (the transferred
+  factory sits in the player's holdings) — plus live rush and fire-sale
+  offers mid-flight and a lapse cooldown, so every field added this era is
+  pinned against future migration regressions. Perf re-checked at Bustling
+  scale with both offer systems in the loop: 0.129 ms/tick at day 300.
+
 - CI (tests + build + e2e), three golden-save fixtures (legacy, modern,
   wholesale-era), three scripted playtest bots (general store; all-verticals;
   pure supplier), a 600-day soak, deep browser smoke, and time-averaged

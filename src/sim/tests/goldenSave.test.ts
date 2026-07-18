@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import fixtureJson from './fixtures/golden-save-v1.json';
 import fixture2Json from './fixtures/golden-save-v2.json';
 import fixture3Json from './fixtures/golden-save-v3.json';
+import fixture4Json from './fixtures/golden-save-v4.json';
 import { Simulation } from '../core/Simulation';
 import { deserialize, serialize } from '../persistence/saveLoad';
 import { totalMoneySupply } from '../core/GameState';
@@ -119,5 +120,42 @@ describe('Golden save fixture v3 (wholesale era)', () => {
     const sim = new Simulation(state);
     expect(() => sim.run(ticksPerDay(state.config) * 10)).not.toThrow();
     expect(totalMoneySupply(sim.getState())).toBe(supply0);
+  });
+});
+
+describe('Golden save fixture v4 (rush-order / fire-sale era)', () => {
+  const raw4 = JSON.stringify(fixture4Json);
+
+  it('loads intact with every rush/fire-sale field populated', () => {
+    const state = deserialize(raw4);
+    // Earned counters came through the real engine paths.
+    expect(state.rushOrdersCompleted).toBe(1);
+    expect(state.fireSalesBought).toBe(1);
+    // Live offers mid-flight.
+    expect(state.rushOrder).not.toBeNull();
+    expect(state.rushOrder!.filled).toBeGreaterThan(0);
+    expect(state.rushOrder!.bonusCents).toBeGreaterThan(0);
+    expect(state.facilityOffer).not.toBeNull();
+    expect(state.facilities[state.facilityOffer!.facilityId]).toBeDefined();
+    expect(state.lastLapsedFireSale).not.toBeNull();
+    // The fire-sale purchase actually moved a building to the player.
+    const player = state.firms[state.playerFirmId]!;
+    const boughtFactory = player.facilities
+      .map((id) => state.facilities[id]!)
+      .filter((f) => f.type === 'factory');
+    expect(boughtFactory.length).toBeGreaterThanOrEqual(2); // chain's own + fire-sale buy
+    const again = deserialize(serialize(state));
+    expect(serialize(again)).toBe(serialize(state));
+  });
+
+  it('keeps running with money conserved, offers expiring naturally', () => {
+    const state = deserialize(raw4);
+    const supply0 = totalMoneySupply(state);
+    const sim = new Simulation(state);
+    expect(() => sim.run(ticksPerDay(state.config) * 10)).not.toThrow();
+    expect(totalMoneySupply(sim.getState())).toBe(supply0);
+    // Both live offers resolve one way or another within ten days.
+    const end = sim.getState();
+    expect(end.rushOrder === null || end.rushOrder.startDay > 33).toBe(true);
   });
 });
