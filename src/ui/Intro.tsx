@@ -16,11 +16,12 @@ export function Intro(): React.ReactElement | null {
         <div className="intro-grid">
           <div>
             <h4>The world runs itself</h4>
-            <p>40 citizens work, earn wages, and shop. Three AI companies run
-              <strong> bread</strong>, <strong>tools</strong>, and
-              <strong> clothes</strong> chains (farm/mine → factory → store).
-              World events — booms, droughts, crazes — shake things up; watch
-              the news chips on the map.</p>
+            <p>Citizens work, earn wages, and shop. Rival firms with named
+              CEOs run <strong>bread</strong>, <strong>tools</strong>, and
+              <strong> clothes</strong> chains — nobody serves
+              <strong> coffee</strong> yet. World events shake things up, the
+              town grows when it prospers, and prosperity is cyclical: watch
+              the trends in <strong>Population</strong>.</p>
           </div>
           <div>
             <h4>Trade, seasons, and the town</h4>
@@ -37,12 +38,15 @@ export function Intro(): React.ReactElement | null {
               premium once you dominate, and staff up: extra hands raise output.</p>
           </div>
           <div>
-            <h4>Compete on three levers</h4>
-            <p><strong>Brand</strong> — advertise to make customers pay more &amp;
-              choose you. <strong>Quality</strong> — invest in R&amp;D for better
-              goods. <strong>Finance</strong> — borrow to expand, buy rival
-              shares, or <strong>acquire competitors outright</strong>. The AI
-              fights back with new outlets where demand is unmet.</p>
+            <h4>Compete on every lever</h4>
+            <p><strong>Brand</strong> (ads), <strong>quality</strong> (R&amp;D),
+              <strong> wages</strong> (out-pay rivals by 15% to poach their
+              veterans — they answer back), <strong>finance</strong> (loans,
+              shares, outright <strong>acquisitions</strong>), and
+              <strong> real estate</strong> (apartments collect rent). The
+              🧭 <strong>Advisor</strong> card tells you what needs attention;
+              press <strong>F</strong> to see supply chains flow. Want a score?
+              Start a 🏁 <strong>Challenge run</strong> from New Game.</p>
           </div>
         </div>
 

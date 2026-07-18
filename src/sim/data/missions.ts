@@ -140,6 +140,51 @@ export const MISSION_DEFS: MissionDef[] = [
     check: (s) => (player(s)?.exportRevenue ?? 0) > 0,
   },
   {
+    id: 'wage_leader',
+    name: 'Wage Leader',
+    icon: '🤝',
+    description: 'Pay the town\'s best wage — set your base wage above every rival\'s (Wages card in your firm inspector) while employing at least one worker.',
+    reward: dollars(1500),
+    check: (s) => {
+      const p = player(s);
+      if (!p || p.employees.length === 0) return false;
+      for (const fid in s.firms) {
+        const f = s.firms[fid]!;
+        if (f.id === p.id || (f.ownerType !== 'ai' && f.ownerType !== 'player')) continue;
+        if (f.wagePolicy.baseWage >= p.wagePolicy.baseWage) return false;
+      }
+      return true;
+    },
+  },
+  {
+    id: 'morning_rush',
+    name: 'Morning Rush',
+    icon: '☕',
+    description: 'Serve the town coffee: carry it in one of your stores and make a sale (roast it yourself or buy from the importer).',
+    reward: dollars(1500),
+    check: (s) => {
+      const p = player(s);
+      if (!p) return false;
+      const carries = p.facilities.some((fid) => s.facilities[fid]?.retailProductIds.includes('coffee'));
+      return carries && (s.marketStats['coffee']?.unitsSoldByFirm[p.id] ?? 0) > 0;
+    },
+  },
+  {
+    id: 'landlord',
+    name: 'Landlord',
+    icon: '🏢',
+    description: 'Build an Apartment and house a resident — rent collects daily, and new arrivals need somewhere to live.',
+    reward: dollars(2000),
+    check: (s) => {
+      const p = player(s);
+      if (!p) return false;
+      return p.facilities.some((fid) => {
+        const f = s.facilities[fid];
+        return f?.defId === 'apartment' && f.residentIds.length >= 1;
+      });
+    },
+  },
+  {
     id: 'valuation_30k',
     name: 'On the Map',
     icon: '🏢',
