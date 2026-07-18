@@ -172,6 +172,8 @@ export interface GameState {
   emigrationPressure: number;
   /** Lifetime households lost to emigration (records/achievements). */
   emigrationDepartures: number;
+  /** Consecutive days each staple has had no staffed seller (AI founders). */
+  marketGapDays: Record<string, number>;
   /** Last lapsed fire sale — that facility cools down before re-listing. */
   lastLapsedFireSale: { facilityId: FacilityId; day: number } | null;
 

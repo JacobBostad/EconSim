@@ -241,6 +241,7 @@ export function createInitialState(
     deskTrades: 0,
     emigrationPressure: 0,
     emigrationDepartures: 0,
+    marketGapDays: {},
     lastLapsedFireSale: null,
     townHistory: [],
     idCounters: counters,

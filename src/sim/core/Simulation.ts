@@ -45,6 +45,7 @@ import {
 import { companyValuation } from '../selectors/companySelectors';
 import { worldImportMult } from '../data/worldEvents';
 import { CHAIN_BLUEPRINTS, chainCost } from '../data/chains';
+import { buildStarterChain } from './ChainBuilder';
 import { performAcquisition } from './Acquisition';
 import { upgradeFacility } from './Upgrades';
 import { sellFacility } from './Demolition';
@@ -74,6 +75,7 @@ import { runMarketingSystem } from '../systems/MarketingSystem';
 import { runFinanceSystem } from '../systems/FinanceSystem';
 import { runDividendSystem } from '../systems/DividendSystem';
 import { runImmigrationSystem } from '../systems/ImmigrationSystem';
+import { runAIFounderSystem } from '../systems/AIFounderSystem';
 import { runSatisfactionSystem } from '../systems/SatisfactionSystem';
 import { runAccountingSystem } from '../systems/AccountingSystem';
 import { runPayrollSystem } from '../systems/PayrollSystem';
@@ -113,6 +115,7 @@ const SYSTEMS: SystemFn[] = [
   runTierSystem, // prosperity ladder: derives tiers after satisfaction lands
   runTownStatsSystem, // record daily town vitals after the satisfaction step
   runImmigrationSystem, // a prosperous town attracts new citizens
+  runAIFounderSystem, // ...and its unserved markets attract new rivals
   runRentSystem, // apartment rent (before accounting snapshots the day)
   runAccountingSystem, // maintenance + snapshot + reset daily accumulators
   runPayrollSystem,
@@ -456,67 +459,13 @@ export class Simulation {
       return;
     }
 
-    // Prefer clear ground nearest the homes' center of mass — a store on the
-    // town edge never sees foot traffic, whatever it costs.
-    let homeCx = s.config.mapWidth / 2;
-    let homeCount = 0;
-    for (const fid in s.facilities) {
-      const f = s.facilities[fid]!;
-      if (f.type === 'home') { homeCx += f.location.x; homeCount++; }
-    }
-    if (homeCount > 0) homeCx = (homeCx - s.config.mapWidth / 2) / homeCount;
-    const findSpot = (y: number): { x: number; y: number } | null => {
-      let best: { x: number; y: number } | null = null;
-      let bestDist = Infinity;
-      for (let x = 12; x <= s.config.mapWidth - 8; x += 6) {
-        let clear = true;
-        for (const fid in s.facilities) {
-          const loc = s.facilities[fid]!.location;
-          const dx = loc.x - x;
-          const dy = loc.y - y;
-          if (dx * dx + dy * dy < 36) {
-            clear = false;
-            break;
-          }
-        }
-        if (clear && Math.abs(x - homeCx) < bestDist) {
-          bestDist = Math.abs(x - homeCx);
-          best = { x, y };
-        }
-      }
-      return best;
-    };
-    const spots = [findSpot(20), findSpot(33), findSpot(51)];
-    if (spots.some((p) => p === null)) {
+    const built = buildStarterChain(s, firmId, productId);
+    if (!built) {
       emitEvent(s, 'warning', 'player', 'No clear ground for a full chain — build the stages manually.', firmId);
       return;
     }
+    const { producer, factory, store } = built;
 
-    const build = (defId: string, loc: { x: number; y: number }) => {
-      const def = getFacilityDef(defId);
-      const mult = landCostMultiplier(landValueAt(s, loc));
-      const price = Math.round(def.buildCost * mult);
-      const fac = createFacility(s, defId, firmId, loc);
-      fac.buildCost = price;
-      fac.operatingCostPerDay = Math.round(def.maintenanceCostPerDay * mult);
-      if (price > 0) {
-        recordTransaction(s, {
-          from: firmAccount(firmId), to: WORLD_ACCOUNT, amount: price,
-          firmId, category: 'buildSpend', note: `Built ${def.name}`,
-        });
-      }
-      return fac;
-    };
-    const producer = build(bp.producerDefId, spots[0]!);
-    const factory = build('factory', spots[1]!);
-    const store = build('retail', spots[2]!);
-
-    producer.activeRecipeId = bp.producerRecipeId;
-    factory.activeRecipeId = bp.factoryRecipeId;
-    store.retailProductIds = [bp.productId];
-    if (!firm.pricesByProduct[bp.productId]) {
-      firm.pricesByProduct[bp.productId] = getProduct(bp.productId).basePrice;
-    }
     // Entering a market where an incumbent has brand and loyal customers takes
     // penetration pricing AND advertising — the AI's own playbook. Default
     // both on so the wizard hands over a running, self-managing business.
@@ -530,28 +479,6 @@ export class Simulation {
     if (!firm.adBudgetByProduct[bp.productId]) {
       firm.adBudgetByProduct[bp.productId] = WIZARD_AD_BUDGET;
     }
-
-    const staff = (facilityId: string, count: number): void => {
-      for (let i = 0; i < count; i++) {
-        const cid = findUnemployed(s);
-        if (!cid || !hireCitizen(s, facilityId, cid)) break;
-      }
-    };
-    staff(producer.id, getRecipe(bp.producerRecipeId).laborRequired);
-    staff(factory.id, getRecipe(bp.factoryRecipeId).laborRequired);
-    staff(store.id, 1);
-
-    const wire = (sourceId: string, destId: string, pid: string): void => {
-      const id = nextId(s.idCounters, 'ctr');
-      s.contracts[id] = {
-        id, ownerFirmId: firmId, sourceFacilityId: sourceId,
-        destinationFacilityId: destId, productId: pid,
-        targetQuantity: 40, reorderPoint: 16, maxInventory: 80,
-        transportCost: 0, active: true,
-      };
-    };
-    wire(producer.id, factory.id, bp.inputProductId);
-    wire(factory.id, store.id, bp.productId);
 
     emitEvent(s, 'success', 'player',
       `🪄 Built a full ${getProduct(bp.productId).name} chain: ${producer.name} → ${factory.name} → ${store.name} — wired, staffed, auto-priced, and advertised. Tune any of it in the store inspector.`,

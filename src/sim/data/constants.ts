@@ -156,3 +156,21 @@ export const EMIGRATION_GRACE_DAYS = 10;
 export const EMIGRATION_DAILY_CHANCE = 0.25;
 /** The town never empties out — departures stop at this population. */
 export const EMIGRATION_MIN_POPULATION = 12;
+
+// --- AI founders (capital follows people) -----------------------------------
+/** No AI founds anything before this day — the map's gaps belong to the
+ * player first. */
+export const FOUNDER_EARLIEST_DAY = 55;
+/** A staple must go unsold (no staffed seller) this many CONSECUTIVE days
+ * before capital notices; any seller appearing resets the count. */
+export const FOUNDER_GAP_DAYS = 20;
+/** Hash-gated daily odds of an entry once every gate is open. */
+export const FOUNDER_DAILY_CHANCE = 0.12;
+/** Total AI firms the town supports before founders stop coming. */
+export const FOUNDER_MAX_AI_FIRMS = 6;
+/** Founders only chase towns worth living in (see also the satisfaction
+ * gate — the immigration bar). */
+export const FOUNDER_MIN_POPULATION = 30;
+/** Founding capital, paid in from the world account (conserved): a starter
+ * chain (~$8-10k at land prices) plus working-capital runway. */
+export const FOUNDER_CASH = dollars(22000);

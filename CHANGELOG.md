@@ -25,6 +25,18 @@ hireable managers, a real commodity market, and shared daily play.
   insolvency.
 - **AI market entries**: mid-game roasteries (coffee), late-game luxury,
   apartment landlording under housing squeezes, rescue M&A, share purchases.
+- **AI founders — capital follows people**: leave a staple (bread, tools,
+  clothes) with no staffed seller for 20 straight days in a town worth
+  living in (satisfaction at the immigration gate, 30+ citizens, day 55+)
+  and a brand-new rival firm founds a starter chain for it — built by the
+  player's own chain wizard machinery, funded from the world account
+  (conserved), with a rotation-assigned CEO and a 📰 Gazette debut. Any
+  seller appearing resets the clock, so serving your markets keeps
+  competitors out; a total-AI cap keeps the map from crowding. Probed:
+  Gold Rush's missing clothes market gets its Weaver House by ~day 80
+  (solvent 220 days later), Meadowbrook never draws a spurious entry, and
+  a rescued Dust Hollow attracts new employers only AFTER the exodus
+  stops — the revival completes the migration story.
 - **Wholesale market**: supply contracts can source from other firms'
   facilities — the buyer pays ~70% of market price on each shipment (seller
   books revenue, buyer books COGS), sellers never part with stock their own

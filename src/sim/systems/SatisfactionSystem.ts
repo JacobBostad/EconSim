@@ -33,8 +33,9 @@ export function needWeight(productId: string): number {
 /** Rate a lapsed luxury craving fades for citizens below the ladder. */
 const LUXURY_DECAY_PER_DAY = 0.1;
 
-/** Whether any staffed store in town currently sells the product. */
-function soldSomewhere(state: import('../core/GameState').GameState, productId: string): boolean {
+/** Whether any staffed store in town currently sells the product. Shared
+ * with the AI founder system's market-gap tracking. */
+export function soldSomewhere(state: import('../core/GameState').GameState, productId: string): boolean {
   for (const fid in state.facilities) {
     const f = state.facilities[fid]!;
     if (f.retailProductIds.includes(productId) && f.status !== 'closed' && f.employees.length > 0) {

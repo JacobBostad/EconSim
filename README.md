@@ -223,7 +223,10 @@ CEO with an archetype — 🥊 Price Fighter, 📣 Brand Builder, 🏗️ Expans
 🚢 Exporter — that tilts the same shared knobs (ad cap, cut depth, penetration
 target, expansion appetite, R&D cadence, export eagerness). Scenarios pin
 personalities for flavor; the CEO and stance show in the Company dashboard
-standings and the firm inspector.
+standings and the firm inspector. The cast isn't fixed: leave a staple
+unsold for weeks in a thriving town and a brand-new rival founds a chain
+for it (`AIFounderSystem.ts`) — capital follows people, so serving your
+markets is also how you keep competitors out.
 
 **Strategic depth — the three Capitalism-Lab axes** (you win on more than price):
 
