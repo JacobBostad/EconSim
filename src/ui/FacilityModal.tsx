@@ -502,9 +502,11 @@ export function FacilityActions({ fac }: { fac: Facility }): React.ReactElement 
               Create contract
             </button>
             <p className="muted" style={{ marginTop: 4 }}>
-              Wholesale sources (other firms) charge ~70% of the market's
-              average price per unit, paid on each shipment — cheaper than
-              importing, and they never sell you stock their own chains need.
+              Wholesale sources (other firms) charge their asking price
+              (50–100% of market average, 70% by default — see the Wholesale
+              board in the Market tab), paid on each shipment. Usually cheaper
+              than importing, and they never sell you stock their own chains
+              need.
             </p>
           </div>
         )}

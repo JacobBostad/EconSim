@@ -61,7 +61,8 @@ export function Intro(): React.ReactElement | null {
               shoppers buy whole baskets), price to penetrate then charge a
               premium once you dominate, and staff up: extra hands raise output.
               Short on capital? Source shelves <strong>wholesale</strong> from
-              rivals' factories (~70% of market, paid per shipment).</p>
+              rivals' factories at their asking price — or become the town's
+              supplier and set your own.</p>
           </div>
           <div>
             <h4>Compete on every lever</h4>
