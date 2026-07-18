@@ -7,6 +7,7 @@ import {
 import { getScenario } from '../sim/data/scenarios';
 import { formatMoney } from '../utils/formatMoney';
 import { isMuted, setMuted } from './sound';
+import { isMusicOn, setMusicOn, startMusic } from './music';
 
 const SPEEDS: Speed[] = [1, 5, 20, 100];
 
@@ -206,15 +207,29 @@ function ExportImportButtons(): React.ReactElement {
 
 function MuteButton(): React.ReactElement {
   const [muted, setMutedState] = useState(isMuted());
+  const [music, setMusicState] = useState(isMusicOn());
   return (
-    <button
-      title={muted ? 'Unmute sound effects' : 'Mute sound effects'}
-      onClick={() => {
-        setMuted(!muted);
-        setMutedState(!muted);
-      }}
-    >
-      {muted ? '🔇' : '🔊'}
-    </button>
+    <>
+      <button
+        title={muted ? 'Unmute sound effects' : 'Mute sound effects'}
+        onClick={() => {
+          setMuted(!muted);
+          setMutedState(!muted);
+        }}
+      >
+        {muted ? '🔇' : '🔊'}
+      </button>
+      <button
+        title={music ? 'Turn off ambient music' : 'Turn on ambient music'}
+        style={music ? undefined : { opacity: 0.45 }}
+        onClick={() => {
+          setMusicOn(!music);
+          setMusicState(!music);
+          if (!music) startMusic(); // click is the user gesture — start now
+        }}
+      >
+        🎵
+      </button>
+    </>
   );
 }

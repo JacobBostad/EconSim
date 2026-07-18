@@ -14,6 +14,7 @@ import { AchievementToast } from './AchievementToast';
 import { NewGameModal } from './NewGameModal';
 import { MissionPanel } from './MissionPanel';
 import { SoundDirector } from './SoundDirector';
+import { MusicDirector } from './MusicDirector';
 import { ReportCardModal } from './ReportCardModal';
 import { ReceivershipModal } from './ReceivershipModal';
 import { FinalScoreModal } from './FinalScoreModal';
@@ -55,6 +56,7 @@ export function App(): React.ReactElement {
       <ReceivershipModal />
       <FinalScoreModal />
       <SoundDirector />
+      <MusicDirector />
       <RecordsTracker />
       <KeyboardShortcuts />
       <ChronicleModal />

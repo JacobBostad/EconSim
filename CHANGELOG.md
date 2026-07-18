@@ -207,6 +207,12 @@ engine tests), probed with headless balance runs, and guarded by CI.
   3 seeds: AI landlords enter the developer race by day 44–85 and the town
   more than doubles (26 → 59–71) once housing appears, everyone solvent.
 - Sound stings: receivership, challenge fanfare, rival openings, poach alerts.
+- **Ambient soundtrack**: a quiet generative lo-fi bed — a slow maj7 chord
+  pad through a lowpass with a sparse pentatonic music-box line echoing over
+  it. Nothing loops verbatim, so it never grates. Daytime is brighter and
+  busier; night closes the filter down and lets the pad breathe. Its own 🎵
+  toggle sits next to the mute button; it also honors the master mute and
+  ducks to silence when the tab is hidden, swelling back over a few seconds.
 - Chronicle viewable anytime; apartments/roasteries visually distinct.
 
 ## Measured findings (kept as design, documented in code)
