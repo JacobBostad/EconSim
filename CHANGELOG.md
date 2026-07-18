@@ -125,6 +125,12 @@ engine tests), probed with headless balance runs, and guarded by CI.
 - **Cash runway countdown**: when the 7-day average burn would empty the
   till within 15 days, the Advisor leads with "~N days of cash left" (danger
   at ≤5) — missed payroll and receivership used to arrive with no countdown.
+- **The takeover moment**: acquiring a rival — the biggest single move in
+  the game — used to pass with one event-log line. Now the fanfare plays
+  and a banner names the absorbed firm ("Loom & Thread is yours —
+  facilities, staff, brands, and contracts absorbed"), with the same
+  baseline-on-mount guard as achievement toasts so loading a save doesn't
+  replay old conquests.
 - **Wage-ratchet warning**: when 7-day payroll eats 60%+ of revenue while
   the firm runs at a loss, the Advisor says so and names the way out (grow
   sales or trim staff before out-bidding rivals again). Born from the
