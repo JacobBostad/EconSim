@@ -57,6 +57,8 @@ import { runTimeSystem } from '../systems/TimeSystem';
 import { runWorldEventSystem } from '../systems/WorldEventSystem';
 import { runTradeCitySystem } from '../systems/TradeCitySystem';
 import { runRushOrderSystem } from '../systems/RushOrderSystem';
+import { runFireSaleSystem } from '../systems/FireSaleSystem';
+import { acceptFacilityOffer } from './FireSale';
 import { runAchievementSystem } from '../systems/AchievementSystem';
 import { runMissionSystem } from '../systems/MissionSystem';
 import { runMarketStatsSystem } from '../systems/MarketStatsSystem';
@@ -91,6 +93,7 @@ const SYSTEMS: SystemFn[] = [
   runWorldEventSystem, // roll/expire world events first so the day sees them
   runTradeCitySystem, // Port Rosa price walk (daily)
   runRushOrderSystem, // rush offers/expiry after prices land (own rng stream)
+  runFireSaleSystem, // rival fire-sale offers/expiry (own rng stream)
   runMarketStatsSystem, // finalize previous day's stats; hourly inventory totals
   runAIStrategySystem, // AI reacts using the finalized day (sets ad/R&D/loans)
   runEventLogSystem, // player-facing alerts (before daily stats are reset)
@@ -226,6 +229,9 @@ export class Simulation {
         return;
       case 'SELL_FACILITY':
         sellFacility(s, command.firmId, command.facilityId);
+        return;
+      case 'ACCEPT_FACILITY_OFFER':
+        acceptFacilityOffer(s);
         return;
       case 'CIVIC_ACTION':
         this.civicAction(command.firmId, command.action);

@@ -229,6 +229,8 @@ export function createInitialState(
     rushOrder: null,
     rushOrdersCompleted: 0,
     rushOrdersMissed: 0,
+    facilityOffer: null,
+    fireSalesBought: 0,
     townHistory: [],
     idCounters: counters,
     selectedEntityId: null,

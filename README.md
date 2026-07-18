@@ -276,10 +276,14 @@ losses (boost brake + downsizing), so booms end in equilibrium instead of
 insolvency. Some towns still stagnate in a poverty trap the AI cannot escape:
 that gap is deliberately the player's opening.
 
-**M&A** (`core/Acquisition.ts`): buy out AI rivals at 1.3× valuation (0.9×
-distressed, credit for held shares) and absorb everything; flush AI firms
-rescue-acquire dying rivals too. Objectives escalate on a ladder (Tycoon
-$50k → Magnate $150k → Business Empire $400k).
+**M&A** (`core/Acquisition.ts`, `core/FireSale.ts`): buy out AI rivals at
+1.3× valuation (0.9× distressed, credit for held shares) and absorb
+everything; flush AI firms rescue-acquire dying rivals too. Smaller deals
+roll in as **fire sales**: a rival facility bleeding money on the 7-day
+view goes on the block at 75% of build cost for four days — accept from
+the ticker and the building, its crew, and its supply lines transfer to
+you. Objectives escalate on a ladder (Tycoon $50k → Magnate $100k →
+Business Empire $200k, re-priced from 600-day pacing probes).
 
 **Inter-city trade** (`TradeCitySystem.ts`, `core/Trade.ts`,
 `data/tradeCities.ts`): two distant markets price every product on bounded

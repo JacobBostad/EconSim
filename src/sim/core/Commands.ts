@@ -100,6 +100,8 @@ export type Command =
   | { type: 'TAKE_LOAN'; firmId: FirmId; amount: number }
   | { type: 'REPAY_LOAN'; firmId: FirmId; amount: number }
   | { type: 'ACQUIRE_FIRM'; firmId: FirmId; targetFirmId: FirmId }
+  /** Accept the active rival fire-sale offer (player only; validated in core/FireSale). */
+  | { type: 'ACCEPT_FACILITY_OFFER' }
   | { type: 'BUY_SHARES'; firmId: FirmId; targetFirmId: FirmId; percent: number }
   | { type: 'SELL_SHARES'; firmId: FirmId; targetFirmId: FirmId; percent: number }
   | { type: 'SELECT_ENTITY'; entityId: EntityId | null };

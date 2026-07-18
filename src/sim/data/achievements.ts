@@ -282,6 +282,14 @@ export const ACHIEVEMENT_DEFS: AchievementDef[] = [
     },
   },
   {
+    id: 'bargain_hunter',
+    name: 'Bargain Hunter',
+    icon: '🏷️',
+    description: 'Bought a rival facility in a fire sale.',
+    hint: 'When a rival facility bleeds money long enough, its owner puts it on the block at 75% of build cost — watch the ticker and pounce.',
+    check: (s) => s.fireSalesBought >= 1,
+  },
+  {
     id: 'beat_the_clock',
     name: 'Beat the Clock',
     icon: '🚚',

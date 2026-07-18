@@ -71,6 +71,22 @@ export interface RushOrder {
   bonusCents: number;
 }
 
+/**
+ * A rival's fire-sale offer: a distressed AI puts one of its losing
+ * facilities on the block at a discount before closing it. Accepting
+ * transfers the building, its crew, and its supply lines to the player.
+ * At most one is active at a time.
+ */
+export interface FacilityOffer {
+  facilityId: FacilityId;
+  sellerFirmId: FirmId;
+  /** Asking price in cents, locked at offer time (75% of build cost). */
+  askCents: number;
+  startDay: number;
+  /** Last day the offer stands; it lapses when the next day begins. */
+  deadlineDay: number;
+}
+
 /** A permanently unlocked achievement (def lives in data/achievements.ts). */
 export interface UnlockedAchievement {
   id: string;
@@ -125,6 +141,10 @@ export interface GameState {
   /** Lifetime rush orders completed / let expire (player-facing counters). */
   rushOrdersCompleted: number;
   rushOrdersMissed: number;
+  /** Active rival fire-sale offer, if any. */
+  facilityOffer: FacilityOffer | null;
+  /** Lifetime fire-sale purchases (achievements/records). */
+  fireSalesBought: number;
 
   idCounters: IdCounters;
   selectedEntityId: EntityId | null;

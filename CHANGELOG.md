@@ -229,7 +229,18 @@ engine tests), probed with headless balance runs, and guarded by CI.
   3 seeds: AI landlords enter the developer race by day 44–85 and the town
   more than doubles (26 → 59–71) once housing appears, everyone solvent.
 - Sound stings: receivership, challenge fanfare, rival openings, poach alerts,
-  and the rush-order beats (offer, completion, lapse).
+  the rush-order beats (offer, completion, lapse), and fire-sale offers/closings.
+- **Fire sales**: when a rival facility bleeds money on the 7-day EMA view,
+  its owner puts it on the block at 75% of build cost rather than keep
+  feeding it — a four-day window announced in the ticker with a Buy button
+  right on the chip. Accepting pays the rival firm-to-firm (money
+  conserved) and transfers the building, its crew (jobs intact, now on
+  your payroll), and its supply lines: contracts feeding the facility
+  become yours, contracts sourcing from it keep their owners and start
+  paying you at ship time like any wholesale switch. Offer timing rides
+  the same stream-safe hash rng as rush orders, so no calibrated outcome
+  re-dealt; which facility goes up is deterministic (the worst sustained
+  loser). New 🏷️ Bargain Hunter achievement.
 - **Rush orders**: once the player owns a warehouse, a port's buyer
   occasionally calls for a bulk load — 40–120 units of something the player
   stages or produces, delivered to the ports within six days for a bonus of
