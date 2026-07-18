@@ -18,6 +18,7 @@ import { getProduct } from '../sim/data/products';
 import { citizenActionLabel, populationStats } from '../sim/selectors/citizenSelectors';
 import { firmPnLToday, firmPnLLifetime, firmFacilities, firmWarnings, rivalTopWage } from '../sim/selectors/companySelectors';
 import { getPersonality } from '../sim/data/personalities';
+import { morningBriefing } from '../sim/selectors/advisorSelectors';
 import { facilityProfitContribution } from '../sim/selectors/facilitySelectors';
 import { clamp } from '../utils/clamp';
 
@@ -168,6 +169,7 @@ function FirmView({ firm, state }: { firm: Firm; state: GameState }): React.Reac
         <span className="k">Debt</span>
         <span className="mono" style={{ color: firm.debt > 0 ? 'var(--amber)' : undefined }}>{formatMoney(firm.debt)}</span>
       </div>
+      {firm.ownerType === 'player' && <AdvisorCard state={state} />}
       {firm.ownerType === 'player' && <FinanceControls firmId={firm.id} />}
       {firm.ownerType === 'player' && <WageControls firm={firm} state={state} />}
 
@@ -195,6 +197,23 @@ function FirmView({ firm, state }: { firm: Firm; state: GameState }): React.Reac
           {warnings.map((w, i) => <div className="small" key={i} style={{ color: 'var(--amber)' }}>⚠ {w}</div>)}
         </>
       )}
+    </div>
+  );
+}
+
+/** The morning briefing: the game's insight streams as actionable one-liners. */
+function AdvisorCard({ state }: { state: GameState }): React.ReactElement | null {
+  const advice = morningBriefing(state);
+  if (advice.length === 0) return null;
+  const color = { danger: 'var(--red)', warning: 'var(--amber)', info: 'var(--text)' } as const;
+  return (
+    <div className="card" style={{ marginTop: 6 }}>
+      <div className="section-title" style={{ margin: 0 }}>🧭 Advisor</div>
+      {advice.map((a, i) => (
+        <div className="small" key={i} style={{ color: color[a.severity], marginTop: 4 }}>
+          {a.icon} {a.text}
+        </div>
+      ))}
     </div>
   );
 }
