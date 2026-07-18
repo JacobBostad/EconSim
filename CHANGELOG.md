@@ -125,6 +125,14 @@ engine tests), probed with headless balance runs, and guarded by CI.
 - **Cash runway countdown**: when the 7-day average burn would empty the
   till within 15 days, the Advisor leads with "~N days of cash left" (danger
   at ≤5) — missed payroll and receivership used to arrive with no countdown.
+- **Big-moment sweep, verified live**: the four dramatic beats all fire
+  correctly in a real browser — the takeover (fanfare + banner, below),
+  the Empire chronicle at the re-priced rung, and the receivership arc:
+  a teetering firm slides distressed → insolvent, the modal lays out the
+  books (negative cash, available credit, "last profitable day: never")
+  with three ways back, and the emergency loan genuinely rescues it —
+  Weathered the Storm unlocks, the firm returns to healthy, and the next
+  report card honestly grades the disaster quarter an F.
 - **The takeover moment**: acquiring a rival — the biggest single move in
   the game — used to pass with one event-log line. Now the fanfare plays
   and a banner names the absorbed firm ("Loom & Thread is yours —
