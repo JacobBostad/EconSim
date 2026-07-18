@@ -125,9 +125,11 @@ engine tests), probed with headless balance runs, and guarded by CI.
 - **Cash runway countdown**: when the 7-day average burn would empty the
   till within 15 days, the Advisor leads with "~N days of cash left" (danger
   at ≤5) — missed payroll and receivership used to arrive with no countdown.
-- **Big-moment sweep, verified live**: the four dramatic beats all fire
+- **Big-moment sweep, verified live**: the five dramatic beats all fire
   correctly in a real browser — the takeover (fanfare + banner, below),
-  the Empire chronicle at the re-priced rung, and the receivership arc:
+  the Empire chronicle at the re-priced rung, the day-200 challenge
+  finish (score breakdown, leaderboard rank, copy-result / new-challenge
+  / sandbox exits), and the receivership arc:
   a teetering firm slides distressed → insolvent, the modal lays out the
   books (negative cash, available credit, "last profitable day: never")
   with three ways back, and the emergency loan genuinely rescues it —
