@@ -19,6 +19,7 @@ import { getQuantity } from '../sim/entities/Inventory';
 import { formatMoney } from '../utils/formatMoney';
 import { CENTS } from '../sim/data/constants';
 import { upgradeCost } from '../sim/core/Upgrades';
+import { pricingInsight } from '../sim/selectors/marketSelectors';
 
 export function FacilityActions({ fac }: { fac: Facility }): React.ReactElement {
   const sim = useGameStore((s) => s.sim);
@@ -194,6 +195,23 @@ export function FacilityActions({ fac }: { fac: Facility }): React.ReactElement 
               editable={isPlayer}
             />
           )}
+          {fac.retailProductId && firm && isPlayer && (() => {
+            const ins = pricingInsight(state, firm.id, fac.retailProductId);
+            const overWtp = ins.yourPrice > ins.wtpHigh;
+            return (
+              <div className="small muted" style={{ margin: '4px 0', lineHeight: 1.5 }}>
+                Market avg <span className="mono">{ins.marketAvgPrice ? formatMoney(ins.marketAvgPrice) : '—'}</span>
+                {' · '}customers pay up to{' '}
+                <span className="mono" style={{ color: overWtp ? 'var(--red)' : 'var(--green)' }}>
+                  {formatMoney(ins.wtpLow)}–{formatMoney(ins.wtpHigh)}
+                </span>
+                {' '}(brand/quality raise this)
+                {' · '}{ins.competitors} rival store{ins.competitors === 1 ? '' : 's'}
+                {' · '}your share <span className="mono">{(ins.yourShare * 100).toFixed(0)}%</span>
+                {overWtp && <strong style={{ color: 'var(--red)' }}> — priced above what anyone will pay!</strong>}
+              </div>
+            );
+          })()}
           {fac.retailProductId && firm && isPlayer && (
             <label className="row small" style={{ marginTop: 4, cursor: 'pointer' }}>
               <input
