@@ -399,6 +399,16 @@ hireable managers, a real commodity market, and shared daily play.
 
 ## Measured findings (kept as design, documented in code)
 
+- **Pillar-era health sweep** (post-arc, unattended): 600-day Bustling soak
+  (seed 42) — population 40 → 84, money conserved, zero AI insolvencies,
+  tiers 60/20/4, no stuck forwards or announcements, 0.23 ms/tick. All six
+  scenarios probed 300 days × 2 seeds: every one conserved, growing, and
+  AI-solvent. Scenario personalities show through the tier lens now —
+  Port Haven's export wealth mints affluent citizens (up to 24 of 40, avg
+  satisfaction 87) and Gold Rush pays miners into affluence too, while
+  Mill Country stays a hard-scrabble worker town (49/14/0, satisfaction
+  ~47–52) — exactly the fixer-upper it was designed to be.
+
 - **Full drift verify after the session's balance changes** (ladder,
   festival, rush orders): all six scenarios plus a Bustling variant, 300
   unattended days each — money supply conserved everywhere, no NaN in
