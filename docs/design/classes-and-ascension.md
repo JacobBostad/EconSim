@@ -81,6 +81,17 @@ probes forced: **a sign must be earned or it does nothing.**
   wanted. Unattended 4-seed probe with AI adoption: pop/sat within noise of
   the Phase-2 baseline (69.3/57.2 vs 72.5/58.1).
 
+**Phase 5 — the ladder feeds the town's story (SHIPPED).** Prosperity is a
+magnet: at 40%+ comfortable-or-better, immigrants arrive with +0.1 skill
+(applied after creation — zero extra rng draws, stream-safe) and a "word
+of the good life spreads" arrival story; an all-worker town below 50
+satisfaction occasionally mutters about leaving (hash-gated flavor event —
+mechanical emigration deliberately deferred pending a probe). The Gazette
+gains a 🎩 Society column derived live from tier data: daily counts, the
+longest active climbing streak, the newest affluent household. Unattended
+probes stay in band (the skill magnet rarely triggers without a player
+lifting the town — it is the player's reward).
+
 **Phase 4 — ascension as spectacle (SHIPPED).** Affluent ascents make the
 event feed/Gazette (Phase 1); per-day tier counts recorded in townHistory
 (pre-tier saves migrate as all-worker days); "Middle class share" and

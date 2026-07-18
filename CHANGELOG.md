@@ -171,6 +171,13 @@ hireable managers, a real commodity market, and shared daily play.
   ~$100 per play — real, repeatable, bounded by price impact, and not
   worth building a warehouse for on its own. Ticker chip counts down to
   the move.
+- **Tier-driven town stories**: prosperity is now a magnet — when the
+  middle class is broad (40%+ comfortable-or-better), newcomers arrive with
+  a trade (+0.1 skill) and the Gazette says why; a struggling all-worker
+  town with low satisfaction mutters about leaving instead (flavor only —
+  nobody departs, yet). The Gazette gains a 🎩 Society column: the ladder's
+  daily counts, the citizen on the longest climbing streak, and the newest
+  affluent household.
 - **Follow mode**: a 🎥 Follow button on any citizen puts the camera on
   their day — commute, shopping trips, and, if you've been paying them
   well, the day they earn their gold circlet. Esc or grabbing the map

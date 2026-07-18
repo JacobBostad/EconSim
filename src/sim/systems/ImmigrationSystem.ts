@@ -47,6 +47,19 @@ export function homeSlotFor(index: number, mapHeight: number): { x: number; y: n
   return { x: baseX + col * 11, y };
 }
 
+/** Comfortable+affluent share above which newcomers arrive skilled. */
+export const PROSPEROUS_SHARE = 0.4;
+export const PROSPEROUS_SKILL_BONUS = 0.1;
+
+/** Struggling worker towns mutter about leaving (flavor only — probe
+ * before ever making anyone actually depart). Hash-gated, no rng draws. */
+export function emigrationMutter(seed: number, day: number): boolean {
+  let t = (seed ^ Math.imul(day + 53, 0x9e3779b9)) >>> 0;
+  t = Math.imul(t ^ (t >>> 15), t | 1);
+  t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+  return ((t ^ (t >>> 14)) >>> 0) / 4294967296 < 0.06;
+}
+
 export function runImmigrationSystem(ctx: SimContext): void {
   if (!isDayBoundary(ctx.state.tick, ctx.config)) return;
   const { state, rng } = ctx;
@@ -62,7 +75,20 @@ export function runImmigrationSystem(ctx: SimContext): void {
     if (c.employmentStatus === 'unemployed') unemployed += 1;
   }
   if (total === 0 || total >= ctx.config.maxCitizens) return;
-  if (satisfactionSum / total < IMMIGRATION_MIN_SATISFACTION) return;
+  if (satisfactionSum / total < IMMIGRATION_MIN_SATISFACTION) {
+    // A struggling worker town doesn't just fail to attract — it mutters.
+    if (satisfactionSum / total < 50 && emigrationMutter(state.seed, ctx.time.day)) {
+      let workers = 0;
+      for (const cid in state.citizens) {
+        if (state.citizens[cid]!.tier === 'worker') workers += 1;
+      }
+      if (workers / total > 0.8) {
+        emitEvent(state, 'warning', 'economy',
+          '🧳 Around kitchen tables, families talk of leaving — low pay and empty shelves wear a town down.');
+      }
+    }
+    return;
+  }
   const maxUnemployed = Math.max(
     IMMIGRATION_MAX_UNEMPLOYED_FLOOR,
     Math.floor(total * IMMIGRATION_MAX_UNEMPLOYED_RATE),
@@ -97,11 +123,21 @@ export function runImmigrationSystem(ctx: SimContext): void {
     category: 'none',
     note: 'New arrival savings',
   });
-  emitEvent(
-    state,
-    'success',
-    'economy',
-    `${cit.name} moved to town (population ${total + 1}).`,
-    cit.id,
-  );
+
+  // Prosperous towns attract talent: when the middle class is broad, word
+  // of the good life reaches skilled tradespeople. Applied AFTER creation
+  // so the shared rng stream is untouched (no new draws, same sequence).
+  let climbed = 0;
+  for (const cid in state.citizens) {
+    if (state.citizens[cid]!.tier !== 'worker') climbed += 1;
+  }
+  const prosperous = total > 0 && climbed / total > PROSPEROUS_SHARE;
+  if (prosperous) {
+    cit.skill = Math.min(1.3, Math.round((cit.skill + PROSPEROUS_SKILL_BONUS) * 100) / 100);
+    emitEvent(state, 'success', 'economy',
+      `✨ Word of the good life here spreads — ${cit.name} arrives with a trade (population ${total + 1}).`, cit.id);
+  } else {
+    emitEvent(state, 'success', 'economy',
+      `${cit.name} moved to town (population ${total + 1}).`, cit.id);
+  }
 }

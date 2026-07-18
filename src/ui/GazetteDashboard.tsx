@@ -36,6 +36,34 @@ export function GazetteDashboard(): React.ReactElement {
           </div>
         </div>
       )}
+      {(() => {
+        const cits = Object.values(state.citizens);
+        if (cits.length === 0) return null;
+        const counts = { worker: 0, comfortable: 0, affluent: 0 };
+        let climber: (typeof cits)[number] | null = null;
+        for (const c of cits) {
+          counts[c.tier] += 1;
+          if (c.tierStreak > 0 && (!climber || c.tierStreak > climber.tierStreak)) climber = c;
+        }
+        const newestAffluent = [...state.events].reverse().find((e) => e.message.includes('is prospering'));
+        return (
+          <div className="card">
+            <div className="section-title" style={{ marginTop: 0 }}>🎩 Society</div>
+            <div className="small">
+              The ladder today: {counts.worker} working, {counts.comfortable} comfortable, {counts.affluent} affluent.
+              {counts.comfortable + counts.affluent > counts.worker && ' A comfortable majority — the good life is winning.'}
+            </div>
+            {climber && (
+              <div className="small" style={{ marginTop: 2 }}>
+                📈 One to watch: <strong>{climber.name}</strong> — {climber.tierStreak} straight good day{climber.tierStreak === 1 ? '' : 's'} toward the next rung.
+              </div>
+            )}
+            {newestAffluent && (
+              <div className="small muted" style={{ marginTop: 2 }}>{newestAffluent.message}</div>
+            )}
+          </div>
+        );
+      })()}
       {editions.map((ed) => (
         <div className="gazette-day card" key={ed.day}>
           <div className="gazette-dateline">Day {ed.day + 1}</div>
