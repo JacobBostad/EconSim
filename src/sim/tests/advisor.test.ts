@@ -22,6 +22,24 @@ describe('morningBriefing', () => {
     expect(money!.text).toContain('wages');
   });
 
+  it('flags heavy debt service', () => {
+    const sim = newSim(1);
+    const state = sim.getState();
+    const player = state.firms[state.playerFirmId]!;
+    player.debt = 50000_00;
+    player.accounting.dailyHistory.push({
+      day: 3, revenue: 20000, costOfGoodsSold: 0, wages: 0, maintenance: 0,
+      logisticsCost: 0, variableProductionCost: 0, marketing: 0, rnd: 0, interest: 4500,
+      grossProfit: 20000, operatingProfit: 15500, netProfit: 15500,
+      cash: 100000, debt: 50000_00, inventoryValue: 0, valuation: 100000, buildSpend: 0,
+    });
+    const advice = morningBriefing(state);
+    const debtLine = advice.find((a) => a.icon === '🏦');
+    expect(debtLine).toBeTruthy();
+    expect(debtLine!.severity).toBe('warning');
+    expect(debtLine!.text).toContain('Debt service');
+  });
+
   it('flags a facility blocked all day and a poach-risk wage gap', () => {
     const sim = newSim(1);
     const state = sim.getState();

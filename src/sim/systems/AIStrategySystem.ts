@@ -48,6 +48,7 @@ export function runAIStrategySystem(ctx: SimContext): void {
     }
     adjustPrices(ctx, firm.id);
     if (firm.bankruptcyStatus === 'healthy') {
+      manageDebt(ctx, firm.id);
       manageAdBudget(ctx, firm.id);
       maybeInvestQuality(ctx, firm.id);
       maybeExpand(ctx, firm.id);
@@ -571,6 +572,33 @@ function maybeUpgrade(ctx: SimContext, firmId: string): void {
     upgradeFacility(state, firmId, facId);
     return;
   }
+}
+
+/**
+ * Deleverage: expansion loans are bridges, not permanent fixtures — at ~30%/yr
+ * the interest quietly eats late-game margins if debt is never repaid. When
+ * cash comfortably exceeds an operating cushion, pay the loan down. The cushion
+ * keeps the firm able to expand again (borrowing back is always possible).
+ */
+const DEBT_CASH_CUSHION = 6000_00;
+const DEBT_MIN_REPAYMENT = 100_00; // skip dribble payments
+
+function manageDebt(ctx: SimContext, firmId: string): void {
+  const { state } = ctx;
+  const firm = state.firms[firmId]!;
+  if (firm.debt <= 0) return;
+  const spare = firm.cash - DEBT_CASH_CUSHION;
+  if (spare < DEBT_MIN_REPAYMENT) return;
+  const amount = Math.min(firm.debt, spare);
+  firm.debt -= amount;
+  recordTransaction(state, {
+    from: firmAccount(firmId),
+    to: WORLD_ACCOUNT,
+    amount,
+    firmId,
+    category: 'loanRepay',
+    note: 'Deleveraging',
+  });
 }
 
 /**

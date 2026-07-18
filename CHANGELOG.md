@@ -25,6 +25,10 @@ engine tests), probed with headless balance runs, and guarded by CI.
 - **Port Rosa follows world news**: trade prices mean-revert toward
   event-shifted centers (droughts raise grain there too); fuel spikes scale
   export freight. Exporters never ship stock their own shelves are waiting on.
+- **Debt is a lifecycle, not a state**: AI firms deleverage when cash-rich
+  instead of carrying expansion loans forever; receivership offers a one-click
+  emergency loan against remaining credit; the advisor flags heavy debt
+  service.
 - **The affordability thermostat**: the price controller now sees priced-out
   walkaways and cuts when they outnumber buyers — without it, quality/brand
   premiums let prices ride the market-power ceiling until town demand quietly

@@ -37,6 +37,17 @@ export function morningBriefing(state: GameState): Advice[] {
     });
   }
 
+  // 1b. Debt service eating the margin: interest is easy to forget because it
+  // never shows up as a decision — only as a quiet daily drain.
+  const lastDay = player.accounting.dailyHistory[player.accounting.dailyHistory.length - 1];
+  if (lastDay && player.debt > 0 && lastDay.interest >= Math.max(50, lastDay.revenue * 0.15)) {
+    items.push({
+      icon: '🏦',
+      severity: 'warning',
+      text: `Debt service cost ${formatMoney(lastDay.interest)} yesterday on ${formatMoney(player.debt)} of loans — repay from your company's Loans panel when cash allows.`,
+    });
+  }
+
   // 2. Production blocked all day (stamped during work hours only).
   for (const facId of player.facilities) {
     const fac = state.facilities[facId];

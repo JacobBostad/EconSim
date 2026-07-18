@@ -1,8 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useGameStore } from '../store/useGameStore';
-import { dailyInsight } from '../sim/selectors/companySelectors';
+import { dailyInsight, companyValuation } from '../sim/selectors/companySelectors';
 import { formatMoney } from '../utils/formatMoney';
 import { computeTime } from '../sim/core/Tick';
+import { LOAN_CREDIT_LIMIT_MULTIPLE, LOAN_MIN_CREDIT } from '../sim/data/constants';
 
 /**
  * The defeat moment. When the player firm first turns 'insolvent' the sim
@@ -44,6 +45,16 @@ export function ReceivershipModal(): React.ReactElement | null {
   }
   const wageBill = player.employees.length * player.wagePolicy.baseWage;
 
+  // The bank will still lend against what's left of the balance sheet: enough
+  // to clear the negative balance plus a small working buffer, capped by the
+  // same credit limit TAKE_LOAN enforces.
+  const creditLimit = Math.max(
+    LOAN_MIN_CREDIT,
+    Math.round(companyValuation(state, player.id).netWorth * LOAN_CREDIT_LIMIT_MULTIPLE),
+  );
+  const headroom = Math.max(0, creditLimit - player.debt);
+  const emergencyLoan = Math.min(headroom, Math.max(0, -player.cash) + 2000_00);
+
   return (
     <div className="intro-backdrop">
       <div className="intro-card">
@@ -65,17 +76,33 @@ export function ReceivershipModal(): React.ReactElement | null {
         )}
         <div className="kv small"><span className="k">Last profitable day</span>
           <span>{lastProfitDay ? `day ${lastProfitDay}` : 'never'}</span></div>
+        <div className="kv small"><span className="k">Available credit</span>
+          <span className="mono">{formatMoney(headroom)}</span></div>
 
         <p className="small" style={{ marginTop: 10 }}>
-          Ways back: sell facilities you can't staff profitably, cut wages or
-          headcount, drop loss-making products from your stores, or export
-          surplus stock for cash. Reaching non-negative cash restores your firm.
+          Ways back: take an emergency loan, sell facilities you can't staff
+          profitably, cut wages or headcount, drop loss-making products from
+          your stores, or export surplus stock for cash. Reaching non-negative
+          cash restores your firm — but a loan only buys time if the losses
+          continue.
         </p>
 
         <div className="row" style={{ gap: 8, marginTop: 10, justifyContent: 'flex-end' }}>
           <button onClick={() => { setShow(false); setShowNewGame(true); }}>
             Start fresh
           </button>
+          {emergencyLoan > 0 && (
+            <button
+              title="Borrow enough to clear the negative balance plus a small buffer"
+              onClick={() => {
+                dispatch({ type: 'TAKE_LOAN', firmId: player.id, amount: emergencyLoan });
+                setShow(false);
+                dispatch({ type: 'RESUME' });
+              }}
+            >
+              🏦 Emergency loan ({formatMoney(emergencyLoan)})
+            </button>
+          )}
           <button className="active" onClick={() => { setShow(false); dispatch({ type: 'RESUME' }); }}>
             Fight on
           </button>
