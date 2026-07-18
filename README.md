@@ -213,11 +213,28 @@ distressed, credit for held shares) and absorb everything; flush AI firms
 rescue-acquire dying rivals too. Objectives escalate on a ladder (Tycoon
 $50k → Magnate $150k → Business Empire $400k).
 
-**Inter-city trade** (`TradeCitySystem.ts`): Port Rosa, a distant trade city,
-prices every product on a bounded daily random walk (0.6×–1.8× base). Stage
-goods in a warehouse and EXPORT them at Port Rosa's price minus 8% freight —
-stockpile cheap, ship on spikes. Booms/gluts make the news; the Market
-dashboard shows live Port Rosa prices.
+**Inter-city trade** (`TradeCitySystem.ts`, `core/Trade.ts`): Port Rosa, a
+distant trade city, prices every product on a bounded daily random walk
+(0.6×–1.8× base). Stage goods in a warehouse and EXPORT at Port Rosa's price
+minus 8% freight — manually, or with **standing orders** ("auto-export ≥1.3×,
+keep 10") executed daily after the price walk. AI firms broker their surpluses
+at a steeper 15% fee. Booms/gluts make the news; the Market dashboard charts
+Port Rosa prices.
+
+**Luxury tier**: pastries (grain) and jewelry (minerals) satisfy a 'luxury'
+need that only grows for satisfied, well-off citizens. Their recipes demand
+craft quality ≥75 (invest R&D first). No AI sells luxury at the start — but a
+genuinely flush AI enters after day 60 with an atelier and boutique.
+
+**Civic actions**: sponsor a 3-day town festival (+demand for every seller) or
+fund a new home (two citizens move in immediately) — spend on the town itself.
+
+**Seasons & scenarios**: four 30-day seasons cycle farm output, winter demand,
+and freight; three starting scenarios (Meadowbrook, Gold Rush Gulch, Harvest
+Valley) change which AI chains exist — each variant leaves a market gap that's
+the player's opening. Facility upgrades (L1→L3) raise storage, speed, and crew
+size; the endgame Chronicle retells your whole run when you reach Business
+Empire.
 
 **World events** (`WorldEventSystem.ts`, defs in `data/worldEvents.ts`): once per
 day there is a 20% chance a news event starts (max 2 active, opposites never

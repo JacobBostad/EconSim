@@ -23,10 +23,11 @@ export function Intro(): React.ReactElement | null {
               the news chips on the map.</p>
           </div>
           <div>
-            <h4>Inspect anything</h4>
-            <p>Click a building, citizen, or truck. Drag to pan, scroll to zoom.
-              Hover any underlined number to see the formula behind it. Open the
-              dashboards (top bar) for Company, Market, Supply Chain & Population.</p>
+            <h4>Trade, seasons, and the town</h4>
+            <p>Export to <strong>Port Rosa</strong> when its prices spike (set
+              standing orders in a warehouse). Brace for <strong>winter</strong>,
+              sponsor <strong>festivals</strong>, fund homes, upgrade buildings —
+              and unlock the <strong>luxury market</strong> with R&amp;D.</p>
           </div>
           <div>
             <h4>Run your company</h4>
