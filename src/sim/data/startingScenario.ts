@@ -29,6 +29,7 @@ import { getFacilityDef } from './facilityDefinitions';
 import { getProduct, CONSUMER_PRODUCT_IDS, ALL_PRODUCT_IDS } from './products';
 import { FIRST_NAMES, LAST_NAMES } from './names';
 import { dollars } from './constants';
+import { defaultPersonalityFor, defaultCeoFor } from './personalities';
 import { getScenario, DEFAULT_SCENARIO_ID } from './scenarios';
 import { SAVE_VERSION } from '../core/GameState';
 
@@ -110,6 +111,8 @@ function newFirm(
     daysInsolvent: 0,
     marketShareByProduct: {},
     createdAtTick: 0,
+    personalityId: null,
+    ceoName: null,
     brandByProduct: {},
     adBudgetByProduct: {},
     qualityByProduct: {},
@@ -311,8 +314,13 @@ export function createInitialState(
     return ctr;
   };
 
+  let aiIndex = 0;
   for (const spec of scenario.aiChains) {
     const firm = newFirm(b, spec.firmName, 'ai', spec.cash, emptyStrategy(spec.product), DEFAULT_AI_WAGE);
+    const personality = spec.personality ?? defaultPersonalityFor(aiIndex);
+    firm.personalityId = personality;
+    firm.ceoName = defaultCeoFor(personality, aiIndex);
+    aiIndex += 1;
     firm.pricesByProduct[spec.product] = getProduct(spec.product).basePrice;
     firm.brandByProduct[spec.product] = spec.brand;
     firm.qualityByProduct[spec.product] = getProduct(spec.product).defaultQuality;

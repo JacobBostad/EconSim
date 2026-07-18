@@ -202,12 +202,23 @@ internal production cost shows up as wages + variable cost (no double counting).
 
 **AI pricing** (`AIStrategySystem.ts`) — a mean-reverting controller
 ```
-sold out while selling      → raise 2–5%
-has stock but sold nothing  → cut hard (priced out of market)
-held surplus, no sellout    → cut gently
-selling steadily            → drift toward base price
+sold out while selling        → raise 2–5%
+has stock but sold nothing    → cut hard (priced out of market)
+walkaways outnumber buyers    → cut hard (affordability thermostat)
+held surplus, no sellout      → cut gently
+selling steadily              → drift toward base price
 clamped to [floor, ceil] × basePrice
 ```
+The affordability thermostat counts shoppers who saw the price and walked away
+(`dailyStats.pricedOut`); without it, quality/brand premiums let prices ride
+the market-power ceiling past what citizens can pay and demand quietly dies.
+
+**AI personalities** (`data/personalities.ts`): every rival firm has a named
+CEO with an archetype — 🥊 Price Fighter, 📣 Brand Builder, 🏗️ Expansionist,
+🚢 Exporter — that tilts the same shared knobs (ad cap, cut depth, penetration
+target, expansion appetite, R&D cadence, export eagerness). Scenarios pin
+personalities for flavor; the CEO and stance show in the Company dashboard
+standings and the firm inspector.
 
 **Strategic depth — the three Capitalism-Lab axes** (you win on more than price):
 

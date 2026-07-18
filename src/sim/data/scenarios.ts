@@ -9,6 +9,7 @@
 
 import type { Vec2 } from '../entities/Location';
 import { dollars } from './constants';
+import type { PersonalityId } from './personalities';
 
 export interface AiChainSpec {
   firmName: string;
@@ -32,6 +33,8 @@ export interface AiChainSpec {
   /** Contract params: producer→factory and factory→shop. */
   pf: { target: number; reorder: number; max: number };
   fs: { target: number; reorder: number; max: number };
+  /** CEO archetype; defaults to a deterministic rotation when omitted. */
+  personality?: PersonalityId;
 }
 
 export interface ScenarioDef {
@@ -60,6 +63,7 @@ const breadChain = (over: Partial<AiChainSpec> = {}): AiChainSpec => ({
   staff: { producer: 2, factory: 2, retail: 2 },
   pf: { target: 40, reorder: 15, max: 80 },
   fs: { target: 60, reorder: 24, max: 110 },
+  personality: 'brand_builder',
   ...over,
 });
 
@@ -81,6 +85,7 @@ const toolsChain = (over: Partial<AiChainSpec> = {}): AiChainSpec => ({
   staff: { producer: 2, factory: 2, retail: 1 },
   pf: { target: 30, reorder: 12, max: 60 },
   fs: { target: 40, reorder: 14, max: 80 },
+  personality: 'price_fighter',
   ...over,
 });
 
@@ -102,6 +107,7 @@ const clothesChain = (over: Partial<AiChainSpec> = {}): AiChainSpec => ({
   staff: { producer: 2, factory: 2, retail: 1 },
   pf: { target: 30, reorder: 12, max: 60 },
   fs: { target: 36, reorder: 14, max: 80 },
+  personality: 'expansionist',
   ...over,
 });
 
@@ -131,6 +137,7 @@ export const SCENARIOS: Record<string, ScenarioDef> = {
         loc: { producer: { x: 118, y: 22 }, factory: { x: 108, y: 36 }, retail: { x: 96, y: 50 } },
         cash: dollars(40000),
         brand: 16,
+        personality: 'exporter',
       }),
     ],
   },
@@ -150,6 +157,7 @@ export const SCENARIOS: Record<string, ScenarioDef> = {
         loc: { producer: { x: 100, y: 14 }, factory: { x: 92, y: 32 }, retail: { x: 84, y: 48 } },
         cash: dollars(36000),
         brand: 18,
+        personality: 'price_fighter',
       }),
       clothesChain(),
     ],

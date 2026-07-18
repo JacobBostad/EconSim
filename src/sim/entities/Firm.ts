@@ -51,6 +51,10 @@ export interface Firm {
   daysInsolvent: number;
   marketShareByProduct: Record<ProductId, number>;
   createdAtTick: number;
+  /** AI personality archetype id (see data/personalities). Null for the player. */
+  personalityId: string | null;
+  /** Flavor: the CEO's name shown in dashboards. Null for the player. */
+  ceoName: string | null;
 
   // --- Strategic levers (the three Capitalism-Lab axes) ----------------
   /** Brand strength per product (0..100). Raised by advertising, decays. */

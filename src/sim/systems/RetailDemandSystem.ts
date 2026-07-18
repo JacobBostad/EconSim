@@ -190,8 +190,12 @@ function attemptPurchase(
   }
 
   if (price > maxPrice) {
-    // Too expensive -> walk away unsatisfied.
+    // Too expensive -> walk away unsatisfied. Counted separately from
+    // stockouts so the price controller can SEE priced-out demand — without
+    // this signal, prices ride the market-power ceiling right past what the
+    // town can afford and demand quietly dies.
     stat.unmetDemand += wantQty;
+    store.dailyStats.pricedOut += wantQty;
     cit.dailyStats.unmetNeeds += 1;
     cit.satisfaction = clamp(cit.satisfaction - 1, 0, 100);
     return;

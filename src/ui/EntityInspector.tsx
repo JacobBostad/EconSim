@@ -17,6 +17,7 @@ import { formatMoney } from '../utils/formatMoney';
 import { getProduct } from '../sim/data/products';
 import { citizenActionLabel } from '../sim/selectors/citizenSelectors';
 import { firmPnLToday, firmPnLLifetime, firmFacilities, firmWarnings } from '../sim/selectors/companySelectors';
+import { getPersonality } from '../sim/data/personalities';
 import { facilityProfitContribution } from '../sim/selectors/facilitySelectors';
 import { clamp } from '../utils/clamp';
 
@@ -153,6 +154,12 @@ function FirmView({ firm, state }: { firm: Firm; state: GameState }): React.Reac
     <div>
       <h3 style={{ margin: '0 0 2px' }}>{firm.name}</h3>
       <div className="small muted">{firm.ownerType} firm · <span className={`tag ${firm.bankruptcyStatus === 'healthy' ? 'green' : 'red'}`}>{firm.bankruptcyStatus}</span></div>
+      {firm.ceoName && (
+        <div className="small" title={getPersonality(firm.personalityId).blurb} style={{ marginTop: 2 }}>
+          CEO {firm.ceoName} · {getPersonality(firm.personalityId).icon}{' '}
+          {getPersonality(firm.personalityId).name}
+        </div>
+      )}
       <div className="kv small" style={{ marginTop: 6 }}>
         <span className="k">Cash</span>
         <span className="mono" style={{ color: firm.cash < 0 ? 'var(--red)' : 'var(--green)' }}>{formatMoney(firm.cash)}</span>

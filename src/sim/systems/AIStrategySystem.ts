@@ -31,6 +31,7 @@ import { companyValuation } from '../selectors/companySelectors';
 import { acquisitionCost, performAcquisition } from '../core/Acquisition';
 import { landCostMultiplier, landValueAt } from '../core/LandValue';
 import { MAX_FACILITY_LEVEL, upgradeCost, upgradeFacility } from '../core/Upgrades';
+import { getPersonality } from '../data/personalities';
 
 export function runAIStrategySystem(ctx: SimContext): void {
   if (!isDayBoundary(ctx.state.tick, ctx.config)) return;
@@ -77,6 +78,9 @@ const AD_BUDGET_FLOOR = 8_00;
 function manageAdBudget(ctx: SimContext, firmId: string): void {
   const { state } = ctx;
   const firm = state.firms[firmId]!;
+  const persona = getPersonality(firm.personalityId);
+  const cap = Math.round(AD_BUDGET_CAP * persona.adMult);
+  const step = Math.round(AD_BUDGET_STEP * persona.adMult);
   for (const facId of firm.facilities) {
     const fac = state.facilities[facId];
     if (!fac || fac.type !== 'retail') continue;
@@ -86,11 +90,11 @@ function manageAdBudget(ctx: SimContext, firmId: string): void {
     if (firm.strategy.lossStreak >= 3 || share > 0.7) {
       // Bleeding or dominant: dial spend down toward the floor.
       if (budget > AD_BUDGET_FLOOR) {
-        firm.adBudgetByProduct[pid] = Math.max(AD_BUDGET_FLOOR, budget - AD_BUDGET_STEP / 2);
+        firm.adBudgetByProduct[pid] = Math.max(AD_BUDGET_FLOOR, budget - step / 2);
       }
-    } else if (share < 0.5 && firm.cash > 15000_00 && budget < AD_BUDGET_CAP) {
-      firm.adBudgetByProduct[pid] = Math.min(AD_BUDGET_CAP, budget + AD_BUDGET_STEP);
-      if (budget + AD_BUDGET_STEP >= AD_BUDGET_CAP) {
+    } else if (share < 0.5 && firm.cash > 15000_00 && budget < cap) {
+      firm.adBudgetByProduct[pid] = Math.min(cap, budget + step);
+      if (budget + step >= cap) {
         emitEvent(state, 'info', 'ai',
           `${firm.name} is running a maximum ad campaign for ${getProduct(pid).name}.`, firm.id);
       }
@@ -124,7 +128,7 @@ function maybeInvestQuality(ctx: SimContext, firmId: string): void {
     if (!pid) continue;
     const cur = firm.qualityByProduct[pid] ?? getProduct(pid).defaultQuality;
     const behindRival = bestRivalQuality(ctx, firmId, pid) > cur + 5;
-    if (!behindRival && !rng.chance(0.15)) return;
+    if (!behindRival && !rng.chance(getPersonality(firm.personalityId).rndChance)) return;
     if (cur >= (behindRival ? 88 : 80)) continue;
     const amount = 1200_00; // $1,200 R&D
     if (!canAfford(state, firmAccount(firmId), amount + 20000_00)) continue;
@@ -161,7 +165,8 @@ function maybeExpand(ctx: SimContext, firmId: string): void {
   if (!product) return;
   const stat = state.marketStats[product]!;
   if (stat.unmetDemand < 14 || lost < 6) return; // only under real shortage
-  if (!rng.chance(ctx.config.aiExpandChance)) return; // not every eligible day
+  const expandChance = Math.min(1, ctx.config.aiExpandChance * getPersonality(firm.personalityId).expandChanceMult);
+  if (!rng.chance(expandChance)) return; // not every eligible day
 
   const def = getFacilityDef('retail');
   // Location + land premium: AI pays market rates like everyone else.
@@ -296,12 +301,13 @@ const AI_EXPORT_KEEP = 20; // units kept as working stock
 function maybeExportSurplus(ctx: SimContext, firmId: string): void {
   const { state } = ctx;
   const firm = state.firms[firmId]!;
+  const keep = Math.round(AI_EXPORT_KEEP * getPersonality(firm.personalityId).exportKeepMult);
   for (const facId of firm.facilities) {
     const fac = state.facilities[facId];
     if (!fac || (fac.type !== 'farm' && fac.type !== 'mine' && fac.type !== 'factory')) continue;
     for (const pid in fac.outputInventory) {
       const have = getQuantity(fac.outputInventory, pid);
-      if (have <= AI_EXPORT_KEEP + 10) continue;
+      if (have <= keep + 10) continue;
       const product = getProduct(pid);
       const tradePrice = state.tradeCity.pricesByProduct[pid] ?? product.basePrice;
       if (tradePrice < product.basePrice * AI_EXPORT_MIN_MULT) continue;
@@ -452,6 +458,9 @@ function adjustPrices(ctx: SimContext, firmId: string, onlyAutoPriced = false): 
   const { state, config, rng } = ctx;
   const firm = state.firms[firmId]!;
   const losing = firm.strategy.lossStreak >= 3;
+  // Personality tilts cut depth and the penetration target (neutral for the
+  // player's auto-priced products — firm.personalityId is null there).
+  const persona = getPersonality(firm.personalityId);
 
   for (const facId of firm.facilities) {
     const fac = state.facilities[facId];
@@ -471,8 +480,15 @@ function adjustPrices(ctx: SimContext, firmId: string, onlyAutoPriced = false): 
     const excessDemand = lost > 0 && sold > 0 && stock <= 2;
     // Priced out of the market: has stock but sold nothing -> cut decisively.
     const pricedOut = stock > 0 && sold === 0;
+    // Affordability thermostat: shoppers came, looked at the price, and walked
+    // away outnumbering actual buyers. Without this signal the market-power
+    // drift rides quality/brand premiums right past what the town can afford
+    // and the whole demand side quietly dies (measured: seed-1 town falls
+    // from sat 63 to 28 by day 120 without it).
+    const unaffordable =
+      !excessDemand && fac.dailyStats.pricedOut > Math.max(2, sold);
     // Surplus: held meaningful stock without selling out -> gently lower.
-    const surplus = lost === 0 && stock > 5 && !pricedOut;
+    const surplus = lost === 0 && stock > 5 && !pricedOut && !unaffordable;
 
     if (excessDemand) {
       firm.strategy.selloutStreak[pid] = (firm.strategy.selloutStreak[pid] ?? 0) + 1;
@@ -487,20 +503,21 @@ function adjustPrices(ctx: SimContext, firmId: string, onlyAutoPriced = false): 
           firm.id,
         );
       }
-    } else if (pricedOut) {
+    } else if (pricedOut || unaffordable) {
       firm.strategy.gluttStreak[pid] = (firm.strategy.gluttStreak[pid] ?? 0) + 1;
       firm.strategy.selloutStreak[pid] = 0;
-      price *= 1 - Math.max(step, 0.06); // cut hard when nothing sells
+      price *= 1 - Math.min(0.2, Math.max(step, 0.06) * persona.priceCutMult); // cut hard when demand can't reach the price
     } else if (surplus) {
       firm.strategy.gluttStreak[pid] = (firm.strategy.gluttStreak[pid] ?? 0) + 1;
       firm.strategy.selloutStreak[pid] = 0;
-      price *= 1 - step * 0.5; // gentle
+      price *= 1 - step * 0.5 * persona.priceCutMult; // gentle
     } else if ((firm.marketShareByProduct[pid] ?? 0) < 0.12 && stock > 5) {
       // Market entrant with stock but no share: penetration pricing — dive
-      // toward 78% of base to buy customers, then normal control takes over.
+      // toward the persona's target (default 78% of base) to buy customers,
+      // then normal control takes over.
       firm.strategy.selloutStreak[pid] = 0;
       firm.strategy.gluttStreak[pid] = 0;
-      price += (base * 0.78 - price) * 0.25;
+      price += (base * persona.penetrationTarget - price) * 0.25;
     } else {
       // Selling steadily: drift toward a market-power target — winners charge
       // a premium (up to ~1.45× base at dominant share); brand/quality raise

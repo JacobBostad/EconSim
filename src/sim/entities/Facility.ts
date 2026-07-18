@@ -43,6 +43,8 @@ export interface FacilityDailyStats {
   revenue: number; // cents
   variableCost: number; // cents
   lostSales: number; // demand attempts that failed due to stockout
+  /** Would-be purchases abandoned because the price exceeded willingness to pay. */
+  pricedOut: number;
   ticksActive: number;
   /** Last binding constraint seen during work hours (null = ran clean). */
   bottleneck: string | null;
@@ -57,6 +59,7 @@ export function emptyFacilityDailyStats(): FacilityDailyStats {
     revenue: 0,
     variableCost: 0,
     lostSales: 0,
+    pricedOut: 0,
     ticksActive: 0,
     bottleneck: null,
   };

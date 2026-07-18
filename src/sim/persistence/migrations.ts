@@ -17,6 +17,7 @@ import { emptyMarketStat } from '../entities/Market';
 import { defaultNeedFor } from '../entities/factories';
 import { getProduct } from '../data/products';
 import { getFacilityDef } from '../data/facilityDefinitions';
+import { defaultPersonalityFor, defaultCeoFor, type PersonalityId } from '../data/personalities';
 
 type Raw = Record<string, unknown>;
 
@@ -66,6 +67,7 @@ function normalize(state: GameState): GameState {
   state.config.playerStartCash = state.config.playerStartCash ?? 15000 * 100;
   state.config.worldEventDailyChance = state.config.worldEventDailyChance ?? 0.2;
   state.config.aiExpandChance = state.config.aiExpandChance ?? 0.5;
+  let aiSeen = 0;
   for (const id in state.firms) {
     const f = state.firms[id]!;
     f.brandByProduct = f.brandByProduct ?? {};
@@ -77,6 +79,18 @@ function normalize(state: GameState): GameState {
     f.acquiredNames = f.acquiredNames ?? [];
     f.autoPriceByProduct = f.autoPriceByProduct ?? {};
     f.exportRevenue = f.exportRevenue ?? 0;
+    if (f.personalityId === undefined || f.ceoName === undefined) {
+      // Old saves: give existing AI firms a deterministic personality + CEO.
+      if (f.ownerType === 'ai') {
+        const p = f.personalityId ?? defaultPersonalityFor(aiSeen);
+        f.personalityId = p;
+        f.ceoName = f.ceoName ?? defaultCeoFor(p as PersonalityId, aiSeen);
+      } else {
+        f.personalityId = f.personalityId ?? null;
+        f.ceoName = f.ceoName ?? null;
+      }
+    }
+    if (f.ownerType === 'ai') aiSeen += 1;
     f.accounting.lifetime = normPeriod(f.accounting.lifetime);
     f.accounting.today = normPeriod(f.accounting.today);
     f.accounting.dailyHistory = (f.accounting.dailyHistory ?? []).map((d) => ({
@@ -130,6 +144,7 @@ function normalize(state: GameState): GameState {
     f.exportOrders = f.exportOrders ?? {};
     f.builtAtTick = f.builtAtTick ?? 0;
     f.dailyStats.bottleneck = f.dailyStats.bottleneck ?? null;
+    f.dailyStats.pricedOut = f.dailyStats.pricedOut ?? 0;
     // Multi-product retail: wrap the legacy single retailProductId.
     if (!Array.isArray(f.retailProductIds)) {
       const legacy = (f as unknown as { retailProductId?: string | null }).retailProductId;

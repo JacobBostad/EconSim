@@ -21,6 +21,7 @@ import {
 import { clamp } from '../utils/clamp';
 import { TrendCard } from './Sparkline';
 import { SHOW_CHRONICLE_EVENT } from './ChronicleModal';
+import { getPersonality } from '../sim/data/personalities';
 
 export function CompanyDashboard(): React.ReactElement {
   const sim = useGameStore((s) => s.sim);
@@ -118,7 +119,15 @@ export function CompanyDashboard(): React.ReactElement {
             return (
               <tr key={e.firmId} style={{ fontWeight: e.isPlayer ? 700 : 400, color: e.isPlayer ? 'var(--accent)' : undefined }}>
                 <td>{i + 1}{i === 0 ? ' 🏆' : ''}</td>
-                <td>{e.name}{e.isPlayer ? ' (you)' : ''}</td>
+                <td>
+                  {e.name}{e.isPlayer ? ' (you)' : ''}
+                  {targetFirm?.ceoName && (
+                    <div className="small muted" title={getPersonality(targetFirm.personalityId).blurb}>
+                      CEO {targetFirm.ceoName} · {getPersonality(targetFirm.personalityId).icon}{' '}
+                      {getPersonality(targetFirm.personalityId).name}
+                    </div>
+                  )}
+                </td>
                 <td className="mono">{formatMoney(e.valuation)}</td>
                 <td className="mono">{e.isPlayer ? '—' : formatMoney(pricePerPct)}</td>
                 <td className="mono">{e.isPlayer ? '—' : `${owned}%`}</td>
