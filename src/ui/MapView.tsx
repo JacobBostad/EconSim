@@ -24,6 +24,10 @@ export function MapView(): React.ReactElement {
         getBuildMode: () => useGameStore.getState().buildDefId != null,
         getBuildDefId: () => useGameStore.getState().buildDefId,
         getFlowOverlay: () => useGameStore.getState().flowOverlay,
+        getFollowId: () => useGameStore.getState().followedCitizenId,
+        onFollowBroken: () => {
+          if (useGameStore.getState().followedCitizenId) useGameStore.getState().setFollow(null);
+        },
         onBuildAt: (world) => {
           const store = useGameStore.getState();
           const defId = store.buildDefId;
@@ -43,7 +47,10 @@ export function MapView(): React.ReactElement {
     );
     rendererRef.current = renderer;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') useGameStore.getState().setBuildDef(null);
+      if (e.key === 'Escape') {
+        useGameStore.getState().setBuildDef(null);
+        useGameStore.getState().setFollow(null);
+      }
     };
     window.addEventListener('keydown', onKey);
     return () => {

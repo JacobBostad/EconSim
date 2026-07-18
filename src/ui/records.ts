@@ -114,11 +114,41 @@ export function recordChallengeRun(run: ChallengeRun): void {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Daily challenge — a shared seed derived from the UTC calendar date, so
+// every player worldwide races the SAME deterministic town that day. The
+// engine's determinism makes this serverless: same seed + standard settings
+// replay identically for everyone. The seed IS the date (YYYYMMDD), so a
+// leaderboard entry can be recognized as a daily run from its seed alone.
+// ---------------------------------------------------------------------------
+
+/** Today's (or any date's) shared seed: UTC YYYYMMDD as a number. */
+export function dailySeed(date: Date): number {
+  return (
+    date.getUTCFullYear() * 10000 + (date.getUTCMonth() + 1) * 100 + date.getUTCDate()
+  );
+}
+
+/** If a seed encodes a plausible daily-challenge date, its ISO label. */
+export function dailyDateFromSeed(seed: number): string | null {
+  if (!Number.isInteger(seed) || seed < 2024_00_00 || seed > 2099_12_31) return null;
+  const y = Math.floor(seed / 10000);
+  const m = Math.floor((seed % 10000) / 100);
+  const d = seed % 100;
+  if (m < 1 || m > 12 || d < 1 || d > 31) return null;
+  return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+}
+
 /** Compact, paste-anywhere summary of a challenge run — a deterministic dare. */
 export function challengeShareText(run: ChallengeRun, scenarioName: string): string {
+  const daily = dailyDateFromSeed(run.seed);
   return [
-    `🏁 EconSim Challenge — ${scenarioName} · ${run.difficulty} · seed ${run.seed}`,
+    daily
+      ? `📅 EconSim Daily Challenge ${daily} — ${scenarioName} · ${run.difficulty}`
+      : `🏁 EconSim Challenge — ${scenarioName} · ${run.difficulty} · seed ${run.seed}`,
     `Score ${run.score}/1000 · valuation $${(run.valuation / 100).toLocaleString('en-US', { maximumFractionDigits: 0 })}`,
-    `Same seed + scenario + difficulty replays identically — beat me.`,
+    daily
+      ? `Everyone races the same town today — beat me.`
+      : `Same seed + scenario + difficulty replays identically — beat me.`,
   ].join('\n');
 }

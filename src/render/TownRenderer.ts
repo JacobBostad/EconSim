@@ -79,6 +79,10 @@ export interface RendererCallbacks {
   getBuildDefId: () => string | null;
   getFlowOverlay: () => boolean;
   onBuildAt: (world: Vec) => void;
+  /** Citizen the camera should track (null = free camera). */
+  getFollowId: () => string | null;
+  /** Manual pan/zoom broke the follow — clear it upstream. */
+  onFollowBroken: () => void;
 }
 
 export class TownRenderer {
@@ -195,6 +199,19 @@ export class TownRenderer {
    * the camera. Any manual drag/wheel cancels the glide.
    */
   private trackSelection(s: GameState, dt: number): void {
+    // Follow mode: keep the glide target pinned on the followed citizen
+    // every frame — the eased pan below does the cinematography. Any manual
+    // drag/wheel/arrow input breaks the follow (see those handlers).
+    const followId = this.cb.getFollowId();
+    if (followId) {
+      const cit = s.citizens[followId];
+      if (!cit) {
+        this.cb.onFollowBroken();
+      } else {
+        this.camGlide = { x: cit.currentLocation.x, y: cit.currentLocation.y };
+        this.autoFit = false;
+      }
+    }
     const sel = this.cb.getSelectedId();
     if (sel !== this.lastSel) {
       this.lastSel = sel;
@@ -288,6 +305,7 @@ export class TownRenderer {
     if (!dx && !dy && zin === zout) return;
     this.autoFit = false;
     this.camGlide = null;
+    this.cb.onFollowBroken();
     this.panX += dx;
     this.panY += dy;
     if (zin !== zout) {
@@ -313,6 +331,7 @@ export class TownRenderer {
     this.zoom = Math.max(0.4, Math.min(6, this.zoom * factor));
     this.autoFit = false;
     this.camGlide = null;
+    this.cb.onFollowBroken();
     const after = this.w2s(s, before);
     this.panX += m.x - after.x;
     this.panY += m.y - after.y;
@@ -326,6 +345,7 @@ export class TownRenderer {
       return;
     }
     this.camGlide = null;
+    this.cb.onFollowBroken();
     this.dragging = true;
     this.dragMoved = false;
     this.dragStart = m;
@@ -1435,6 +1455,7 @@ export class TownRenderer {
     const sc = this.effScale();
     this.autoFit = false;
     this.camGlide = null;
+    this.cb.onFollowBroken();
     this.panX = -(wx - this.view.cx) * sc;
     this.panY = -(wy - this.view.cy) * sc;
   }
@@ -1566,5 +1587,5 @@ export class TownRenderer {
     ctx.closePath();
   }
 
-  resetView(): void { this.zoom = 1; this.panX = 0; this.panY = 0; this.autoFit = true; this.camGlide = null; }
+  resetView(): void { this.zoom = 1; this.panX = 0; this.panY = 0; this.autoFit = true; this.camGlide = null; this.cb.onFollowBroken(); }
 }

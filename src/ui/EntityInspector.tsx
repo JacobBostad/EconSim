@@ -144,9 +144,24 @@ function FacilityView({ fac, state }: { fac: Facility; state: GameState }): Reac
 
 function CitizenView({ c, state }: { c: Citizen; state: GameState }): React.ReactElement {
   const employer = c.employerFirmId ? state.firms[c.employerFirmId] : null;
+  const followedId = useGameStore((s) => s.followedCitizenId);
+  const setFollow = useGameStore((s) => s.setFollow);
+  const following = followedId === c.id;
   return (
     <div>
-      <h3 style={{ margin: '0 0 2px' }}>{c.name}</h3>
+      <h3 style={{ margin: '0 0 2px' }}>
+        {c.name}{' '}
+        <button
+          className={following ? 'primary' : ''}
+          style={{ padding: '1px 8px', fontSize: 12, verticalAlign: 'middle' }}
+          title={following
+            ? 'Stop following (Esc or panning also breaks it)'
+            : 'Camera follows this citizen through their day — commute, shopping, and (maybe) their climb up the prosperity ladder.'}
+          onClick={() => setFollow(following ? null : c.id)}
+        >
+          {following ? '🎥 Following' : '🎥 Follow'}
+        </button>
+      </h3>
       <div className="small muted">{citizenActionLabel(c)}</div>
       <div className="kv small" style={{ marginTop: 6 }}>
         <span className="k">Cash</span><span className="mono">{formatMoney(c.cash)}</span>

@@ -1,5 +1,5 @@
 import React from 'react';
-import { loadChallengeRuns, challengeShareText } from './records';
+import { loadChallengeRuns, challengeShareText, dailyDateFromSeed } from './records';
 import { formatMoneyShort } from '../utils/formatMoney';
 import { SCENARIOS } from '../sim/data/scenarios';
 import { SHOW_CHRONICLE_EVENT } from './ChronicleModal';
@@ -90,7 +90,13 @@ export function AwardsDashboard(): React.ReactElement {
                     )}
                   </td>
                   <td>{r.difficulty}</td>
-                  <td className="mono">{r.seed}</td>
+                  <td className="mono">
+                    {dailyDateFromSeed(r.seed) ? (
+                      <span title={`Daily challenge ${dailyDateFromSeed(r.seed)} — everyone raced this town that day`}>📅 {dailyDateFromSeed(r.seed)}</span>
+                    ) : (
+                      r.seed
+                    )}
+                  </td>
                   <td className="muted small">{r.at}</td>
                   <td>
                     <button

@@ -79,6 +79,9 @@ interface GameStore {
   setDashboard: (tab: DashboardTab) => void;
   /** Supply-chain flow overlay on the map (toggled with F). */
   flowOverlay: boolean;
+  /** Citizen the camera is following on the map (null = free camera). */
+  followedCitizenId: string | null;
+  setFollow: (citizenId: string | null) => void;
   toggleFlowOverlay: () => void;
 
   _start: () => void;
@@ -193,6 +196,8 @@ export const useGameStore = create<GameStore>((set, get) => {
     setDashboard: (tab) => set({ dashboard: tab }),
     flowOverlay: false,
     toggleFlowOverlay: () => set((s) => ({ flowOverlay: !s.flowOverlay })),
+    followedCitizenId: null,
+    setFollow: (citizenId) => set({ followedCitizenId: citizenId }),
 
     _start: () => {
       if (typeof window === 'undefined') return;

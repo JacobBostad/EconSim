@@ -149,6 +149,15 @@ engine tests), probed with headless balance runs, and guarded by CI.
   200-unit round trips now lose $26k/100d while patient 50-unit trading
   with a real edge earns ~$38/day. Craft beats greed, the town probe is
   unchanged, and AI gluts soften prices for real.
+- **Daily challenge** (Pillar 4): one button starts today's shared run —
+  seed = the UTC date, standard difficulty, the classic town, scored at day
+  200. The deterministic engine makes it serverless: every player worldwide
+  races the *same* town, and the leaderboard + share string recognize daily
+  runs from the seed alone (📅 2026-07-18 beats "seed 20260718").
+- **Follow mode**: a 🎥 Follow button on any citizen puts the camera on
+  their day — commute, shopping trips, and, if you've been paying them
+  well, the day they earn their gold circlet. Esc or grabbing the map
+  hands the camera back.
 
 - **Coffee**: a cheap everyday product (grain → roastery → café) nobody serves
   at start — a first-mover mainstream niche, wizardable, with AI contest.

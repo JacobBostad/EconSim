@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useGameStore } from '../store/useGameStore';
 import type { Difficulty } from '../sim/core/SimulationConfig';
-import { loadRecords } from './records';
+import { loadRecords, dailySeed } from './records';
 import { SCENARIOS, DEFAULT_SCENARIO_ID } from '../sim/data/scenarios';
 import { formatMoney } from '../utils/formatMoney';
 
@@ -140,6 +140,12 @@ export function NewGameModal(): React.ReactElement | null {
           />
           <span className="spacer" style={{ flex: 1 }} />
           <button onClick={() => setShow(false)}>Cancel</button>
+          <button
+            title="Everyone in the world races the SAME town today: seed = today's date (UTC), standard difficulty, the classic scenario, scored at day 200. Deterministic engine, no server — compare share strings."
+            onClick={() => newGame(dailySeed(new Date()), 'standard', DEFAULT_SCENARIO_ID, true, 'cozy')}
+          >
+            📅 Daily challenge
+          </button>
           <button className="active" onClick={start}>Start town</button>
         </div>
       </div>
