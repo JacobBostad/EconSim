@@ -6,6 +6,8 @@ import type { GameState } from '../core/GameState';
 import { deserialize, serialize } from '../persistence/saveLoad';
 import {
   runTierSystem,
+  tierNeedGrowthMult,
+  tierPriceCapMult,
   PROMOTION_DAYS,
   AFFLUENT_PROMOTION_DAYS,
   DEMOTION_DAYS,
@@ -110,6 +112,42 @@ describe('Prosperity tiers', () => {
     for (const cid in a.getState().citizens) {
       expect(['worker', 'comfortable', 'affluent']).toContain(a.getState().citizens[cid]!.tier);
     }
+  });
+
+  it('tiered demand: appetite is strictly additive above the worker baseline', () => {
+    // Workers keep the calibrated baseline (any per-capita cut was probed to
+    // shrink the whole town); prosperity only ADDS demand — affluent boosts
+    // plus luxury unlocks up the ladder.
+    expect(tierNeedGrowthMult('worker', 'coffee')).toBe(1);
+    expect(tierNeedGrowthMult('worker', 'bread')).toBe(1);
+    expect(tierNeedGrowthMult('worker', 'pastries')).toBe(0); // luxury gated
+    expect(tierNeedGrowthMult('worker', 'jewelry')).toBe(0);
+    expect(tierNeedGrowthMult('comfortable', 'coffee')).toBe(1);
+    expect(tierNeedGrowthMult('comfortable', 'pastries')).toBeGreaterThan(0);
+    expect(tierNeedGrowthMult('affluent', 'coffee')).toBeGreaterThan(1);
+    expect(tierNeedGrowthMult('affluent', 'jewelry')).toBeGreaterThan(1);
+    expect(tierPriceCapMult('worker', 'coffee')).toBe(1);
+    expect(tierPriceCapMult('affluent', 'coffee')).toBeGreaterThan(1);
+  });
+
+  it('tiered demand: a worker\'s coffee craving grows slower than an affluent one', () => {
+    const sim = newSim(3);
+    const state = sim.getState();
+    const cits = Object.values(state.citizens);
+    const worker = cits[0]!;
+    const affluent = cits[1]!;
+    const wNeed = worker.needs.find((n) => n.productId === 'coffee')!;
+    const aNeed = affluent.needs.find((n) => n.productId === 'coffee')!;
+    wNeed.urgency = 0; aNeed.urgency = 0;
+    wNeed.urgencyGrowthPerDay = 0.4; aNeed.urgencyGrowthPerDay = 0.4;
+    for (let d = 1; d <= 3; d++) {
+      worker.tier = 'worker';
+      affluent.tier = 'affluent';
+      sim.run(ticksPerDay(state.config));
+    }
+    // Purchases could reduce urgency; both start at 0 so 3 days of growth
+    // dominates. Affluent grows at 1.4x vs the worker's 0.6x.
+    expect(aNeed.urgency).toBeGreaterThan(wNeed.urgency);
   });
 
   it('pre-tier saves migrate with a sensible snapshot guess', () => {

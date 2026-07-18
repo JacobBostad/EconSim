@@ -53,6 +53,40 @@ export const DEMOTION_DAYS = 5;
 
 const ORDER: CitizenTier[] = ['worker', 'comfortable', 'affluent'];
 
+/**
+ * Phase 2 — tiered demand. Each tier's appetite scales the per-citizen need
+ * growth rate (purchase FREQUENCY, not basket size — quantity multipliers
+ * were probed to overshoot production capacity; see the coffee lesson in
+ * the balance notes). Strictly ADDITIVE above the worker baseline: probes
+ * showed any per-capita cut for workers (even ×0.9 coffee) contracts the
+ * whole town ~10% by day 300 — revenue falls, cafés shed staff, immigration
+ * stalls. The calibrated economy IS the worker baseline; prosperity only
+ * adds demand, so ascension is strictly good news for shopkeepers. Luxury
+ * at 0 replaces the old satisfaction+cash aspiration gate: the tier ladder
+ * IS the aspiration signal now, and its hysteresis means new money takes a
+ * week to become new tastes.
+ */
+const GROWTH_MULT: Record<CitizenTier, Record<string, number>> = {
+  worker: { pastries: 0, jewelry: 0 },
+  comfortable: { pastries: 0.5, jewelry: 0.3 },
+  affluent: { coffee: 1.5, clothes: 1.4, pastries: 1.5, jewelry: 1.5 },
+};
+
+/** Affluent citizens tolerate premium prices on their favorite categories. */
+const PRICE_CAP_MULT: Record<CitizenTier, Record<string, number>> = {
+  worker: {},
+  comfortable: {},
+  affluent: { bread: 1.1, coffee: 1.2, clothes: 1.2 },
+};
+
+export function tierNeedGrowthMult(tier: CitizenTier, productId: string): number {
+  return GROWTH_MULT[tier][productId] ?? 1;
+}
+
+export function tierPriceCapMult(tier: CitizenTier, productId: string): number {
+  return PRICE_CAP_MULT[tier][productId] ?? 1;
+}
+
 function livesInApartment(state: GameState, cit: Citizen): boolean {
   return state.facilities[cit.homeFacilityId]?.defId === 'apartment';
 }

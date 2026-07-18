@@ -27,22 +27,21 @@ describe('Luxury tier', () => {
     expect(getQuantity(fac.outputInventory, 'pastries') + fac.dailyStats.unitsProduced).toBeGreaterThan(0);
   });
 
-  it('luxury cravings only grow for satisfied, well-off citizens', () => {
+  it('luxury cravings only grow up the prosperity ladder', () => {
     const sim = newSim(1);
     const state = sim.getState();
     const cits = Object.values(state.citizens);
     const rich = cits[0]!;
     const poor = cits[1]!;
-    rich.satisfaction = 90; rich.cash = 2000_00;
-    poor.satisfaction = 30; poor.cash = 100_00;
     const richNeed = rich.needs.find((n) => n.productId === 'pastries')!;
     const poorNeed = poor.needs.find((n) => n.productId === 'pastries')!;
     richNeed.urgency = 0; poorNeed.urgency = 0.5;
 
-    // Drive several daily satisfaction passes while keeping conditions pinned.
+    // Drive several daily satisfaction passes while keeping tiers pinned
+    // (the ladder replaced the old satisfaction+cash aspiration gate).
     for (let d = 1; d <= 3; d++) {
-      rich.satisfaction = 90; rich.cash = 2000_00;
-      poor.satisfaction = 30; poor.cash = 100_00;
+      rich.tier = 'affluent'; rich.satisfaction = 90; rich.cash = 2000_00;
+      poor.tier = 'worker'; poor.satisfaction = 30; poor.cash = 100_00;
       sim.run(ticksPerDay(state.config));
     }
     expect(richNeed.urgency).toBeGreaterThan(0.2);

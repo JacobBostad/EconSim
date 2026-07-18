@@ -37,23 +37,28 @@ Three tiers, stored on the citizen (`tier`), derived daily with hysteresis:
 
 ## What tiers change (later phases — Phase 1 changes nothing)
 
-**Phase 2 — tiered demand.** Per-tier scaling applied to the existing need
-templates at derivation time (needs stay per-citizen; tier scales them):
+**Phase 2 — tiered demand (SHIPPED).** Per-tier scaling on need urgency
+growth (purchase frequency, not basket size) plus affluent price-cap
+tolerance. **Strictly additive above the worker baseline** — the original
+draft cut worker coffee/clothes (×0.6–0.9), and every probed variant of
+that contracted the whole town ~10% by day 300 (less revenue → cafés shed
+staff → immigration stalls); see "Phase 2 probe results" below. Shipped
+table:
 
 | Product | worker | comfortable | affluent |
 | --- | --- | --- | --- |
-| bread | ×1 qty, price cap ×1.0 | ×1 | ×1, cap ×1.1 |
+| bread | ×1 | ×1 | ×1, price cap ×1.1 |
 | tools | ×1 | ×1 | ×1 |
-| coffee | ×0.6 qty | ×1 | ×1.4 qty, cap ×1.2 |
-| clothes | ×0.8 | ×1 | ×1.3, cap ×1.2 |
+| coffee | ×1 | ×1 | ×1.5, cap ×1.2 |
+| clothes | ×1 | ×1 | ×1.4, cap ×1.2 |
 | pastries (luxury) | ×0 | ×0.5 | ×1.5 |
 | jewelry (luxury) | ×0 | ×0.3 | ×1.5 |
 
-(Multipliers over current template values; exact numbers set by probe so
-town-wide demand stays within production capacity — the coffee-quantity
-lesson from the balance notes applies.) This deliberately re-deals
-calibrated outcomes; playtest-bot floors get re-baselined honestly in the
-same commit, with the deltas documented.
+The luxury ×0/×0.5 ladder **replaces** the old satisfaction+cash
+aspiration gate in SatisfactionSystem: the tier ladder is the aspiration
+signal now, and its hysteresis means new money takes a week to become new
+tastes. Bot floors needed no re-baseline — aggregate demand is conserved
+by construction.
 
 **Phase 3 — store positioning.** A per-store lever
 `positioning: discount | standard | premium`:
@@ -89,7 +94,8 @@ nothing.
 1. **Phase 1 (this commit)**: tier + streak on Citizen, TierSystem
    derivation with hysteresis, migration defaults, Population dashboard
    tier card, tests, 300-day distribution probe documented here.
-2. Phase 2: tiered demand + deliberate re-baseline of bot floors.
+2. Phase 2 (shipped): tiered demand — additive design meant no bot
+   re-baseline was needed.
 3. Phase 3: store positioning lever + AI adoption + probes.
 4. Phase 4: spectacle (gazette/toasts/charts/achievements) + media refresh.
 
@@ -127,3 +133,25 @@ paying above-market wages and building apartments. The worker share
 *rising* over time is immigration at work: newcomers arrive as workers
 faster than incumbents climb, which gives Phase 2's tiered demand a natural
 late-game texture (a broad worker base plus a comfortable middle).
+
+## Phase 2 probe results
+
+300-day unattended A/B, seeds 11/4/7/21, day-300 population and average
+satisfaction vs the Phase-1 baseline (avg pop 72.5, avg sat 59.0):
+
+| Variant | worker coffee/clothes | comfortable | avg pop | avg sat |
+| --- | --- | --- | --- | --- |
+| draft (seeds 11/4 only) | ×0.6 / ×0.8 | ×1 | 58.5 (−23% vs those seeds) | 59.3 |
+| softened | ×0.85 / ×0.9 | ×1.1 both | 65.3 (−10%) | 56.4 |
+| ends-only | ×0.9 / ×0.9 | ×1 coffee, ×1.1 clothes | 64.0 (−12%) | 55.6 |
+| **additive (shipped)** | **×1 / ×1** | **×1** | **72.5 (±0%)** | **58.1** |
+
+Every variant that trimmed worker staple demand contracted the town —
+the retail economy is calibrated to the all-citizens baseline, and a
+per-capita cut compounds (lower revenue → downsizing → fewer jobs →
+slower immigration). Boosting comfortable to compensate just moved the
+damage to stockout-driven satisfaction loss. The additive design keeps
+towns statistically indistinguishable from baseline while affluent
+citizens and the luxury ladder still create real per-tier texture: in one
+probe seed an AI luxury boutique found paying customers among comfortable
+citizens (pastries moving unattended for the first time).

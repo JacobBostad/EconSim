@@ -78,6 +78,18 @@ engine tests), probed with headless balance runs, and guarded by CI.
   the natural climb, generous player wages the shortcut. The Population tab
   shows the ladder; ascents to affluent make the event feed. Phase 1 changes
   no behavior yet — tiered demand and store positioning build on it next.
+- **Tiered demand** (Phase 2): the ladder now changes how citizens shop —
+  affluent citizens drink 1.5× the coffee, buy 1.4× the clothes, and tolerate
+  10–20% premium prices on their favorite categories; luxury cravings follow
+  the ladder (workers never, comfortable a little, affluent avidly), replacing
+  the old satisfaction+cash gate so new money must climb before it becomes new
+  tastes. Deliberately **additive-only**: probes showed trimming worker staple
+  demand even 10% contracts the whole town by day 300 (revenue → jobs →
+  immigration compound), so workers keep the calibrated baseline and
+  prosperity strictly adds demand — ascension is always good news for
+  shopkeepers, and no bot floor moved. Four-seed A/B: population and
+  satisfaction statistically indistinguishable from baseline, with one probe
+  town's AI pastry boutique finding its first unattended customers.
 
 ## Player features
 

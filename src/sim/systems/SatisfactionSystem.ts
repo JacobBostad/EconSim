@@ -12,6 +12,7 @@ import { isDayBoundary } from '../core/Tick';
 import { getProduct } from '../data/products';
 import { clamp } from '../../utils/clamp';
 import { APARTMENT_SATISFACTION_BONUS } from '../data/constants';
+import { tierNeedGrowthMult } from './TierSystem';
 
 /** Needs never accumulate beyond this urgency. */
 const URGENCY_CAP = 3;
@@ -29,9 +30,8 @@ export function needWeight(productId: string): number {
   return 0.55;
 }
 
-/** Luxury cravings only grow in comfortable lives. */
-const LUXURY_MIN_SATISFACTION = 70;
-const LUXURY_MIN_CASH = 600_00;
+/** Rate a lapsed luxury craving fades for citizens below the ladder. */
+const LUXURY_DECAY_PER_DAY = 0.1;
 
 /** Whether any staffed store in town currently sells the product. */
 function soldSomewhere(state: import('../core/GameState').GameState, productId: string): boolean {
@@ -71,14 +71,15 @@ export function runSatisfactionSystem(ctx: SimContext): void {
     const cit = state.citizens[cid]!;
     let unmetPressure = 0;
     for (const need of cit.needs) {
-      if (getProduct(need.productId).needType === 'luxury') {
-        const aspiring =
-          cit.satisfaction >= LUXURY_MIN_SATISFACTION && cit.cash >= LUXURY_MIN_CASH;
-        need.urgency = aspiring
-          ? Math.min(URGENCY_CAP, need.urgency + need.urgencyGrowthPerDay)
-          : Math.max(0, need.urgency - 0.1);
+      // Tiered demand: the prosperity ladder scales each tier's appetite.
+      // Luxury multipliers hit 0 for workers — the ladder replaced the old
+      // satisfaction+cash aspiration gate, so new money must climb (with
+      // hysteresis) before it turns into new tastes.
+      const mult = tierNeedGrowthMult(cit.tier, need.productId);
+      if (mult <= 0 && getProduct(need.productId).needType === 'luxury') {
+        need.urgency = Math.max(0, need.urgency - LUXURY_DECAY_PER_DAY);
       } else {
-        need.urgency = Math.min(URGENCY_CAP, need.urgency + need.urgencyGrowthPerDay);
+        need.urgency = Math.min(URGENCY_CAP, need.urgency + need.urgencyGrowthPerDay * mult);
       }
       unmetPressure += pressureOf(state, config, need);
     }

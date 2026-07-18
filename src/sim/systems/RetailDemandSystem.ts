@@ -26,6 +26,7 @@ import { distance } from '../entities/Location';
 import { getProduct } from '../data/products';
 import { worldDemandMult, worldSpendingMult } from '../data/worldEvents';
 import { seasonDemandMult } from '../data/seasons';
+import { tierPriceCapMult } from './TierSystem';
 import { clamp } from '../../utils/clamp';
 
 /** Price a firm charges for a product (falls back to base price). */
@@ -166,9 +167,14 @@ function attemptPurchase(
   const brand = firm?.brandByProduct[productId] ?? 0;
   const qual = getQuality(store.inputInventory, productId);
   const premium = 1 + brand / 250 + (qual - 50) / 300;
-  // Booms/recessions move what citizens will pay; fads move how much they buy.
+  // Booms/recessions move what citizens will pay; fads move how much they
+  // buy; affluent citizens tolerate premium prices on favorite categories.
   const maxPrice =
-    product.basePrice * need.maxAffordablePriceMultiplier * premium * worldSpendingMult(state);
+    product.basePrice *
+    need.maxAffordablePriceMultiplier *
+    premium *
+    worldSpendingMult(state) *
+    tierPriceCapMult(cit.tier, productId);
 
   const wantQty = Math.max(
     1,
