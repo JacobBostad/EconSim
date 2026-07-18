@@ -249,7 +249,9 @@ Downtown premiums buy real customers via the distance term in store scoring.
 paying ≥15% more — wage policy poaches veterans or loses yours. The Wages
 card in your firm inspector shows the town average and top rival wage with a
 one-click "Beat market"; AI firms answer back, raising wages up to ~1.5× when
-they can't fill slots and drifting down when labor is slack.
+they can't fill slots and drifting down when labor is slack. Or skip the
+wage war: **train your crew** from the facility inspector — $120/worker
+buys +0.15 skill on the spot (~2 weeks of practice, booked as R&D).
 
 **Real estate** (`RentSystem.ts`): buildable Apartments house 2 citizens who
 pay daily rent to the owner and live measurably happier; municipal homes stay

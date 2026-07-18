@@ -230,6 +230,13 @@ engine tests), probed with headless balance runs, and guarded by CI.
   more than doubles (26 → 59–71) once housing appears, everyone solvent.
 - Sound stings: receivership, challenge fanfare, rival openings, poach alerts,
   the rush-order beats (offer, completion, lapse), and fire-sale offers/closings.
+- **Crew training**: the facility inspector's staffing row shows the crew's
+  average skill (0.7× green to 1.3× veteran output) and a 🎓 Train button —
+  $120 per worker below the cap buys +0.15 skill on the spot, about two
+  weeks of on-the-job practice. Workers already at peak aren't billed, and
+  the whole session books as R&D. A real three-way decision now: train
+  green hires, wait out practice, or poach veterans at a permanent wage
+  premium. New 🎓 Master Crew achievement (a 2+ crew averaging 1.25+).
 - **Fire sales**: when a rival facility bleeds money on the 7-day EMA view,
   its owner puts it on the block at 75% of build cost rather than keep
   feeding it — a four-day window announced in the ticker with a Buy button

@@ -282,6 +282,24 @@ export const ACHIEVEMENT_DEFS: AchievementDef[] = [
     },
   },
   {
+    id: 'master_crew',
+    name: 'Master Crew',
+    icon: '🎓',
+    description: 'Ran a facility whose crew (2+) averages 1.25+ skill.',
+    hint: 'Skill grows on the job (0.012/workday) or jumps +0.15 per training workshop (facility inspector). Veterans produce up to 1.3× — keep them from being poached.',
+    check: (s) => {
+      const p = player(s);
+      if (!p) return false;
+      for (const fid of p.facilities) {
+        const fac = s.facilities[fid];
+        if (!fac || fac.employees.length < 2) continue;
+        const avg = fac.employees.reduce((sum, cid) => sum + (s.citizens[cid]?.skill ?? 0), 0) / fac.employees.length;
+        if (avg >= 1.25) return true;
+      }
+      return false;
+    },
+  },
+  {
     id: 'bargain_hunter',
     name: 'Bargain Hunter',
     icon: '🏷️',

@@ -20,6 +20,7 @@ import { formatMoney } from '../utils/formatMoney';
 import { CENTS, WHOLESALE_DISCOUNT } from '../sim/data/constants';
 import { WHOLESALE_MULT_MIN, WHOLESALE_MULT_MAX } from '../sim/core/Wholesale';
 import { upgradeCost } from '../sim/core/Upgrades';
+import { TRAINING_COST_PER_WORKER, TRAINING_SKILL_GAIN, SKILL_MAX } from '../sim/systems/LaborSystem';
 import { sellRefund } from '../sim/core/Demolition';
 import { pricingInsight } from '../sim/selectors/marketSelectors';
 import { pickBestCity, cityPrice } from '../sim/core/Trade';
@@ -377,16 +378,37 @@ export function FacilityActions({ fac }: { fac: Facility }): React.ReactElement 
         <div className="section-title" style={{ marginTop: 0 }}>
           Workers {employees.length}/{fac.workerCapacity} · present {fac.presentWorkers}
         </div>
-        {isPlayer && (
-          <div className="row" style={{ marginBottom: 6 }}>
-            <button
-              disabled={employees.length >= fac.workerCapacity}
-              onClick={() => dispatch({ type: 'HIRE_WORKER', facilityId: fac.id, citizenId: null })}
-            >
-              + Hire unemployed
-            </button>
-          </div>
-        )}
+        {isPlayer && (() => {
+          const avgSkill = employees.length
+            ? employees.reduce((s, c) => s + c.skill, 0) / employees.length
+            : 0;
+          const trainees = employees.filter((c) => c.skill < SKILL_MAX - 1e-9);
+          const trainCost = trainees.length * TRAINING_COST_PER_WORKER;
+          return (
+            <div className="row" style={{ marginBottom: 6, gap: 6, flexWrap: 'wrap' }}>
+              <button
+                disabled={employees.length >= fac.workerCapacity}
+                onClick={() => dispatch({ type: 'HIRE_WORKER', facilityId: fac.id, citizenId: null })}
+              >
+                + Hire unemployed
+              </button>
+              <button
+                disabled={trainees.length === 0}
+                title={trainees.length === 0
+                  ? 'Crew is at peak skill'
+                  : `+${TRAINING_SKILL_GAIN} skill for each of ${trainees.length} worker${trainees.length === 1 ? '' : 's'} below the ${SKILL_MAX} cap (~2 weeks of practice, instantly). Books as R&D.`}
+                onClick={() => dispatch({ type: 'TRAIN_CREW', firmId: fac.ownerFirmId, facilityId: fac.id })}
+              >
+                🎓 Train crew{trainees.length > 0 ? ` — ${formatMoney(trainCost)}` : ''}
+              </button>
+              {employees.length > 0 && (
+                <span className="small muted" title="Crew skill scales output (0.7× green to 1.3× veteran).">
+                  avg skill {avgSkill.toFixed(2)} / {SKILL_MAX}
+                </span>
+              )}
+            </div>
+          );
+        })()}
         {employees.map((c) => (
           <div className="row between small" key={c.id}>
             <span>{c.name} ({c.role})</span>

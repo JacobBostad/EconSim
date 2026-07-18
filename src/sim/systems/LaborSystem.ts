@@ -11,7 +11,8 @@
 
 import type { GameState, SimContext } from '../core/GameState';
 import { formatMoney } from '../../utils/formatMoney';
-import { emitEvent } from '../core/GameState';
+import { canAfford, emitEvent, recordTransaction } from '../core/GameState';
+import { firmAccount, WORLD_ACCOUNT } from '../core/Transactions';
 import { isDayBoundary } from '../core/Tick';
 import type { FacilityId, CitizenId } from '../core/Id';
 import { clamp } from '../../utils/clamp';
@@ -25,6 +26,60 @@ const SKILL_MIN = 0.7;
 /** Job switching: minimum pay rise that tempts a worker, and daily chance. */
 const POACH_WAGE_PREMIUM = 1.15;
 const POACH_DAILY_CHANCE = 0.08;
+
+/**
+ * Training workshop: an immediate skill jump you pay for, against waiting
+ * out on-the-job gains (0.012/workday) or poaching a veteran at a
+ * permanent wage premium. +0.15 is ~12 workdays of practice per session;
+ * reaching the cap from green costs 4 sessions ($480/worker) — a real
+ * investment, not a cheat code, and useless once the crew is at 1.3.
+ */
+export const TRAINING_COST_PER_WORKER = 120_00;
+export const TRAINING_SKILL_GAIN = 0.15;
+export { SKILL_MAX };
+
+/**
+ * Send a facility's crew to a training workshop: every worker below the
+ * skill cap jumps +TRAINING_SKILL_GAIN, paid per trainee (workers already
+ * at cap aren't billed). Books as R&D — it's an investment in capability,
+ * not payroll. Returns true when anyone was trained.
+ */
+export function trainCrew(
+  state: GameState,
+  firmId: import('../core/Id').FirmId,
+  facilityId: FacilityId,
+): boolean {
+  const firm = state.firms[firmId];
+  const fac = state.facilities[facilityId];
+  if (!firm || !fac || fac.ownerFirmId !== firmId) return false;
+  const trainees = fac.employees
+    .map((cid) => state.citizens[cid])
+    .filter((c): c is NonNullable<typeof c> => !!c && c.skill < SKILL_MAX - 1e-9);
+  if (trainees.length === 0) {
+    emitEvent(state, 'info', 'player', `${fac.name}'s crew is already at peak skill — nothing to train.`, facilityId);
+    return false;
+  }
+  const cost = trainees.length * TRAINING_COST_PER_WORKER;
+  if (!canAfford(state, firmAccount(firmId), cost)) {
+    emitEvent(state, 'danger', 'player',
+      `Training ${trainees.length} worker${trainees.length === 1 ? '' : 's'} costs ${formatMoney(cost)}.`, facilityId);
+    return false;
+  }
+  recordTransaction(state, {
+    from: firmAccount(firmId),
+    to: WORLD_ACCOUNT,
+    amount: cost,
+    firmId,
+    category: 'rnd',
+    note: `Training workshop for ${fac.name} (${trainees.length} trainee${trainees.length === 1 ? '' : 's'})`,
+  });
+  for (const cit of trainees) {
+    cit.skill = Math.min(SKILL_MAX, cit.skill + TRAINING_SKILL_GAIN);
+  }
+  emitEvent(state, 'success', 'player',
+    `🎓 ${fac.name}'s crew trained up — ${trainees.length} worker${trainees.length === 1 ? '' : 's'} sharper for ${formatMoney(cost)}.`, facilityId);
+  return true;
+}
 
 /**
  * Hire an unemployed citizen into a facility at the firm's base wage.

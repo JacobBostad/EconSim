@@ -102,6 +102,8 @@ export type Command =
   | { type: 'ACQUIRE_FIRM'; firmId: FirmId; targetFirmId: FirmId }
   /** Accept the active rival fire-sale offer (player only; validated in core/FireSale). */
   | { type: 'ACCEPT_FACILITY_OFFER' }
+  /** Send a facility's crew to a training workshop (+skill per worker, paid per head). */
+  | { type: 'TRAIN_CREW'; firmId: FirmId; facilityId: FacilityId }
   | { type: 'BUY_SHARES'; firmId: FirmId; targetFirmId: FirmId; percent: number }
   | { type: 'SELL_SHARES'; firmId: FirmId; targetFirmId: FirmId; percent: number }
   | { type: 'SELECT_ENTITY'; entityId: EntityId | null };

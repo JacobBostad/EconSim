@@ -76,7 +76,7 @@ import { runRentSystem } from '../systems/RentSystem';
 import { runTownStatsSystem } from '../systems/TownStatsSystem';
 import { runCitizenScheduleSystem } from '../systems/CitizenScheduleSystem';
 import { runMovementSystem } from '../systems/MovementSystem';
-import { runLaborSystem, hireCitizen, fireCitizen, findUnemployed } from '../systems/LaborSystem';
+import { runLaborSystem, hireCitizen, fireCitizen, findUnemployed, trainCrew } from '../systems/LaborSystem';
 import { runProductionSystem } from '../systems/ProductionSystem';
 import { runLogisticsSystem } from '../systems/LogisticsSystem';
 import { runRetailDemandSystem } from '../systems/RetailDemandSystem';
@@ -232,6 +232,9 @@ export class Simulation {
         return;
       case 'ACCEPT_FACILITY_OFFER':
         acceptFacilityOffer(s);
+        return;
+      case 'TRAIN_CREW':
+        trainCrew(s, command.firmId, command.facilityId);
         return;
       case 'CIVIC_ACTION':
         this.civicAction(command.firmId, command.action);
