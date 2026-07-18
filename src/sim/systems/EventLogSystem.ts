@@ -10,6 +10,7 @@
  */
 
 import type { SimContext } from '../core/GameState';
+import { formatMoney } from '../../utils/formatMoney';
 import { emitEvent } from '../core/GameState';
 import { isDayBoundary } from '../core/Tick';
 import { operatingProfit } from '../entities/Accounting';
@@ -25,25 +26,40 @@ export function runEventLogSystem(ctx: SimContext): void {
     const fac = state.facilities[facId];
     if (!fac || fac.status === 'closed') continue;
 
-    if (fac.status === 'input-starved' && fac.bottleneckReason) {
-      emitEvent(state, 'warning', 'production', `${fac.name}: ${fac.bottleneckReason}.`, fac.id);
-    }
-    if (fac.status === 'labor-starved') {
-      emitEvent(state, 'warning', 'production', `${fac.name} has no workers present.`, fac.id);
-    }
-    if (fac.status === 'inventory-full') {
-      emitEvent(state, 'warning', 'production', `${fac.name}: workers idle — output storage is full.`, fac.id);
+    // Daily production digest from yesterday's stats (EventLog runs before the
+    // accounting reset). Instantaneous status is useless here: this pass runs
+    // at midnight, when every facility is off-shift.
+    // A full output buffer is a saturation signal, not a failure — even when
+    // it idled the facility all day. The harsh "produced nothing" alarm is
+    // reserved for real starvation (missing inputs, no workers).
+    if (fac.dailyStats.bottleneck === 'Output storage full') {
+      emitEvent(
+        state, 'info', 'production',
+        `${fac.name} is producing more than you sell — it pauses until stock moves. Sell the surplus wholesale, export from a warehouse, or grow your store's sales.`,
+        fac.id,
+      );
+    } else if (fac.activeRecipeId && fac.dailyStats.ticksActive === 0 && fac.dailyStats.bottleneck) {
+      emitEvent(
+        state, 'warning', 'production',
+        `${fac.name} produced nothing yesterday — ${fac.dailyStats.bottleneck}.`,
+        fac.id,
+      );
     }
 
-    if (fac.type === 'retail' && fac.retailProductId) {
-      const pid = fac.retailProductId;
+    for (const pid of fac.type === 'retail' ? fac.retailProductIds : []) {
       const product = getProduct(pid);
       if (fac.dailyStats.lostSales > 0) {
+        // Tell the truth about WHY: an empty shelf is a supply problem, a
+        // shopper at a closed door is just the clock.
+        const closed = fac.dailyStats.closedDoorVisits ?? 0;
+        const stockout = fac.dailyStats.lostSales - closed;
         emitEvent(
           state,
-          'warning',
+          stockout > 0 ? 'warning' : 'info',
           'retail',
-          `${fac.name} lost ${fac.dailyStats.lostSales} ${product.name} sales to stockouts today.`,
+          stockout > 0
+            ? `${fac.name} lost ${stockout} ${product.name} sales to stockouts today${closed > 0 ? ` (+${closed} shoppers arrived after closing)` : ''}.`
+            : `${fac.name} missed ${closed} ${product.name} shoppers who arrived after closing time — shelves were stocked.`,
           fac.id,
         );
       }
@@ -81,7 +97,7 @@ export function runEventLogSystem(ctx: SimContext): void {
       state,
       'danger',
       'finance',
-      `Your firm ran an operating loss of ${Math.abs(op)}¢ today — wages/costs exceed margin.`,
+      `Your firm ran an operating loss of ${formatMoney(Math.abs(op))} today — wages/costs exceed margin.`,
       player.id,
     );
   }

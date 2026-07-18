@@ -17,6 +17,8 @@ import type {
   EntityId,
 } from './Id';
 import type { Vec2 } from '../entities/Location';
+import type { StorePositioning } from '../entities/Facility';
+import type { ManagerRole } from '../entities/Firm';
 
 export type Speed = 0 | 1 | 5 | 20 | 100;
 
@@ -40,8 +42,62 @@ export type Command =
       facilityId: FacilityId;
       productId: ProductId | null;
     }
+  | { type: 'TOGGLE_RETAIL_PRODUCT'; facilityId: FacilityId; productId: ProductId }
   | { type: 'SET_PRICE'; firmId: FirmId; productId: ProductId; price: number }
+  | { type: 'SET_AUTO_PRICE'; firmId: FirmId; productId: ProductId; enabled: boolean }
+  | { type: 'BUILD_CHAIN'; firmId: FirmId; productId: ProductId }
+  | { type: 'UPGRADE_FACILITY'; firmId: FirmId; facilityId: FacilityId }
+  | { type: 'SELL_FACILITY'; firmId: FirmId; facilityId: FacilityId }
+  | { type: 'CIVIC_ACTION'; firmId: FirmId; action: 'festival' | 'fund_home' }
+  | {
+      type: 'SET_EXPORT_ORDER';
+      facilityId: FacilityId;
+      productId: ProductId;
+      /** null clears the standing order. */
+      minMult: number | null;
+      keep: number;
+    }
+  | {
+      type: 'BUY_FROM_CITY';
+      firmId: FirmId;
+      /** Destination warehouse (storage is the position limit). */
+      facilityId: FacilityId;
+      productId: ProductId;
+      quantity: number;
+      cityId: string;
+    }
+  | {
+      type: 'SELL_FORWARD';
+      firmId: FirmId;
+      productId: ProductId;
+      quantity: number;
+      cityId: string;
+      /** Absolute game day to deliver by (3–10 days out). */
+      deliveryDay: number;
+    }
+  | {
+      type: 'EXPORT_GOODS';
+      firmId: FirmId;
+      facilityId: FacilityId;
+      productId: ProductId;
+      quantity: number;
+      /** Destination trade city; defaults to the best net price if omitted. */
+      cityId?: string;
+    }
   | { type: 'SET_WAGE'; firmId: FirmId; wage: number }
+  | { type: 'TOGGLE_WHOLESALE'; facilityId: FacilityId; enabled: boolean }
+  | { type: 'SET_POSITIONING'; facilityId: FacilityId; positioning: StorePositioning }
+  | {
+      type: 'HIRE_MANAGER';
+      firmId: FirmId;
+      /** The store for a 'store' hire; omit/null for firm-wide roles. */
+      facilityId?: FacilityId | null;
+      candidateIndex: number;
+      /** Defaults to 'store'. */
+      role?: ManagerRole;
+    }
+  | { type: 'FIRE_MANAGER'; firmId: FirmId; managerId: string }
+  | { type: 'SET_WHOLESALE_PRICE'; facilityId: FacilityId; mult: number }
   | { type: 'HIRE_WORKER'; facilityId: FacilityId; citizenId: CitizenId | null }
   | { type: 'FIRE_WORKER'; facilityId: FacilityId; citizenId: CitizenId }
   | {
@@ -56,6 +112,14 @@ export type Command =
     }
   | { type: 'CANCEL_SUPPLY_CONTRACT'; contractId: ContractId }
   | {
+      type: 'UPDATE_SUPPLY_CONTRACT';
+      contractId: ContractId;
+      targetQuantity?: number;
+      reorderPoint?: number;
+      maxInventory?: number;
+      active?: boolean;
+    }
+  | {
       type: 'BUY_FROM_IMPORTER';
       firmId: FirmId;
       destinationFacilityId: FacilityId;
@@ -66,6 +130,11 @@ export type Command =
   | { type: 'INVEST_RND'; firmId: FirmId; productId: ProductId; amount: number }
   | { type: 'TAKE_LOAN'; firmId: FirmId; amount: number }
   | { type: 'REPAY_LOAN'; firmId: FirmId; amount: number }
+  | { type: 'ACQUIRE_FIRM'; firmId: FirmId; targetFirmId: FirmId }
+  /** Accept the active rival fire-sale offer (player only; validated in core/FireSale). */
+  | { type: 'ACCEPT_FACILITY_OFFER' }
+  /** Send a facility's crew to a training workshop (+skill per worker, paid per head). */
+  | { type: 'TRAIN_CREW'; firmId: FirmId; facilityId: FacilityId }
   | { type: 'BUY_SHARES'; firmId: FirmId; targetFirmId: FirmId; percent: number }
   | { type: 'SELL_SHARES'; firmId: FirmId; targetFirmId: FirmId; percent: number }
   | { type: 'SELECT_ENTITY'; entityId: EntityId | null };

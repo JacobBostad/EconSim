@@ -1,8 +1,8 @@
 /**
  * startingScenario.ts — Builds the initial, immediately-playable GameState.
  *
- * The town has 40 citizens in 20 homes, two AI competitors running full supply
- * chains (a bread chain and a tools chain), an external importer, and a player
+ * The town has 40 citizens in 20 homes, three AI competitors running full supply
+ * chains (bread, tools, and clothes), an external importer, and a player
  * firm with starting cash but no facilities (buildable empty land). Initial
  * inventories and employment are seeded so the economy starts moving on tick 0.
  *
@@ -27,16 +27,18 @@ import { addStock, type Inventory } from '../entities/Inventory';
 import { makeCitizenNeeds } from '../entities/factories';
 import { getFacilityDef } from './facilityDefinitions';
 import { getProduct, CONSUMER_PRODUCT_IDS, ALL_PRODUCT_IDS } from './products';
+import { TRADE_CITY_IDS, cityBias } from './tradeCities';
 import { FIRST_NAMES, LAST_NAMES } from './names';
 import { dollars } from './constants';
+import { defaultPersonalityFor, defaultCeoFor } from './personalities';
+import { getScenario, DEFAULT_SCENARIO_ID } from './scenarios';
 import { SAVE_VERSION } from '../core/GameState';
 
 const NUM_HOMES = 20;
 const CITIZENS_PER_HOME = 2;
-const PLAYER_START_CASH = dollars(15000);
 const CITIZEN_START_CASH = dollars(400);
-const DEFAULT_AI_WAGE = dollars(14);
-const PLAYER_DEFAULT_WAGE = dollars(15);
+const DEFAULT_AI_WAGE = dollars(16);
+const PLAYER_DEFAULT_WAGE = dollars(16);
 
 interface Builder {
   state: GameState;
@@ -49,7 +51,7 @@ function newFacility(
   defId: string,
   ownerFirmId: string,
   location: Vec2,
-  opts: { name?: string; activeRecipeId?: string | null; retailProductId?: string | null } = {},
+  opts: { name?: string; activeRecipeId?: string | null; retailProductIds?: string[] } = {},
 ): Facility {
   const def = getFacilityDef(defId);
   const id = nextId(b.counters, 'fac');
@@ -66,15 +68,24 @@ function newFacility(
     storageCapacity: def.storageCapacity,
     recipes: [...def.allowedRecipes],
     activeRecipeId: opts.activeRecipeId ?? null,
-    retailProductId: opts.retailProductId ?? null,
+    retailProductIds: opts.retailProductIds ?? [],
+    positioning: 'standard',
     operatingCostPerDay: def.maintenanceCostPerDay,
     buildCost: def.buildCost,
     productionProgress: 0,
     status: 'idle',
     bottleneckReason: null,
     dailyStats: emptyFacilityDailyStats(),
+    yesterdayStats: emptyFacilityDailyStats(),
+    pnlEma: { revenue: 0, cost: 0, net: 0 },
     presentWorkers: 0,
+    presentSkill: 0,
+    builtAtTick: 0,
+    level: 1,
+    workerCapacity: def.workerCapacity,
+    exportOrders: {},
     residentIds: [],
+    wholesaleEnabled: true,
   };
   b.state.facilities[id] = fac;
   b.state.firms[ownerFirmId]!.facilities.push(id);
@@ -105,12 +116,23 @@ function newFirm(
     daysInsolvent: 0,
     marketShareByProduct: {},
     createdAtTick: 0,
+    personalityId: null,
+    ceoName: null,
     brandByProduct: {},
     adBudgetByProduct: {},
     qualityByProduct: {},
     debt: 0,
     interestRatePerDay: 0.0009,
     sharesHeld: {},
+    acquiredNames: [],
+    autoPriceByProduct: {},
+    exportRevenue: 0,
+    exportRevenueByCity: {},
+    wholesaleSpend: 0,
+    wholesaleEarned: 0,
+    managers: [],
+    forwards: [],
+    forwardWins: 0,
   };
   b.state.firms[id] = firm;
   return firm;
@@ -142,11 +164,14 @@ function newCitizen(b: Builder, homeId: string, homeLoc: Vec2): Citizen {
     activity: 'home',
     satisfaction: 70,
     employmentStatus: 'unemployed',
+    tier: 'worker',
+    tierStreak: 0,
     lastPurchasedFromByProduct: {},
     storeReliability: {},
     dailyStats: { day: 0, wagesEarned: 0, spent: 0, purchases: 0, unmetNeeds: 0 },
     lastShopTick: -1000,
     missedPaydays: 0,
+    skill: b.rng.range(0.85, 1.05),
   };
   b.state.citizens[id] = cit;
   b.state.facilities[homeId]!.residentIds.push(id);
@@ -179,11 +204,14 @@ function stock(inv: Inventory, productId: string, qty: number): void {
 export function createInitialState(
   seed: number,
   config: SimulationConfig = DEFAULT_CONFIG,
+  scenarioId: string = DEFAULT_SCENARIO_ID,
 ): GameState {
+  const scenario = getScenario(scenarioId);
   const counters: IdCounters = {};
   const state: GameState = {
     saveVersion: SAVE_VERSION,
     seed,
+    scenarioId: scenario.id,
     rngState: seedToState(seed),
     tick: 0,
     speed: 1,
@@ -200,13 +228,37 @@ export function createInitialState(
     worldFirmId: '',
     events: [],
     transactions: [],
+    worldEvents: [],
+    achievements: [],
+    missions: [],
+    tradeCities: {},
+    rushOrder: null,
+    tradeAnnouncement: null,
+    rushOrdersCompleted: 0,
+    rushOrdersMissed: 0,
+    facilityOffer: null,
+    fireSalesBought: 0,
+    deskTrades: 0,
+    emigrationPressure: 0,
+    emigrationDepartures: 0,
+    marketGapDays: {},
+    lastLapsedFireSale: null,
+    townHistory: [],
     idCounters: counters,
     selectedEntityId: null,
     perf: { lastTickMs: 0, avgTickMs: 0, ticksSimulated: 0 },
   };
   const b: Builder = { state, rng: new Rng(state), counters };
 
-  for (const pid of ALL_PRODUCT_IDS) state.marketStats[pid] = emptyMarketStat(pid);
+  for (const cid of TRADE_CITY_IDS) state.tradeCities[cid] = { pricesByProduct: {} };
+  for (const pid of ALL_PRODUCT_IDS) {
+    state.marketStats[pid] = emptyMarketStat(pid);
+    for (const cid of TRADE_CITY_IDS) {
+      state.tradeCities[cid]!.pricesByProduct[pid] = Math.round(
+        getProduct(pid).basePrice * cityBias(cid, pid),
+      );
+    }
+  }
 
   // --- World firm (owns homes; sink for external costs) ------------------
   const world = newFirm(b, 'Municipality', 'world', 0, emptyStrategy('none'), 0);
@@ -215,7 +267,8 @@ export function createInitialState(
   // --- Homes (residential neighbourhood, lower band) ---------------------
   const homeLocations: Vec2[] = [];
   const cols = 5;
-  for (let i = 0; i < NUM_HOMES; i++) {
+  const numHomes = scenario.homes ?? NUM_HOMES;
+  for (let i = 0; i < numHomes; i++) {
     const col = i % cols;
     const row = Math.floor(i / cols);
     const loc: Vec2 = { x: 16 + col * 11, y: 60 + row * 8 };
@@ -243,7 +296,7 @@ export function createInitialState(
     b,
     'Player Holdings',
     'player',
-    PLAYER_START_CASH,
+    state.config.playerStartCash,
     emptyStrategy('none'),
     PLAYER_DEFAULT_WAGE,
   );
@@ -264,101 +317,9 @@ export function createInitialState(
   // Importer holds a large buffer so contract-based sourcing always succeeds.
   stock(importerFac.outputInventory, 'grain', 100000);
   stock(importerFac.outputInventory, 'minerals', 100000);
+  stock(importerFac.outputInventory, 'cotton', 100000);
 
-  // --- AI Foods: bread chain (farm -> bakery -> retail) ------------------
-  const aiFoods = newFirm(
-    b,
-    'Sunrise Foods',
-    'ai',
-    dollars(40000),
-    emptyStrategy('bread'),
-    DEFAULT_AI_WAGE,
-  );
-  aiFoods.pricesByProduct.bread = getProduct('bread').basePrice;
-  aiFoods.brandByProduct.bread = 22;
-  aiFoods.qualityByProduct.bread = getProduct('bread').defaultQuality;
-  aiFoods.adBudgetByProduct.bread = dollars(20);
-
-  const farm = newFacility(b, 'farm', aiFoods.id, { x: 26, y: 16 }, {
-    name: 'Sunrise Farm',
-    activeRecipeId: 'grow_grain',
-  });
-  stock(farm.outputInventory, 'grain', 60);
-
-  const bakery = newFacility(b, 'factory', aiFoods.id, { x: 48, y: 32 }, {
-    name: 'Sunrise Bakery',
-    activeRecipeId: 'bake_bread',
-  });
-  stock(bakery.inputInventory, 'grain', 30);
-  stock(bakery.outputInventory, 'bread', 24);
-
-  const breadShop = newFacility(b, 'retail', aiFoods.id, { x: 46, y: 48 }, {
-    name: 'Sunrise Bread Shop',
-    retailProductId: 'bread',
-  });
-  stock(breadShop.inputInventory, 'bread', 40);
-
-  // Staff the bread chain (lean: roughly at each recipe's labor requirement).
-  for (let i = 0; i < 2; i++) {
-    const w = takeWorker();
-    if (w) employ(b, w, aiFoods.id, farm.id, 'farmhand', DEFAULT_AI_WAGE);
-  }
-  for (let i = 0; i < 2; i++) {
-    const w = takeWorker();
-    if (w) employ(b, w, aiFoods.id, bakery.id, 'baker', DEFAULT_AI_WAGE);
-  }
-  for (let i = 0; i < 2; i++) {
-    const w = takeWorker();
-    if (w) employ(b, w, aiFoods.id, breadShop.id, 'clerk', DEFAULT_AI_WAGE);
-  }
-
-  // --- AI Industrial: tools chain (mine -> factory -> retail) ------------
-  const aiInd = newFirm(
-    b,
-    'Granite Industries',
-    'ai',
-    dollars(45000),
-    emptyStrategy('tools'),
-    DEFAULT_AI_WAGE,
-  );
-  aiInd.pricesByProduct.tools = getProduct('tools').basePrice;
-  aiInd.brandByProduct.tools = 22;
-  aiInd.qualityByProduct.tools = getProduct('tools').defaultQuality;
-  aiInd.adBudgetByProduct.tools = dollars(14);
-
-  const mine = newFacility(b, 'mine', aiInd.id, { x: 104, y: 16 }, {
-    name: 'Granite Mine',
-    activeRecipeId: 'mine_minerals',
-  });
-  stock(mine.outputInventory, 'minerals', 50);
-
-  const toolFactory = newFacility(b, 'factory', aiInd.id, { x: 86, y: 32 }, {
-    name: 'Granite Tool Works',
-    activeRecipeId: 'make_tools',
-  });
-  stock(toolFactory.inputInventory, 'minerals', 24);
-  stock(toolFactory.outputInventory, 'tools', 12);
-
-  const toolShop = newFacility(b, 'retail', aiInd.id, { x: 78, y: 48 }, {
-    name: 'Granite Hardware',
-    retailProductId: 'tools',
-  });
-  stock(toolShop.inputInventory, 'tools', 20);
-
-  for (let i = 0; i < 2; i++) {
-    const w = takeWorker();
-    if (w) employ(b, w, aiInd.id, mine.id, 'miner', DEFAULT_AI_WAGE);
-  }
-  for (let i = 0; i < 2; i++) {
-    const w = takeWorker();
-    if (w) employ(b, w, aiInd.id, toolFactory.id, 'machinist', DEFAULT_AI_WAGE);
-  }
-  for (let i = 0; i < 1; i++) {
-    const w = takeWorker();
-    if (w) employ(b, w, aiInd.id, toolShop.id, 'clerk', DEFAULT_AI_WAGE);
-  }
-
-  // --- AI supply contracts -----------------------------------------------
+  // --- AI chains (data-driven; see data/scenarios.ts) --------------------
   const addContract = (
     ownerFirmId: string,
     source: string,
@@ -385,10 +346,58 @@ export function createInitialState(
     return ctr;
   };
 
-  addContract(aiFoods.id, farm.id, bakery.id, 'grain', 40, 15, 80);
-  addContract(aiFoods.id, bakery.id, breadShop.id, 'bread', 50, 20, 90);
-  addContract(aiInd.id, mine.id, toolFactory.id, 'minerals', 30, 12, 60);
-  addContract(aiInd.id, toolFactory.id, toolShop.id, 'tools', 24, 8, 50);
+  let aiIndex = 0;
+  for (const spec of scenario.aiChains) {
+    const firm = newFirm(b, spec.firmName, 'ai', spec.cash, emptyStrategy(spec.product), DEFAULT_AI_WAGE);
+    const personality = spec.personality ?? defaultPersonalityFor(aiIndex);
+    firm.personalityId = personality;
+    firm.ceoName = defaultCeoFor(personality, aiIndex);
+    aiIndex += 1;
+    firm.pricesByProduct[spec.product] = getProduct(spec.product).basePrice;
+    firm.brandByProduct[spec.product] = spec.brand;
+    firm.qualityByProduct[spec.product] = getProduct(spec.product).defaultQuality;
+    firm.adBudgetByProduct[spec.product] = spec.adBudget;
+
+    // Importer-fed chains build no producer: their factory buys inputs from
+    // the Import Terminal, making them day-one wholesale customers for any
+    // local supplier who undercuts it.
+    const producer = spec.importerFed
+      ? null
+      : newFacility(b, spec.producerDef, firm.id, spec.loc.producer, {
+          name: spec.producerName,
+          activeRecipeId: spec.producerRecipe,
+        });
+    if (producer) stock(producer.outputInventory, spec.inputProduct, spec.stocks.producerOut);
+
+    const factory = newFacility(b, 'factory', firm.id, spec.loc.factory, {
+      name: spec.factoryName,
+      activeRecipeId: spec.factoryRecipe,
+    });
+    stock(factory.inputInventory, spec.inputProduct, spec.stocks.factoryIn);
+    stock(factory.outputInventory, spec.product, spec.stocks.factoryOut);
+
+    const shop = newFacility(b, 'retail', firm.id, spec.loc.retail, {
+      name: spec.retailName,
+      retailProductIds: [spec.product],
+    });
+    stock(shop.inputInventory, spec.product, spec.stocks.shopIn);
+
+    const staffUp = (facId: string, count: number, role: string): void => {
+      for (let i = 0; i < count; i++) {
+        const w = takeWorker();
+        if (w) employ(b, w, firm.id, facId, role, DEFAULT_AI_WAGE);
+      }
+    };
+    if (producer) staffUp(producer.id, spec.staff.producer, `${spec.producerDef} worker`);
+    staffUp(factory.id, spec.staff.factory, 'factory worker');
+    staffUp(shop.id, spec.staff.retail, 'clerk');
+
+    addContract(
+      firm.id, producer ? producer.id : importerFac.id, factory.id,
+      spec.inputProduct, spec.pf.target, spec.pf.reorder, spec.pf.max,
+    );
+    addContract(firm.id, factory.id, shop.id, spec.product, spec.fs.target, spec.fs.reorder, spec.fs.max);
+  }
 
   return state;
 }

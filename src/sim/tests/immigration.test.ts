@@ -43,16 +43,30 @@ describe('Immigration', () => {
     expect(newcomer).toBeTruthy();
   });
 
-  it('an unhappy town does not grow', () => {
+  it('a merely-glum town neither grows nor shrinks', () => {
+    // Satisfaction 50: below the immigration gate (55) but above the
+    // emigration bar (42) — the town just sits still.
     const sim = newSim(302);
     const state = sim.getState();
-    for (const id in state.citizens) state.citizens[id]!.satisfaction = 20;
     const popBefore = Object.keys(state.citizens).length;
     for (let d = 1; d <= 20; d++) {
       state.tick = TPD * d;
+      for (const id in state.citizens) state.citizens[id]!.satisfaction = 50;
       runImmigrationSystem(makeContext(state));
     }
     expect(Object.keys(state.citizens).length).toBe(popBefore);
+  });
+
+  it('a deeply miserable worker town eventually shrinks', () => {
+    const sim = newSim(302);
+    const state = sim.getState();
+    const popBefore = Object.keys(state.citizens).length;
+    for (let d = 1; d <= 30; d++) {
+      state.tick = TPD * d;
+      for (const id in state.citizens) state.citizens[id]!.satisfaction = 20;
+      runImmigrationSystem(makeContext(state));
+    }
+    expect(Object.keys(state.citizens).length).toBeLessThan(popBefore);
   });
 
   it('growth respects the population cap', () => {

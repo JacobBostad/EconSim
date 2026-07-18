@@ -24,7 +24,7 @@ export function facilitiesSellingProduct(state: GameState, productId: ProductId)
   const out: Facility[] = [];
   for (const id in state.facilities) {
     const f = state.facilities[id]!;
-    if (f.type === 'retail' && f.retailProductId === productId) out.push(f);
+    if (f.type === 'retail' && f.retailProductIds.includes(productId)) out.push(f);
   }
   return out;
 }

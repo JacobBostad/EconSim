@@ -9,6 +9,19 @@ import { BottomBar } from './BottomBar';
 import { Dashboard } from './Dashboard';
 import { Intro } from './Intro';
 import { ObjectiveBanner } from './ObjectiveBanner';
+import { WorldEventTicker } from './WorldEventTicker';
+import { AchievementToast } from './AchievementToast';
+import { NewGameModal } from './NewGameModal';
+import { MissionPanel } from './MissionPanel';
+import { SoundDirector } from './SoundDirector';
+import { MusicDirector } from './MusicDirector';
+import { TakeoverToast } from './TakeoverToast';
+import { ReportCardModal } from './ReportCardModal';
+import { ReceivershipModal } from './ReceivershipModal';
+import { FinalScoreModal } from './FinalScoreModal';
+import { RecordsTracker } from './RecordsTracker';
+import { KeyboardShortcuts } from './KeyboardShortcuts';
+import { ChronicleModal } from './ChronicleModal';
 
 export function App(): React.ReactElement {
   // Subscribe to version so the whole tree re-renders as the sim advances.
@@ -22,11 +35,14 @@ export function App(): React.ReactElement {
       </div>
       <div className="left panel">
         <Controls />
+        <MissionPanel />
         <BuildPanel />
       </div>
       <div className="center">
         <MapView />
+        <WorldEventTicker />
         <ObjectiveBanner />
+        <AchievementToast />
         {dashboard !== 'none' && <Dashboard />}
       </div>
       <div className="right panel">
@@ -36,6 +52,16 @@ export function App(): React.ReactElement {
         <BottomBar />
       </div>
       <Intro />
+      <NewGameModal />
+      <ReportCardModal />
+      <ReceivershipModal />
+      <FinalScoreModal />
+      <SoundDirector />
+      <MusicDirector />
+      <TakeoverToast />
+      <RecordsTracker />
+      <KeyboardShortcuts />
+      <ChronicleModal />
     </div>
   );
 }

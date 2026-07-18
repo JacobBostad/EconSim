@@ -6,3 +6,7 @@ dist-ssr
 coverage
 .vite
 *.log
+
+e2e/.artifacts/
+shot-*.png
+*.tsbuildinfo

@@ -8,10 +8,10 @@
 
 import type { ProductId } from '../core/Id';
 
-export type ProductCategory = 'food' | 'durable' | 'raw' | 'intermediate';
+export type ProductCategory = 'food' | 'durable' | 'raw' | 'intermediate' | 'apparel' | 'luxury';
 
 /** What kind of citizen need this product satisfies (raw goods satisfy none). */
-export type NeedType = 'food' | 'goods' | 'none';
+export type NeedType = 'food' | 'goods' | 'clothing' | 'luxury' | 'none';
 
 export interface Product {
   id: ProductId;
@@ -29,6 +29,12 @@ export interface Product {
   brandWeight: number;
   /** Which citizen need this product satisfies. */
   needType: NeedType;
+  /**
+   * Override for how much an unmet need for this product hurts satisfaction
+   * (defaults per needType: food 1.4, luxury 0.2, else 0.55). Lets a small
+   * craving (coffee) matter less than a missing staple at the same needType.
+   */
+  satisfactionWeight?: number;
   /** Default quality (0..100) for freshly produced units. */
   defaultQuality: number;
   /** Logical size per unit (used for storage/transport accounting). */

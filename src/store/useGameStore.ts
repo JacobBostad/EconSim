@@ -20,10 +20,12 @@
 import { create } from 'zustand';
 import { Simulation } from '../sim/core/Simulation';
 import { createInitialState } from '../sim/data/startingScenario';
+import { configForDifficulty, type Difficulty } from '../sim/core/SimulationConfig';
 import type { GameState } from '../sim/core/GameState';
 import type { Command, Speed } from '../sim/core/Commands';
 import type { EntityId, FacilityDefId } from '../sim/core/Id';
-import { saveGame, loadGame, hasSave } from '../sim/persistence/saveLoad';
+import { saveGame, loadGame, hasSave, BACKUP_SLOT } from '../sim/persistence/saveLoad';
+import { recordTownFounded } from '../ui/records';
 
 const DEFAULT_SEED = 20260601;
 
@@ -41,6 +43,8 @@ export type DashboardTab =
   | 'market'
   | 'supply'
   | 'population'
+  | 'awards'
+  | 'gazette'
   | 'debug';
 
 interface GameStore {
@@ -50,6 +54,8 @@ interface GameStore {
   dashboard: DashboardTab;
   showIntro: boolean;
   setShowIntro: (v: boolean) => void;
+  showNewGame: boolean;
+  setShowNewGame: (v: boolean) => void;
   /** Wall-clock ms at the last tick, exposed for render interpolation. */
   lastTickAt: number;
   tickIntervalMs: number;
@@ -60,14 +66,23 @@ interface GameStore {
   setSpeed: (speed: Speed) => void;
   togglePause: () => void;
 
-  newGame: (seed?: number) => void;
+  newGame: (seed?: number, difficulty?: Difficulty, scenarioId?: string, challenge?: boolean, size?: 'cozy' | 'bustling') => void;
   save: () => void;
   load: () => void;
   hasSave: () => boolean;
+  /** Restore the town that was running before the last New Game. */
+  loadBackup: () => void;
+  hasBackup: () => boolean;
 
   select: (id: EntityId | null) => void;
   setBuildDef: (defId: FacilityDefId | null) => void;
   setDashboard: (tab: DashboardTab) => void;
+  /** Supply-chain flow overlay on the map (toggled with F). */
+  flowOverlay: boolean;
+  /** Citizen the camera is following on the map (null = free camera). */
+  followedCitizenId: string | null;
+  setFollow: (citizenId: string | null) => void;
+  toggleFlowOverlay: () => void;
 
   _start: () => void;
 }
@@ -102,6 +117,8 @@ export const useGameStore = create<GameStore>((set, get) => {
       if (!v) { try { localStorage.setItem('econsim.introSeen', '1'); } catch { /* ignore */ } }
       set({ showIntro: v });
     },
+    showNewGame: false,
+    setShowNewGame: (v) => set({ showNewGame: v }),
     lastTickAt: performance.now(),
     tickIntervalMs: 1000 / SPEED_TPS[1],
 
@@ -130,9 +147,18 @@ export const useGameStore = create<GameStore>((set, get) => {
       bump(true);
     },
 
-    newGame: (seed = Math.floor(Math.random() * 1_000_000)) => {
-      get().sim.setState(createInitialState(seed));
-      set({ buildDefId: null });
+    newGame: (seed = Math.floor(Math.random() * 1_000_000), difficulty = 'standard', scenarioId = 'meadowbrook', challenge = false, size = 'cozy') => {
+      // The 4s autosave would overwrite the old town within seconds of a new
+      // game — stash it in the backup slot so a mis-click never costs a run.
+      const old = get().sim.getState();
+      if (old.tick > 0) saveGame(old, BACKUP_SLOT);
+      const sizeOverrides =
+        size === 'bustling' ? { maxHomes: 80, maxCitizens: 160, mapHeight: 124 } : {};
+      get().sim.setState(
+        createInitialState(seed, { ...configForDifficulty(difficulty), challengeMode: challenge, ...sizeOverrides }, scenarioId),
+      );
+      recordTownFounded();
+      set({ buildDefId: null, showNewGame: false });
       bump(true);
     },
 
@@ -151,6 +177,16 @@ export const useGameStore = create<GameStore>((set, get) => {
 
     hasSave: () => hasSave(),
 
+    loadBackup: () => {
+      const loaded = loadGame(BACKUP_SLOT);
+      if (loaded) {
+        get().sim.setState(loaded);
+        bump(true);
+      }
+    },
+
+    hasBackup: () => hasSave(BACKUP_SLOT),
+
     select: (id) => {
       get().sim.dispatch({ type: 'SELECT_ENTITY', entityId: id });
       bump(true);
@@ -158,6 +194,10 @@ export const useGameStore = create<GameStore>((set, get) => {
 
     setBuildDef: (defId) => set({ buildDefId: defId }),
     setDashboard: (tab) => set({ dashboard: tab }),
+    flowOverlay: false,
+    toggleFlowOverlay: () => set((s) => ({ flowOverlay: !s.flowOverlay })),
+    followedCitizenId: null,
+    setFollow: (citizenId) => set({ followedCitizenId: citizenId }),
 
     _start: () => {
       if (typeof window === 'undefined') return;

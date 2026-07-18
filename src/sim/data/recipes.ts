@@ -22,7 +22,7 @@ export const RECIPES: Record<RecipeId, Recipe> = {
     laborRequired: 2,
     ticksRequired: 3,
     baseEfficiency: 1,
-    variableCost: dollars(2.0), // seed, water, fuel
+    variableCost: dollars(1.5), // seed, water, fuel
   },
   bake_bread: {
     id: 'bake_bread',
@@ -33,7 +33,19 @@ export const RECIPES: Record<RecipeId, Recipe> = {
     laborRequired: 2,
     ticksRequired: 2,
     baseEfficiency: 1,
-    variableCost: dollars(1.5),
+    variableCost: dollars(1.2),
+  },
+
+  roast_coffee: {
+    id: 'roast_coffee',
+    name: 'Roast Coffee',
+    facilityType: 'factory',
+    inputs: [{ productId: 'grain', quantity: 2 }],
+    outputs: [{ productId: 'coffee', quantity: 10 }],
+    laborRequired: 2,
+    ticksRequired: 2,
+    baseEfficiency: 1,
+    variableCost: dollars(0.8),
   },
 
   // --- Tools chain -------------------------------------------------------
@@ -46,18 +58,68 @@ export const RECIPES: Record<RecipeId, Recipe> = {
     laborRequired: 2,
     ticksRequired: 4,
     baseEfficiency: 1,
-    variableCost: dollars(2.5),
+    variableCost: dollars(1.8),
   },
   make_tools: {
     id: 'make_tools',
     name: 'Make Tools',
     facilityType: 'factory',
     inputs: [{ productId: 'minerals', quantity: 4 }],
-    outputs: [{ productId: 'tools', quantity: 9 }],
+    outputs: [{ productId: 'tools', quantity: 10 }],
     laborRequired: 2,
     ticksRequired: 3,
     baseEfficiency: 1,
-    variableCost: dollars(2.5),
+    variableCost: dollars(1.8),
+  },
+
+  // --- Apparel chain -----------------------------------------------------
+  grow_cotton: {
+    id: 'grow_cotton',
+    name: 'Grow Cotton',
+    facilityType: 'farm',
+    inputs: [],
+    outputs: [{ productId: 'cotton', quantity: 8 }],
+    laborRequired: 2,
+    ticksRequired: 3,
+    baseEfficiency: 1,
+    variableCost: dollars(1.6),
+  },
+  sew_clothes: {
+    id: 'sew_clothes',
+    name: 'Sew Clothes',
+    facilityType: 'factory',
+    inputs: [{ productId: 'cotton', quantity: 3 }],
+    outputs: [{ productId: 'clothes', quantity: 8 }],
+    laborRequired: 2,
+    ticksRequired: 3,
+    baseEfficiency: 1,
+    variableCost: dollars(1.6),
+  },
+
+  // --- Luxury tier (requires mastery — see minQuality) -------------------
+  bake_pastries: {
+    id: 'bake_pastries',
+    name: 'Bake Pastries',
+    facilityType: 'factory',
+    inputs: [{ productId: 'grain', quantity: 2 }],
+    outputs: [{ productId: 'pastries', quantity: 6 }],
+    laborRequired: 2,
+    ticksRequired: 3,
+    baseEfficiency: 1,
+    variableCost: dollars(2.4),
+    minQuality: 75,
+  },
+  craft_jewelry: {
+    id: 'craft_jewelry',
+    name: 'Craft Jewelry',
+    facilityType: 'factory',
+    inputs: [{ productId: 'minerals', quantity: 3 }],
+    outputs: [{ productId: 'jewelry', quantity: 4 }],
+    laborRequired: 2,
+    ticksRequired: 4,
+    baseEfficiency: 1,
+    variableCost: dollars(4.0),
+    minQuality: 75,
   },
 
   // --- Importer (extraction from the outside world) ----------------------
@@ -82,6 +144,17 @@ export const RECIPES: Record<RecipeId, Recipe> = {
     ticksRequired: 2,
     baseEfficiency: 1,
     variableCost: dollars(3.4),
+  },
+  import_cotton: {
+    id: 'import_cotton',
+    name: 'Import Cotton',
+    facilityType: 'importer',
+    inputs: [],
+    outputs: [{ productId: 'cotton', quantity: 8 }],
+    laborRequired: 0,
+    ticksRequired: 2,
+    baseEfficiency: 1,
+    variableCost: dollars(3.6),
   },
 };
 

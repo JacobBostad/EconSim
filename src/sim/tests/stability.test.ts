@@ -19,5 +19,8 @@ describe('Stability', () => {
     // Bounded logs never exploded.
     expect(after.events.length).toBeLessThanOrEqual(after.config.maxEvents);
     expect(after.transactions.length).toBeLessThanOrEqual(after.config.maxTransactions);
+    // Perf budget: measured ~0.2ms avg/tick at max town size; 2ms is a 10×
+    // headroom alarm line before playback smoothness is ever at risk.
+    expect(after.perf.avgTickMs).toBeLessThan(2);
   }, 30000);
 });

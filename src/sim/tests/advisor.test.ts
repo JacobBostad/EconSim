@@ -1,0 +1,171 @@
+import { describe, it, expect } from 'vitest';
+import { newSim } from './helpers';
+import { morningBriefing } from '../selectors/advisorSelectors';
+import { addStock } from '../entities/Inventory';
+import { getProduct } from '../data/products';
+
+describe('morningBriefing', () => {
+  const snap = (day: number, operatingProfit: number, cash: number) => ({
+    day, revenue: 0, costOfGoodsSold: 0, wages: -Math.min(0, operatingProfit), maintenance: 0,
+    logisticsCost: 0, variableProductionCost: 0, marketing: 0, rnd: 0, interest: 0,
+    grossProfit: 0, operatingProfit, netProfit: operatingProfit,
+    cash, debt: 0, inventoryValue: 0, valuation: 100000, buildSpend: 0,
+  });
+
+  it('counts down the cash runway when the firm burns money', () => {
+    const sim = newSim(1);
+    const state = sim.getState();
+    const player = state.firms[state.playerFirmId]!;
+    player.cash = 100_00; // $100 left
+    for (let d = 1; d <= 5; d++) player.accounting.dailyHistory.push(snap(d, -20_00, 200_00));
+
+    const advice = morningBriefing(state);
+    const runway = advice.find((a) => a.icon === '⏳')!;
+    expect(runway).toBeTruthy();
+    expect(runway.severity).toBe('danger'); // 5 days left
+    expect(runway.text).toContain('5 days of cash left');
+  });
+
+  it('stays quiet about runway when the firm is profitable or flush', () => {
+    const sim = newSim(1);
+    const state = sim.getState();
+    const player = state.firms[state.playerFirmId]!;
+    player.cash = 100000_00;
+    for (let d = 1; d <= 5; d++) player.accounting.dailyHistory.push(snap(d, -20_00, 100000_00));
+    // Flush: 5000 days of runway — no line.
+    expect(morningBriefing(state).find((a) => a.icon === '⏳')).toBeUndefined();
+
+    player.accounting.dailyHistory.length = 0;
+    for (let d = 1; d <= 5; d++) player.accounting.dailyHistory.push(snap(d, 50_00, 100000_00));
+    // Profitable — no line.
+    expect(morningBriefing(state).find((a) => a.icon === '⏳')).toBeUndefined();
+  });
+
+  it('warns when payroll swamps revenue during a sustained loss', () => {
+    const sim = newSim(1);
+    const state = sim.getState();
+    const player = state.firms[state.playerFirmId]!;
+    player.employees.push(Object.keys(state.citizens)[0]!);
+    for (let d = 1; d <= 6; d++) {
+      player.accounting.dailyHistory.push({
+        ...snap(d, -10_00, 5000_00),
+        revenue: 100_00,
+        wages: 80_00,
+      });
+    }
+    const advice = morningBriefing(state);
+    const wageTrap = advice.find((a) => a.icon === '⚖️')!;
+    expect(wageTrap).toBeTruthy();
+    expect(wageTrap.severity).toBe('warning');
+    expect(wageTrap.text).toContain('80% of revenue');
+  });
+
+  it('stays quiet about payroll when profitable or when wages are proportionate', () => {
+    const sim = newSim(1);
+    const state = sim.getState();
+    const player = state.firms[state.playerFirmId]!;
+    player.employees.push(Object.keys(state.citizens)[0]!);
+    // Profitable at high wage share — earning your payroll is fine.
+    for (let d = 1; d <= 6; d++) {
+      player.accounting.dailyHistory.push({ ...snap(d, 20_00, 5000_00), revenue: 100_00, wages: 70_00 });
+    }
+    expect(morningBriefing(state).find((a) => a.icon === '⚖️')).toBeUndefined();
+
+    // Losing, but wages are a minor share — the loss is something else.
+    player.accounting.dailyHistory.length = 0;
+    for (let d = 1; d <= 6; d++) {
+      player.accounting.dailyHistory.push({ ...snap(d, -10_00, 5000_00), revenue: 100_00, wages: 30_00 });
+    }
+    expect(morningBriefing(state).find((a) => a.icon === '⚖️')).toBeUndefined();
+  });
+
+  it('flags a losing day with its dominant cost', () => {
+    const sim = newSim(1);
+    const state = sim.getState();
+    const player = state.firms[state.playerFirmId]!;
+    player.accounting.dailyHistory.push({
+      day: 3, revenue: 1000, costOfGoodsSold: 0, wages: 8000, maintenance: 900,
+      logisticsCost: 0, variableProductionCost: 0, marketing: 0, rnd: 0, interest: 0,
+      grossProfit: 1000, operatingProfit: -7900, netProfit: -7900,
+      cash: 100000, debt: 0, inventoryValue: 0, valuation: 100000, buildSpend: 0,
+    });
+    const advice = morningBriefing(state);
+    const money = advice.find((a) => a.icon === '📉');
+    expect(money).toBeTruthy();
+    expect(money!.severity).toBe('danger');
+    expect(money!.text).toContain('wages');
+  });
+
+  it('flags heavy debt service', () => {
+    const sim = newSim(1);
+    const state = sim.getState();
+    const player = state.firms[state.playerFirmId]!;
+    player.debt = 50000_00;
+    player.accounting.dailyHistory.push({
+      day: 3, revenue: 20000, costOfGoodsSold: 0, wages: 0, maintenance: 0,
+      logisticsCost: 0, variableProductionCost: 0, marketing: 0, rnd: 0, interest: 4500,
+      grossProfit: 20000, operatingProfit: 15500, netProfit: 15500,
+      cash: 100000, debt: 50000_00, inventoryValue: 0, valuation: 100000, buildSpend: 0,
+    });
+    const advice = morningBriefing(state);
+    const debtLine = advice.find((a) => a.icon === '🏦');
+    expect(debtLine).toBeTruthy();
+    expect(debtLine!.severity).toBe('warning');
+    expect(debtLine!.text).toContain('Debt service');
+  });
+
+  it('flags a facility blocked all day and a poach-risk wage gap', () => {
+    const sim = newSim(1);
+    const state = sim.getState();
+    const player = state.firms[state.playerFirmId]!;
+    sim.dispatch({ type: 'BUILD_CHAIN', firmId: player.id, productId: 'bread' });
+    const farm = player.facilities.map((id) => state.facilities[id]!).find((f) => f.type === 'farm')!;
+    // The advisor reads the closed-day snapshot, not mid-day partials.
+    farm.yesterdayStats.ticksActive = 0;
+    farm.yesterdayStats.bottleneck = 'No workers present (need 2)';
+    const rival = Object.values(state.firms).find((f) => f.name === 'Sunrise Foods')!;
+    rival.wagePolicy.baseWage = Math.round(player.wagePolicy.baseWage * 1.3);
+
+    const advice = morningBriefing(state);
+    expect(advice.some((a) => a.icon === '🏭' && a.text.includes(farm.name))).toBe(true);
+    expect(advice.some((a) => a.icon === '🤝')).toBe(true);
+  });
+
+  it('suggests wholesale when the player imports what a local firm has piled up', () => {
+    const sim = newSim(1);
+    const state = sim.getState();
+    const player = state.firms[state.playerFirmId]!;
+    sim.dispatch({ type: 'BUILD_CHAIN', firmId: player.id, productId: 'bread' });
+    const factory = player.facilities.map((id) => state.facilities[id]!).find((f) => f.type === 'factory')!;
+    const importer = Object.values(state.facilities).find((f) => f.type === 'importer')!;
+    sim.dispatch({
+      type: 'CREATE_SUPPLY_CONTRACT', ownerFirmId: player.id,
+      sourceFacilityId: importer.id, destinationFacilityId: factory.id,
+      productId: 'grain', targetQuantity: 20, reorderPoint: 10, maxInventory: 40,
+    });
+    const aiFarm = Object.values(state.facilities).find(
+      (f) => f.type === 'farm' && state.firms[f.ownerFirmId]?.ownerType === 'ai',
+    )!;
+    addStock(aiFarm.outputInventory, 'grain', 50, 60);
+
+    const advice = morningBriefing(state);
+    expect(advice.some((a) => a.text.includes('wholesale contract'))).toBe(true);
+  });
+
+  it('spots a Port Rosa premium for goods the player holds, and caps at 5 items', () => {
+    const sim = newSim(1);
+    const state = sim.getState();
+    const player = state.firms[state.playerFirmId]!;
+    sim.dispatch({ type: 'BUILD_CHAIN', firmId: player.id, productId: 'bread' });
+    const factory = player.facilities.map((id) => state.facilities[id]!).find((f) => f.type === 'factory')!;
+    addStock(factory.outputInventory, 'bread', 40, 60);
+    state.tradeCities['port_rosa']!.pricesByProduct['bread'] = Math.round(getProduct('bread').basePrice * 1.5);
+
+    const advice = morningBriefing(state);
+    expect(advice.some((a) => a.icon === '🚢' && a.text.includes('Bread'))).toBe(true);
+    expect(advice.length).toBeLessThanOrEqual(5);
+    // Severity ordering: dangers before infos.
+    const sevRank = advice.map((a) => ({ danger: 0, warning: 1, info: 2 })[a.severity]);
+    for (let i = 1; i < sevRank.length; i++) expect(sevRank[i - 1]!).toBeLessThanOrEqual(sevRank[i]!);
+  });
+});

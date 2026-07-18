@@ -27,14 +27,20 @@ export function isShopTime(ctx: SimContext): boolean {
   return h >= ctx.config.shopStartHour && h < ctx.config.shopEndHour;
 }
 
-/** The citizen's most urgent need that is above the shopping threshold. */
-function topUrgentNeed(ctx: SimContext, cit: Citizen): Citizen['needs'][number] | null {
-  let best: Citizen['needs'][number] | null = null;
-  for (const need of cit.needs) {
-    if (need.urgency < ctx.config.needUrgencyThreshold) continue;
-    if (!best || need.urgency > best.urgency) best = need;
-  }
-  return best;
+/**
+ * Needs above the shopping threshold, most urgent first. The schedule tries
+ * them in order and takes the first one an open store actually sells — an
+ * unservable craving (nobody in town sells clothes) must never block a
+ * citizen from buying bread.
+ */
+function shoppableNeeds(ctx: SimContext, cit: Citizen): Citizen['needs'] {
+  // Raw urgency, deliberately NOT weighted by satisfaction impact: buying a
+  // need drops its urgency below the others, which is what rotates trips
+  // across products. (A weighted sort was tried and measured: staples then
+  // outrank everything permanently and tools/clothes trips never recur.)
+  return cit.needs
+    .filter((n) => n.urgency >= ctx.config.needUrgencyThreshold)
+    .sort((a, b) => b.urgency - a.urgency);
 }
 
 export function runCitizenScheduleSystem(ctx: SimContext): void {
@@ -71,22 +77,29 @@ export function runCitizenScheduleSystem(ctx: SimContext): void {
       cit.activity = 'home';
     }
 
-    // 2) Shopping: in the window, or whenever a need is urgent (and not at work).
-    const urgent = topUrgentNeed(ctx, cit);
+    // 2) Shopping: in the window, or whenever a need is urgent (and not at
+    // work). Urgency never overrides store hours: a 3am trip just bounces off
+    // a closed door — measured as ~25 phantom "lost sales"/day per store and a
+    // nightly satisfaction drain, all retry inflation. The need keeps its
+    // urgency and the citizen shops at opening time instead.
+    const storesOpenNow =
+      ctx.time.hour >= ctx.config.storeOpenHour &&
+      ctx.time.hour < ctx.config.storeCloseHour;
     const offCooldown =
       state.tick - cit.lastShopTick >= ctx.config.shoppingCooldownTicks;
-    const canShopNow =
-      urgent != null &&
-      offCooldown &&
-      (isShopTime(ctx) || urgent.urgency >= ctx.config.needUrgentThreshold) &&
-      !(employed && isWorkTime(ctx));
-    if (canShopNow && urgent) {
-      const store = chooseBestStore(ctx, cit, urgent.productId);
-      if (store) {
-        cit.lastShopTick = state.tick;
-        startCommute(cit, store.id, store.location, 'commuting-to-shop');
-        continue;
+    if (offCooldown && storesOpenNow && !(employed && isWorkTime(ctx))) {
+      let commuting = false;
+      for (const need of shoppableNeeds(ctx, cit)) {
+        if (!isShopTime(ctx) && need.urgency < ctx.config.needUrgentThreshold) continue;
+        const store = chooseBestStore(ctx, cit, need.productId);
+        if (store) {
+          cit.lastShopTick = state.tick;
+          startCommute(cit, store.id, store.location, 'commuting-to-shop');
+          commuting = true;
+          break;
+        }
       }
+      if (commuting) continue;
     }
 
     // 3) Default: be at home (sleeping before work, home otherwise).

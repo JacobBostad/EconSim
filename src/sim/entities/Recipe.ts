@@ -32,4 +32,6 @@ export interface Recipe {
   baseEfficiency: number;
   /** Variable cost in cents per completed batch (paid to world account). */
   variableCost: number;
+  /** Firm must have at least this quality in the output product to run it. */
+  minQuality?: number;
 }

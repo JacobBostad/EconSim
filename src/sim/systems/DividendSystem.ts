@@ -12,6 +12,7 @@
  */
 
 import type { SimContext } from '../core/GameState';
+import { formatMoney } from '../../utils/formatMoney';
 import { recordTransaction, emitEvent } from '../core/GameState';
 import { firmAccount, WORLD_ACCOUNT } from '../core/Transactions';
 import { isDayBoundary } from '../core/Tick';
@@ -48,7 +49,7 @@ export function runDividendSystem(ctx: SimContext): void {
         note: `Dividend from ${payer.name} (${pct}%)`,
       });
       if (hid === state.playerFirmId) {
-        emitEvent(state, 'success', 'finance', `Received ${amount}¢ dividend from ${payer.name} (${pct}% stake).`, fid);
+        emitEvent(state, 'success', 'finance', `Received ${formatMoney(amount)} dividend from ${payer.name} (${pct}% stake).`, fid);
       }
     }
     // Public float's share leaves to the outside world.

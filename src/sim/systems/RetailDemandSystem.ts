@@ -24,6 +24,9 @@ import type { ProductId } from '../core/Id';
 import { getQuantity, getQuality, removeStock } from '../entities/Inventory';
 import { distance } from '../entities/Location';
 import { getProduct } from '../data/products';
+import { worldDemandMult, worldSpendingMult } from '../data/worldEvents';
+import { seasonDemandMult } from '../data/seasons';
+import { tierPriceCapMult, positioningAffinity, positioningPriceImage } from './TierSystem';
 import { clamp } from '../../utils/clamp';
 
 /** Price a firm charges for a product (falls back to base price). */
@@ -57,7 +60,7 @@ export function scoreStore(
   facility: Facility,
   productId: ProductId,
 ): StoreScore | null {
-  if (facility.retailProductId !== productId) return null;
+  if (!facility.retailProductIds.includes(productId)) return null;
   const product = getProduct(productId);
   const home = ctx.state.facilities[citizen.homeFacilityId];
   const refPrice = product.basePrice;
@@ -75,13 +78,31 @@ export function scoreStore(
   const firm = ctx.state.firms[facility.ownerFirmId];
   const brandScore = clamp((firm?.brandByProduct[productId] ?? 0) / 100, 0, 1);
 
+  // Grand-opening novelty: citizens try a NEW store (first ~15 days, fading)
+  // — without it, zero brand + zero reliability makes cold-start retail
+  // mathematically unwinnable against incumbents.
+  const ageDays =
+    (ctx.state.tick - facility.builtAtTick) / (ctx.config.ticksPerHour * 24);
+  const noveltyScore =
+    facility.builtAtTick > 0 && ageDays < 15 ? 0.12 * (1 - ageDays / 15) : 0;
+
+  // Positioning: an honest discount sign courts workers; an earned premium
+  // sign courts the affluent — unearned signs do nothing (see TierSystem).
+  const affinity = positioningAffinity(facility.positioning, citizen.tier, {
+    avgQuality: getQuality(facility.inputInventory, productId),
+    price,
+    marketAvgPrice: ctx.state.marketStats[productId]?.averagePrice || refPrice,
+  });
+
   const score =
     availabilityScore * 0.28 +
     priceScore * 0.22 +
     distanceScore * 0.18 +
     qualityScore * 0.14 +
     brandScore * 0.12 +
-    reliabilityScore * 0.06;
+    reliabilityScore * 0.06 +
+    noveltyScore +
+    affinity;
 
   return { facility, score, price };
 }
@@ -96,7 +117,7 @@ export function chooseBestStore(
   let bestScore = -Infinity;
   for (const id in ctx.state.facilities) {
     const fac = ctx.state.facilities[id]!;
-    if (fac.retailProductId !== productId) continue;
+    if (!fac.retailProductIds.includes(productId)) continue;
     if (fac.status === 'closed' || fac.employees.length === 0) continue;
     const scored = scoreStore(ctx, citizen, fac, productId);
     if (!scored) continue;
@@ -117,12 +138,21 @@ export function runRetailDemandSystem(ctx: SimContext): void {
     const store = cit.targetFacilityId ? state.facilities[cit.targetFacilityId] : null;
     // Whatever happens, after a shopping visit the citizen heads home.
     sendHome(ctx, cit);
-    if (!store || store.retailProductId == null) continue;
-    const productId = store.retailProductId;
-    const need = cit.needs.find((n) => n.productId === productId);
-    if (!need) continue;
+    if (!store || store.retailProductIds.length === 0) continue;
 
-    attemptPurchase(ctx, cit, store, productId, need);
+    // Basket shopping: while here, buy EVERY need this store can serve (most
+    // urgent first). This is what makes multi-product stores economical —
+    // one staffed storefront, several revenue streams per visit.
+    const wants = cit.needs
+      .filter(
+        (n) =>
+          store.retailProductIds.includes(n.productId) &&
+          n.urgency >= ctx.config.needUrgencyThreshold * 0.6,
+      )
+      .sort((a, b) => b.urgency - a.urgency);
+    for (const need of wants) {
+      attemptPurchase(ctx, cit, store, need.productId, need);
+    }
   }
 }
 
@@ -146,12 +176,35 @@ function attemptPurchase(
   const brand = firm?.brandByProduct[productId] ?? 0;
   const qual = getQuality(store.inputInventory, productId);
   const premium = 1 + brand / 250 + (qual - 50) / 300;
-  const maxPrice = product.basePrice * need.maxAffordablePriceMultiplier * premium;
+  // Booms/recessions move what citizens will pay; fads move how much they
+  // buy; affluent citizens tolerate premium prices on favorite categories;
+  // positioning sets the price image (discount shoppers expect discounts,
+  // premium shoppers accept a markup — if the quality earns the sign).
+  const maxPrice =
+    product.basePrice *
+    need.maxAffordablePriceMultiplier *
+    premium *
+    worldSpendingMult(state) *
+    tierPriceCapMult(cit.tier, productId) *
+    positioningPriceImage(store.positioning, qual);
 
-  const wantQty = need.preferredQuantity;
+  const wantQty = Math.max(
+    1,
+    Math.round(
+      need.preferredQuantity *
+        worldDemandMult(state, productId) *
+        seasonDemandMult(state, productId),
+    ),
+  );
 
   if (!open || stock <= 0) {
-    // Stockout / store closed -> lost sale.
+    // Stockout / store closed -> lost sale. Both cases keep feeding
+    // lostSales — the shelf-widening and pricing equilibrium was measured
+    // with after-hours arrivals included, and removing them was probed to
+    // starve the whole town (immigration stalls at ~42). But the closed-door
+    // share is tracked separately so the daily digest can tell the player
+    // the truth instead of reporting "stockouts" at a fully stocked store.
+    if (!open) store.dailyStats.closedDoorVisits = (store.dailyStats.closedDoorVisits ?? 0) + wantQty;
     store.dailyStats.lostSales += wantQty;
     stat.unmetDemand += wantQty;
     stat.stockoutCount += 1;
@@ -161,8 +214,12 @@ function attemptPurchase(
   }
 
   if (price > maxPrice) {
-    // Too expensive -> walk away unsatisfied.
+    // Too expensive -> walk away unsatisfied. Counted separately from
+    // stockouts so the price controller can SEE priced-out demand — without
+    // this signal, prices ride the market-power ceiling right past what the
+    // town can afford and demand quietly dies.
     stat.unmetDemand += wantQty;
+    store.dailyStats.pricedOut += wantQty;
     cit.dailyStats.unmetNeeds += 1;
     cit.satisfaction = clamp(cit.satisfaction - 1, 0, 100);
     return;

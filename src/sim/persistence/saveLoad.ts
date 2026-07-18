@@ -11,6 +11,8 @@ import { migrate } from './migrations';
 
 const PREFIX = 'econsim.save.';
 const DEFAULT_SLOT = 'default';
+/** Where the outgoing town is stashed when a new game starts. */
+export const BACKUP_SLOT = 'backup';
 
 export function serialize(state: GameState): string {
   return JSON.stringify(state);
@@ -68,4 +70,44 @@ export function listSaves(): string[] {
     if (key && key.startsWith(PREFIX)) slots.push(key.slice(PREFIX.length));
   }
   return slots;
+}
+
+export function removeSave(slot: string): void {
+  if (!hasStorage()) return;
+  localStorage.removeItem(PREFIX + slot);
+}
+
+export interface SaveMeta {
+  slot: string;
+  day: number;
+  scenarioId: string;
+  playerCash: number; // cents
+  citizens: number;
+}
+
+/** Lightweight summary of a stored save (null if missing/corrupt). */
+export function saveMeta(slot: string): SaveMeta | null {
+  if (!hasStorage()) return null;
+  try {
+    const json = localStorage.getItem(PREFIX + slot);
+    if (!json) return null;
+    const raw = JSON.parse(json) as {
+      tick?: number;
+      scenarioId?: string;
+      config?: { ticksPerHour?: number };
+      firms?: Record<string, { cash?: number }>;
+      playerFirmId?: string;
+      citizens?: Record<string, unknown>;
+    };
+    const tph = raw.config?.ticksPerHour ?? 1;
+    return {
+      slot,
+      day: Math.floor((raw.tick ?? 0) / (tph * 24)) + 1,
+      scenarioId: raw.scenarioId ?? 'meadowbrook',
+      playerCash: raw.firms?.[raw.playerFirmId ?? '']?.cash ?? 0,
+      citizens: Object.keys(raw.citizens ?? {}).length,
+    };
+  } catch {
+    return null;
+  }
 }

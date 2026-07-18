@@ -15,8 +15,13 @@ import { FacilityActions } from './FacilityModal';
 import { FormulaTooltip } from './FormulaTooltip';
 import { formatMoney } from '../utils/formatMoney';
 import { getProduct } from '../sim/data/products';
-import { citizenActionLabel } from '../sim/selectors/citizenSelectors';
-import { firmPnLToday, firmPnLLifetime, firmFacilities, firmWarnings } from '../sim/selectors/companySelectors';
+import { citizenActionLabel, populationStats } from '../sim/selectors/citizenSelectors';
+import { firmPnLToday, firmPnLLifetime, firmFacilities, firmWarnings, rivalTopWage } from '../sim/selectors/companySelectors';
+import { getPersonality } from '../sim/data/personalities';
+import { morningBriefing } from '../sim/selectors/advisorSelectors';
+import { managerCandidates, managerDuties } from '../sim/systems/ManagerSystem';
+import { computeTime } from '../sim/core/Tick';
+import { APARTMENT_RENT_PER_DAY } from '../sim/data/constants';
 import { facilityProfitContribution } from '../sim/selectors/facilitySelectors';
 import { clamp } from '../utils/clamp';
 
@@ -60,6 +65,18 @@ function FacilityView({ fac, state }: { fac: Facility; state: GameState }): Reac
         {fac.bottleneckReason && <span className="small" style={{ color: 'var(--amber)' }}>{fac.bottleneckReason}</span>}
       </div>
 
+      {fac.type === 'home' && (
+        <div className="kv small">
+          <span className="k">Residents</span>
+          <span className="mono">{fac.residentIds.length}/2</span>
+        </div>
+      )}
+      {fac.defId === 'apartment' && (
+        <div className="kv small">
+          <span className="k">Rent income</span>
+          <span className="mono">{formatMoney(fac.residentIds.length * APARTMENT_RENT_PER_DAY)}/day</span>
+        </div>
+      )}
       <Inv title="Input" inv={fac.inputInventory} />
       <Inv title="Output" inv={fac.outputInventory} />
 
@@ -89,6 +106,34 @@ function FacilityView({ fac, state }: { fac: Facility; state: GameState }): Reac
           {formatMoney(contribution)}
         </span>
       </div>
+      {(() => {
+        // Mirror of facilityPnL for one building: the last closed day.
+        const y = fac.yesterdayStats;
+        const yRevenue = y.revenue + y.transferOutValue;
+        const yCost =
+          (firm ? fac.employees.length * firm.wagePolicy.baseWage : 0) +
+          fac.operatingCostPerDay + y.variableCost + y.transferInValue;
+        const yNet = yRevenue - yCost;
+        return (
+          <div className="kv small">
+            <span className="k">
+              <FormulaTooltip
+                title="Yesterday's P&L"
+                explanation="Last closed day: cash earnings + shipments out (valued at market price) − wages − upkeep − variable cost − inputs received. Firm-wide spend (ads, R&D, interest, freight) not attributed."
+              >
+                Yesterday net
+              </FormulaTooltip>
+            </span>
+            <span className="mono" style={{ color: yNet >= 0 ? 'var(--green)' : 'var(--red)' }}>
+              {formatMoney(yNet)} ({formatMoney(yRevenue)} in / {formatMoney(yCost)} out)
+              {' · 7d Ø '}
+              <span style={{ color: fac.pnlEma.net >= 0 ? 'var(--green)' : 'var(--red)' }}>
+                {formatMoney(Math.round(fac.pnlEma.net))}
+              </span>
+            </span>
+          </div>
+        );
+      })()}
 
       <div style={{ marginTop: 8 }}>
         <FacilityActions fac={fac} />
@@ -99,15 +144,40 @@ function FacilityView({ fac, state }: { fac: Facility; state: GameState }): Reac
 
 function CitizenView({ c, state }: { c: Citizen; state: GameState }): React.ReactElement {
   const employer = c.employerFirmId ? state.firms[c.employerFirmId] : null;
+  const followedId = useGameStore((s) => s.followedCitizenId);
+  const setFollow = useGameStore((s) => s.setFollow);
+  const following = followedId === c.id;
   return (
     <div>
-      <h3 style={{ margin: '0 0 2px' }}>{c.name}</h3>
+      <h3 style={{ margin: '0 0 2px' }}>
+        {c.name}{' '}
+        <button
+          className={following ? 'primary' : ''}
+          style={{ padding: '1px 8px', fontSize: 12, verticalAlign: 'middle' }}
+          title={following
+            ? 'Stop following (Esc or panning also breaks it)'
+            : 'Camera follows this citizen through their day — commute, shopping, and (maybe) their climb up the prosperity ladder.'}
+          onClick={() => setFollow(following ? null : c.id)}
+        >
+          {following ? '🎥 Following' : '🎥 Follow'}
+        </button>
+      </h3>
       <div className="small muted">{citizenActionLabel(c)}</div>
       <div className="kv small" style={{ marginTop: 6 }}>
         <span className="k">Cash</span><span className="mono">{formatMoney(c.cash)}</span>
       </div>
       <div className="kv small"><span className="k">Employer</span><span>{employer?.name ?? 'unemployed'}</span></div>
+      <div className="kv small">
+        <span className="k">Home</span>
+        <span>
+          {state.facilities[c.homeFacilityId]?.name ?? '—'}
+          {state.facilities[c.homeFacilityId]?.defId === 'apartment' && (
+            <span className="muted"> · pays {formatMoney(APARTMENT_RENT_PER_DAY)}/day rent</span>
+          )}
+        </span>
+      </div>
       <div className="kv small"><span className="k">Wage / payday</span><span className="mono">{formatMoney(c.wage)}</span></div>
+      <div className="kv small"><span className="k">Skill</span><span className="mono">{c.skill.toFixed(2)}× {c.skill >= 1.2 ? '★' : ''}</span></div>
       <div className="kv small">
         <span className="k">
           <FormulaTooltip title="Satisfaction" explanation="Rises when employed and needs are met; falls with unmet needs and missed pay.">
@@ -152,6 +222,12 @@ function FirmView({ firm, state }: { firm: Firm; state: GameState }): React.Reac
     <div>
       <h3 style={{ margin: '0 0 2px' }}>{firm.name}</h3>
       <div className="small muted">{firm.ownerType} firm · <span className={`tag ${firm.bankruptcyStatus === 'healthy' ? 'green' : 'red'}`}>{firm.bankruptcyStatus}</span></div>
+      {firm.ceoName && (
+        <div className="small" title={getPersonality(firm.personalityId).blurb} style={{ marginTop: 2 }}>
+          CEO {firm.ceoName} · {getPersonality(firm.personalityId).icon}{' '}
+          {getPersonality(firm.personalityId).name}
+        </div>
+      )}
       <div className="kv small" style={{ marginTop: 6 }}>
         <span className="k">Cash</span>
         <span className="mono" style={{ color: firm.cash < 0 ? 'var(--red)' : 'var(--green)' }}>{formatMoney(firm.cash)}</span>
@@ -160,7 +236,10 @@ function FirmView({ firm, state }: { firm: Firm; state: GameState }): React.Reac
         <span className="k">Debt</span>
         <span className="mono" style={{ color: firm.debt > 0 ? 'var(--amber)' : undefined }}>{formatMoney(firm.debt)}</span>
       </div>
+      {firm.ownerType === 'player' && <AdvisorCard state={state} />}
+      {firm.ownerType === 'player' && <ExecutiveTeamCard firm={firm} state={state} />}
       {firm.ownerType === 'player' && <FinanceControls firmId={firm.id} />}
+      {firm.ownerType === 'player' && <WageControls firm={firm} state={state} />}
 
       <div className="section-title">P&L Today</div>
       <PnL p={today} />
@@ -186,6 +265,147 @@ function FirmView({ firm, state }: { firm: Firm; state: GameState }): React.Reac
           {warnings.map((w, i) => <div className="small" key={i} style={{ color: 'var(--amber)' }}>⚠ {w}</div>)}
         </>
       )}
+    </div>
+  );
+}
+
+/** The morning briefing: the game's insight streams as actionable one-liners. */
+function AdvisorCard({ state }: { state: GameState }): React.ReactElement | null {
+  const advice = morningBriefing(state);
+  if (advice.length === 0) return null;
+  const color = { danger: 'var(--red)', warning: 'var(--amber)', info: 'var(--text)' } as const;
+  return (
+    <div className="card" style={{ marginTop: 6 }}>
+      <div className="section-title" style={{ margin: 0 }}>🧭 Advisor</div>
+      {advice.map((a, i) => (
+        <div className="small" key={i} style={{ color: color[a.severity], marginTop: 4 }}>
+          {a.icon} {a.text}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * The executive team: firm-wide delegation. A logistics manager sizes shelf
+ * contracts and sources wholesale; a sales manager works the ports. Store
+ * managers are hired per-store from the store's inspector.
+ */
+function ExecutiveTeamCard({ firm, state }: { firm: Firm; state: GameState }): React.ReactElement {
+  const dispatch = useGameStore((s) => s.dispatch);
+  const day = computeTime(state.tick, state.config).day;
+  const roles = [
+    { role: 'logistics' as const, icon: '🚚', label: 'Logistics', blurb: 'sizes shelf contracts, sources wholesale' },
+    { role: 'sales' as const, icon: '🚢', label: 'Sales', blurb: 'fills rush orders, sets standing exports' },
+  ];
+  const storeMgrs = firm.managers.filter((m) => m.role === 'store').length;
+  return (
+    <div className="card" style={{ marginTop: 6 }}>
+      <div className="section-title" style={{ margin: 0 }}>👔 Executive team</div>
+      {roles.map(({ role, icon, label, blurb }) => {
+        const mgr = firm.managers.find((m) => m.role === role);
+        if (mgr) {
+          return (
+            <div className="row small" key={role} style={{ gap: 6, alignItems: 'center', marginTop: 4, flexWrap: 'wrap' }}>
+              <span title={`Duties: ${managerDuties(mgr.skill, role).join(', ')}`}>
+                {icon} <strong>{mgr.name}</strong> — {label} · {formatMoney(mgr.salaryPerDay)}/day
+              </span>
+              <button
+                style={{ padding: '1px 8px' }}
+                onClick={() => dispatch({ type: 'FIRE_MANAGER', firmId: firm.id, managerId: mgr.id })}
+              >
+                Let go
+              </button>
+            </div>
+          );
+        }
+        return (
+          <div className="small" key={role} style={{ marginTop: 4 }}>
+            <span className="muted" title={`Hire a ${label.toLowerCase()} manager — ${blurb}. Candidates rotate weekly.`}>
+              {icon} {label} ({blurb}):
+            </span>
+            <div className="row" style={{ gap: 6, flexWrap: 'wrap', marginTop: 2 }}>
+              {managerCandidates(state, day, role).map((c, i) => (
+                <button
+                  key={c.name}
+                  style={{ padding: '1px 8px' }}
+                  title={`${c.band} — duties: ${managerDuties(c.skill, role).join(', ')}`}
+                  onClick={() => dispatch({ type: 'HIRE_MANAGER', firmId: firm.id, role, candidateIndex: i })}
+                >
+                  {c.name} ({c.band}, {formatMoney(c.salaryPerDay)}/day)
+                </button>
+              ))}
+            </div>
+          </div>
+        );
+      })}
+      <div className="muted small" style={{ marginTop: 4 }}>
+        {storeMgrs > 0
+          ? `${storeMgrs} store manager${storeMgrs === 1 ? '' : 's'} on payroll — see each store's inspector.`
+          : 'Store managers are hired from each store\'s inspector.'}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The wage lever: pay above the poaching bar (1.15×) to pull skilled workers
+ * from rivals — or watch yours walk when a rival out-pays you.
+ */
+function WageControls({ firm, state }: { firm: Firm; state: GameState }): React.ReactElement {
+  const dispatch = useGameStore((s) => s.dispatch);
+  const pop = populationStats(state);
+  const rivalTop = rivalTopWage(state, firm.id);
+  const wage = firm.wagePolicy.baseWage;
+  const poachRisk = rivalTop >= wage * 1.15;
+  const poachPower = wage >= rivalTop * 1.15;
+  const beatMarket = Math.round(rivalTop * 1.16);
+  return (
+    <div className="card" style={{ marginTop: 6 }}>
+      <div className="section-title" style={{ margin: 0 }}>Wages</div>
+      <div className="kv small">
+        <span className="k">Your base wage</span>
+        <span className="mono">{formatMoney(wage)}/day</span>
+      </div>
+      <div className="kv small">
+        <span className="k">Town average</span>
+        <span className="mono">{formatMoney(pop.averageWage)}/day</span>
+      </div>
+      <div className="kv small">
+        <span className="k">Top rival</span>
+        <span className="mono">{formatMoney(rivalTop)}/day</span>
+      </div>
+      {poachRisk && (
+        <div className="small" style={{ color: 'var(--amber)' }}>
+          ⚠ A rival pays ≥1.15× your wage — your workers may defect.
+        </div>
+      )}
+      {poachPower && (
+        <div className="small" style={{ color: 'var(--green)' }}>
+          ✓ You out-pay every rival by 15%+ — skilled workers will come to you.
+        </div>
+      )}
+      <div className="row" style={{ gap: 6, marginTop: 4 }}>
+        <button
+          disabled={wage <= 100}
+          onClick={() => dispatch({ type: 'SET_WAGE', firmId: firm.id, wage: Math.max(100, wage - 100) })}
+        >
+          −$1
+        </button>
+        <button onClick={() => dispatch({ type: 'SET_WAGE', firmId: firm.id, wage: wage + 100 })}>
+          +$1
+        </button>
+        <button
+          disabled={wage >= beatMarket}
+          title="Set your wage 16% above the top rival — enough to poach their workers"
+          onClick={() => dispatch({ type: 'SET_WAGE', firmId: firm.id, wage: beatMarket })}
+        >
+          Beat market — {formatMoney(beatMarket)}
+        </button>
+      </div>
+      <div className="small muted" style={{ marginTop: 4 }}>
+        Applies to all {firm.employees.length} current employees immediately.
+      </div>
     </div>
   );
 }

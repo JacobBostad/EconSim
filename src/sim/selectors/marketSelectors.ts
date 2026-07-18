@@ -58,3 +58,69 @@ export function marketRows(state: GameState, consumerOnly = true): MarketRow[] {
     };
   });
 }
+
+
+// ---------------------------------------------------------------------------
+// Pricing insight (store inspector)
+// ---------------------------------------------------------------------------
+
+import { REFERENCE_QUALITY } from '../data/constants';
+
+export interface PricingInsight {
+  yourPrice: number;
+  marketAvgPrice: number;
+  basePrice: number;
+  /** Typical willingness-to-pay band across citizens (cents). */
+  wtpLow: number;
+  wtpHigh: number;
+  /** Competing staffed stores selling the product (excluding this firm's). */
+  competitors: number;
+  yourShare: number;
+}
+
+/**
+ * What citizens will actually pay for this firm's product, given its brand
+ * and stock quality (mirrors the willingness formula in RetailDemandSystem).
+ */
+export function pricingInsight(
+  state: GameState,
+  firmId: string,
+  productId: string,
+): PricingInsight {
+  const firm = state.firms[firmId];
+  const product = getProduct(productId);
+  const brand = firm?.brandByProduct[productId] ?? 0;
+  const quality = firm?.qualityByProduct[productId] ?? product.defaultQuality;
+  const premium = 1 + brand / 250 + (quality - REFERENCE_QUALITY) / 300;
+
+  // Citizens' maxAffordablePriceMultiplier spans roughly 1.1–1.8 by product;
+  // read the live range from the population for honesty.
+  let lo = Infinity;
+  let hi = 0;
+  for (const cid in state.citizens) {
+    const need = state.citizens[cid]!.needs.find((n) => n.productId === productId);
+    if (!need) continue;
+    lo = Math.min(lo, need.maxAffordablePriceMultiplier);
+    hi = Math.max(hi, need.maxAffordablePriceMultiplier);
+  }
+  if (!isFinite(lo)) { lo = 1.2; hi = 1.6; }
+
+  let competitors = 0;
+  for (const fid in state.facilities) {
+    const f = state.facilities[fid]!;
+    if (f.retailProductIds.includes(productId) && f.ownerFirmId !== firmId &&
+        f.status !== 'closed' && f.employees.length > 0) {
+      competitors++;
+    }
+  }
+
+  return {
+    yourPrice: firm?.pricesByProduct[productId] ?? product.basePrice,
+    marketAvgPrice: state.marketStats[productId]?.averagePrice ?? 0,
+    basePrice: product.basePrice,
+    wtpLow: Math.round(product.basePrice * lo * premium),
+    wtpHigh: Math.round(product.basePrice * hi * premium),
+    competitors,
+    yourShare: firm?.marketShareByProduct[productId] ?? 0,
+  };
+}

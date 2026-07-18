@@ -29,6 +29,16 @@ import {
   TRANSPORT_COST_PER_UNIT_DISTANCE,
   TRANSPORT_FLAT_COST,
 } from '../data/constants';
+import { wholesaleUnitPrice } from '../core/Wholesale';
+import { worldImportMult, worldTransportMult } from '../data/worldEvents';
+import { seasonTransportMult, seasonOf } from '../data/seasons';
+
+/** Value of an internal shipment at today's market price (base as fallback). */
+function transferValue(state: SimContext['state'], productId: string, qty: number): number {
+  const avg = state.marketStats[productId]?.averagePrice ?? 0;
+  const price = avg > 0 ? avg : getProduct(productId).basePrice;
+  return Math.round(qty * price);
+}
 
 export function runLogisticsSystem(ctx: SimContext): void {
   processArrivals(ctx);
@@ -48,6 +58,12 @@ function processArrivals(ctx: SimContext): void {
     if (dest) {
       addStock(dest.inputInventory, v.cargo.productId, v.cargo.quantity, v.cargo.quality);
       dest.dailyStats.unitsReceived += v.cargo.quantity;
+      // Wholesale cargo carries its real purchase price; intra-firm transfers
+      // are valued at market.
+      dest.dailyStats.transferInValue +=
+        v.wholesalePaid && v.wholesalePaid > 0
+          ? v.wholesalePaid
+          : transferValue(state, v.cargo.productId, v.cargo.quantity);
     }
     if (v.transportCost > 0) {
       recordTransaction(state, {
@@ -82,13 +98,28 @@ function processReorders(ctx: SimContext): void {
     if (!source || !dest) continue;
 
     const destHave = getQuantity(dest.inputInventory, contract.productId);
-    if (destHave >= contract.reorderPoint) continue;
+
+    // AI firms brace for winter: in autumn/winter their supply lines run
+    // deeper (reorder sooner, hold more) so the 65%-output season doesn't
+    // starve their chains. Player contracts are untouched — stockpiling is
+    // the player's own call.
+    const owner = state.firms[contract.ownerFirmId];
+    const season = seasonOf(state);
+    const bracing =
+      owner?.ownerType === 'ai' && (season === 'autumn' || season === 'winter');
+    const reorderPoint = bracing
+      ? Math.round(contract.reorderPoint * 1.4)
+      : contract.reorderPoint;
+    const maxInventory = bracing
+      ? Math.round(contract.maxInventory * 1.3)
+      : contract.maxInventory;
+    if (destHave >= reorderPoint) continue;
 
     // How much to bring in.
     const room = dest.storageCapacity - totalUnits(dest.inputInventory);
     const want = Math.min(
       contract.targetQuantity,
-      contract.maxInventory - destHave,
+      maxInventory - destHave,
       room,
     );
     if (want <= 0) continue;
@@ -97,12 +128,14 @@ function processReorders(ctx: SimContext): void {
     const product = getProduct(contract.productId);
     let qty: number;
     let quality: number;
+    let wholesalePaid = 0;
 
     if (isImporter) {
       qty = want;
       quality = product.defaultQuality;
-      // Pay the importer up front (cost of goods sold).
-      const price = Math.round(product.basePrice * IMPORT_MARKUP) * qty;
+      // Pay the importer up front (cost of goods sold). Tariff events raise it.
+      const price =
+        Math.round(product.basePrice * IMPORT_MARKUP * worldImportMult(state)) * qty;
       recordTransaction(state, {
         from: firmAccount(contract.ownerFirmId),
         to: firmAccount(source.ownerFirmId),
@@ -114,18 +147,78 @@ function processReorders(ctx: SimContext): void {
         note: `Imported ${qty} ${product.name}`,
       });
     } else {
-      const avail = getQuantity(source.outputInventory, contract.productId);
+      // Producers ship finished goods (output inventory). Warehouses are
+      // relays: deliveries land in their INPUT inventory, so they ship from
+      // whichever bag holds the product — otherwise a warehouse could receive
+      // goods but never forward them.
+      let bag = source.outputInventory;
+      if (
+        source.type === 'warehouse' &&
+        getQuantity(bag, contract.productId) <= 0 &&
+        getQuantity(source.inputInventory, contract.productId) > 0
+      ) {
+        bag = source.inputInventory;
+      }
+      let avail = getQuantity(bag, contract.productId);
+
+      // Wholesale: a contract whose source belongs to ANOTHER firm buys the
+      // goods at ship time — sellers are never raided below what their own
+      // supply lines need, and buyers who can't pay don't get shipped to.
+      const crossFirm = source.ownerFirmId !== dest.ownerFirmId;
+      if (crossFirm && source.wholesaleEnabled === false) continue; // seller opted out
+      if (crossFirm) {
+        let reserved = 0;
+        for (const cid2 in state.contracts) {
+          const c2 = state.contracts[cid2]!;
+          if (!c2.active || c2.id === contract.id || c2.sourceFacilityId !== source.id) continue;
+          if (c2.productId !== contract.productId) continue;
+          if (state.facilities[c2.destinationFacilityId]?.ownerFirmId !== source.ownerFirmId) continue;
+          reserved += c2.targetQuantity;
+        }
+        avail = Math.max(0, avail - reserved);
+      }
       qty = Math.min(want, avail);
       if (qty <= 0) continue;
-      quality = source.outputInventory[contract.productId]?.quality ?? product.defaultQuality;
-      removeStock(source.outputInventory, contract.productId, qty);
+      quality = bag[contract.productId]?.quality ?? product.defaultQuality;
+
+      if (crossFirm) {
+        const unit = wholesaleUnitPrice(state, source, contract.productId);
+        wholesalePaid = unit * qty;
+        const buyer = state.firms[dest.ownerFirmId];
+        if (!buyer || buyer.cash < wholesalePaid) continue; // can't pay -> no shipment
+        recordTransaction(state, {
+          from: firmAccount(dest.ownerFirmId),
+          to: firmAccount(source.ownerFirmId),
+          amount: wholesalePaid,
+          firmId: dest.ownerFirmId,
+          category: 'cogs',
+          productId: contract.productId,
+          quantity: qty,
+          note: `Wholesale ${qty} ${product.name} from ${state.firms[source.ownerFirmId]?.name ?? 'supplier'}`,
+          counterparty: { firmId: source.ownerFirmId, category: 'revenue' },
+        });
+        buyer.wholesaleSpend += wholesalePaid;
+        const wholesaler = state.firms[source.ownerFirmId];
+        if (wholesaler) wholesaler.wholesaleEarned += wholesalePaid;
+      }
+      removeStock(bag, contract.productId, qty);
     }
 
     source.dailyStats.unitsShipped += qty;
+    if (wholesalePaid > 0) {
+      // Real cash revenue for the seller's facility, not a market estimate.
+      source.dailyStats.revenue += wholesalePaid;
+    } else {
+      source.dailyStats.transferOutValue += transferValue(state, contract.productId, qty);
+    }
 
     const dist = distance(source.location, dest.location);
-    const transportCost =
-      TRANSPORT_FLAT_COST + Math.round(dist * qty * TRANSPORT_COST_PER_UNIT_DISTANCE);
+    // Fuel-price events scale the whole shipment cost.
+    const transportCost = Math.round(
+      (TRANSPORT_FLAT_COST + dist * qty * TRANSPORT_COST_PER_UNIT_DISTANCE) *
+        worldTransportMult(state) *
+        seasonTransportMult(state),
+    );
     const ticks = Math.max(1, Math.ceil(dist / ctx.config.vehicleSpeed));
 
     const vehicle: Vehicle = {
@@ -141,6 +234,7 @@ function processReorders(ctx: SimContext): void {
       status: 'enroute',
       ticksUntilArrival: ticks,
       transportCost,
+      wholesalePaid,
     };
     state.vehicles[vehicle.id] = vehicle;
   }

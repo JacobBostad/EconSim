@@ -45,9 +45,82 @@ export interface PerfMetrics {
   ticksSimulated: number;
 }
 
+/** A world event currently in effect (def lives in data/worldEvents.ts). */
+export interface ActiveWorldEvent {
+  defId: string;
+  startDay: number;
+  endDay: number;
+}
+
+/**
+ * A timed bulk-export contract offered to the player: deliver `quantity`
+ * units of the product to the ports (any port — the buyer charters freight
+ * from wherever it lands) before `deadlineDay` ends for a cash bonus on top
+ * of the normal export revenue. At most one is active at a time.
+ */
+/**
+ * A pre-announced trade shock: the Gazette breaks the news days before a
+ * city's price center actually moves, so reading the paper becomes a
+ * trading edge (see docs/design/commodity-market.md).
+ */
+export interface TradeAnnouncement {
+  cityId: string;
+  productId: ProductId;
+  /** Center multiplier while in effect (>1 tender/surge, <1 glut/slump). */
+  mult: number;
+  announcedDay: number;
+  effectDay: number;
+  durationDays: number;
+}
+
+export interface RushOrder {
+  /** Flavor + bonus payer: which city's buyer placed the call. */
+  cityId: string;
+  productId: ProductId;
+  quantity: number;
+  filled: number;
+  startDay: number;
+  /** Last day deliveries count; expires when the next day begins. */
+  deadlineDay: number;
+  /** Completion bonus in cents, locked at offer time. */
+  bonusCents: number;
+}
+
+/**
+ * A rival's fire-sale offer: a distressed AI puts one of its losing
+ * facilities on the block at a discount before closing it. Accepting
+ * transfers the building, its crew, and its supply lines to the player.
+ * At most one is active at a time.
+ */
+export interface FacilityOffer {
+  facilityId: FacilityId;
+  sellerFirmId: FirmId;
+  /** Asking price in cents, locked at offer time (75% of build cost). */
+  askCents: number;
+  startDay: number;
+  /** Last day the offer stands; it lapses when the next day begins. */
+  deadlineDay: number;
+}
+
+/** A permanently unlocked achievement (def lives in data/achievements.ts). */
+export interface UnlockedAchievement {
+  id: string;
+  day: number;
+}
+
+/** A completed guided mission (def lives in data/missions.ts). */
+export interface CompletedMission {
+  id: string;
+  day: number;
+}
+
 export interface GameState {
   saveVersion: number;
   seed: number;
+  /** Which starting scenario built this town (for records/leaderboards). */
+  scenarioId: string;
+  /** Bounded daily town vitals (population, employment, satisfaction). */
+  townHistory: import('../systems/TownStatsSystem').TownDay[];
   /** Live PRNG state (see Random.ts). Part of state for determinism. */
   rngState: number;
   tick: number;
@@ -70,6 +143,39 @@ export interface GameState {
 
   events: GameEvent[];
   transactions: Transaction[];
+  /** Active world events (booms, droughts, fads...); rolled daily. */
+  worldEvents: ActiveWorldEvent[];
+  /** Unlocked achievements (permanent). */
+  achievements: UnlockedAchievement[];
+  /** Completed guided missions (ordered chain; see data/missions.ts). */
+  missions: CompletedMission[];
+  /** Distant trade cities' per-product export prices (see data/tradeCities). */
+  tradeCities: Record<string, { pricesByProduct: Record<ProductId, number> }>;
+  /** Active rush order (timed bulk-export contract), if any. */
+  rushOrder: RushOrder | null;
+  /** Pre-announced city price shock, if one is pending or in effect. */
+  tradeAnnouncement: TradeAnnouncement | null;
+  /** Lifetime rush orders completed / let expire (player-facing counters). */
+  rushOrdersCompleted: number;
+  rushOrdersMissed: number;
+  /** Active rival fire-sale offer, if any. */
+  facilityOffer: FacilityOffer | null;
+  /** Lifetime fire-sale purchases (achievements/records). */
+  fireSalesBought: number;
+  /** Lifetime commodity-desk purchases from the trade cities (missions). */
+  deskTrades: number;
+  /**
+   * Consecutive days the town has met the emigration misery bar (worker-heavy
+   * AND deeply unsatisfied). Past the grace period families start leaving;
+   * a single day above the bar resets it to zero.
+   */
+  emigrationPressure: number;
+  /** Lifetime households lost to emigration (records/achievements). */
+  emigrationDepartures: number;
+  /** Consecutive days each staple has had no staffed seller (AI founders). */
+  marketGapDays: Record<string, number>;
+  /** Last lapsed fire sale — that facility cools down before re-listing. */
+  lastLapsedFireSale: { facilityId: FacilityId; day: number } | null;
 
   idCounters: IdCounters;
   selectedEntityId: EntityId | null;
@@ -134,6 +240,12 @@ export interface TransactionInput {
   productId?: ProductId | null;
   quantity?: number;
   note?: string;
+  /**
+   * When a single money movement is a different line item for each side
+   * (e.g. wholesale: buyer's COGS is the seller's revenue), the counterparty
+   * firm's ledger gets the same amount under its own category.
+   */
+  counterparty?: { firmId: FirmId; category: LedgerCategory };
 }
 
 /**
@@ -168,6 +280,13 @@ export function recordTransaction(
     if (firm) {
       applyToLedger(firm.accounting.lifetime, input.category, amount);
       applyToLedger(firm.accounting.today, input.category, amount);
+    }
+  }
+  if (input.counterparty) {
+    const other = state.firms[input.counterparty.firmId];
+    if (other) {
+      applyToLedger(other.accounting.lifetime, input.counterparty.category, amount);
+      applyToLedger(other.accounting.today, input.counterparty.category, amount);
     }
   }
 

@@ -6,7 +6,20 @@
  * playable and the economy moves quickly.
  */
 
+export type Difficulty = 'relaxed' | 'standard' | 'brutal';
+
 export interface SimulationConfig {
+  /** Chosen difficulty preset (informational; the knobs below carry the effect). */
+  difficulty: Difficulty;
+  /** Challenge run: the game ends with a final score at day 200. */
+  challengeMode: boolean;
+  /** Player starting cash (cents). */
+  playerStartCash: number;
+  /** Chance per day that a new world event starts (see WorldEventSystem). */
+  worldEventDailyChance: number;
+  /** Chance per eligible day that an AI firm opens a new outlet. */
+  aiExpandChance: number;
+
   /** Ticks per in-game hour. Day length = ticksPerHour * 24. */
   ticksPerHour: number;
   /** Citizen movement speed in map units per tick. */
@@ -64,9 +77,18 @@ export interface SimulationConfig {
   /** Map dimensions in units. */
   mapWidth: number;
   mapHeight: number;
+  /** Hard caps on town growth (town-size presets scale these). */
+  maxHomes: number;
+  maxCitizens: number;
 }
 
 export const DEFAULT_CONFIG: SimulationConfig = {
+  difficulty: 'standard',
+  challengeMode: false,
+  playerStartCash: 15000 * 100,
+  worldEventDailyChance: 0.2,
+  aiExpandChance: 0.5,
+
   ticksPerHour: 2, // 48 ticks/day
   citizenSpeed: 6,
   vehicleSpeed: 4,
@@ -79,7 +101,7 @@ export const DEFAULT_CONFIG: SimulationConfig = {
   storeCloseHour: 22,
 
   payrollIntervalDays: 1,
-  subsistenceIncomePerDay: 900, // $9.00/day
+  subsistenceIncomePerDay: 1400, // $14.00/day — keeps consumption flowing
 
   needUrgencyThreshold: 0.5,
   needUrgentThreshold: 1.1,
@@ -101,4 +123,30 @@ export const DEFAULT_CONFIG: SimulationConfig = {
 
   mapWidth: 130,
   mapHeight: 92,
+  maxHomes: 40,
+  maxCitizens: 80,
 };
+
+/** Difficulty presets: starting capital, news volatility, AI aggressiveness. */
+export function configForDifficulty(difficulty: Difficulty): SimulationConfig {
+  switch (difficulty) {
+    case 'relaxed':
+      return {
+        ...DEFAULT_CONFIG,
+        difficulty,
+        playerStartCash: 25000 * 100,
+        worldEventDailyChance: 0.12,
+        aiExpandChance: 0.35,
+      };
+    case 'brutal':
+      return {
+        ...DEFAULT_CONFIG,
+        difficulty,
+        playerStartCash: 9000 * 100,
+        worldEventDailyChance: 0.3,
+        aiExpandChance: 0.7,
+      };
+    default:
+      return { ...DEFAULT_CONFIG, difficulty: 'standard' };
+  }
+}

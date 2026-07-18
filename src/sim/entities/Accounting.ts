@@ -51,6 +51,10 @@ export interface DailySnapshot {
   cash: number;
   debt: number;
   inventoryValue: number;
+  /** End-of-day company valuation (for the trend chart). */
+  valuation: number;
+  /** Capital spent on construction that day (growth-phase signal). */
+  buildSpend: number;
 }
 
 export interface Accounting {

@@ -37,4 +37,10 @@ export interface Vehicle {
   status: VehicleStatus;
   ticksUntilArrival: number;
   transportCost: number; // cents, charged on arrival
+  /**
+   * For wholesale (cross-firm) shipments: what the buyer paid the seller at
+   * dispatch, cents. Arrival stamps this as the destination's input cost
+   * instead of a market-price estimate. Absent/0 for intra-firm shipments.
+   */
+  wholesalePaid?: number;
 }

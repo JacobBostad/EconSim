@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test-and-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      # playwright-core has no installer CLI; borrow the playwright CLI at the
+      # exact version npm resolved, so the browser revision matches at launch
+      - run: npx --yes playwright@$(node -p "require('playwright-core/package.json').version") install --with-deps chromium
+      - run: npm run build
+      - run: npx vite preview --port 4173 & sleep 3
+      - run: npm run e2e
+      - run: npm run e2e:deep

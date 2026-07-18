@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { useGameStore } from '../store/useGameStore';
 import { TownRenderer } from '../render/TownRenderer';
+import { placementBlocker } from '../sim/core/Placement';
 
 /**
  * MapView mounts the self-contained TownRenderer once. The renderer runs its own
@@ -21,10 +22,19 @@ export function MapView(): React.ReactElement {
         onPick: (id) => useGameStore.getState().select(id),
         getSelectedId: () => useGameStore.getState().sim.getState().selectedEntityId,
         getBuildMode: () => useGameStore.getState().buildDefId != null,
+        getBuildDefId: () => useGameStore.getState().buildDefId,
+        getFlowOverlay: () => useGameStore.getState().flowOverlay,
+        getFollowId: () => useGameStore.getState().followedCitizenId,
+        onFollowBroken: () => {
+          if (useGameStore.getState().followedCitizenId) useGameStore.getState().setFollow(null);
+        },
         onBuildAt: (world) => {
           const store = useGameStore.getState();
           const defId = store.buildDefId;
           if (!defId) return;
+          // Blocked ground: stay in build mode so the player can just move
+          // the cursor — the ghost is already explaining why.
+          if (placementBlocker(store.sim.getState(), world)) return;
           store.dispatch({
             type: 'BUILD_FACILITY',
             firmId: store.sim.getState().playerFirmId,
@@ -37,7 +47,10 @@ export function MapView(): React.ReactElement {
     );
     rendererRef.current = renderer;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') useGameStore.getState().setBuildDef(null);
+      if (e.key === 'Escape') {
+        useGameStore.getState().setBuildDef(null);
+        useGameStore.getState().setFollow(null);
+      }
     };
     window.addEventListener('keydown', onKey);
     return () => {
@@ -53,7 +66,7 @@ export function MapView(): React.ReactElement {
         style={{ width: '100%', height: '100%', cursor: buildDefId ? 'copy' : 'grab' }}
       />
       <div className="map-hint">
-        {buildDefId ? '🏗 Click to place · Esc/Cancel to stop' : '🖱 Drag to pan · Scroll to zoom · Click to inspect'}
+        {buildDefId ? '🏗 Click to place · Esc/Cancel to stop' : '🖱 Drag · Scroll/± zoom · Arrows pan · Space pause · 1-4 speed · G gazette · F flows'}
         <button onClick={() => rendererRef.current?.resetView()}>Reset view</button>
       </div>
     </div>

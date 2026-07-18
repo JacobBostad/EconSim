@@ -22,6 +22,9 @@ import {
   getQuantity,
   totalUnits,
 } from '../entities/Inventory';
+import { worldProductionMult } from '../data/worldEvents';
+import { seasonProductionMult } from '../data/seasons';
+import { isWorkTime } from './CitizenScheduleSystem';
 
 const PRODUCING_TYPES = new Set(['farm', 'mine', 'factory', 'importer']);
 
@@ -38,6 +41,19 @@ export function runProductionSystem(ctx: SimContext): void {
     }
     const recipe = getRecipe(fac.activeRecipeId);
 
+    // Mastery gate: luxury recipes need the firm's craft quality first.
+    if (recipe.minQuality !== undefined) {
+      const outPid = recipe.outputs[0]?.productId;
+      const firmQ = outPid
+        ? state.firms[fac.ownerFirmId]?.qualityByProduct[outPid] ?? getProduct(outPid).defaultQuality
+        : 0;
+      if (firmQ < recipe.minQuality) {
+        fac.status = 'idle';
+        fac.bottleneckReason = `Needs quality ≥ ${recipe.minQuality} (invest R&D in ${outPid ? getProduct(outPid).name : 'product'})`;
+        continue;
+      }
+    }
+
     // Input availability.
     let inputsAvailable = true;
     let missingInput = '';
@@ -49,9 +65,19 @@ export function runProductionSystem(ctx: SimContext): void {
       }
     }
 
+    // Crew skill scales output: an experienced crew (avg skill up to 1.3)
+    // outproduces a green one. Falls back to neutral when skill is untracked.
+    const avgSkill =
+      fac.presentWorkers > 0 && fac.presentSkill > 0
+        ? fac.presentSkill / fac.presentWorkers
+        : 1;
+    // Staffing beyond laborRequired scales output (up to 2.5×) — hiring is a
+    // real growth lever, employment absorbs the town's labor pool, and full
+    // employment unlocks immigration (the growth flywheel).
     const workerFactor =
       recipe.laborRequired > 0
-        ? Math.min(1, fac.presentWorkers / recipe.laborRequired)
+        ? Math.min(2.5, fac.presentWorkers / recipe.laborRequired) *
+          Math.min(1.3, Math.max(0.7, avgSkill))
         : 1;
 
     // Output capacity check.
@@ -59,22 +85,38 @@ export function runProductionSystem(ctx: SimContext): void {
     const projected = totalUnits(fac.outputInventory) + outUnits;
     const storageFull = projected > fac.storageCapacity;
 
+    // Yesterday's binding constraint feeds the daily digest — only what blocks
+    // the facility during the shift counts (overnight lulls are not news).
+    const stamp = (reason: string | null) => {
+      if (reason && isWorkTime(ctx)) fac.dailyStats.bottleneck = reason;
+    };
+
     if (!inputsAvailable) {
       fac.status = 'input-starved';
       fac.bottleneckReason = `Missing input: ${missingInput}`;
+      stamp(fac.bottleneckReason);
       continue;
     }
     if (workerFactor <= 0) {
-      fac.status = 'labor-starved';
-      fac.bottleneckReason =
-        recipe.laborRequired > 0
-          ? `No workers present (need ${recipe.laborRequired})`
-          : null;
+      // Off-hours with a hired crew is a shift break, not a staffing problem —
+      // only unstaffed facilities alarm around the clock.
+      if (fac.employees.length > 0 && !isWorkTime(ctx)) {
+        fac.status = 'idle';
+        fac.bottleneckReason = null;
+      } else {
+        fac.status = 'labor-starved';
+        fac.bottleneckReason =
+          recipe.laborRequired > 0
+            ? `No workers present (need ${recipe.laborRequired})`
+            : null;
+        stamp(fac.bottleneckReason);
+      }
       continue;
     }
     if (storageFull) {
       fac.status = 'inventory-full';
       fac.bottleneckReason = 'Output storage full';
+      stamp(fac.bottleneckReason);
       continue;
     }
 
@@ -82,7 +124,15 @@ export function runProductionSystem(ctx: SimContext): void {
     fac.bottleneckReason = null;
     fac.dailyStats.ticksActive += 1;
 
-    const efficiency = recipe.baseEfficiency * workerFactor; // inputAvailability == 1 here
+    // inputAvailability == 1 here; seasons cycle farm output and world events
+    // (droughts, rich veins...) scale it further while they last.
+    const levelMult = 1 + 0.15 * (fac.level - 1);
+    const efficiency =
+      recipe.baseEfficiency *
+      workerFactor *
+      levelMult *
+      worldProductionMult(state, fac.type) *
+      seasonProductionMult(state, fac.type);
     fac.productionProgress += efficiency;
 
     if (fac.productionProgress >= recipe.ticksRequired) {
