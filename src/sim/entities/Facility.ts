@@ -89,6 +89,11 @@ export interface Facility {
   presentSkill: number;
   /** Upgrade level (1..3): +40% storage, +15% efficiency, +1 worker cap each. */
   level: number;
+  /**
+   * Standing export orders (warehouses): productId -> auto-export when Port
+   * Rosa pays at least minMult × base, keeping `keep` units in reserve.
+   */
+  exportOrders: Record<string, { minMult: number; keep: number }>;
   /** Effective worker capacity (base def capacity + upgrades). */
   workerCapacity: number;
   /** For homes: which citizen lives here (informational). */

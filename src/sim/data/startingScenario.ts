@@ -77,6 +77,7 @@ function newFacility(
     presentSkill: 0,
     level: 1,
     workerCapacity: def.workerCapacity,
+    exportOrders: {},
     residentIds: [],
   };
   b.state.facilities[id] = fac;

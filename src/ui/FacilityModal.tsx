@@ -100,6 +100,63 @@ export function FacilityActions({ fac }: { fac: Facility }): React.ReactElement 
           {ALL_PRODUCT_IDS.every(
             (pid) => getQuantity(fac.inputInventory, pid) + getQuantity(fac.outputInventory, pid) <= 0,
           ) && <div className="muted small">Nothing staged — wire a supply contract into this warehouse.</div>}
+
+          <div className="section-title">Standing orders (auto-export daily)</div>
+          {ALL_PRODUCT_IDS.filter(
+            (pid) =>
+              fac.exportOrders[pid] !== undefined ||
+              getQuantity(fac.inputInventory, pid) + getQuantity(fac.outputInventory, pid) > 0,
+          ).map((pid) => {
+            const order = fac.exportOrders[pid];
+            return (
+              <div className="row between small" key={`order-${pid}`} style={{ marginBottom: 4 }}>
+                <span>{getProduct(pid).name}</span>
+                <span className="row" style={{ gap: 4 }}>
+                  <select
+                    value={order ? String(order.minMult) : ''}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      dispatch({
+                        type: 'SET_EXPORT_ORDER',
+                        facilityId: fac.id,
+                        productId: pid,
+                        minMult: v === '' ? null : parseFloat(v),
+                        keep: order?.keep ?? 10,
+                      });
+                    }}
+                  >
+                    <option value="">off</option>
+                    <option value="1.15">sell ≥1.15×</option>
+                    <option value="1.3">sell ≥1.3×</option>
+                    <option value="1.5">sell ≥1.5×</option>
+                  </select>
+                  {order && (
+                    <label title="Units to keep in reserve">
+                      keep
+                      <input
+                        type="number"
+                        min={0}
+                        defaultValue={order.keep}
+                        style={{ width: 46, marginLeft: 3 }}
+                        onBlur={(e) => {
+                          const v = parseInt(e.target.value, 10);
+                          if (Number.isFinite(v)) {
+                            dispatch({
+                              type: 'SET_EXPORT_ORDER',
+                              facilityId: fac.id,
+                              productId: pid,
+                              minMult: order.minMult,
+                              keep: v,
+                            });
+                          }
+                        }}
+                      />
+                    </label>
+                  )}
+                </span>
+              </div>
+            );
+          })}
         </div>
       )}
 

@@ -46,6 +46,14 @@ export type Command =
   | { type: 'UPGRADE_FACILITY'; firmId: FirmId; facilityId: FacilityId }
   | { type: 'CIVIC_ACTION'; firmId: FirmId; action: 'festival' | 'fund_home' }
   | {
+      type: 'SET_EXPORT_ORDER';
+      facilityId: FacilityId;
+      productId: ProductId;
+      /** null clears the standing order. */
+      minMult: number | null;
+      keep: number;
+    }
+  | {
       type: 'EXPORT_GOODS';
       firmId: FirmId;
       facilityId: FacilityId;

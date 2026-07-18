@@ -26,7 +26,7 @@ import { Rng } from './Random';
 import { getFacilityDef } from '../data/facilityDefinitions';
 import { getRecipe } from '../data/recipes';
 import { getProduct } from '../data/products';
-import { addStock, removeStock, totalUnits, getQuantity as totalOf } from '../entities/Inventory';
+import { addStock, totalUnits } from '../entities/Inventory';
 import {
   IMPORT_MARKUP,
   CENTS,
@@ -34,7 +34,6 @@ import {
   LOAN_CREDIT_LIMIT_MULTIPLE,
   LOAN_MIN_CREDIT,
   MAX_STAKE_PCT,
-  EXPORT_FREIGHT_FEE,
   FESTIVAL_COST,
   FUND_HOME_COST,
   MAX_CITIZENS,
@@ -46,6 +45,7 @@ import { worldImportMult } from '../data/worldEvents';
 import { CHAIN_BLUEPRINTS, chainCost } from '../data/chains';
 import { performAcquisition } from './Acquisition';
 import { upgradeFacility } from './Upgrades';
+import { performExport } from './Trade';
 import { landCostMultiplier, landValueAt } from './LandValue';
 import type { Contract } from '../entities/Contract';
 
@@ -195,6 +195,19 @@ export class Simulation {
       case 'EXPORT_GOODS':
         this.exportGoods(command);
         return;
+      case 'SET_EXPORT_ORDER': {
+        const fac = s.facilities[command.facilityId];
+        if (!fac || fac.type !== 'warehouse') return;
+        if (command.minMult === null) {
+          delete fac.exportOrders[command.productId];
+        } else if (command.minMult > 0) {
+          fac.exportOrders[command.productId] = {
+            minMult: command.minMult,
+            keep: Math.max(0, Math.round(command.keep)),
+          };
+        }
+        return;
+      }
       case 'UPGRADE_FACILITY':
         upgradeFacility(s, command.firmId, command.facilityId);
         return;
@@ -418,41 +431,12 @@ export class Simulation {
    */
   private exportGoods(command: Extract<Command, { type: 'EXPORT_GOODS' }>): void {
     const s = this.state;
-    const firm = s.firms[command.firmId];
     const fac = s.facilities[command.facilityId];
-    if (!firm || !fac || fac.ownerFirmId !== firm.id) return;
-    if (fac.type !== 'warehouse') {
+    if (fac && fac.type !== 'warehouse') {
       emitEvent(s, 'warning', 'logistics', 'Exports ship from warehouses — stage goods there first.', fac.id);
       return;
     }
-    const product = getProduct(command.productId);
-    const inInput = totalOf(fac.inputInventory, command.productId);
-    const inOutput = totalOf(fac.outputInventory, command.productId);
-    const qty = Math.min(Math.max(0, Math.round(command.quantity)), inInput + inOutput);
-    if (qty <= 0) return;
-
-    const price = s.tradeCity.pricesByProduct[command.productId] ?? product.basePrice;
-    const revenue = Math.round(qty * price * (1 - EXPORT_FREIGHT_FEE));
-
-    // Remove from input first (the relay bag), then output.
-    const fromInput = Math.min(qty, inInput);
-    if (fromInput > 0) removeStock(fac.inputInventory, command.productId, fromInput);
-    if (qty - fromInput > 0) removeStock(fac.outputInventory, command.productId, qty - fromInput);
-
-    recordTransaction(s, {
-      from: WORLD_ACCOUNT,
-      to: firmAccount(firm.id),
-      amount: revenue,
-      firmId: firm.id,
-      category: 'revenue',
-      productId: command.productId,
-      quantity: qty,
-      note: `Exported ${qty} ${product.name} to Port Rosa`,
-    });
-    fac.dailyStats.unitsShipped += qty;
-    firm.exportRevenue += revenue;
-    emitEvent(s, 'success', 'logistics',
-      `🚢 Exported ${qty} ${product.name} to Port Rosa for ${revenue}¢ (after freight).`, fac.id);
+    performExport(s, command.firmId, command.facilityId, command.productId, command.quantity);
   }
 
   /**

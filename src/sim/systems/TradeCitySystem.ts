@@ -23,10 +23,18 @@ import {
   TRADE_GLUT_MULT,
 } from '../data/constants';
 import { clamp } from '../../utils/clamp';
+import { getQuantity } from '../entities/Inventory';
+import { performExport } from '../core/Trade';
 
 export function runTradeCitySystem(ctx: SimContext): void {
   const { state } = ctx;
   if (!isDayBoundary(state.tick, ctx.config)) return;
+  updatePrices(ctx);
+  runStandingOrders(ctx);
+}
+
+function updatePrices(ctx: SimContext): void {
+  const { state } = ctx;
 
   for (const pid of ALL_PRODUCT_IDS) {
     const base = getProduct(pid).basePrice;
@@ -48,6 +56,29 @@ export function runTradeCitySystem(ctx: SimContext): void {
     } else if (prevMult > TRADE_GLUT_MULT && nextMult <= TRADE_GLUT_MULT) {
       emitEvent(state, 'info', 'economy',
         `🚢 ${getProduct(pid).name} glut in Port Rosa — export prices have collapsed (${nextMult.toFixed(2)}× base).`);
+    }
+  }
+}
+
+/**
+ * Standing export orders: after the day's prices land, warehouses with a rule
+ * "auto-export when ≥ minMult × base, keep N" sell their surplus hands-free.
+ */
+function runStandingOrders(ctx: SimContext): void {
+  const { state } = ctx;
+  for (const fid in state.facilities) {
+    const fac = state.facilities[fid]!;
+    if (fac.type !== 'warehouse') continue;
+    for (const pid in fac.exportOrders) {
+      const order = fac.exportOrders[pid]!;
+      const base = getProduct(pid).basePrice;
+      const price = state.tradeCity.pricesByProduct[pid] ?? base;
+      if (price < base * order.minMult) continue;
+      const have =
+        getQuantity(fac.inputInventory, pid) + getQuantity(fac.outputInventory, pid);
+      const qty = have - order.keep;
+      if (qty <= 0) continue;
+      performExport(state, fac.ownerFirmId, fac.id, pid, qty, 'Standing order shipped');
     }
   }
 }

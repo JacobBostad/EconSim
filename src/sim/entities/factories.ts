@@ -50,6 +50,7 @@ export function createFacility(
     presentSkill: 0,
     level: 1,
     workerCapacity: def.workerCapacity,
+    exportOrders: {},
     residentIds: [],
   };
   state.facilities[id] = fac;
