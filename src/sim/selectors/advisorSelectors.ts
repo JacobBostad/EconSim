@@ -201,5 +201,33 @@ export function morningBriefing(state: GameState): Advice[] {
 
   const order = { danger: 0, warning: 1, info: 2 };
   items.sort((a, b) => order[a.severity] - order[b.severity]);
+  // Announced trade shock still pending: the informed-trader window is open.
+  // Only shown when the player owns a warehouse — otherwise it's not
+  // actionable (and building one just for the play rarely pays; probed).
+  const ann = state.tradeAnnouncement;
+  if (ann) {
+    const day = computeTime(state.tick, state.config).day;
+    const ownsWarehouse = player.facilities.some(
+      (fid) => state.facilities[fid]?.type === 'warehouse',
+    );
+    if (day < ann.effectDay && ownsWarehouse) {
+      const city = getTradeCity(ann.cityId);
+      const name = getProduct(ann.productId).name;
+      items.push(
+        ann.mult > 1
+          ? {
+              icon: '📯',
+              severity: 'info',
+              text: `${city.name} pays ~${ann.mult}× for ${name} from day ${ann.effectDay + 1} — stage it in your warehouse now and sell into the move.`,
+            }
+          : {
+              icon: '📯',
+              severity: 'info',
+              text: `${name} slides in ${city.name} from day ${ann.effectDay + 1} (~${ann.mult}×) — lock a forward at today's quote before the drop.`,
+            },
+      );
+    }
+  }
+
   return items.slice(0, MAX_ITEMS);
 }

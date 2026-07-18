@@ -162,6 +162,8 @@ export interface GameState {
   facilityOffer: FacilityOffer | null;
   /** Lifetime fire-sale purchases (achievements/records). */
   fireSalesBought: number;
+  /** Lifetime commodity-desk purchases from the trade cities (missions). */
+  deskTrades: number;
   /** Last lapsed fire sale — that facility cools down before re-listing. */
   lastLapsedFireSale: { facilityId: FacilityId; day: number } | null;
 

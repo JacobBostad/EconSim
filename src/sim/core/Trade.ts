@@ -116,6 +116,7 @@ export function performCityPurchase(
   });
   addStock(fac.inputInventory, productId, qty, product.defaultQuality);
   applyPriceImpact(state, cityId, productId, qty, 1); // buying moves the quote up
+  if (firmId === state.playerFirmId) state.deskTrades += 1;
   const city = getTradeCity(cityId);
   emitEvent(state, 'success', 'logistics',
     `${city.emoji} Bought ${qty} ${product.name} from ${city.name} at ${formatMoney(unitCost)}/unit (freight in).`, facilityId);

@@ -203,6 +203,14 @@ export const MISSION_DEFS: MissionDef[] = [
     },
   },
   {
+    id: 'play_the_news',
+    name: 'Play the News',
+    icon: '📯',
+    description: 'Trade the market both ways: buy goods FROM a city twice on the warehouse commodity desk (watch the ticker for 📯 announced price moves — buy before the surge, sell into it).',
+    reward: dollars(1500),
+    check: (s) => s.deskTrades >= 2,
+  },
+  {
     id: 'valuation_30k',
     name: 'On the Map',
     icon: '🏢',

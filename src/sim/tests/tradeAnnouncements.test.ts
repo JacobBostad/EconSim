@@ -5,6 +5,7 @@ import { totalMoneySupply } from '../core/GameState';
 import { tradeAnnouncementMult, ANNOUNCE_LEAD_DAYS } from '../systems/TradeAnnouncementSystem';
 import { cityPrice } from '../core/Trade';
 import { getProduct } from '../data/products';
+import { morningBriefing } from '../selectors/advisorSelectors';
 
 describe('Trade announcements', () => {
   it('rolls deterministically from the seed — same town, same news', () => {
@@ -45,6 +46,27 @@ describe('Trade announcements', () => {
     // After the window the announcement clears itself.
     sim.run(tpd * 4);
     expect(sim.getState().tradeAnnouncement).toBeNull();
+  });
+
+  it('the advisor calls the play while the window is open — warehouse required', () => {
+    const sim = newSim(11);
+    const state = sim.getState();
+    state.tradeAnnouncement = {
+      cityId: 'ironvale', productId: 'tools', mult: 1.5,
+      announcedDay: 0, effectDay: 6, durationDays: 5,
+    };
+    // No warehouse: not actionable, no line.
+    expect(morningBriefing(state).some((a) => a.icon === '📯')).toBe(false);
+
+    const player = state.firms[state.playerFirmId]!;
+    player.cash = 100000_00;
+    sim.dispatch({ type: 'BUILD_FACILITY', firmId: player.id, defId: 'warehouse', location: { x: 70, y: 30 } });
+    const surge = morningBriefing(state).find((a) => a.icon === '📯');
+    expect(surge?.text).toContain('stage it in your warehouse');
+
+    state.tradeAnnouncement.mult = 0.65;
+    const glut = morningBriefing(state).find((a) => a.icon === '📯');
+    expect(glut?.text).toContain('lock a forward');
   });
 
   it('announcements move prices, not money', () => {

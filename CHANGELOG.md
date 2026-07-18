@@ -170,7 +170,9 @@ hireable managers, a real commodity market, and shared daily play.
   the Gazette is now a trading skill: the probed informed-trader edge is
   ~$100 per play — real, repeatable, bounded by price impact, and not
   worth building a warehouse for on its own. Ticker chip counts down to
-  the move.
+  the move, the Advisor calls the play while the window is open (stage
+  goods for a surge, lock a forward before a glut — warehouse owners
+  only), and a 📯 Play the News mission teaches the desk.
 - **Tier-driven town stories**: prosperity is now a magnet — when the
   middle class is broad (40%+ comfortable-or-better), newcomers arrive with
   a trade (+0.1 skill) and the Gazette says why; a struggling all-worker

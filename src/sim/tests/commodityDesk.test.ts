@@ -4,6 +4,7 @@ import { totalMoneySupply } from '../core/GameState';
 import { cityPrice, exportFreightFee, impactedFillPrice } from '../core/Trade';
 import { getQuantity, totalUnits } from '../entities/Inventory';
 import { getProduct } from '../data/products';
+import { serialize, deserialize } from '../persistence/saveLoad';
 import type { Simulation } from '../core/Simulation';
 
 function playerWarehouse(sim: Simulation) {
@@ -74,6 +75,28 @@ describe('Commodity desk', () => {
     });
     expect(getQuantity(wh.inputInventory, 'grain')).toBe(0);
     expect(player.cash).toBe(cash0);
+  });
+
+  it('desk trades count toward the Play the News mission, and migrate', () => {
+    const sim = newSim(3);
+    const state = sim.getState();
+    const player = state.firms[state.playerFirmId]!;
+    const wh = playerWarehouse(sim);
+    expect(state.deskTrades).toBe(0);
+    for (let i = 0; i < 2; i++) {
+      sim.dispatch({
+        type: 'BUY_FROM_CITY', firmId: player.id, facilityId: wh.id,
+        productId: 'grain', quantity: 10, cityId: 'port_rosa',
+      });
+    }
+    expect(state.deskTrades).toBe(2);
+    void player;
+
+    // Old saves default the counter to zero.
+    const raw = JSON.parse(serialize(state)) as Record<string, unknown>;
+    delete raw.deskTrades;
+    const migrated = deserialize(JSON.stringify(raw));
+    expect(migrated.deskTrades).toBe(0);
   });
 
   it('round trip: buy the dip here, sell the spike there', () => {
