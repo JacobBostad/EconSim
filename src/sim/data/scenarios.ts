@@ -35,6 +35,12 @@ export interface AiChainSpec {
   fs: { target: number; reorder: number; max: number };
   /** CEO archetype; defaults to a deterministic rotation when omitted. */
   personality?: PersonalityId;
+  /**
+   * No producer of its own: the factory buys inputs from the Import Terminal
+   * (1.5× markup) — and the AI's local-sourcing logic will switch to any
+   * cheaper local supplier, so these chains are born customers.
+   */
+  importerFed?: boolean;
 }
 
 export interface ScenarioDef {
@@ -196,6 +202,36 @@ export const SCENARIOS: Record<string, ScenarioDef> = {
         personality: 'price_fighter',
       }),
       clothesChain(),
+    ],
+  },
+  mill_country: {
+    id: 'mill_country',
+    name: 'Mill Country',
+    icon: '🏭',
+    description:
+      'A town of mills and no fields: every factory buys its raw goods from the Import Terminal at a stiff markup. Build the farms and mines they lack, undercut the importer, and every mill in town becomes your customer.',
+    aiChains: [
+      breadChain({
+        importerFed: true,
+        // No fields — the bakery imports its grain. Extra cash cushions the
+        // premium until a local supplier (ideally the player) appears.
+        cash: dollars(46000),
+        stocks: { producerOut: 0, factoryIn: 40, factoryOut: 24, shopIn: 40 },
+        staff: { producer: 0, factory: 2, retail: 2 },
+      }),
+      toolsChain({
+        importerFed: true,
+        cash: dollars(46000),
+        stocks: { producerOut: 0, factoryIn: 40, factoryOut: 20, shopIn: 30 },
+        staff: { producer: 0, factory: 2, retail: 2 },
+        personality: 'price_fighter',
+      }),
+      clothesChain({
+        importerFed: true,
+        cash: dollars(46000),
+        stocks: { producerOut: 0, factoryIn: 40, factoryOut: 20, shopIn: 30 },
+        staff: { producer: 0, factory: 2, retail: 2 },
+      }),
     ],
   },
 };

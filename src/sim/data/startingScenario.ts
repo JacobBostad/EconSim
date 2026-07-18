@@ -340,11 +340,16 @@ export function createInitialState(
     firm.qualityByProduct[spec.product] = getProduct(spec.product).defaultQuality;
     firm.adBudgetByProduct[spec.product] = spec.adBudget;
 
-    const producer = newFacility(b, spec.producerDef, firm.id, spec.loc.producer, {
-      name: spec.producerName,
-      activeRecipeId: spec.producerRecipe,
-    });
-    stock(producer.outputInventory, spec.inputProduct, spec.stocks.producerOut);
+    // Importer-fed chains build no producer: their factory buys inputs from
+    // the Import Terminal, making them day-one wholesale customers for any
+    // local supplier who undercuts it.
+    const producer = spec.importerFed
+      ? null
+      : newFacility(b, spec.producerDef, firm.id, spec.loc.producer, {
+          name: spec.producerName,
+          activeRecipeId: spec.producerRecipe,
+        });
+    if (producer) stock(producer.outputInventory, spec.inputProduct, spec.stocks.producerOut);
 
     const factory = newFacility(b, 'factory', firm.id, spec.loc.factory, {
       name: spec.factoryName,
@@ -365,11 +370,14 @@ export function createInitialState(
         if (w) employ(b, w, firm.id, facId, role, DEFAULT_AI_WAGE);
       }
     };
-    staffUp(producer.id, spec.staff.producer, `${spec.producerDef} worker`);
+    if (producer) staffUp(producer.id, spec.staff.producer, `${spec.producerDef} worker`);
     staffUp(factory.id, spec.staff.factory, 'factory worker');
     staffUp(shop.id, spec.staff.retail, 'clerk');
 
-    addContract(firm.id, producer.id, factory.id, spec.inputProduct, spec.pf.target, spec.pf.reorder, spec.pf.max);
+    addContract(
+      firm.id, producer ? producer.id : importerFac.id, factory.id,
+      spec.inputProduct, spec.pf.target, spec.pf.reorder, spec.pf.max,
+    );
     addContract(firm.id, factory.id, shop.id, spec.product, spec.fs.target, spec.fs.reorder, spec.fs.max);
   }
 

@@ -54,3 +54,46 @@ describe('Scenario variants', () => {
     expect(Object.values(state.firms).some((f) => f.name === 'Sunrise Foods')).toBe(true);
   });
 });
+
+describe('Mill Country (importer-fed chains)', () => {
+  it('builds no AI producers; every factory imports its inputs', () => {
+    const state = createInitialState(1, undefined, 'mill_country');
+    const aiFirms = Object.values(state.firms).filter((f) => f.ownerType === 'ai');
+    expect(aiFirms).toHaveLength(3);
+    for (const firm of aiFirms) {
+      const types = firm.facilities.map((i) => state.facilities[i]!.type);
+      expect(types).not.toContain('farm');
+      expect(types).not.toContain('mine');
+    }
+    const importerContracts = Object.values(state.contracts).filter(
+      (c) => state.facilities[c.sourceFacilityId]?.type === 'importer',
+    );
+    expect(importerContracts.length).toBe(3);
+  });
+
+  it('a player farm quickly becomes the local bakery supplier', () => {
+    const state = createInitialState(4, undefined, 'mill_country');
+    const sim = new Simulation(state);
+    sim.dispatch({ type: 'RESUME' });
+    const player = state.firms[state.playerFirmId]!;
+    sim.dispatch({ type: 'BUILD_FACILITY', firmId: player.id, defId: 'farm', location: { x: 30, y: 20 } });
+    const farm = state.facilities[player.facilities[0]!]!;
+    sim.dispatch({ type: 'SELECT_RECIPE', facilityId: farm.id, recipeId: 'grow_grain' });
+    sim.dispatch({ type: 'HIRE_WORKER', facilityId: farm.id, citizenId: null });
+    sim.dispatch({ type: 'HIRE_WORKER', facilityId: farm.id, citizenId: null });
+
+    let customerDay = 0;
+    const tpd = ticksPerDay(state.config);
+    for (let d = 1; d <= 40 && !customerDay; d++) {
+      sim.run(tpd);
+      const hasCustomer = Object.values(state.contracts).some(
+        (c) => c.active && c.sourceFacilityId === farm.id
+          && state.firms[c.ownerFirmId]?.ownerType === 'ai',
+      );
+      if (hasCustomer) customerDay = d;
+    }
+    expect(customerDay).toBeGreaterThan(0);
+    expect(customerDay).toBeLessThanOrEqual(40);
+    expect(player.wholesaleEarned).toBeGreaterThanOrEqual(0);
+  });
+});

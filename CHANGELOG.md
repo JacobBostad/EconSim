@@ -100,7 +100,10 @@ engine tests), probed with headless balance runs, and guarded by CI.
 ## Content & polish
 
 - **Port Haven scenario** (exporter CEOs, thin home shelves) joins Meadowbrook,
-  Gold Rush Gulch, Harvest Valley.
+  Gold Rush Gulch, Harvest Valley — and **Mill Country**, where every AI
+  factory imports its raw goods, so the player's opening is to become the
+  whole town's supplier (verified: a staffed farm lands its first AI
+  customer within 40 days).
 - Missions, achievements, intro, README, and media all teach the new systems.
 - Sound stings: receivership, challenge fanfare, rival openings, poach alerts.
 - Chronicle viewable anytime; apartments/roasteries visually distinct.
