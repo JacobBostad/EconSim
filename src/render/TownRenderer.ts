@@ -166,6 +166,52 @@ export class TownRenderer {
   }
 
   private effScale(): number { return this.view.scale * this.zoom; }
+
+  // --- camera glide to off-screen selections ----------------------------
+  private lastSel: string | null = null;
+  private camGlide: Vec | null = null;
+
+  /** Where a selectable entity stands right now (facilities, citizens,
+   * vehicles — firms have no location). */
+  private entityLocation(s: GameState, id: string): Vec | null {
+    return s.facilities[id]?.location
+      ?? s.citizens[id]?.currentLocation
+      ?? s.vehicles[id]?.currentLocation
+      ?? null;
+  }
+
+  /**
+   * When something gets selected from a list (event log, tables) while it
+   * sits off-screen, glide the camera to it — "click it and the map takes
+   * you there". Map-click selections are already on-screen and never move
+   * the camera. Any manual drag/wheel cancels the glide.
+   */
+  private trackSelection(s: GameState, dt: number): void {
+    const sel = this.cb.getSelectedId();
+    if (sel !== this.lastSel) {
+      this.lastSel = sel;
+      if (sel) {
+        const loc = this.entityLocation(s, sel);
+        if (loc) {
+          const sp = this.w2s(s, loc);
+          const m = 8;
+          if (sp.x < m || sp.y < m || sp.x > this.cssW - m || sp.y > this.cssH - m) {
+            this.camGlide = { x: loc.x, y: loc.y };
+            this.autoFit = false;
+          }
+        }
+      }
+    }
+    if (this.camGlide) {
+      const sc = this.effScale();
+      const tx = -(this.camGlide.x - this.view.cx) * sc;
+      const ty = -(this.camGlide.y - this.view.cy) * sc;
+      const k = Math.min(1, dt * 6);
+      this.panX += (tx - this.panX) * k;
+      this.panY += (ty - this.panY) * k;
+      if (Math.hypot(tx - this.panX, ty - this.panY) < 1) this.camGlide = null;
+    }
+  }
   private w2s(_s: GameState, p: Vec): Vec {
     const sc = this.effScale();
     return {
@@ -211,11 +257,13 @@ export class TownRenderer {
     const factor = e.deltaY < 0 ? 1.12 : 1 / 1.12;
     this.zoom = Math.max(0.4, Math.min(6, this.zoom * factor));
     this.autoFit = false;
+    this.camGlide = null;
     const after = this.w2s(s, before);
     this.panX += m.x - after.x;
     this.panY += m.y - after.y;
   };
   private onDown = (e: MouseEvent): void => {
+    this.camGlide = null;
     this.dragging = true;
     this.dragMoved = false;
     this.dragStart = this.localMouse(e);
@@ -308,6 +356,7 @@ export class TownRenderer {
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     if (this.autoFit) { this.panX = 0; this.panY = 0; }
     this.updateView(s);
+    this.trackSelection(s, dt);
 
     const time = computeTime(s.tick, s.config);
     this.smokeT += dt * 1000;
@@ -1233,5 +1282,5 @@ export class TownRenderer {
     ctx.closePath();
   }
 
-  resetView(): void { this.zoom = 1; this.panX = 0; this.panY = 0; this.autoFit = true; }
+  resetView(): void { this.zoom = 1; this.panX = 0; this.panY = 0; this.autoFit = true; this.camGlide = null; }
 }
