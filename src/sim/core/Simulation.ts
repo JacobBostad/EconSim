@@ -49,6 +49,7 @@ import { sellFacility } from './Demolition';
 import { performExport, pickBestCity } from './Trade';
 import { landCostMultiplier, landValueAt } from './LandValue';
 import { placementBlocker } from './Placement';
+import { WHOLESALE_MULT_MIN, WHOLESALE_MULT_MAX } from './Wholesale';
 import type { Contract } from '../entities/Contract';
 
 import { runTimeSystem } from '../systems/TimeSystem';
@@ -232,6 +233,13 @@ export class Simulation {
       case 'TOGGLE_WHOLESALE': {
         const fac = s.facilities[command.facilityId];
         if (fac) fac.wholesaleEnabled = command.enabled;
+        return;
+      }
+      case 'SET_WHOLESALE_PRICE': {
+        const fac = s.facilities[command.facilityId];
+        if (!fac || !Number.isFinite(command.mult)) return;
+        fac.wholesalePriceMult =
+          Math.round(Math.min(WHOLESALE_MULT_MAX, Math.max(WHOLESALE_MULT_MIN, command.mult)) * 100) / 100;
         return;
       }
       case 'HIRE_WORKER':

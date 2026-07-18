@@ -26,7 +26,8 @@ import { createFacility } from '../entities/factories';
 import type { Contract } from '../entities/Contract';
 import { hireCitizen, fireCitizen, findUnemployed } from './LaborSystem';
 import { clamp } from '../../utils/clamp';
-import { CENTS, RND_QUALITY_GAIN_PER_1000, MAX_RETAIL_PRODUCTS, IMPORT_MARKUP, WHOLESALE_DISCOUNT } from '../data/constants';
+import { CENTS, RND_QUALITY_GAIN_PER_1000, MAX_RETAIL_PRODUCTS, IMPORT_MARKUP } from '../data/constants';
+import { wholesaleUnitPrice } from '../core/Wholesale';
 import { worldImportMult } from '../data/worldEvents';
 import { companyValuation } from '../selectors/companySelectors';
 import { acquisitionCost, performAcquisition } from '../core/Acquisition';
@@ -672,14 +673,12 @@ function manageSourcing(ctx: SimContext, firmId: string): void {
     const pid = contract.productId;
 
     if (source.type === 'importer') {
-      // Consider switching to a cheaper local supplier.
+      // Consider switching to the CHEAPEST qualifying local supplier —
+      // sellers set their own wholesale price, so undercutting wins the
+      // customer.
       const product = getProduct(pid);
       const importerUnit = Math.round(product.basePrice * IMPORT_MARKUP * worldImportMult(state));
-      const stat = state.marketStats[pid];
-      const wholesaleUnit = Math.round(
-        (stat && stat.averagePrice > 0 ? stat.averagePrice : product.basePrice) * WHOLESALE_DISCOUNT,
-      );
-      if (wholesaleUnit >= importerUnit * LOCAL_SOURCE_SAVINGS) continue;
+      let best: { fac: import('../entities/Facility').Facility; unit: number } | null = null;
       for (const fid in state.facilities) {
         const fac = state.facilities[fid]!;
         if (fac.ownerFirmId === firmId || fac.type === 'importer' || fac.status === 'closed') continue;
@@ -689,24 +688,36 @@ function manageSourcing(ctx: SimContext, firmId: string): void {
         const sellerType = state.firms[fac.ownerFirmId]?.ownerType;
         if (sellerType !== 'ai' && sellerType !== 'player') continue;
         if (localSurplus(state, fac, pid) < LOCAL_SOURCE_MIN_SURPLUS) continue;
-        contract.sourceFacilityId = fac.id;
+        const unit = wholesaleUnitPrice(state, fac, pid);
+        if (unit >= importerUnit * LOCAL_SOURCE_SAVINGS) continue; // not enough savings
+        if (!best || unit < best.unit) best = { fac, unit };
+      }
+      if (best) {
+        contract.sourceFacilityId = best.fac.id;
         emitEvent(state, 'info', 'ai',
-          `${firm.name} now sources ${product.name} locally from ${state.firms[fac.ownerFirmId]!.name} — wholesale beats the importer.`,
+          `${firm.name} now sources ${product.name} locally from ${state.firms[best.fac.ownerFirmId]!.name} — wholesale beats the importer.`,
           dest.id);
         return; // one switch per firm per day
       }
     } else if (source.ownerFirmId !== firmId) {
-      // Cross-firm source opted out of wholesale (revert immediately — that
-      // source will never ship again) or dried up while the destination
+      // Cross-firm source opted out (revert immediately — that source will
+      // never ship again), priced itself above import parity (no one pays a
+      // local MORE than the importer), or dried up while the destination
       // starves: go back to the importer rather than die of loyalty.
       const cutOff = source.wholesaleEnabled === false;
+      const importerUnit = Math.round(
+        getProduct(pid).basePrice * IMPORT_MARKUP * worldImportMult(state),
+      );
+      const gouged = wholesaleUnitPrice(state, source, pid) > importerUnit;
       const destHave = getQuantity(dest.inputInventory, pid);
-      if (!cutOff && (destHave > 0 || localSurplus(state, source, pid) >= 10)) continue;
+      if (!cutOff && !gouged && (destHave > 0 || localSurplus(state, source, pid) >= 10)) continue;
       const importer = Object.values(state.facilities).find((f) => f.type === 'importer');
       if (!importer) continue;
       contract.sourceFacilityId = importer.id;
       emitEvent(state, 'info', 'ai',
-        `${firm.name} switched ${getProduct(pid).name} sourcing back to the importer — the local supplier ran dry.`,
+        gouged && !cutOff
+          ? `${firm.name} dropped ${state.firms[source.ownerFirmId]?.name ?? 'a supplier'} for ${getProduct(pid).name} — pricier than importing.`
+          : `${firm.name} switched ${getProduct(pid).name} sourcing back to the importer — the local supplier ran dry.`,
         dest.id);
       return;
     }

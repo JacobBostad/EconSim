@@ -133,6 +133,12 @@ export interface Facility {
    * buyers can't force a sale at the wholesale discount.
    */
   wholesaleEnabled: boolean;
+  /**
+   * Seller's wholesale price as a fraction of market average (0.5–1.0).
+   * Absent = the default WHOLESALE_DISCOUNT (0.7). Undercut to win AI
+   * customers; price above import parity and they walk.
+   */
+  wholesalePriceMult?: number;
 }
 
 /** Static template for a buildable facility. */

@@ -26,10 +26,10 @@ import type { Vehicle } from '../entities/Vehicle';
 import { getProduct } from '../data/products';
 import {
   IMPORT_MARKUP,
-  WHOLESALE_DISCOUNT,
   TRANSPORT_COST_PER_UNIT_DISTANCE,
   TRANSPORT_FLAT_COST,
 } from '../data/constants';
+import { wholesaleUnitPrice } from '../core/Wholesale';
 import { worldImportMult, worldTransportMult } from '../data/worldEvents';
 import { seasonTransportMult, seasonOf } from '../data/seasons';
 
@@ -182,11 +182,7 @@ function processReorders(ctx: SimContext): void {
       quality = bag[contract.productId]?.quality ?? product.defaultQuality;
 
       if (crossFirm) {
-        const stat = state.marketStats[contract.productId];
-        const unit = Math.round(
-          (stat && stat.averagePrice > 0 ? stat.averagePrice : product.basePrice) *
-            WHOLESALE_DISCOUNT,
-        );
+        const unit = wholesaleUnitPrice(state, source, contract.productId);
         wholesalePaid = unit * qty;
         const buyer = state.firms[dest.ownerFirmId];
         if (!buyer || buyer.cash < wholesalePaid) continue; // can't pay -> no shipment

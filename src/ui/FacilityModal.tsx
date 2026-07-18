@@ -17,7 +17,8 @@ import { facilityEmployees } from '../sim/selectors/facilitySelectors';
 import { contractsByDestination } from '../sim/selectors/supplyChainSelectors';
 import { getQuantity } from '../sim/entities/Inventory';
 import { formatMoney } from '../utils/formatMoney';
-import { CENTS } from '../sim/data/constants';
+import { CENTS, WHOLESALE_DISCOUNT } from '../sim/data/constants';
+import { WHOLESALE_MULT_MIN, WHOLESALE_MULT_MAX } from '../sim/core/Wholesale';
 import { upgradeCost } from '../sim/core/Upgrades';
 import { sellRefund } from '../sim/core/Demolition';
 import { pricingInsight } from '../sim/selectors/marketSelectors';
@@ -85,8 +86,32 @@ export function FacilityActions({ fac }: { fac: Facility }): React.ReactElement 
                 dispatch({ type: 'TOGGLE_WHOLESALE', facilityId: fac.id, enabled: e.target.checked })
               }
             />
-            Sell surplus to other firms (~70% of market, paid per shipment)
+            Sell surplus to other firms (paid per shipment)
           </label>
+          {fac.wholesaleEnabled !== false && (() => {
+            const mult = fac.wholesalePriceMult ?? WHOLESALE_DISCOUNT;
+            const pct = Math.round(mult * 100);
+            return (
+              <div className="small row" style={{ gap: 6, marginTop: 4, alignItems: 'center' }}>
+                <span>Your price: <strong>{pct}%</strong> of market</span>
+                <button
+                  disabled={mult <= WHOLESALE_MULT_MIN + 1e-9}
+                  onClick={() => dispatch({ type: 'SET_WHOLESALE_PRICE', facilityId: fac.id, mult: mult - 0.05 })}
+                >−5%</button>
+                <button
+                  disabled={mult >= WHOLESALE_MULT_MAX - 1e-9}
+                  onClick={() => dispatch({ type: 'SET_WHOLESALE_PRICE', facilityId: fac.id, mult: mult + 0.05 })}
+                >+5%</button>
+                <span className="muted">
+                  {pct < 70
+                    ? 'undercutting — first pick for AI buyers'
+                    : pct <= 80
+                      ? 'AI switches only when this clearly beats importing'
+                      : 'pricey — customers walk if importing is cheaper'}
+                </span>
+              </div>
+            );
+          })()}
           {(() => {
             const customers = Object.values(state.contracts).filter(
               (c) => c.active && c.sourceFacilityId === fac.id

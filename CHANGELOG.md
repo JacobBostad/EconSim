@@ -27,6 +27,9 @@ engine tests), probed with headless balance runs, and guarded by CI.
   books revenue, buyer books COGS), sellers never part with stock their own
   chains reserve, and broke buyers don't get shipped to. Buy local
   intermediates cheaper than importing, or run a pure-supplier strategy.
+  Sellers set their own price (50–100% of market, default 70%): AI buyers
+  pick the cheapest qualifying supplier, so undercutting wins the customer —
+  and anyone priced above import parity gets dropped for the importer.
   (Also fixes what was a free-goods exploit: the UI offered cross-firm
   sources but nothing charged for them.) Measured: at 85% a wholesale
   storefront's margin couldn't cover wages; at 70% it roughly breaks even
