@@ -235,6 +235,15 @@ engine tests), probed with headless balance runs, and guarded by CI.
 
 ## Measured findings (kept as design, documented in code)
 
+- **Challenge scores are scenario-fair enough for one leaderboard** (probed:
+  identical bread-chain-plus-exports play, 200 days, all six scenarios × two
+  seeds): scenario means ranged 212 (Gold Rush Gulch) to 289 (Mill Country /
+  Port Haven) — a real ~±15% terrain effect, but the same order as seed
+  luck within a scenario (Gold Rush swung 183→240 on seed alone). Kept the
+  single leaderboard and its scoring; the Awards table now medals your best
+  run per town (🏅) and says plainly that scores compare best within the
+  same town and difficulty.
+
 - **Shares play pays** (probed at day 100, two seeds): a 45% stake in the
   top rival costs ~$25k and returns ~$25/day in dividends — roughly a 35%
   annualized yield at the 30% payout ratio, so stake-building is a real

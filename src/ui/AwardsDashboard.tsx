@@ -48,6 +48,11 @@ export function AwardsDashboard(): React.ReactElement {
       </div>
 
       <div className="section-title">🏁 Challenge Leaderboard</div>
+      <p className="muted small">
+        Scores compare best within the same town and difficulty — terrain
+        tilts identical play by roughly ±15%, about as much as seed luck.
+        🏅 marks your best run in each town.
+      </p>
       {(() => {
         const runs = loadChallengeRuns();
         if (runs.length === 0) {
@@ -57,6 +62,15 @@ export function AwardsDashboard(): React.ReactElement {
               (final score at day 200).
             </p>
           );
+        }
+        // Each scenario's best run gets a medal — terrain shifts scores a
+        // little (measured: ~±15% for identical play), so the per-town best
+        // is the fairer brag.
+        const bestByScenario = new Map<string, number>();
+        for (const r of runs) {
+          if ((bestByScenario.get(r.scenarioId) ?? -1) < r.score) {
+            bestByScenario.set(r.scenarioId, r.score);
+          }
         }
         return (
           <table>
@@ -69,7 +83,12 @@ export function AwardsDashboard(): React.ReactElement {
                   <td>{i + 1}{i === 0 ? ' 🏆' : ''}</td>
                   <td className="mono">{r.score}</td>
                   <td className="mono">{formatMoneyShort(r.valuation)}</td>
-                  <td>{SCENARIOS[r.scenarioId]?.name ?? r.scenarioId}</td>
+                  <td>
+                    {SCENARIOS[r.scenarioId]?.name ?? r.scenarioId}
+                    {bestByScenario.get(r.scenarioId) === r.score && (
+                      <span title="Your best score in this town"> 🏅</span>
+                    )}
+                  </td>
                   <td>{r.difficulty}</td>
                   <td className="mono">{r.seed}</td>
                   <td className="muted small">{r.at}</td>
