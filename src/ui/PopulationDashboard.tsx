@@ -6,6 +6,7 @@ import {
   citizenActionLabel,
   laborMarketStats,
   employerBreakdown,
+  spendingPower,
 } from '../sim/selectors/citizenSelectors';
 import { macroIndicators } from '../sim/selectors/debugSelectors';
 import { formatMoney } from '../utils/formatMoney';
@@ -20,6 +21,7 @@ export function PopulationDashboard(): React.ReactElement {
   const citizens = allCitizens(state);
   const labor = laborMarketStats(state);
   const employers = employerBreakdown(state);
+  const spend = spendingPower(state);
   const maxBucket = Math.max(1, ...labor.skillBuckets.map((b) => b.count));
 
   return (
@@ -43,6 +45,39 @@ export function PopulationDashboard(): React.ReactElement {
         <Stat label="Avg cash" value={formatMoney(pop.averageCash)} />
         <Stat label="Avg satisfaction" value={`${pop.averageSatisfaction.toFixed(0)}/100`} />
         <Stat label="Unmet needs today" value={String(pop.totalUnmetNeedsToday)} />
+      </div>
+
+      <h3>Spending Power</h3>
+      <div className="row" style={{ gap: 10, flexWrap: 'wrap', alignItems: 'stretch' }}>
+        <div className="card" style={{ minWidth: 240, marginBottom: 0 }}>
+          <div className="muted small" style={{ marginBottom: 4 }}>Household money (today)</div>
+          <div className="kv small"><span className="k">Wages earned</span><span className="mono">{formatMoney(spend.wagesEarnedToday)}</span></div>
+          <div className="kv small"><span className="k">Spent in stores</span><span className="mono">{formatMoney(spend.spentToday)}</span></div>
+          <div className="kv small"><span className="k">Purchases</span><span className="mono">{spend.purchasesToday}</span></div>
+          <div className="kv small"><span className="k">Avg cash held</span><span className="mono">{formatMoney(spend.averageCash)}</span></div>
+          {spend.hungryMarkets.length > 0 && (
+            <div className="small" style={{ color: 'var(--amber)', marginTop: 4 }}>
+              💡 Hungry markets: {spend.hungryMarkets.join(', ')} — unmet demand
+              beat sales yesterday.
+            </div>
+          )}
+        </div>
+        <div className="card" style={{ minWidth: 240, marginBottom: 0 }}>
+          <div className="muted small" style={{ marginBottom: 4 }}>Where it went (yesterday)</div>
+          {spend.spendByProduct.length === 0 && <div className="muted small">no sales yet</div>}
+          {spend.spendByProduct.map((p) => {
+            const max = spend.spendByProduct[0]!.amount;
+            return (
+              <div className="row small" key={p.productId} style={{ gap: 6 }}>
+                <span style={{ width: 70 }}>{p.name}</span>
+                <span className="bar" style={{ flex: 1 }}>
+                  <span style={{ width: `${(p.amount / max) * 100}%` }} />
+                </span>
+                <span className="mono" style={{ width: 70, textAlign: 'right' }}>{formatMoney(p.amount)}</span>
+              </div>
+            );
+          })}
+        </div>
       </div>
 
       <h3>Labor Market</h3>

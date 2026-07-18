@@ -6,6 +6,7 @@ import type { GameState } from '../core/GameState';
 import type { Citizen } from '../entities/Citizen';
 import type { CitizenId, FirmId } from '../core/Id';
 import { average } from '../../utils/math';
+import { getProduct } from '../data/products';
 
 export function getCitizen(state: GameState, id: CitizenId): Citizen | undefined {
   return state.citizens[id];
@@ -148,4 +149,60 @@ export function employerBreakdown(state: GameState): EmployerRow[] {
     });
   }
   return rows.sort((a, b) => b.employees - a.employees);
+}
+
+// ---------------------------------------------------------------------------
+// Spending power — where the town's money goes
+// ---------------------------------------------------------------------------
+
+export interface SpendingPower {
+  averageCash: number;
+  /** Sum across citizens, today so far. */
+  wagesEarnedToday: number;
+  spentToday: number;
+  purchasesToday: number;
+  /** Yesterday's citizen spend per product (avgPrice × unitsSold), desc. */
+  spendByProduct: { productId: string; name: string; amount: number }[];
+  /** Products whose unmet demand exceeded sales yesterday — hungry markets. */
+  hungryMarkets: string[];
+}
+
+export function spendingPower(state: GameState): SpendingPower {
+  const citizens = allCitizens(state);
+  let wages = 0, spent = 0, purchases = 0;
+  for (const c of citizens) {
+    wages += c.dailyStats.wagesEarned;
+    spent += c.dailyStats.spent;
+    purchases += c.dailyStats.purchases;
+  }
+  const spendByProduct: SpendingPower['spendByProduct'] = [];
+  const hungryMarkets: string[] = [];
+  // Average urgency per product: catches markets nobody serves at all, which
+  // never register unmetDemand (that counter only ticks at store visits).
+  const urgencySum: Record<string, number> = {};
+  for (const c of citizens) {
+    for (const n of c.needs) urgencySum[n.productId] = (urgencySum[n.productId] ?? 0) + n.urgency;
+  }
+  for (const pid in state.marketStats) {
+    const last = state.marketStats[pid]!.history.slice(-1)[0];
+    if (!last) continue;
+    const amount = last.averagePrice * last.unitsSold;
+    if (amount > 0) {
+      spendByProduct.push({ productId: pid, name: getProduct(pid).name, amount });
+    }
+    const avgUrgency = citizens.length ? (urgencySum[pid] ?? 0) / citizens.length : 0;
+    const served = last.unitsSold > 0;
+    if (last.unmetDemand > Math.max(4, last.unitsSold) || (!served && avgUrgency > 1.2)) {
+      hungryMarkets.push(getProduct(pid).name);
+    }
+  }
+  spendByProduct.sort((a, b) => b.amount - a.amount);
+  return {
+    averageCash: Math.round(average(citizens.map((c) => c.cash))),
+    wagesEarnedToday: wages,
+    spentToday: spent,
+    purchasesToday: purchases,
+    spendByProduct,
+    hungryMarkets,
+  };
 }
