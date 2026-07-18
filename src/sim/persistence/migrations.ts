@@ -128,6 +128,7 @@ function normalize(state: GameState): GameState {
     f.level = f.level ?? 1;
     f.workerCapacity = f.workerCapacity ?? getFacilityDef(f.defId).workerCapacity;
     f.exportOrders = f.exportOrders ?? {};
+    f.builtAtTick = f.builtAtTick ?? 0;
   }
   // ...and give the market a stat entry for them.
   state.tradeCity = state.tradeCity ?? { pricesByProduct: {} };

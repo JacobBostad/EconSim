@@ -75,6 +75,7 @@ function newFacility(
     dailyStats: emptyFacilityDailyStats(),
     presentWorkers: 0,
     presentSkill: 0,
+    builtAtTick: 0,
     level: 1,
     workerCapacity: def.workerCapacity,
     exportOrders: {},

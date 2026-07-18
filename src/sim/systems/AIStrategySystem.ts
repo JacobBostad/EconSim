@@ -493,6 +493,12 @@ function adjustPrices(ctx: SimContext, firmId: string, onlyAutoPriced = false): 
       firm.strategy.gluttStreak[pid] = (firm.strategy.gluttStreak[pid] ?? 0) + 1;
       firm.strategy.selloutStreak[pid] = 0;
       price *= 1 - step * 0.5; // gentle
+    } else if ((firm.marketShareByProduct[pid] ?? 0) < 0.12 && stock > 5) {
+      // Market entrant with stock but no share: penetration pricing — dive
+      // toward 78% of base to buy customers, then normal control takes over.
+      firm.strategy.selloutStreak[pid] = 0;
+      firm.strategy.gluttStreak[pid] = 0;
+      price += (base * 0.78 - price) * 0.25;
     } else {
       // Selling steadily without sellout: mean-revert toward base price.
       firm.strategy.selloutStreak[pid] = 0;

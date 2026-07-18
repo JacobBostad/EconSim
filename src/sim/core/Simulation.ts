@@ -349,7 +349,18 @@ export class Simulation {
       return;
     }
 
+    // Prefer clear ground nearest the homes' center of mass — a store on the
+    // town edge never sees foot traffic, whatever it costs.
+    let homeCx = s.config.mapWidth / 2;
+    let homeCount = 0;
+    for (const fid in s.facilities) {
+      const f = s.facilities[fid]!;
+      if (f.type === 'home') { homeCx += f.location.x; homeCount++; }
+    }
+    if (homeCount > 0) homeCx = (homeCx - s.config.mapWidth / 2) / homeCount;
     const findSpot = (y: number): { x: number; y: number } | null => {
+      let best: { x: number; y: number } | null = null;
+      let bestDist = Infinity;
       for (let x = 12; x <= s.config.mapWidth - 8; x += 6) {
         let clear = true;
         for (const fid in s.facilities) {
@@ -361,9 +372,12 @@ export class Simulation {
             break;
           }
         }
-        if (clear) return { x, y };
+        if (clear && Math.abs(x - homeCx) < bestDist) {
+          bestDist = Math.abs(x - homeCx);
+          best = { x, y };
+        }
       }
-      return null;
+      return best;
     };
     const spots = [findSpot(20), findSpot(33), findSpot(51)];
     if (spots.some((p) => p === null)) {

@@ -22,7 +22,7 @@ export const RECIPES: Record<RecipeId, Recipe> = {
     laborRequired: 2,
     ticksRequired: 3,
     baseEfficiency: 1,
-    variableCost: dollars(2.0), // seed, water, fuel
+    variableCost: dollars(1.5), // seed, water, fuel
   },
   bake_bread: {
     id: 'bake_bread',
@@ -33,7 +33,7 @@ export const RECIPES: Record<RecipeId, Recipe> = {
     laborRequired: 2,
     ticksRequired: 2,
     baseEfficiency: 1,
-    variableCost: dollars(1.5),
+    variableCost: dollars(1.2),
   },
 
   // --- Tools chain -------------------------------------------------------
@@ -46,7 +46,7 @@ export const RECIPES: Record<RecipeId, Recipe> = {
     laborRequired: 2,
     ticksRequired: 4,
     baseEfficiency: 1,
-    variableCost: dollars(2.5),
+    variableCost: dollars(1.8),
   },
   make_tools: {
     id: 'make_tools',
@@ -57,7 +57,7 @@ export const RECIPES: Record<RecipeId, Recipe> = {
     laborRequired: 2,
     ticksRequired: 3,
     baseEfficiency: 1,
-    variableCost: dollars(2.5),
+    variableCost: dollars(1.8),
   },
 
   // --- Apparel chain -----------------------------------------------------
@@ -70,7 +70,7 @@ export const RECIPES: Record<RecipeId, Recipe> = {
     laborRequired: 2,
     ticksRequired: 3,
     baseEfficiency: 1,
-    variableCost: dollars(2.2),
+    variableCost: dollars(1.6),
   },
   sew_clothes: {
     id: 'sew_clothes',
@@ -81,7 +81,7 @@ export const RECIPES: Record<RecipeId, Recipe> = {
     laborRequired: 2,
     ticksRequired: 3,
     baseEfficiency: 1,
-    variableCost: dollars(2.2),
+    variableCost: dollars(1.6),
   },
 
   // --- Luxury tier (requires mastery — see minQuality) -------------------
@@ -94,7 +94,7 @@ export const RECIPES: Record<RecipeId, Recipe> = {
     laborRequired: 2,
     ticksRequired: 3,
     baseEfficiency: 1,
-    variableCost: dollars(3.0),
+    variableCost: dollars(2.4),
     minQuality: 75,
   },
   craft_jewelry: {
@@ -106,7 +106,7 @@ export const RECIPES: Record<RecipeId, Recipe> = {
     laborRequired: 2,
     ticksRequired: 4,
     baseEfficiency: 1,
-    variableCost: dollars(5.0),
+    variableCost: dollars(4.0),
     minQuality: 75,
   },
 

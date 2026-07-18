@@ -77,13 +77,22 @@ export function scoreStore(
   const firm = ctx.state.firms[facility.ownerFirmId];
   const brandScore = clamp((firm?.brandByProduct[productId] ?? 0) / 100, 0, 1);
 
+  // Grand-opening novelty: citizens try a NEW store (first ~15 days, fading)
+  // — without it, zero brand + zero reliability makes cold-start retail
+  // mathematically unwinnable against incumbents.
+  const ageDays =
+    (ctx.state.tick - facility.builtAtTick) / (ctx.config.ticksPerHour * 24);
+  const noveltyScore =
+    facility.builtAtTick > 0 && ageDays < 15 ? 0.12 * (1 - ageDays / 15) : 0;
+
   const score =
     availabilityScore * 0.28 +
     priceScore * 0.22 +
     distanceScore * 0.18 +
     qualityScore * 0.14 +
     brandScore * 0.12 +
-    reliabilityScore * 0.06;
+    reliabilityScore * 0.06 +
+    noveltyScore;
 
   return { facility, score, price };
 }

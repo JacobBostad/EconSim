@@ -87,6 +87,8 @@ export interface Facility {
   presentWorkers: number;
   /** Sum of present workers' skill this tick (crew productivity). */
   presentSkill: number;
+  /** Tick this facility was built (0 = founding-era). Drives store novelty. */
+  builtAtTick: number;
   /** Upgrade level (1..3): +40% storage, +15% efficiency, +1 worker cap each. */
   level: number;
   /**

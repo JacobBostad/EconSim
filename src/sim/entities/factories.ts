@@ -48,6 +48,7 @@ export function createFacility(
     dailyStats: emptyFacilityDailyStats(),
     presentWorkers: 0,
     presentSkill: 0,
+    builtAtTick: state.tick,
     level: 1,
     workerCapacity: def.workerCapacity,
     exportOrders: {},
@@ -65,7 +66,7 @@ export function makeCitizenNeeds(rng: Rng): CitizenNeed[] {
     {
       productId: 'bread',
       urgency: rng.range(0.2, 0.9),
-      urgencyGrowthPerDay: rng.range(0.4, 0.55),
+      urgencyGrowthPerDay: rng.range(0.55, 0.75),
       preferredQuantity: 2,
       maxAffordablePriceMultiplier: rng.range(1.4, 1.8),
       lastSatisfiedTick: 0,
@@ -75,7 +76,7 @@ export function makeCitizenNeeds(rng: Rng): CitizenNeed[] {
       urgency: rng.range(0, 0.4),
       // Durables are wanted every ~4 days; keep demand near what the
       // town's production capacity can actually satisfy (see balance notes).
-      urgencyGrowthPerDay: rng.range(0.18, 0.28),
+      urgencyGrowthPerDay: rng.range(0.22, 0.32),
       preferredQuantity: 1,
       maxAffordablePriceMultiplier: rng.range(1.3, 1.6),
       lastSatisfiedTick: 0,
@@ -83,7 +84,7 @@ export function makeCitizenNeeds(rng: Rng): CitizenNeed[] {
     {
       productId: 'clothes',
       urgency: rng.range(0, 0.5),
-      urgencyGrowthPerDay: rng.range(0.16, 0.26),
+      urgencyGrowthPerDay: rng.range(0.2, 0.3),
       preferredQuantity: 1,
       maxAffordablePriceMultiplier: rng.range(1.35, 1.65),
       lastSatisfiedTick: 0,
