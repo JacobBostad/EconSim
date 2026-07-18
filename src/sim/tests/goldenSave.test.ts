@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import fixtureJson from './fixtures/golden-save-v1.json';
+import fixture2Json from './fixtures/golden-save-v2.json';
 import { Simulation } from '../core/Simulation';
 import { deserialize, serialize } from '../persistence/saveLoad';
 import { totalMoneySupply } from '../core/GameState';
@@ -41,5 +42,42 @@ describe('Golden save fixture', () => {
     sim.run(ticksPerDay(state.config) * 5 + 1);
     expect(totalMoneySupply(sim.getState())).toBe(supply0);
     expect(Object.keys(sim.getState().citizens).length).toBeGreaterThan(0);
+  });
+});
+
+/**
+ * Golden save v2 — a modern-feature artifact (day 80, seed 777): coffee
+ * chain, apartment with tenants, AI personalities/CEOs, town history,
+ * wage-market state, doubled production lines possibly in flight. Same
+ * contract as v1: never regenerate to paper over a break.
+ */
+describe('Golden save fixture v2 (modern features)', () => {
+  const raw2 = JSON.stringify(fixture2Json);
+
+  it('loads intact with every modern field populated', () => {
+    const state = deserialize(raw2);
+    const player = state.firms[state.playerFirmId]!;
+    expect(player.facilities.some((i) => state.facilities[i]?.defId === 'apartment')).toBe(true);
+    expect(
+      player.facilities.some((i) => state.facilities[i]?.retailProductIds.includes('coffee')),
+    ).toBe(true);
+    expect(state.townHistory.length).toBeGreaterThan(50);
+    expect(state.scenarioId).toBe('meadowbrook');
+    for (const f of Object.values(state.firms)) {
+      if (f.ownerType === 'ai') {
+        expect(f.personalityId).toBeTruthy();
+        expect(f.ceoName).toBeTruthy();
+      }
+    }
+    const again = deserialize(serialize(state));
+    expect(serialize(again)).toBe(serialize(state));
+  });
+
+  it('keeps running deterministically with money conserved', () => {
+    const state = deserialize(raw2);
+    const supply0 = totalMoneySupply(state);
+    const sim = new Simulation(state);
+    expect(() => sim.run(ticksPerDay(state.config) * 10)).not.toThrow();
+    expect(totalMoneySupply(sim.getState())).toBe(supply0);
   });
 });
