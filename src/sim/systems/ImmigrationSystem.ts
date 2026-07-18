@@ -20,10 +20,32 @@ import {
   IMMIGRATION_MIN_SATISFACTION,
   IMMIGRATION_MAX_UNEMPLOYED_FLOOR,
   IMMIGRATION_MAX_UNEMPLOYED_RATE,
-  MAX_HOMES,
-  MAX_CITIZENS,
   IMMIGRANT_START_CASH,
 } from '../data/constants';
+
+/**
+ * Deterministic slot for the i-th home built beyond the starting 20, laid in
+ * 20-home blocks: east of the starting block first, then southern rows on
+ * taller (Bustling) maps. Null when the map has no room left.
+ */
+export function homeSlotFor(index: number, mapHeight: number): { x: number; y: number } | null {
+  const block = Math.floor(index / 20);
+  const within = index % 20;
+  const col = within % 5;
+  const row = Math.floor(within / 5);
+  let baseX: number;
+  let baseY: number;
+  if (block === 0) {
+    baseX = 76; baseY = 60;
+  } else {
+    const pair = Math.floor((block - 1) / 2);
+    baseX = (block - 1) % 2 === 0 ? 16 : 76;
+    baseY = 92 + pair * 32;
+  }
+  const y = baseY + row * 8;
+  if (y > mapHeight - 4) return null;
+  return { x: baseX + col * 11, y };
+}
 
 export function runImmigrationSystem(ctx: SimContext): void {
   if (!isDayBoundary(ctx.state.tick, ctx.config)) return;
@@ -39,7 +61,7 @@ export function runImmigrationSystem(ctx: SimContext): void {
     satisfactionSum += c.satisfaction;
     if (c.employmentStatus === 'unemployed') unemployed += 1;
   }
-  if (total === 0 || total >= MAX_CITIZENS) return;
+  if (total === 0 || total >= ctx.config.maxCitizens) return;
   if (satisfactionSum / total < IMMIGRATION_MIN_SATISFACTION) return;
   const maxUnemployed = Math.max(
     IMMIGRATION_MAX_UNEMPLOYED_FLOOR,
@@ -58,14 +80,10 @@ export function runImmigrationSystem(ctx: SimContext): void {
     if (homeId === null && f.residentIds.length < 2) homeId = fid;
   }
   if (homeId === null) {
-    if (homes >= MAX_HOMES) return;
-    const i = homes - 20; // index within the second (eastern) block
-    const col = Math.max(0, i) % 5;
-    const row = Math.floor(Math.max(0, i) / 5);
-    const home = createFacility(state, 'home', state.worldFirmId, {
-      x: 76 + col * 11,
-      y: 60 + row * 8,
-    }, { name: `Home ${homes + 1}` });
+    if (homes >= ctx.config.maxHomes) return;
+    const slot = homeSlotFor(Math.max(0, homes - 20), ctx.config.mapHeight);
+    if (!slot) return; // geographically full
+    const home = createFacility(state, 'home', state.worldFirmId, slot, { name: `Home ${homes + 1}` });
     homeId = home.id;
     emitEvent(state, 'info', 'economy', `The town is growing — ${home.name} was built.`, home.id);
   }

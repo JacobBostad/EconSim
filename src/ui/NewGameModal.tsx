@@ -46,6 +46,7 @@ export function NewGameModal(): React.ReactElement | null {
   const [scenarioId, setScenarioId] = useState(DEFAULT_SCENARIO_ID);
   const [seedText, setSeedText] = useState('');
   const [challenge, setChallenge] = useState(false);
+  const [size, setSize] = useState<'cozy' | 'bustling'>('cozy');
 
   if (!show) return null;
   const records = loadRecords();
@@ -55,7 +56,7 @@ export function NewGameModal(): React.ReactElement | null {
     const seed = Number.isFinite(parsed)
       ? parsed
       : Math.floor(Math.random() * 1_000_000);
-    newGame(seed, difficulty, scenarioId, challenge);
+    newGame(seed, difficulty, scenarioId, challenge, size);
   };
 
   return (
@@ -101,6 +102,25 @@ export function NewGameModal(): React.ReactElement | null {
             {records.mostAchievements > 0 && <> · most awards: {records.mostAchievements}</>}
           </p>
         )}
+        <div className="section-title">Town size</div>
+        <div className="row" style={{ gap: 8, alignItems: 'stretch' }}>
+          <button
+            className={`difficulty-card ${size === 'cozy' ? 'active' : ''}`}
+            onClick={() => setSize('cozy')}
+          >
+            <div style={{ fontSize: 20 }}>🏡</div>
+            <div style={{ fontWeight: 700 }}>Cozy</div>
+            <div className="small" style={{ opacity: 0.85 }}>Up to 40 homes / 80 citizens — the classic scale.</div>
+          </button>
+          <button
+            className={`difficulty-card ${size === 'bustling' ? 'active' : ''}`}
+            onClick={() => setSize('bustling')}
+          >
+            <div style={{ fontSize: 20 }}>🏙️</div>
+            <div style={{ fontWeight: 700 }}>Bustling</div>
+            <div className="small" style={{ opacity: 0.85 }}>Double the caps (80 homes / 160 citizens) on a taller map — bigger markets, bigger empires.</div>
+          </button>
+        </div>
         <label className="small" style={{ display: 'block', marginTop: 10 }}>
           <input type="checkbox" checked={challenge} onChange={(e) => setChallenge(e.target.checked)} />{' '}
           🏁 Challenge run — final score at day 200, recorded on your leaderboard

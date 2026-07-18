@@ -26,7 +26,7 @@ import { createFacility } from '../entities/factories';
 import type { Contract } from '../entities/Contract';
 import { hireCitizen, fireCitizen, findUnemployed } from './LaborSystem';
 import { clamp } from '../../utils/clamp';
-import { CENTS, RND_QUALITY_GAIN_PER_1000, MAX_RETAIL_PRODUCTS, MAX_HOMES } from '../data/constants';
+import { CENTS, RND_QUALITY_GAIN_PER_1000, MAX_RETAIL_PRODUCTS } from '../data/constants';
 import { companyValuation } from '../selectors/companySelectors';
 import { acquisitionCost, performAcquisition } from '../core/Acquisition';
 import { landCostMultiplier, landValueAt } from '../core/LandValue';
@@ -533,7 +533,7 @@ function maybeBuildApartment(ctx: SimContext, firmId: string): void {
     if (f.defId === 'apartment' && f.ownerFirmId === firmId) owned += 1;
   }
   if (owned >= LANDLORD_MAX_APARTMENTS) return;
-  if (vacancies > 0 || homes >= MAX_HOMES) return; // only under a housing squeeze
+  if (vacancies > 0 || homes >= state.config.maxHomes) return; // only under a housing squeeze
   if (!rng.chance(LANDLORD_CHANCE)) return;
 
   const loc = {

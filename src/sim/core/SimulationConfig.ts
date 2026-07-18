@@ -77,6 +77,9 @@ export interface SimulationConfig {
   /** Map dimensions in units. */
   mapWidth: number;
   mapHeight: number;
+  /** Hard caps on town growth (town-size presets scale these). */
+  maxHomes: number;
+  maxCitizens: number;
 }
 
 export const DEFAULT_CONFIG: SimulationConfig = {
@@ -120,6 +123,8 @@ export const DEFAULT_CONFIG: SimulationConfig = {
 
   mapWidth: 130,
   mapHeight: 92,
+  maxHomes: 40,
+  maxCitizens: 80,
 };
 
 /** Difficulty presets: starting capital, news volatility, AI aggressiveness. */

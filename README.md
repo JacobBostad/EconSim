@@ -280,6 +280,11 @@ each variant leaves a market gap that's the player's opening. Facility upgrades 
 size; the endgame Chronicle retells your whole run when you reach Business
 Empire.
 
+**Town size**: New Game offers Cozy (40 homes / 80 citizens) or Bustling —
+double the caps on a taller map. Growth is earned either way: immigration
+only flows while satisfaction and employment stay high, so the ceiling you
+reach is the economy you built.
+
 **Challenge mode**: tick the 🏁 box on New Game and the run ends with a final
 0–1000 score at day 200 (valuation-weighted, plus town satisfaction, peak
 share, and export revenue). Scores land on a local leaderboard in Awards —

@@ -37,8 +37,6 @@ import {
   FESTIVAL_COST,
   MAX_RETAIL_PRODUCTS,
   FUND_HOME_COST,
-  MAX_CITIZENS,
-  MAX_HOMES,
   IMMIGRANT_START_CASH,
   WIZARD_AD_BUDGET,
 } from '../data/constants';
@@ -511,7 +509,7 @@ export class Simulation {
     // fund_home
     const citizens = Object.keys(s.citizens).length;
     const homes = Object.values(s.facilities).filter((f) => f.type === 'home').length;
-    if (citizens >= MAX_CITIZENS || homes >= MAX_HOMES) {
+    if (citizens >= s.config.maxCitizens || homes >= s.config.maxHomes) {
       emitEvent(s, 'warning', 'player', 'The town is at capacity — no room for another home.', firmId);
       return;
     }
@@ -542,7 +540,7 @@ export class Simulation {
     });
     const home = createFacility(s, 'home', s.worldFirmId, loc, { name: `Home ${homes + 1}` });
     const rng = new Rng(s);
-    for (let i = 0; i < 2 && Object.keys(s.citizens).length < MAX_CITIZENS; i++) {
+    for (let i = 0; i < 2 && Object.keys(s.citizens).length < s.config.maxCitizens; i++) {
       const cit = createCitizen(s, rng, home.id);
       recordTransaction(s, {
         from: WORLD_ACCOUNT, to: { kind: 'citizen', id: cit.id }, amount: IMMIGRANT_START_CASH,

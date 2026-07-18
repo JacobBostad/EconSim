@@ -67,6 +67,8 @@ function normalize(state: GameState): GameState {
   state.config.challengeMode = state.config.challengeMode ?? false;
   state.scenarioId = state.scenarioId ?? 'meadowbrook';
   state.townHistory = state.townHistory ?? [];
+  state.config.maxHomes = state.config.maxHomes ?? 40;
+  state.config.maxCitizens = state.config.maxCitizens ?? 80;
   state.config.playerStartCash = state.config.playerStartCash ?? 15000 * 100;
   state.config.worldEventDailyChance = state.config.worldEventDailyChance ?? 0.2;
   state.config.aiExpandChance = state.config.aiExpandChance ?? 0.5;

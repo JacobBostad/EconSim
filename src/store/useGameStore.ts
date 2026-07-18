@@ -66,7 +66,7 @@ interface GameStore {
   setSpeed: (speed: Speed) => void;
   togglePause: () => void;
 
-  newGame: (seed?: number, difficulty?: Difficulty, scenarioId?: string, challenge?: boolean) => void;
+  newGame: (seed?: number, difficulty?: Difficulty, scenarioId?: string, challenge?: boolean, size?: 'cozy' | 'bustling') => void;
   save: () => void;
   load: () => void;
   hasSave: () => boolean;
@@ -144,12 +144,16 @@ export const useGameStore = create<GameStore>((set, get) => {
       bump(true);
     },
 
-    newGame: (seed = Math.floor(Math.random() * 1_000_000), difficulty = 'standard', scenarioId = 'meadowbrook', challenge = false) => {
+    newGame: (seed = Math.floor(Math.random() * 1_000_000), difficulty = 'standard', scenarioId = 'meadowbrook', challenge = false, size = 'cozy') => {
       // The 4s autosave would overwrite the old town within seconds of a new
       // game — stash it in the backup slot so a mis-click never costs a run.
       const old = get().sim.getState();
       if (old.tick > 0) saveGame(old, BACKUP_SLOT);
-      get().sim.setState(createInitialState(seed, { ...configForDifficulty(difficulty), challengeMode: challenge }, scenarioId));
+      const sizeOverrides =
+        size === 'bustling' ? { maxHomes: 80, maxCitizens: 160, mapHeight: 124 } : {};
+      get().sim.setState(
+        createInitialState(seed, { ...configForDifficulty(difficulty), challengeMode: challenge, ...sizeOverrides }, scenarioId),
+      );
       recordTownFounded();
       set({ buildDefId: null, showNewGame: false });
       bump(true);
