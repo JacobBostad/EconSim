@@ -115,4 +115,5 @@ engine tests), probed with headless balance runs, and guarded by CI.
 - CI (tests + build + e2e), two golden-save fixtures (legacy + modern), two
   scripted playtest bots (general store; all-verticals), a 600-day soak,
   deep browser smoke, and time-averaged balance probes that respect the
-  economy's real cycles. Perf: 0.24ms/tick at day 300 with everything on.
+  economy's real cycles. Perf: 0.20ms/tick at day 300 with everything on
+  (the night-shopping fix removed more work than the P&L stamps added).
