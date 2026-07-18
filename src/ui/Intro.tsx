@@ -71,7 +71,9 @@ export function Intro(): React.ReactElement | null {
             <p><strong>Brand</strong> (ads), <strong>quality</strong> (R&amp;D),
               <strong> wages</strong> (out-pay rivals by 15% to poach their
               veterans — they answer back), <strong>finance</strong> (loans,
-              shares, outright <strong>acquisitions</strong>), and
+              shares, outright <strong>acquisitions</strong> — and 🏷️
+              <strong> fire-sale bargains</strong> in the ticker when a rival
+              stumbles), and
               <strong> real estate</strong> (apartments collect rent). The
               🧭 <strong>Advisor</strong> card tells you what needs attention;
               press <strong>F</strong> to see supply chains flow. Want a score?
