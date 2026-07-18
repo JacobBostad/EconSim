@@ -177,7 +177,10 @@ export function challengeScore(state: GameState): ChallengeScore {
   const exportRevenue = player?.exportRevenue ?? 0;
 
   const valuationPts = Math.round(600 * clamp(valuation / 15_000_000, 0, 1)); // $150k caps it
-  const satisfactionPts = Math.round(150 * clamp(satisfaction / 100, 0, 1));
+  // Satisfaction only scores above the immigration-gate baseline (55): an
+  // unattended town equilibrates around 60-65 on its own, so points start
+  // where stewardship starts — 90 (a genuinely pampered town) maxes it.
+  const satisfactionPts = Math.round(150 * clamp((satisfaction - 55) / 35, 0, 1));
   const sharePts = Math.round(150 * clamp(peakShare, 0, 1));
   const exportPts = Math.round(100 * clamp(exportRevenue / 2_000_000, 0, 1)); // $20k caps it
   const rawTotal = valuationPts + satisfactionPts + sharePts + exportPts;

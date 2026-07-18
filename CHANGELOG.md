@@ -104,7 +104,11 @@ engine tests), probed with headless balance runs, and guarded by CI.
   on full shelves) and fed the AI's expansion signals. Urgency no longer
   overrides store hours; wizard chains also get the AI's shelf-widening on
   auto-priced products (their 40-unit contracts famine-feasted once demand
-  grew).
+  grew). Post-fix baseline (4 seeds, 200 unattended days): satisfaction
+  equilibrium rose from ~47–54 to ~60–65, all towns clear the immigration
+  gate, populations stay moderate (employment binds instead). Challenge
+  satisfaction points rescaled to start at 55 so the freed baseline isn't
+  free score.
 
 ## Infrastructure
 

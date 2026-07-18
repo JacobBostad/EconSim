@@ -40,7 +40,9 @@ describe('Challenge mode', () => {
 
     const s = challengeScore(state);
     expect(s.valuationPts).toBeGreaterThan(500); // valuation dominates
-    expect(s.satisfactionPts).toBe(120);
+    // Sat 80 scores (80−55)/35 of 150 — points start above the unattended
+    // ~60-65 equilibrium, not at zero satisfaction.
+    expect(s.satisfactionPts).toBe(107);
     expect(s.sharePts).toBe(90);
     expect(s.exportPts).toBe(50);
     expect(s.total).toBe(s.valuationPts + s.satisfactionPts + s.sharePts + s.exportPts);
