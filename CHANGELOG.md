@@ -113,6 +113,16 @@ engine tests), probed with headless balance runs, and guarded by CI.
 
 ## Player features
 
+- **Hireable store managers** (Pillar 2, Phase 1): delegate a store to a
+  named, salaried professional — three candidates (junior/seasoned/veteran)
+  rotate weekly, and skill sets the duty list: everyone runs daily pricing,
+  seasoned hands also size shelf contracts, veterans manage the ad budget
+  too. Salary books as wages on the P&L; a firm that can't cover payday
+  loses its manager on the spot. Measured: a $17/day junior manager rescued
+  a mispriced store launch for a ~$12.8k hundred-day swing vs hands-off —
+  while the $39/day veteran didn't earn their premium in a one-store market.
+  Delegation has real economics, not just convenience.
+
 - **Coffee**: a cheap everyday product (grain → roastery → café) nobody serves
   at start — a first-mover mainstream niche, wizardable, with AI contest.
 - **Real estate**: buildable Apartments collect daily rent, house immigrants,

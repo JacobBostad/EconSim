@@ -130,6 +130,7 @@ function newFirm(
     exportRevenueByCity: {},
     wholesaleSpend: 0,
     wholesaleEarned: 0,
+    managers: [],
   };
   b.state.firms[id] = firm;
   return firm;

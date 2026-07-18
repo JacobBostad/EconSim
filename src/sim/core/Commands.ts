@@ -68,6 +68,8 @@ export type Command =
   | { type: 'SET_WAGE'; firmId: FirmId; wage: number }
   | { type: 'TOGGLE_WHOLESALE'; facilityId: FacilityId; enabled: boolean }
   | { type: 'SET_POSITIONING'; facilityId: FacilityId; positioning: StorePositioning }
+  | { type: 'HIRE_MANAGER'; firmId: FirmId; facilityId: FacilityId; candidateIndex: number }
+  | { type: 'FIRE_MANAGER'; firmId: FirmId; managerId: string }
   | { type: 'SET_WHOLESALE_PRICE'; facilityId: FacilityId; mult: number }
   | { type: 'HIRE_WORKER'; facilityId: FacilityId; citizenId: CitizenId | null }
   | { type: 'FIRE_WORKER'; facilityId: FacilityId; citizenId: CitizenId }

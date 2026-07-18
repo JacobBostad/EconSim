@@ -25,6 +25,8 @@ import { sellRefund } from '../sim/core/Demolition';
 import { pricingInsight } from '../sim/selectors/marketSelectors';
 import { pickBestCity, cityPrice } from '../sim/core/Trade';
 import { TRADE_CITY_IDS, getTradeCity } from '../sim/data/tradeCities';
+import { managerCandidates, managerDuties } from '../sim/systems/ManagerSystem';
+import { computeTime } from '../sim/core/Tick';
 
 export function FacilityActions({ fac }: { fac: Facility }): React.ReactElement {
   const sim = useGameStore((s) => s.sim);
@@ -290,6 +292,48 @@ export function FacilityActions({ fac }: { fac: Facility }): React.ReactElement 
               buy every carried product they need per visit. Wire a supply contract for each.
             </p>
           )}
+          {isPlayer && firm && (() => {
+            const mgr = firm.managers.find((m) => m.facilityId === fac.id);
+            if (mgr) {
+              const tenure = Math.floor((state.tick - mgr.hiredAtTick) / (state.config.ticksPerHour * 24));
+              return (
+                <div className="row small" style={{ gap: 6, alignItems: 'center', margin: '6px 0', flexWrap: 'wrap' }}>
+                  <span title={`Duties: ${managerDuties(mgr.skill).join(', ')}`}>
+                    🤝 <strong>{mgr.name}</strong> runs this store — {managerDuties(mgr.skill).join(' · ')}
+                  </span>
+                  <span className="muted">
+                    {formatMoney(mgr.salaryPerDay)}/day · {tenure}d on the job
+                  </span>
+                  <button
+                    style={{ padding: '2px 8px' }}
+                    onClick={() => dispatch({ type: 'FIRE_MANAGER', firmId: firm.id, managerId: mgr.id })}
+                  >
+                    Let go
+                  </button>
+                </div>
+              );
+            }
+            const day = computeTime(state.tick, state.config).day;
+            return (
+              <div className="small" style={{ margin: '6px 0' }}>
+                <span className="muted" title="A manager runs this store's pricing daily (and, with experience, shelf contracts and marketing). Prices are firm-wide per product, like auto-pricing. Candidates rotate weekly.">
+                  🤝 Hire a manager (hands-off store):
+                </span>
+                <div className="row" style={{ gap: 6, flexWrap: 'wrap', marginTop: 2 }}>
+                  {managerCandidates(state, day).map((c, i) => (
+                    <button
+                      key={c.name}
+                      style={{ padding: '2px 8px' }}
+                      title={`${c.band} — duties: ${managerDuties(c.skill).join(', ')}`}
+                      onClick={() => dispatch({ type: 'HIRE_MANAGER', firmId: firm.id, facilityId: fac.id, candidateIndex: i })}
+                    >
+                      {c.name} ({c.band}, {formatMoney(c.salaryPerDay)}/day)
+                    </button>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
           <div className="row small" style={{ gap: 6, alignItems: 'center', margin: '6px 0' }}>
             <span className="muted">Positioning:</span>
             {(['discount', 'standard', 'premium'] as const).map((pos) =>

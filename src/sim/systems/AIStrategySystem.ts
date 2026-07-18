@@ -1037,10 +1037,16 @@ const SHELF_WIDEN_LOST_SALES = 5;
 const SHELF_TARGET_STEP = 10;
 const SHELF_TARGET_CAP = 120;
 
-function maybeWidenShelves(ctx: SimContext, firmId: string, managedOnly = false): void {
+export function maybeWidenShelves(
+  ctx: SimContext,
+  firmId: string,
+  managedOnly = false,
+  onlyFacilityId?: string,
+): void {
   const { state } = ctx;
   const firm = state.firms[firmId]!;
   for (const facId of firm.facilities) {
+    if (onlyFacilityId && facId !== onlyFacilityId) continue;
     const fac = state.facilities[facId];
     if (!fac || fac.type !== 'retail') continue;
     if (fac.dailyStats.lostSales <= SHELF_WIDEN_LOST_SALES) continue;
@@ -1127,7 +1133,12 @@ function restaff(ctx: SimContext, firmId: string): void {
   }
 }
 
-function adjustPrices(ctx: SimContext, firmId: string, onlyAutoPriced = false): void {
+export function adjustPrices(
+  ctx: SimContext,
+  firmId: string,
+  onlyAutoPriced = false,
+  onlyFacilityId?: string,
+): void {
   const { state, config, rng } = ctx;
   const firm = state.firms[firmId]!;
   const losing = firm.strategy.lossStreak >= 3;
@@ -1136,6 +1147,7 @@ function adjustPrices(ctx: SimContext, firmId: string, onlyAutoPriced = false): 
   const persona = getPersonality(firm.personalityId);
 
   for (const facId of firm.facilities) {
+    if (onlyFacilityId && facId !== onlyFacilityId) continue;
     const fac = state.facilities[facId];
     if (!fac || fac.type !== 'retail') continue;
     for (const pid of fac.retailProductIds) {

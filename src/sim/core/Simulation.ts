@@ -21,6 +21,7 @@ import type { Command } from './Commands';
 import { nextId } from './Id';
 import type { FirmId } from './Id';
 import { firmAccount, WORLD_ACCOUNT } from './Transactions';
+import { computeTime } from './Tick';
 import { createInitialState } from '../data/startingScenario';
 import { createFacility, createCitizen } from '../entities/factories';
 import { Rng } from './Random';
@@ -64,6 +65,7 @@ import { runAchievementSystem } from '../systems/AchievementSystem';
 import { runMissionSystem } from '../systems/MissionSystem';
 import { runMarketStatsSystem } from '../systems/MarketStatsSystem';
 import { runAIStrategySystem } from '../systems/AIStrategySystem';
+import { runManagerSystem, managerCandidates } from '../systems/ManagerSystem';
 import { runEventLogSystem } from '../systems/EventLogSystem';
 import { runBankruptcySystem } from '../systems/BankruptcySystem';
 import { runMarketingSystem } from '../systems/MarketingSystem';
@@ -97,6 +99,7 @@ const SYSTEMS: SystemFn[] = [
   runFireSaleSystem, // rival fire-sale offers/expiry (own rng stream)
   runMarketStatsSystem, // finalize previous day's stats; hourly inventory totals
   runAIStrategySystem, // AI reacts using the finalized day (sets ad/R&D/loans)
+  runManagerSystem, // hired managers run their stores (after AI, same signals)
   runEventLogSystem, // player-facing alerts (before daily stats are reset)
   runMarketingSystem, // ad spend -> brand; brand decay (marketing expense)
   runFinanceSystem, // accrue loan interest
@@ -252,6 +255,37 @@ export class Simulation {
       case 'SET_POSITIONING': {
         const fac = s.facilities[command.facilityId];
         if (fac && fac.type === 'retail') fac.positioning = command.positioning;
+        return;
+      }
+      case 'HIRE_MANAGER': {
+        const firm = s.firms[command.firmId];
+        const fac = s.facilities[command.facilityId];
+        if (!firm || !fac || fac.type !== 'retail' || fac.ownerFirmId !== command.firmId) return;
+        if (firm.managers.some((m) => m.facilityId === command.facilityId)) return;
+        const day = computeTime(s.tick, s.config).day;
+        const cand = managerCandidates(s, day)[command.candidateIndex];
+        if (!cand) return;
+        firm.managers.push({
+          id: nextId(s.idCounters, 'mgr'),
+          name: cand.name,
+          role: 'store',
+          skill: cand.skill,
+          salaryPerDay: cand.salaryPerDay,
+          facilityId: command.facilityId,
+          hiredAtTick: s.tick,
+        });
+        emitEvent(s, 'success', 'player',
+          `🤝 ${cand.name} signed on to manage ${fac.name} (${formatMoney(cand.salaryPerDay)}/day).`, fac.id);
+        return;
+      }
+      case 'FIRE_MANAGER': {
+        const firm = s.firms[command.firmId];
+        if (!firm) return;
+        const mgr = firm.managers.find((m) => m.id === command.managerId);
+        if (!mgr) return;
+        firm.managers = firm.managers.filter((m) => m.id !== command.managerId);
+        emitEvent(s, 'info', 'player',
+          `${mgr.name} was let go as manager of ${s.facilities[mgr.facilityId]?.name ?? 'their store'}.`, mgr.facilityId);
         return;
       }
       case 'SET_WHOLESALE_PRICE': {

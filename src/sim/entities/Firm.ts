@@ -83,4 +83,21 @@ export interface Firm {
   wholesaleSpend: number;
   /** Lifetime revenue earned selling wholesale to other local firms (cents). */
   wholesaleEarned: number;
+  /** Hired managers running slices of this firm's operations (delegation —
+   * see docs/design/managers.md). */
+  managers: Manager[];
+}
+
+/** A named, salaried professional who runs one slice of a firm's ops.
+ * Not a citizen — an off-map hire paid daily out of the firm's cash. */
+export interface Manager {
+  id: string;
+  name: string;
+  /** Phase 1: 'store' runs one retail store's pricing/shelves/marketing. */
+  role: 'store';
+  /** 0.9–1.3 — sets which duties they cover and the salary they command. */
+  skill: number;
+  salaryPerDay: number;
+  facilityId: FacilityId;
+  hiredAtTick: number;
 }
