@@ -1,5 +1,5 @@
 import React from 'react';
-import { loadChallengeRuns } from './records';
+import { loadChallengeRuns, challengeShareText } from './records';
 import { formatMoneyShort } from '../utils/formatMoney';
 import { SCENARIOS } from '../sim/data/scenarios';
 import { useGameStore } from '../store/useGameStore';
@@ -54,7 +54,7 @@ export function AwardsDashboard(): React.ReactElement {
         return (
           <table>
             <thead>
-              <tr><th>#</th><th>Score</th><th>Valuation</th><th>Town</th><th>Difficulty</th><th>Seed</th><th>Date</th></tr>
+              <tr><th>#</th><th>Score</th><th>Valuation</th><th>Town</th><th>Difficulty</th><th>Seed</th><th>Date</th><th></th></tr>
             </thead>
             <tbody>
               {runs.map((r, i) => (
@@ -66,6 +66,16 @@ export function AwardsDashboard(): React.ReactElement {
                   <td>{r.difficulty}</td>
                   <td className="mono">{r.seed}</td>
                   <td className="muted small">{r.at}</td>
+                  <td>
+                    <button
+                      title="Copy a shareable summary"
+                      onClick={() => void navigator.clipboard?.writeText(
+                        challengeShareText(r, SCENARIOS[r.scenarioId]?.name ?? r.scenarioId),
+                      )}
+                    >
+                      📋
+                    </button>
+                  </td>
                 </tr>
               ))}
             </tbody>

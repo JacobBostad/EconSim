@@ -113,3 +113,12 @@ export function recordChallengeRun(run: ChallengeRun): void {
     /* ignore */
   }
 }
+
+/** Compact, paste-anywhere summary of a challenge run — a deterministic dare. */
+export function challengeShareText(run: ChallengeRun, scenarioName: string): string {
+  return [
+    `🏁 EconSim Challenge — ${scenarioName} · ${run.difficulty} · seed ${run.seed}`,
+    `Score ${run.score}/1000 · valuation $${(run.valuation / 100).toLocaleString('en-US', { maximumFractionDigits: 0 })}`,
+    `Same seed + scenario + difficulty replays identically — beat me.`,
+  ].join('\n');
+}

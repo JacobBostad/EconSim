@@ -260,6 +260,60 @@ export const ACHIEVEMENT_DEFS: AchievementDef[] = [
     hint: 'Keep satisfaction and jobs high so 20 new citizens move in.',
     check: (s) => Object.keys(s.citizens).length >= 60,
   },
+  {
+    id: 'landlord_baron',
+    name: 'Landlord Baron',
+    icon: '🏢',
+    description: 'Owned three apartments, every one housing residents.',
+    hint: 'Build 3 Apartments and fill them all (immigration needs housing).',
+    check: (s) => {
+      const p = player(s);
+      if (!p) return false;
+      let full = 0;
+      for (const fid of p.facilities) {
+        const f = s.facilities[fid];
+        if (f?.defId === 'apartment' && f.residentIds.length >= 1) full += 1;
+      }
+      return full >= 3;
+    },
+  },
+  {
+    id: 'coffee_magnate',
+    name: 'Coffee Magnate',
+    icon: '☕',
+    description: 'Owned half the coffee market.',
+    hint: 'Win ≥50% market share in Coffee — the niche nobody serves at start.',
+    check: (s) => (player(s)?.marketShareByProduct['coffee'] ?? 0) >= 0.5,
+  },
+  {
+    id: 'talent_magnet',
+    name: 'Talent Magnet',
+    icon: '🧲',
+    description: 'Paid 1.15× every rival\'s wage with a real team on payroll.',
+    hint: 'Set your base wage past the poaching bar (≥1.15× every rival) while employing 5+.',
+    check: (s) => {
+      const p = player(s);
+      if (!p || p.employees.length < 5) return false;
+      for (const fid in s.firms) {
+        const f = s.firms[fid]!;
+        if (f.id === p.id || (f.ownerType !== 'ai' && f.ownerType !== 'player')) continue;
+        if (p.wagePolicy.baseWage < f.wagePolicy.baseWage * 1.15) return false;
+      }
+      return true;
+    },
+  },
+  {
+    id: 'weathered_storm',
+    name: 'Weathered the Storm',
+    icon: '⛈️',
+    description: 'Came back from the brink — negative cash to solvency.',
+    hint: 'Recover to positive cash after a day in the red (see the receivership screen\'s advice).',
+    check: (s) => {
+      const p = player(s);
+      if (!p || p.cash <= 0) return false;
+      return p.accounting.dailyHistory.some((d) => d.cash < 0);
+    },
+  },
 ];
 
 const DEF_BY_ID: Record<string, AchievementDef> = Object.fromEntries(

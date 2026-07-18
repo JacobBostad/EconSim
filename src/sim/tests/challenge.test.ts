@@ -5,6 +5,7 @@ import { configForDifficulty } from '../core/SimulationConfig';
 import { challengeScore } from '../selectors/reportSelectors';
 import { serialize, deserialize } from '../persistence/saveLoad';
 import { dollars } from '../data/constants';
+import { challengeShareText } from '../../ui/records';
 
 describe('Challenge mode', () => {
   it('challengeMode flag flows through config and survives save/load', () => {
@@ -67,5 +68,18 @@ describe('Challenge mode', () => {
     // cash preset, so compare via the multiplier on each raw total).
     expect(relaxed.total).toBe(Math.round(relaxed.rawTotal * 0.85));
     expect(brutal.total).toBe(Math.round(brutal.rawTotal * 1.15));
+  });
+});
+
+describe('challengeShareText', () => {
+  it('formats a compact replayable dare', () => {
+    const text = challengeShareText(
+      { score: 812, valuation: 12345600, scenarioId: 'port_haven', difficulty: 'brutal', seed: 42, at: '2026-07-18' },
+      'Port Haven',
+    );
+    expect(text).toContain('Port Haven · brutal · seed 42');
+    expect(text).toContain('Score 812/1000');
+    expect(text).toContain('$123,456');
+    expect(text.split('\n').length).toBe(3);
   });
 });

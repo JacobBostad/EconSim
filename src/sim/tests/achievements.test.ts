@@ -81,3 +81,50 @@ describe('Achievements', () => {
     expect(getAchievementDef('founder')?.name).toBeTruthy();
   });
 });
+
+describe('New-system achievements', () => {
+  it('landlord baron: three occupied apartments', () => {
+    const sim = newSim(6);
+    const state = sim.getState();
+    const p = state.firms[state.playerFirmId]!;
+    p.cash = 60000_00;
+    const def = getAchievementDef('landlord_baron')!;
+    for (let i = 0; i < 3; i++) {
+      sim.dispatch({ type: 'BUILD_FACILITY', firmId: p.id, defId: 'apartment', location: { x: 30 + i * 8, y: 62 } });
+    }
+    expect(def.check(state)).toBe(false); // vacant
+    const cids = Object.keys(state.citizens);
+    p.facilities.forEach((fid, i) => state.facilities[fid]!.residentIds.push(cids[i]!));
+    expect(def.check(state)).toBe(true);
+  });
+
+  it('talent magnet: 1.15× every rival wage with 5+ staff', () => {
+    const sim = newSim(6);
+    const state = sim.getState();
+    const p = state.firms[state.playerFirmId]!;
+    const def = getAchievementDef('talent_magnet')!;
+    sim.dispatch({ type: 'BUILD_CHAIN', firmId: p.id, productId: 'bread' });
+    expect(p.employees.length).toBeGreaterThanOrEqual(5);
+    expect(def.check(state)).toBe(false);
+    sim.dispatch({ type: 'SET_WAGE', firmId: p.id, wage: 3000 });
+    expect(def.check(state)).toBe(true);
+  });
+
+  it('weathered the storm: red day in history, positive cash now', () => {
+    const sim = newSim(6);
+    const state = sim.getState();
+    const p = state.firms[state.playerFirmId]!;
+    const def = getAchievementDef('weathered_storm')!;
+    expect(def.check(state)).toBe(false);
+    p.accounting.dailyHistory.push({
+      day: 5, revenue: 0, costOfGoodsSold: 0, wages: 0, maintenance: 0,
+      logisticsCost: 0, variableProductionCost: 0, marketing: 0, rnd: 0, interest: 0,
+      grossProfit: 0, operatingProfit: 0, netProfit: 0,
+      cash: -5000, debt: 0, inventoryValue: 0, valuation: 0, buildSpend: 0,
+    });
+    expect(def.check(state)).toBe(true);
+    expect(getAchievementDef('coffee_magnate')!.check(state)).toBe(false);
+    p.marketShareByProduct['coffee'] = 0.6;
+    expect(getAchievementDef('coffee_magnate')!.check(state)).toBe(true);
+  });
+});

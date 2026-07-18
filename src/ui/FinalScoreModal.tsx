@@ -1,7 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useGameStore } from '../store/useGameStore';
 import { challengeScore, CHALLENGE_END_DAY, type ChallengeScore } from '../sim/selectors/reportSelectors';
-import { recordChallengeRun, loadChallengeRuns } from './records';
+import { recordChallengeRun, loadChallengeRuns, challengeShareText } from './records';
+import { SCENARIOS } from '../sim/data/scenarios';
 import { formatMoney, formatMoneyShort } from '../utils/formatMoney';
 import { computeTime } from '../sim/core/Tick';
 
@@ -82,6 +83,21 @@ export function FinalScoreModal(): React.ReactElement | null {
           or challenge a friend to it. The full leaderboard lives in Awards.
         </p>
         <div className="row" style={{ gap: 8, marginTop: 10, justifyContent: 'flex-end' }}>
+          <button
+            onClick={() => {
+              const text = challengeShareText(
+                {
+                  score: s.total, valuation: s.valuation, scenarioId: state.scenarioId,
+                  difficulty: state.config.difficulty, seed: state.seed, at: '',
+                },
+                SCENARIOS[state.scenarioId]?.name ?? state.scenarioId,
+              );
+              void navigator.clipboard?.writeText(text);
+            }}
+            title="Copy a paste-anywhere summary — the seed makes it a replayable dare"
+          >
+            📋 Copy result
+          </button>
           <button onClick={() => { setResult(null); setShowNewGame(true); }}>
             New challenge
           </button>
