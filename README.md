@@ -21,7 +21,7 @@ lit windows glowing, on a proper day/night curve.
 
 <p align="center">
   <img src="docs/media/media-company.png" width="49%" alt="Company dashboard: objective progress, trend charts, and the standings table with rival CEOs, their archetypes, and estimated dividends per stake" />
-  <img src="docs/media/media-population.png" width="49%" alt="Population dashboard: town trends, satisfaction anatomy pricing each shortage in equilibrium points, and household spending power" />
+  <img src="docs/media/media-population.png" width="49%" alt="Population dashboard: town trends, satisfaction anatomy, the prosperity ladder with middle-class and affluent trend charts, and the executive team card with hired managers" />
 </p>
 
 ---

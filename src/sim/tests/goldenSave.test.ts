@@ -3,6 +3,7 @@ import fixtureJson from './fixtures/golden-save-v1.json';
 import fixture2Json from './fixtures/golden-save-v2.json';
 import fixture3Json from './fixtures/golden-save-v3.json';
 import fixture4Json from './fixtures/golden-save-v4.json';
+import fixture5Json from './fixtures/golden-save-v5.json';
 import { Simulation } from '../core/Simulation';
 import { deserialize, serialize } from '../persistence/saveLoad';
 import { totalMoneySupply } from '../core/GameState';
@@ -157,5 +158,47 @@ describe('Golden save fixture v4 (rush-order / fire-sale era)', () => {
     // Both live offers resolve one way or another within ten days.
     const end = sim.getState();
     expect(end.rushOrder === null || end.rushOrder.startDay > 33).toBe(true);
+  });
+});
+
+/**
+ * Golden save v5 — the four-pillar era (day 82, seed 999): prosperity tiers
+ * derived with real spread, a premium-positioned store run by a hired
+ * manager, a logistics manager on the executive team, a commodity-desk
+ * position staged, an open forward contract, and tier counts flowing into
+ * townHistory. Same contract as ever: never regenerate to paper over a break.
+ */
+describe('Golden save fixture v5 (four-pillar era)', () => {
+  const raw5 = JSON.stringify(fixture5Json);
+
+  it('loads intact with every pillar field populated', () => {
+    const state = deserialize(raw5);
+    const player = state.firms[state.playerFirmId]!;
+    // Managers on payroll, one per kind.
+    expect(player.managers.some((m) => m.role === 'store' && m.facilityId)).toBe(true);
+    expect(player.managers.some((m) => m.role === 'logistics' && m.facilityId === null)).toBe(true);
+    // A positioned store and an open forward.
+    expect(
+      player.facilities.some((i) => state.facilities[i]?.positioning === 'premium'),
+    ).toBe(true);
+    expect(player.forwards.length).toBe(1);
+    expect(player.forwards[0]!.lockedPrice).toBeGreaterThan(0);
+    // Tiers derived with real spread, recorded in town history.
+    const tiers = new Set(Object.values(state.citizens).map((c) => c.tier));
+    expect(tiers.size).toBeGreaterThanOrEqual(2);
+    const last = state.townHistory[state.townHistory.length - 1]!;
+    expect(last.workers + last.comfortable + last.affluent).toBe(last.population);
+    const again = deserialize(serialize(state));
+    expect(serialize(again)).toBe(serialize(state));
+  });
+
+  it('keeps running with money conserved, the forward settling naturally', () => {
+    const state = deserialize(raw5);
+    const supply0 = totalMoneySupply(state);
+    const sim = new Simulation(state);
+    expect(() => sim.run(ticksPerDay(state.config) * 12)).not.toThrow();
+    expect(totalMoneySupply(sim.getState())).toBe(supply0);
+    // The open forward settled (delivered or defaulted) once its day passed.
+    expect(sim.getState().firms[state.playerFirmId]!.forwards.length).toBe(0);
   });
 });

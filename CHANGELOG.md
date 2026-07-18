@@ -1,8 +1,11 @@
 # Changelog — `claude/business-sim-game-enhancement` branch
 
 One continuous development run turning EconSim from a solid simulation into a
-deep, self-explaining economy game. Everything below is tested (119 → 210
-engine tests), probed with headless balance runs, and guarded by CI.
+deep, self-explaining economy game. Everything below is tested (119 → 297
+engine tests), probed with headless balance runs, and guarded by CI. The
+latest arc — four pillars from a market-research pass against Capitalism
+Lab, Big Ambitions, and Offworld Trading Company — added citizen classes,
+hireable managers, a real commodity market, and shared daily play.
 
 ## Economy & AI depth
 

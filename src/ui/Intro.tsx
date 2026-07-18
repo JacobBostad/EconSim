@@ -53,22 +53,26 @@ export function Intro(): React.ReactElement | null {
             <h4>Trade, seasons, and the town</h4>
             <p>Export to <strong>Port Rosa</strong> or industrial
               <strong> Ironvale</strong> — the Gazette's Trade Desk shows which
-              port pays (standing orders route there automatically), and once
-              you own a warehouse, watch the ticker for <strong>rush
-              orders</strong>: bulk deliveries on a deadline for a cash bonus.
-              Brace for <strong>winter</strong>,
-              sponsor <strong>festivals</strong>, fund homes, upgrade buildings —
-              and unlock the <strong>luxury market</strong> with R&amp;D.</p>
+              port pays, and a warehouse unlocks the whole trading game:
+              <strong> rush orders</strong> on a deadline, the 📈
+              <strong> commodity desk</strong> (buy dips, hold, export
+              spikes — big trades move the market), and
+              <strong> forwards</strong> that lock today's spike for delivery
+              within the week. Brace for <strong>winter</strong>, sponsor
+              <strong> festivals</strong>, and unlock
+              <strong> luxury</strong> with R&amp;D.</p>
           </div>
           <div>
             <h4>Run your company</h4>
             <p>Follow the <strong>Missions</strong> panel (left) — it pays cash
               rewards. Run a <strong>general store</strong> (up to 3 products —
-              shoppers buy whole baskets), price to penetrate then charge a
-              premium once you dominate, and staff up: extra hands raise output.
-              Short on capital? Source shelves <strong>wholesale</strong> from
-              rivals' factories at their asking price — or become the town's
-              supplier and set your own.</p>
+              shoppers buy whole baskets), source shelves
+              <strong> wholesale</strong> from rivals — or become the town's
+              supplier. Tired of daily price checks? 🤝 <strong>Hire
+              managers</strong>: a store manager runs pricing and shelves,
+              and the 👔 <strong>executive team</strong> (logistics, sales)
+              delegates the rest — salaried, skilled, and gone the day you
+              can't pay them.</p>
           </div>
           <div>
             <h4>Compete on every lever</h4>
@@ -82,7 +86,9 @@ export function Intro(): React.ReactElement | null {
               <strong> real estate</strong> (apartments collect rent). The
               🧭 <strong>Advisor</strong> card tells you what needs attention;
               press <strong>F</strong> to see supply chains flow. Want a score?
-              Start a 🏁 <strong>Challenge run</strong> from New Game.</p>
+              Start a 🏁 <strong>Challenge run</strong> — or the 📅
+              <strong> Daily challenge</strong>, where everyone on Earth races
+              the same town today.</p>
           </div>
         </div>
 
