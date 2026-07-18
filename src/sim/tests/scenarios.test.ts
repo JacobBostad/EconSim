@@ -38,6 +38,17 @@ describe('Scenario variants', () => {
     }
   });
 
+  it('port haven: two exporter firms, thin home shelves, no clothes market', () => {
+    const state = createInitialState(1, undefined, 'port_haven');
+    const ai = Object.values(state.firms).filter((f) => f.ownerType === 'ai');
+    expect(ai.length).toBe(2);
+    for (const f of ai) expect(f.personalityId).toBe('exporter');
+    const clothesSellers = Object.values(state.facilities).filter((f) =>
+      f.retailProductIds.includes('clothes'),
+    );
+    expect(clothesSellers.length).toBe(0);
+  });
+
   it('an unknown scenario id falls back to the default town', () => {
     const state = createInitialState(1, undefined, 'nope');
     expect(Object.values(state.firms).some((f) => f.name === 'Sunrise Foods')).toBe(true);

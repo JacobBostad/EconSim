@@ -307,11 +307,23 @@ function maybeExportSurplus(ctx: SimContext, firmId: string): void {
     if (!fac || (fac.type !== 'farm' && fac.type !== 'mine' && fac.type !== 'factory')) continue;
     for (const pid in fac.outputInventory) {
       const have = getQuantity(fac.outputInventory, pid);
-      if (have <= keep + 10) continue;
+      // Home shelves eat first: stock spoken for by active outbound supply
+      // contracts is never exported, whatever the personality. Without this an
+      // exporter firm ships its own shops' supply and starves the town
+      // (measured: Port Haven satisfaction 1/100 by day 90 on every seed).
+      let reserved = 0;
+      for (const cid in state.contracts) {
+        const c = state.contracts[cid]!;
+        if (c.active && c.sourceFacilityId === fac.id && c.productId === pid) {
+          reserved += c.targetQuantity;
+        }
+      }
+      const keepHere = Math.max(keep, reserved);
+      if (have <= keepHere + 10) continue;
       const product = getProduct(pid);
       const tradePrice = state.tradeCity.pricesByProduct[pid] ?? product.basePrice;
       if (tradePrice < product.basePrice * AI_EXPORT_MIN_MULT) continue;
-      const qty = Math.min(have - AI_EXPORT_KEEP, 40);
+      const qty = Math.min(have - keepHere, 40);
       const revenue = Math.round(qty * tradePrice * (1 - AI_EXPORT_FEE));
       removeStock(fac.outputInventory, pid, qty);
       recordTransaction(state, {

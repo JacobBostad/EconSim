@@ -141,6 +141,42 @@ export const SCENARIOS: Record<string, ScenarioDef> = {
       }),
     ],
   },
+  port_haven: {
+    id: 'port_haven',
+    name: 'Port Haven',
+    icon: '⚓',
+    description:
+      'A harbor town obsessed with the export trade: the bakery and the forge both ship their best to Port Rosa, leaving home shelves thin — and nobody sells clothes. Feed the town they forgot, or out-sail them.',
+    aiChains: [
+      breadChain({
+        firmName: 'Harbor Loaf Co',
+        producerName: 'Harbor Grain Fields',
+        factoryName: 'Harbor Bakehouse',
+        retailName: 'Harbor Loaf Shop',
+        // Compact, homes-adjacent layout: a scenario whose buildings sit in a
+        // far corner starves — commutes eat the whole workday (measured).
+        loc: { producer: { x: 28, y: 16 }, factory: { x: 46, y: 32 }, retail: { x: 50, y: 48 } },
+        cash: dollars(36000),
+        adBudget: dollars(10),
+        brand: 14, // the home market is an afterthought
+        stocks: { producerOut: 60, factoryIn: 30, factoryOut: 24, shopIn: 30 },
+        staff: { producer: 3, factory: 3, retail: 2 },
+        personality: 'exporter',
+      }),
+      toolsChain({
+        firmName: 'Quayside Ironworks',
+        producerName: 'Quayside Mine',
+        factoryName: 'Quayside Forge',
+        retailName: 'Quayside Supply',
+        loc: { producer: { x: 86, y: 18 }, factory: { x: 76, y: 34 }, retail: { x: 64, y: 48 } },
+        adBudget: dollars(10),
+        brand: 14,
+        stocks: { producerOut: 50, factoryIn: 24, factoryOut: 12, shopIn: 18 },
+        staff: { producer: 3, factory: 3, retail: 2 },
+        personality: 'exporter',
+      }),
+    ],
+  },
   harvest_valley: {
     id: 'harvest_valley',
     name: 'Harvest Valley',
