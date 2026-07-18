@@ -11,6 +11,7 @@ import type { SimContext } from '../core/GameState';
 import { isDayBoundary } from '../core/Tick';
 import { getProduct } from '../data/products';
 import { clamp } from '../../utils/clamp';
+import { APARTMENT_SATISFACTION_BONUS } from '../data/constants';
 
 /** Needs never accumulate beyond this urgency. */
 const URGENCY_CAP = 3;
@@ -77,6 +78,10 @@ export function runSatisfactionSystem(ctx: SimContext): void {
     // lower. Purchases/stockouts still nudge it intraday (RetailDemandSystem).
     let target = 50;
     target += cit.employmentStatus === 'employed' ? 20 : -5;
+    // Premium housing: apartment residents live a little better.
+    if (state.facilities[cit.homeFacilityId]?.defId === 'apartment') {
+      target += APARTMENT_SATISFACTION_BONUS;
+    }
     // Smooth provisioning curve: fully provided = +15, and small chronic
     // cravings (a coffee craze with no café in town) erode it gradually
     // instead of a cliff from +15 to negative the moment any need is unmet.

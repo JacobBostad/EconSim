@@ -246,6 +246,12 @@ card in your firm inspector shows the town average and top rival wage with a
 one-click "Beat market"; AI firms answer back, raising wages up to ~1.5× when
 they can't fill slots and drifting down when labor is slack.
 
+**Real estate** (`RentSystem.ts`): buildable Apartments house 2 citizens who
+pay daily rent to the owner and live measurably happier; municipal homes stay
+free. With immigration filling vacancies, housing is a fourth business
+vertical — build near the action (land premium) and let the town grow into
+your units.
+
 **M&A** (`core/Acquisition.ts`): buy out AI rivals at 1.3× valuation (0.9×
 distressed, credit for held shares) and absorb everything; flush AI firms
 rescue-acquire dying rivals too. Objectives escalate on a ladder (Tycoon

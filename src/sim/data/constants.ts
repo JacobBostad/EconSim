@@ -90,6 +90,11 @@ export const MAX_RETAIL_PRODUCTS = 3;
  */
 export const WIZARD_AD_BUDGET = dollars(15);
 
+/** Daily rent per resident of a player/AI-built apartment. */
+export const APARTMENT_RENT_PER_DAY = dollars(2.5);
+/** Satisfaction equilibrium bonus for living in premium housing. */
+export const APARTMENT_SATISFACTION_BONUS = 5;
+
 export const FESTIVAL_COST = dollars(1500);
 /** Funding a new home (2 residents move in) costs this much. */
 export const FUND_HOME_COST = dollars(3000);

@@ -68,6 +68,7 @@ import { runImmigrationSystem } from '../systems/ImmigrationSystem';
 import { runSatisfactionSystem } from '../systems/SatisfactionSystem';
 import { runAccountingSystem } from '../systems/AccountingSystem';
 import { runPayrollSystem } from '../systems/PayrollSystem';
+import { runRentSystem } from '../systems/RentSystem';
 import { runCitizenScheduleSystem } from '../systems/CitizenScheduleSystem';
 import { runMovementSystem } from '../systems/MovementSystem';
 import { runLaborSystem, hireCitizen, fireCitizen, findUnemployed } from '../systems/LaborSystem';
@@ -95,6 +96,7 @@ const SYSTEMS: SystemFn[] = [
   runBankruptcySystem,
   runSatisfactionSystem,
   runImmigrationSystem, // a prosperous town attracts new citizens
+  runRentSystem, // apartment rent (before accounting snapshots the day)
   runAccountingSystem, // maintenance + snapshot + reset daily accumulators
   runPayrollSystem,
   // --- per-tick simulation ---

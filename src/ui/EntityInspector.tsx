@@ -19,6 +19,7 @@ import { citizenActionLabel, populationStats } from '../sim/selectors/citizenSel
 import { firmPnLToday, firmPnLLifetime, firmFacilities, firmWarnings, rivalTopWage } from '../sim/selectors/companySelectors';
 import { getPersonality } from '../sim/data/personalities';
 import { morningBriefing } from '../sim/selectors/advisorSelectors';
+import { APARTMENT_RENT_PER_DAY } from '../sim/data/constants';
 import { facilityProfitContribution } from '../sim/selectors/facilitySelectors';
 import { clamp } from '../utils/clamp';
 
@@ -62,6 +63,18 @@ function FacilityView({ fac, state }: { fac: Facility; state: GameState }): Reac
         {fac.bottleneckReason && <span className="small" style={{ color: 'var(--amber)' }}>{fac.bottleneckReason}</span>}
       </div>
 
+      {fac.type === 'home' && (
+        <div className="kv small">
+          <span className="k">Residents</span>
+          <span className="mono">{fac.residentIds.length}/2</span>
+        </div>
+      )}
+      {fac.defId === 'apartment' && (
+        <div className="kv small">
+          <span className="k">Rent income</span>
+          <span className="mono">{formatMoney(fac.residentIds.length * APARTMENT_RENT_PER_DAY)}/day</span>
+        </div>
+      )}
       <Inv title="Input" inv={fac.inputInventory} />
       <Inv title="Output" inv={fac.outputInventory} />
 

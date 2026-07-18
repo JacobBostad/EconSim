@@ -24,6 +24,20 @@ export const FACILITY_DEFS: Record<FacilityDefId, FacilityDefinition> = {
     footprint: 1,
     description: 'A residence for citizens.',
   },
+  apartment: {
+    id: 'apartment',
+    name: 'Apartment',
+    type: 'home',
+    buildCost: dollars(4500),
+    maintenanceCostPerDay: dollars(2),
+    workerCapacity: 0,
+    storageCapacity: 50,
+    allowedRecipes: [],
+    allowedProductsForSale: [],
+    footprint: 1,
+    description:
+      'Premium housing for 2 citizens. Residents pay daily rent and live happier — and new arrivals need somewhere to live.',
+  },
   farm: {
     id: 'farm',
     name: 'Farm',
@@ -114,6 +128,7 @@ export function getFacilityDef(id: FacilityDefId): FacilityDefinition {
 /** Definitions the player may build (excludes home/importer). */
 export const BUILDABLE_DEFS: FacilityDefinition[] = [
   FACILITY_DEFS.farm!,
+  FACILITY_DEFS.apartment!,
   FACILITY_DEFS.mine!,
   FACILITY_DEFS.factory!,
   FACILITY_DEFS.warehouse!,
