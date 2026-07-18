@@ -394,6 +394,13 @@ engine tests), probed with headless balance runs, and guarded by CI.
 
 ## Infrastructure
 
+- **Playtest bot v6** (offers era): a 250-day integration regression where
+  the three new systems work together — rush orders filled hands-free by a
+  standing export order, fire sales bought whenever affordable, crews
+  trained whenever average skill dips below 1.1. Floors assert every
+  system actually fired (measured 5 rush completions / 8 fire sales / 4
+  trainings at the pinned seed; every probed seed exercised all three)
+  with money conserved and the firm solvent at day 250.
 - **Golden save v4** (rush-order / fire-sale era): a fixture whose counters
   were earned through real engine paths — a rush order completed by actual
   exports, a fire sale bought through the real accept path (the transferred
