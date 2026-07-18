@@ -104,6 +104,30 @@ function FacilityView({ fac, state }: { fac: Facility; state: GameState }): Reac
           {formatMoney(contribution)}
         </span>
       </div>
+      {(() => {
+        // Mirror of facilityPnL for one building: the last closed day.
+        const y = fac.yesterdayStats;
+        const yRevenue = y.revenue + y.transferOutValue;
+        const yCost =
+          (firm ? fac.employees.length * firm.wagePolicy.baseWage : 0) +
+          fac.operatingCostPerDay + y.variableCost + y.transferInValue;
+        const yNet = yRevenue - yCost;
+        return (
+          <div className="kv small">
+            <span className="k">
+              <FormulaTooltip
+                title="Yesterday's P&L"
+                explanation="Last closed day: cash earnings + shipments out (valued at market price) − wages − upkeep − variable cost − inputs received. Firm-wide spend (ads, R&D, interest, freight) not attributed."
+              >
+                Yesterday net
+              </FormulaTooltip>
+            </span>
+            <span className="mono" style={{ color: yNet >= 0 ? 'var(--green)' : 'var(--red)' }}>
+              {formatMoney(yNet)} ({formatMoney(yRevenue)} in / {formatMoney(yCost)} out)
+            </span>
+          </div>
+        );
+      })()}
 
       <div style={{ marginTop: 8 }}>
         <FacilityActions fac={fac} />

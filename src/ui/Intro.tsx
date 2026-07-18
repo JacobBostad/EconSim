@@ -25,8 +25,10 @@ export function Intro(): React.ReactElement | null {
           </div>
           <div>
             <h4>Trade, seasons, and the town</h4>
-            <p>Export to <strong>Port Rosa</strong> when its prices spike (set
-              standing orders in a warehouse). Brace for <strong>winter</strong>,
+            <p>Export to <strong>Port Rosa</strong> or industrial
+              <strong> Ironvale</strong> — the Gazette's Trade Desk shows which
+              port pays (standing orders route there automatically). Brace for
+              <strong> winter</strong>,
               sponsor <strong>festivals</strong>, fund homes, upgrade buildings —
               and unlock the <strong>luxury market</strong> with R&amp;D.</p>
           </div>
