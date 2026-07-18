@@ -3,14 +3,16 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "A deterministic browser-based economic simulation game — a Capitalism Lab in miniature.",
+  "description": "A deterministic browser-based economic simulation game \u2014 a Capitalism Lab in miniature.",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc -b --noEmit"
+    "typecheck": "tsc -b --noEmit",
+    "e2e": "node e2e/smoke.mjs",
+    "e2e:deep": "node e2e/deepsmoke.mjs"
   },
   "dependencies": {
     "react": "^18.3.1",
@@ -23,6 +25,7 @@
     "@vitejs/plugin-react": "^4.3.4",
     "typescript": "^5.6.3",
     "vite": "^5.4.11",
-    "vitest": "^2.1.8"
+    "vitest": "^2.1.8",
+    "playwright-core": "^1.49.0"
   }
 }
