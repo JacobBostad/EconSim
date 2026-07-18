@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import fixtureJson from './fixtures/golden-save-v1.json';
 import fixture2Json from './fixtures/golden-save-v2.json';
+import fixture3Json from './fixtures/golden-save-v3.json';
 import { Simulation } from '../core/Simulation';
 import { deserialize, serialize } from '../persistence/saveLoad';
 import { totalMoneySupply } from '../core/GameState';
@@ -75,6 +76,45 @@ describe('Golden save fixture v2 (modern features)', () => {
 
   it('keeps running deterministically with money conserved', () => {
     const state = deserialize(raw2);
+    const supply0 = totalMoneySupply(state);
+    const sim = new Simulation(state);
+    expect(() => sim.run(ticksPerDay(state.config) * 10)).not.toThrow();
+    expect(totalMoneySupply(sim.getState())).toBe(supply0);
+  });
+});
+
+/**
+ * Golden save v3 — the wholesale era (day 100, seed 888): player farms with
+ * AI wholesale customers, a store buying bread wholesale from an AI factory,
+ * Ironvale exports, both trade-city books walked, facility P&L EMAs
+ * populated. Same contract as v1/v2: never regenerate to paper over a break.
+ */
+describe('Golden save fixture v3 (wholesale era)', () => {
+  const raw3 = JSON.stringify(fixture3Json);
+
+  it('loads intact with every wholesale-era field populated', () => {
+    const state = deserialize(raw3);
+    const player = state.firms[state.playerFirmId]!;
+    expect(player.wholesaleEarned).toBeGreaterThan(0);
+    expect(player.wholesaleSpend).toBeGreaterThan(0);
+    expect(player.exportRevenueByCity['ironvale'] ?? 0).toBeGreaterThan(0);
+    expect(Object.keys(state.tradeCities)).toContain('ironvale');
+    expect(Object.keys(state.tradeCities)).toContain('port_rosa');
+    // Live AI customer contracts sourcing from the player's facilities.
+    const aiCustomers = Object.values(state.contracts).filter((c) => {
+      const src = state.facilities[c.sourceFacilityId];
+      return c.active && src && player.facilities.includes(src.id)
+        && state.firms[c.ownerFirmId]?.ownerType === 'ai';
+    });
+    expect(aiCustomers.length).toBeGreaterThanOrEqual(1);
+    // Facility P&L EMAs carry real numbers.
+    expect(Object.values(state.facilities).some((f) => f.pnlEma.net !== 0)).toBe(true);
+    const again = deserialize(serialize(state));
+    expect(serialize(again)).toBe(serialize(state));
+  });
+
+  it('keeps running with money conserved', () => {
+    const state = deserialize(raw3);
     const supply0 = totalMoneySupply(state);
     const sim = new Simulation(state);
     expect(() => sim.run(ticksPerDay(state.config) * 10)).not.toThrow();
