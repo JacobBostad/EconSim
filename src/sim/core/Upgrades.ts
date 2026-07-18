@@ -7,6 +7,7 @@
  */
 
 import type { GameState } from './GameState';
+import { formatMoney } from '../../utils/formatMoney';
 import { canAfford, emitEvent, recordTransaction } from './GameState';
 import { firmAccount, WORLD_ACCOUNT } from './Transactions';
 import type { FirmId, FacilityId } from './Id';
@@ -39,7 +40,7 @@ export function upgradeFacility(
   const cost = upgradeCost(state, facilityId);
   if (!canAfford(state, firmAccount(firmId), cost)) {
     if (firm.ownerType === 'player') {
-      emitEvent(state, 'danger', 'player', `Upgrading ${fac.name} costs ${cost}¢ — not enough cash.`, fac.id);
+      emitEvent(state, 'danger', 'player', `Upgrading ${fac.name} costs ${formatMoney(cost)} — not enough cash.`, fac.id);
     }
     return false;
   }

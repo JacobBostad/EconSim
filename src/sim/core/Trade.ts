@@ -6,6 +6,7 @@
  */
 
 import type { GameState } from './GameState';
+import { formatMoney } from '../../utils/formatMoney';
 import { emitEvent, recordTransaction } from './GameState';
 import { firmAccount, WORLD_ACCOUNT } from './Transactions';
 import type { FirmId, FacilityId, ProductId } from './Id';
@@ -90,6 +91,6 @@ export function performExport(
   firm.exportRevenue += revenue;
   firm.exportRevenueByCity[cityId] = (firm.exportRevenueByCity[cityId] ?? 0) + revenue;
   emitEvent(state, 'success', 'logistics',
-    `${city.emoji} ${note} to ${city.name}: ${qty} ${product.name} for ${revenue}¢ (after freight).`, fac.id);
+    `${city.emoji} ${note} to ${city.name}: ${qty} ${product.name} for ${formatMoney(revenue)} (after freight).`, fac.id);
   return revenue;
 }

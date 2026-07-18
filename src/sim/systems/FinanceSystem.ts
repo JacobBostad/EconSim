@@ -9,6 +9,7 @@
  */
 
 import type { SimContext } from '../core/GameState';
+import { formatMoney } from '../../utils/formatMoney';
 import { recordTransaction, emitEvent } from '../core/GameState';
 import { firmAccount, WORLD_ACCOUNT } from '../core/Transactions';
 import { isDayBoundary } from '../core/Tick';
@@ -33,7 +34,7 @@ export function runFinanceSystem(ctx: SimContext): void {
     if (firm.ownerType === 'player') {
       // Quiet by default; only warn when interest is biting into negative cash.
       if (firm.cash < 0) {
-        emitEvent(state, 'warning', 'finance', `Interest of ${interest}¢ accrued while cash is negative.`, firm.id);
+        emitEvent(state, 'warning', 'finance', `Interest of ${formatMoney(interest)} accrued while cash is negative.`, firm.id);
       }
     }
   }

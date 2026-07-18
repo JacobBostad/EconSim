@@ -4,6 +4,7 @@
  */
 
 import type { GameState } from '../core/GameState';
+import { formatMoney } from '../../utils/formatMoney';
 import type { Firm } from '../entities/Firm';
 import type { Facility } from '../entities/Facility';
 import type { Citizen } from '../entities/Citizen';
@@ -124,8 +125,8 @@ export function firmWarnings(state: GameState, firmId: FirmId): string[] {
   const firm = state.firms[firmId];
   if (!firm) return [];
   const warnings: string[] = [];
-  if (firm.cash < 0) warnings.push(`Cash is negative (${firm.cash}¢).`);
-  if (firm.debt > 0) warnings.push(`Carrying ${firm.debt}¢ of debt.`);
+  if (firm.cash < 0) warnings.push(`Cash is negative (${formatMoney(firm.cash)}).`);
+  if (firm.debt > 0) warnings.push(`Carrying ${formatMoney(firm.debt)} of debt.`);
   if (firm.bankruptcyStatus === 'distressed') warnings.push('Firm is distressed.');
   if (firm.bankruptcyStatus === 'insolvent') warnings.push('Firm is insolvent — facilities are closing.');
   for (const fac of firmFacilities(state, firmId)) {

@@ -10,6 +10,7 @@
  */
 
 import type { GameState } from './GameState';
+import { formatMoney } from '../../utils/formatMoney';
 import { recordTransaction, emitEvent } from './GameState';
 import { firmAccount, WORLD_ACCOUNT } from './Transactions';
 import type { FirmId, FacilityId } from './Id';
@@ -82,6 +83,6 @@ export function sellFacility(state: GameState, firmId: FirmId, facilityId: Facil
       note: `Sold ${name}`,
     });
   }
-  emitEvent(state, 'info', 'player', `Sold ${name} for ${refund}¢ (half its build cost).`, firmId);
+  emitEvent(state, 'info', 'player', `Sold ${name} for ${formatMoney(refund)} (half its build cost).`, firmId);
   return true;
 }

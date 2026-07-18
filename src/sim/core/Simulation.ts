@@ -15,6 +15,7 @@
  */
 
 import type { GameState, SimContext } from './GameState';
+import { formatMoney } from '../../utils/formatMoney';
 import { makeContext, emitEvent, recordTransaction, canAfford } from './GameState';
 import type { Command } from './Commands';
 import { nextId } from './Id';
@@ -332,7 +333,7 @@ export class Simulation {
 
     if (applied > 0) {
       if (!canAfford(s, firmAccount(firmId), cost)) {
-        emitEvent(s, 'danger', 'finance', `Not enough cash to buy ${applied}% of ${target.name} (${cost}¢).`, firmId);
+        emitEvent(s, 'danger', 'finance', `Not enough cash to buy ${applied}% of ${target.name} (${formatMoney(cost)}).`, firmId);
         return;
       }
       recordTransaction(s, {
@@ -341,7 +342,7 @@ export class Simulation {
         note: `Bought ${applied}% of ${target.name}`,
       });
       firm.sharesHeld[targetFirmId] = held + applied;
-      emitEvent(s, 'success', 'finance', `${firm.name} bought ${applied}% of ${target.name} for ${cost}¢.`, targetFirmId);
+      emitEvent(s, 'success', 'finance', `${firm.name} bought ${applied}% of ${target.name} for ${formatMoney(cost)}.`, targetFirmId);
     } else {
       recordTransaction(s, {
         from: WORLD_ACCOUNT, to: firmAccount(firmId), amount: cost,
@@ -351,7 +352,7 @@ export class Simulation {
       const remaining = held + applied;
       if (remaining <= 0) delete firm.sharesHeld[targetFirmId];
       else firm.sharesHeld[targetFirmId] = remaining;
-      emitEvent(s, 'info', 'finance', `${firm.name} sold ${-applied}% of ${target.name} for ${cost}¢.`, targetFirmId);
+      emitEvent(s, 'info', 'finance', `${firm.name} sold ${-applied}% of ${target.name} for ${formatMoney(cost)}.`, targetFirmId);
     }
   }
 
@@ -370,7 +371,7 @@ export class Simulation {
     // Wizard placements sit in mid-value rows; budget for a modest premium.
     const cost = Math.round(chainCost(bp) * 1.2);
     if (!canAfford(s, firmAccount(firmId), cost)) {
-      emitEvent(s, 'danger', 'player', `A full ${getProduct(bp.productId).name} chain costs about ${cost}¢ — not enough cash.`, firmId);
+      emitEvent(s, 'danger', 'player', `A full ${getProduct(bp.productId).name} chain costs about ${formatMoney(cost)} — not enough cash.`, firmId);
       return;
     }
 
@@ -511,7 +512,7 @@ export class Simulation {
         return;
       }
       if (!canAfford(s, firmAccount(firmId), FESTIVAL_COST)) {
-        emitEvent(s, 'danger', 'player', `Sponsoring the festival costs ${FESTIVAL_COST}¢.`, firmId);
+        emitEvent(s, 'danger', 'player', `Sponsoring the festival costs ${formatMoney(FESTIVAL_COST)}.`, firmId);
         return;
       }
       recordTransaction(s, {
@@ -532,7 +533,7 @@ export class Simulation {
       return;
     }
     if (!canAfford(s, firmAccount(firmId), FUND_HOME_COST)) {
-      emitEvent(s, 'danger', 'player', `Funding a home costs ${FUND_HOME_COST}¢.`, firmId);
+      emitEvent(s, 'danger', 'player', `Funding a home costs ${formatMoney(FUND_HOME_COST)}.`, firmId);
       return;
     }
     // Deterministic placement: scan the residential band for clear ground.
@@ -629,7 +630,7 @@ export class Simulation {
       category: 'loanDraw',
       note: 'Loan drawdown',
     });
-    emitEvent(s, 'success', 'finance', `Borrowed ${amount}¢. Total debt ${firm.debt}¢.`, firm.id);
+    emitEvent(s, 'success', 'finance', `Borrowed ${formatMoney(amount)}. Total debt ${formatMoney(firm.debt)}.`, firm.id);
   }
 
   private repayLoan(command: Extract<Command, { type: 'REPAY_LOAN' }>): void {
@@ -647,7 +648,7 @@ export class Simulation {
       category: 'loanRepay',
       note: 'Loan repayment',
     });
-    emitEvent(s, 'info', 'finance', `Repaid ${amount}¢. Remaining debt ${firm.debt}¢.`, firm.id);
+    emitEvent(s, 'info', 'finance', `Repaid ${formatMoney(amount)}. Remaining debt ${formatMoney(firm.debt)}.`, firm.id);
   }
 
   // ---- command handlers -------------------------------------------------
@@ -685,7 +686,7 @@ export class Simulation {
     const mult = landCostMultiplier(landValueAt(s, command.location));
     const cost = Math.round(def.buildCost * mult);
     if (!canAfford(s, firmAccount(firm.id), cost)) {
-      emitEvent(s, 'danger', 'player', `Cannot afford to build ${def.name} here (${cost}¢ with land premium).`, firm.id);
+      emitEvent(s, 'danger', 'player', `Cannot afford to build ${def.name} here (${formatMoney(cost)} with land premium).`, firm.id);
       return;
     }
     const fac = createFacility(s, command.defId, firm.id, command.location);
@@ -703,7 +704,7 @@ export class Simulation {
     }
     const pct = Math.round((mult - 1) * 100);
     emitEvent(s, 'success', 'player',
-      `Built ${fac.name}${pct !== 0 ? ` (land ${pct > 0 ? '+' : ''}${pct}% → rent ${fac.operatingCostPerDay}¢/day)` : ''}.`,
+      `Built ${fac.name}${pct !== 0 ? ` (land ${pct > 0 ? '+' : ''}${pct}% → rent ${formatMoney(fac.operatingCostPerDay)}/day)` : ''}.`,
       fac.id);
   }
 

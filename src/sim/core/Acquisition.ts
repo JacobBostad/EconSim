@@ -10,6 +10,7 @@
  */
 
 import type { GameState } from './GameState';
+import { formatMoney } from '../../utils/formatMoney';
 import { canAfford, emitEvent, recordTransaction } from './GameState';
 import { firmAccount, WORLD_ACCOUNT } from './Transactions';
 import type { FirmId } from './Id';
@@ -51,7 +52,7 @@ export function performAcquisition(
   if (!canAfford(s, firmAccount(buyer.id), cost)) {
     if (buyer.ownerType === 'player') {
       emitEvent(s, 'danger', 'finance',
-        `Not enough cash to acquire ${target.name} (needs ${cost}¢).`, buyer.id);
+        `Not enough cash to acquire ${target.name} (needs ${formatMoney(cost)}).`, buyer.id);
     }
     return false;
   }
@@ -124,7 +125,7 @@ export function performAcquisition(
   buyer.acquiredNames.push(target.name);
   delete s.firms[targetId];
   emitEvent(s, buyer.ownerType === 'player' ? 'success' : 'warning', 'finance',
-    `🤝 ${buyer.name} acquired ${target.name} for ${cost}¢ — facilities, staff, and brands absorbed.`,
+    `🤝 ${buyer.name} acquired ${target.name} for ${formatMoney(cost)} — facilities, staff, and brands absorbed.`,
     buyer.id);
   return true;
 }

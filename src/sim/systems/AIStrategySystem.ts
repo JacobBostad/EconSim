@@ -13,6 +13,7 @@
  */
 
 import type { SimContext } from '../core/GameState';
+import { formatMoney } from '../../utils/formatMoney';
 import { emitEvent, canAfford, recordTransaction } from '../core/GameState';
 import { firmAccount, WORLD_ACCOUNT } from '../core/Transactions';
 import { nextId } from '../core/Id';
@@ -378,7 +379,7 @@ function maybeExportSurplus(ctx: SimContext, firmId: string): void {
       firm.exportRevenueByCity[best.cityId] = (firm.exportRevenueByCity[best.cityId] ?? 0) + revenue;
       if (revenue >= 200_00) {
         emitEvent(state, 'info', 'ai',
-          `${firm.name} exported ${qty} ${product.name} to ${cityName} for ${revenue}¢.${ceoQuote(rng, firm, 'export')}`, fac.id);
+          `${firm.name} exported ${qty} ${product.name} to ${cityName} for ${formatMoney(revenue)}.${ceoQuote(rng, firm, 'export')}`, fac.id);
       }
       return; // one export per firm per day
     }
@@ -826,7 +827,7 @@ function manageWages(ctx: SimContext, firmId: string): void {
     }
     if (next > wage) {
       emitEvent(state, 'info', 'ai',
-        `${firm.name} raised wages to ${next}¢/day to attract scarce workers.`, firm.id);
+        `${firm.name} raised wages to ${formatMoney(next)}/day to attract scarce workers.`, firm.id);
     }
   }
 }

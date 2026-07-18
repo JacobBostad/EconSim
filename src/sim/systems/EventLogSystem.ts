@@ -10,6 +10,7 @@
  */
 
 import type { SimContext } from '../core/GameState';
+import { formatMoney } from '../../utils/formatMoney';
 import { emitEvent } from '../core/GameState';
 import { isDayBoundary } from '../core/Tick';
 import { operatingProfit } from '../entities/Accounting';
@@ -90,7 +91,7 @@ export function runEventLogSystem(ctx: SimContext): void {
       state,
       'danger',
       'finance',
-      `Your firm ran an operating loss of ${Math.abs(op)}¢ today — wages/costs exceed margin.`,
+      `Your firm ran an operating loss of ${formatMoney(Math.abs(op))} today — wages/costs exceed margin.`,
       player.id,
     );
   }

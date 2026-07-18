@@ -10,6 +10,7 @@
  */
 
 import type { GameState, SimContext } from '../core/GameState';
+import { formatMoney } from '../../utils/formatMoney';
 import { emitEvent } from '../core/GameState';
 import { isDayBoundary } from '../core/Tick';
 import type { FacilityId, CitizenId } from '../core/Id';
@@ -152,7 +153,7 @@ function runJobMarket(ctx: SimContext): void {
     const newFirm = state.firms[state.facilities[best]!.ownerFirmId]!;
     if (from === state.playerFirmId) {
       emitEvent(state, 'warning', 'payroll',
-        `${cit.name} left you for ${newFirm.name}'s higher wages (${newFirm.wagePolicy.baseWage}¢/day).`, cid);
+        `${cit.name} left you for ${newFirm.name}'s higher wages (${formatMoney(newFirm.wagePolicy.baseWage)}/day).`, cid);
     } else if (newFirm.id === state.playerFirmId) {
       emitEvent(state, 'success', 'payroll',
         `${cit.name} (skill ${clamp(cit.skill, SKILL_MIN, SKILL_MAX).toFixed(2)}) joined you for better pay.`, cid);
