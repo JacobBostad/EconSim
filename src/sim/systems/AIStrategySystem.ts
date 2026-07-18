@@ -670,8 +670,107 @@ function maybeBoostProduction(ctx: SimContext, firmId: string): void {
         upgradeFacility(state, firmId, fac.id);
         return;
       }
+      continue;
+    }
+    // Maxed out and STILL short: the last rung duplicates the whole
+    // production sub-chain (producer + factory together). Duplicating only
+    // one stage was measured to backfire — a second bakery fed by the same
+    // single farm starves both. Trigger on factories; the paired producer
+    // comes along.
+    if (fac.type === 'factory' && buildSiblingChain(ctx, firmId, fac.id)) return;
+  }
+}
+
+/** How many of this firm's facilities run the given recipe. */
+function countRecipe(state: import('../core/GameState').GameState, firmId: string, recipeId: string): number {
+  let n = 0;
+  const firm = state.firms[firmId]!;
+  for (const fid of firm.facilities) {
+    if (state.facilities[fid]?.activeRecipeId === recipeId) n += 1;
+  }
+  return n;
+}
+
+const SIBLING_CAP_PER_RECIPE = 2;
+
+function buildSiblingChain(ctx: SimContext, firmId: string, factoryId: string): boolean {
+  const { state, rng } = ctx;
+  const firm = state.firms[firmId]!;
+  const factory = state.facilities[factoryId]!;
+  if (!factory.activeRecipeId) return false;
+  if (countRecipe(state, firmId, factory.activeRecipeId) >= SIBLING_CAP_PER_RECIPE) return false;
+
+  // The producer feeding this factory (via its input contract), if the firm
+  // owns one — otherwise the importer supplies the sibling too.
+  let producer: import('../entities/Facility').Facility | null = null;
+  let inputContract: Contract | null = null;
+  for (const cid in state.contracts) {
+    const c = state.contracts[cid]!;
+    if (!c.active || c.destinationFacilityId !== factoryId) continue;
+    inputContract = c;
+    const src = state.facilities[c.sourceFacilityId];
+    if (src && src.ownerFirmId === firmId && src.activeRecipeId) producer = src;
+    break;
+  }
+
+  const jit = () => rng.jitter(4);
+  const facLoc = {
+    x: clamp(factory.location.x + (rng.chance(0.5) ? 12 : -12) + jit(), 8, state.config.mapWidth - 8),
+    y: clamp(factory.location.y + jit(), 8, state.config.mapHeight - 8),
+  };
+  const facDef = getFacilityDef(factory.defId);
+  const facCost = Math.round(facDef.buildCost * landCostMultiplier(landValueAt(state, facLoc)));
+  let prodCost = 0;
+  let prodLoc: { x: number; y: number } | null = null;
+  if (producer) {
+    prodLoc = {
+      x: clamp(producer.location.x + (rng.chance(0.5) ? 12 : -12) + jit(), 8, state.config.mapWidth - 8),
+      y: clamp(producer.location.y + jit(), 8, state.config.mapHeight - 8),
+    };
+    prodCost = Math.round(getFacilityDef(producer.defId).buildCost * landCostMultiplier(landValueAt(state, prodLoc)));
+  }
+  if (firm.cash - (facCost + prodCost) < 20000_00) return false;
+
+  const build = (defId: string, loc: { x: number; y: number }, cost: number, name: string, recipeId: string) => {
+    const fac = createFacility(state, defId, firmId, loc, { name });
+    fac.activeRecipeId = recipeId;
+    fac.buildCost = cost;
+    fac.operatingCostPerDay = Math.round(getFacilityDef(defId).maintenanceCostPerDay * landCostMultiplier(landValueAt(state, loc)));
+    recordTransaction(state, {
+      from: firmAccount(firmId), to: WORLD_ACCOUNT, amount: cost,
+      firmId, category: 'buildSpend', note: `Built ${name}`,
+    });
+    const labor = getRecipe(recipeId).laborRequired;
+    for (let i = 0; i < labor; i++) {
+      const cid = findUnemployed(state);
+      if (!cid || !hireCitizen(state, fac.id, cid)) break;
+    }
+    return fac;
+  };
+
+  const factory2 = build(factory.defId, facLoc, facCost, `${factory.name} II`, factory.activeRecipeId);
+  const wire = (src: string, dest: string, base: Contract): void => {
+    const id = nextId(state.idCounters, 'ctr');
+    state.contracts[id] = { ...base, id, sourceFacilityId: src, destinationFacilityId: dest };
+  };
+
+  if (producer && prodLoc && producer.activeRecipeId && inputContract) {
+    const producer2 = build(producer.defId, prodLoc, prodCost, `${producer.name} II`, producer.activeRecipeId);
+    wire(producer2.id, factory2.id, inputContract); // own grain for the new line
+  } else if (inputContract) {
+    wire(inputContract.sourceFacilityId, factory2.id, inputContract); // importer-fed
+  }
+  // The new line ships to the same destinations as the original factory.
+  for (const cid in state.contracts) {
+    const c = state.contracts[cid]!;
+    if (c.active && c.sourceFacilityId === factoryId) {
+      wire(factory2.id, c.destinationFacilityId, c);
     }
   }
+
+  emitEvent(state, 'info', 'ai',
+    `🏗️ ${firm.name} doubled its production line: ${factory2.name} is running.${ceoQuote(rng, firm, 'expand')}`, factory2.id);
+  return true;
 }
 
 /**
