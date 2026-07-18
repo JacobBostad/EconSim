@@ -10,6 +10,12 @@ import type { FirmId, FacilityId, ProductId } from './Id';
 import { getProduct } from '../data/products';
 import { getQuantity, removeStock } from '../entities/Inventory';
 import { EXPORT_FREIGHT_FEE } from '../data/constants';
+import { worldTransportMult } from '../data/worldEvents';
+
+/** Freight fee scaled by fuel conditions, capped so exports never go negative-margin by fee alone. */
+export function exportFreightFee(state: GameState): number {
+  return Math.min(0.5, EXPORT_FREIGHT_FEE * worldTransportMult(state));
+}
 
 /**
  * Export up to `quantity` of a product staged in a warehouse to Port Rosa at
@@ -35,7 +41,8 @@ export function performExport(
   if (qty <= 0) return 0;
 
   const price = state.tradeCity.pricesByProduct[productId] ?? product.basePrice;
-  const revenue = Math.round(qty * price * (1 - EXPORT_FREIGHT_FEE));
+  // Fuel spikes hit sea freight too — the fee scales with transport conditions.
+  const revenue = Math.round(qty * price * (1 - exportFreightFee(state)));
 
   const fromInput = Math.min(qty, inInput);
   if (fromInput > 0) removeStock(fac.inputInventory, productId, fromInput);

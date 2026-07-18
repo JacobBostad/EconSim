@@ -33,6 +33,12 @@ export interface WorldEventEffects {
   transport?: number;
   /** Multiplier on the importer's price markup. */
   importMarkup?: number;
+  /**
+   * Bias on Port Rosa's price center per product ('all' = every product).
+   * The trade city's random walk reverts toward base × this, so a drought
+   * makes grain exports lucrative while it lasts.
+   */
+  tradePrice?: Record<string, number>;
 }
 
 export interface WorldEventDef {
@@ -71,7 +77,7 @@ export const WORLD_EVENT_DEFS: WorldEventDef[] = [
     weight: 10,
     exclusiveGroup: 'macro',
     earliestDay: 4,
-    effects: { spending: 1.25 },
+    effects: { spending: 1.25, tradePrice: { all: 1.15 } },
   },
   {
     id: 'recession',
@@ -86,7 +92,7 @@ export const WORLD_EVENT_DEFS: WorldEventDef[] = [
     weight: 10,
     exclusiveGroup: 'macro',
     earliestDay: 6,
-    effects: { spending: 0.75 },
+    effects: { spending: 0.75, tradePrice: { all: 0.8 } },
   },
   {
     id: 'drought',
@@ -101,7 +107,7 @@ export const WORLD_EVENT_DEFS: WorldEventDef[] = [
     weight: 8,
     exclusiveGroup: 'farm',
     earliestDay: 5,
-    effects: { production: { farm: 0.5 } },
+    effects: { production: { farm: 0.5 }, tradePrice: { grain: 1.5, bread: 1.35, cotton: 1.4 } },
   },
   {
     id: 'bumper_harvest',
@@ -116,7 +122,7 @@ export const WORLD_EVENT_DEFS: WorldEventDef[] = [
     weight: 8,
     exclusiveGroup: 'farm',
     earliestDay: 5,
-    effects: { production: { farm: 1.6 } },
+    effects: { production: { farm: 1.6 }, tradePrice: { grain: 0.7, bread: 0.85, cotton: 0.75 } },
   },
   {
     id: 'mine_collapse',
@@ -131,7 +137,7 @@ export const WORLD_EVENT_DEFS: WorldEventDef[] = [
     weight: 6,
     exclusiveGroup: 'mine',
     earliestDay: 7,
-    effects: { production: { mine: 0.45 } },
+    effects: { production: { mine: 0.45 }, tradePrice: { minerals: 1.5, tools: 1.3 } },
   },
   {
     id: 'rich_vein',
@@ -146,7 +152,7 @@ export const WORLD_EVENT_DEFS: WorldEventDef[] = [
     weight: 6,
     exclusiveGroup: 'mine',
     earliestDay: 7,
-    effects: { production: { mine: 1.6 } },
+    effects: { production: { mine: 1.6 }, tradePrice: { minerals: 0.75 } },
   },
   {
     id: 'bread_craze',
@@ -217,7 +223,7 @@ export const WORLD_EVENT_DEFS: WorldEventDef[] = [
     icon: '⛽',
     headline: 'Fuel prices spike — shipping costs double.',
     description:
-      'Every shipment costs about 2.2× normal transport. Short supply lines win; consider sourcing closer to home.',
+      'Every shipment costs about 2.2× normal transport, and export freight fees scale up too. Short supply lines win; consider sourcing closer to home.',
     severity: 'warning',
     minDays: 4,
     maxDays: 8,
@@ -239,7 +245,7 @@ export const WORLD_EVENT_DEFS: WorldEventDef[] = [
     weight: 7,
     exclusiveGroup: 'trade',
     earliestDay: 8,
-    effects: { importMarkup: 1.5 },
+    effects: { importMarkup: 1.5, tradePrice: { all: 0.9 } },
   },
 ];
 
@@ -293,6 +299,18 @@ export function worldDemandMult(state: GameState, productId: ProductId): number 
     if (f !== undefined) m *= f;
   }
   return m;
+}
+
+/** Port Rosa price-center bias for a product across active events. */
+export function worldTradePriceMult(state: GameState, productId: ProductId): number {
+  let mult = 1;
+  for (const ev of state.worldEvents) {
+    const t = DEF_BY_ID[ev.defId]?.effects.tradePrice;
+    if (!t) continue;
+    if (t.all !== undefined) mult *= t.all;
+    if (t[productId] !== undefined) mult *= t[productId]!;
+  }
+  return mult;
 }
 
 export function worldSpendingMult(state: GameState): number {

@@ -76,7 +76,7 @@ export function FacilityActions({ fac }: { fac: Facility }): React.ReactElement 
         <div className="card">
           <div className="section-title" style={{ marginTop: 0 }}>🚢 Export to Port Rosa</div>
           <p className="muted small" style={{ margin: '0 0 6px' }}>
-            Port Rosa's prices drift daily (0.6×–1.8× base); freight takes 8%.
+            Port Rosa's prices drift daily (0.6×–1.8× base) and follow world events; freight takes 8% (more during fuel spikes).
             Stage goods here via supply contracts, then sell when prices spike.
           </p>
           {ALL_PRODUCT_IDS.map((pid) => {

@@ -5,6 +5,8 @@ import { ticksPerDay } from '../core/Tick';
 import { PERSONALITIES, getPersonality, NEUTRAL, ceoQuote } from '../data/personalities';
 import { makeContext } from '../core/GameState';
 import { runAIStrategySystem } from '../systems/AIStrategySystem';
+import { addStock } from '../entities/Inventory';
+import { getProduct } from '../data/products';
 
 function sunrise(state: ReturnType<Simulation['getState']>) {
   return Object.values(state.firms).find((f) => f.name === 'Sunrise Foods')!;
@@ -45,17 +47,27 @@ describe('AI personalities', () => {
     expect(run('brand_builder')).toBeGreaterThan(run('price_fighter'));
   });
 
-  it('an exporter ships more Port Rosa revenue than a brand builder (same seed)', () => {
+  it('an exporter ships surplus a brand builder would keep at home', () => {
+    // A producing facility with free (uncontracted) surplus: the exporter's
+    // lower keep ships it; the brand builder holds more back.
     const run = (personality: 'exporter' | 'brand_builder') => {
       const state = createInitialState(9);
       const granite = Object.values(state.firms).find((f) => f.name === 'Granite Industries')!;
       granite.personalityId = personality;
-      const sim = new Simulation(state);
-      sim.dispatch({ type: 'RESUME' });
-      sim.run(ticksPerDay(state.config) * 60 + 1);
-      return Object.values(sim.getState().firms).find((f) => f.name === 'Granite Industries')!;
+      const mine = granite.facilities.map((id) => state.firms && state.facilities[id]!).find((f) => f.type === 'mine')!;
+      // Sever outbound contracts so nothing is reserved for home shelves.
+      for (const cid of Object.keys(state.contracts)) {
+        if (state.contracts[cid]!.sourceFacilityId === mine.id) delete state.contracts[cid];
+      }
+      mine.outputInventory = {};
+      addStock(mine.outputInventory, 'minerals', 26, 60);
+      state.tradeCity.pricesByProduct['minerals'] = Math.round(getProduct('minerals').basePrice * 1.3);
+      state.tick = ticksPerDay(state.config);
+      runAIStrategySystem(makeContext(state));
+      return granite.exportRevenue;
     };
-    expect(run('exporter').exportRevenue).toBeGreaterThanOrEqual(run('brand_builder').exportRevenue);
+    // keep: exporter 10 vs neutral-ish 20 → exporter ships 16, builder ships 6.
+    expect(run('exporter')).toBeGreaterThan(run('brand_builder'));
   });
 });
 

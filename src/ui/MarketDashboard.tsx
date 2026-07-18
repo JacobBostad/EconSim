@@ -25,7 +25,7 @@ export function MarketDashboard(): React.ReactElement {
             <th><FormulaTooltip title="Demand attempts" explanation="Shopping visits today, fulfilled or not.">Attempts</FormulaTooltip></th>
             <th>Fulfilled</th><th>Unmet</th><th>Units sold</th><th>Stockouts</th>
             <th>Avg quality</th><th>Total inventory</th>
-            <th><FormulaTooltip title="Port Rosa price" explanation="The distant trade city's current price. Export from a warehouse; freight takes 8%. Green = lucrative (≥1.3× base).">Port Rosa</FormulaTooltip></th>
+            <th><FormulaTooltip title="Port Rosa price" explanation="The distant trade city's current price. Export from a warehouse; freight takes 8% (more during fuel spikes). Follows world events — droughts raise grain prices there too. Green = lucrative (≥1.3× base).">Port Rosa</FormulaTooltip></th>
             <th>Leader</th>
           </tr>
         </thead>

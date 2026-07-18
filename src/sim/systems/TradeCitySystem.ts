@@ -25,6 +25,10 @@ import {
 import { clamp } from '../../utils/clamp';
 import { getQuantity } from '../entities/Inventory';
 import { performExport } from '../core/Trade';
+import { worldTradePriceMult } from '../data/worldEvents';
+
+/** Daily reversion strength toward the (event-shifted) price center. */
+const TRADE_CENTER_PULL = 0.12;
 
 export function runTradeCitySystem(ctx: SimContext): void {
   const { state } = ctx;
@@ -39,9 +43,14 @@ function updatePrices(ctx: SimContext): void {
   for (const pid of ALL_PRODUCT_IDS) {
     const base = getProduct(pid).basePrice;
     const prev = state.tradeCity.pricesByProduct[pid] ?? base;
+    // Random walk with a gentle pull toward the event-shifted center: a
+    // drought makes Port Rosa pay up for grain, a recession discounts
+    // everything — so world news is also trade news.
+    const center = base * worldTradePriceMult(state, pid);
+    const walked = prev * (1 + ctx.rng.jitter(TRADE_WALK_STEP));
     const next = Math.round(
       clamp(
-        prev * (1 + ctx.rng.jitter(TRADE_WALK_STEP)),
+        walked + (center - walked) * TRADE_CENTER_PULL,
         base * TRADE_PRICE_MIN_MULT,
         base * TRADE_PRICE_MAX_MULT,
       ),
