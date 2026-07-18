@@ -19,6 +19,7 @@ import { getQuantity } from '../sim/entities/Inventory';
 import { formatMoney } from '../utils/formatMoney';
 import { CENTS } from '../sim/data/constants';
 import { upgradeCost } from '../sim/core/Upgrades';
+import { sellRefund } from '../sim/core/Demolition';
 import { pricingInsight } from '../sim/selectors/marketSelectors';
 
 export function FacilityActions({ fac }: { fac: Facility }): React.ReactElement {
@@ -39,6 +40,7 @@ export function FacilityActions({ fac }: { fac: Facility }): React.ReactElement 
   const [importQty, setImportQty] = useState(20);
 
   const producing = fac.type === 'farm' || fac.type === 'mine' || fac.type === 'factory';
+  const sellValue = isPlayer ? sellRefund(state, fac.ownerFirmId, fac.id) : null;
 
   return (
     <div>
@@ -255,6 +257,25 @@ export function FacilityActions({ fac }: { fac: Facility }): React.ReactElement 
               </button>
             )}
           </div>
+          {sellValue !== null && (
+            <div className="row" style={{ marginTop: 6 }}>
+              <button
+                style={{ color: 'var(--red)' }}
+                title="Refunds half the build cost. Workers return to the labor pool; contracts, shipments, and stored goods are written off."
+                onClick={() => {
+                  if (
+                    confirm(
+                      `Sell ${fac.name} for ${formatMoney(sellValue)}? Its workers are released and any stored goods, contracts, and shipments are lost.`,
+                    )
+                  ) {
+                    dispatch({ type: 'SELL_FACILITY', firmId: fac.ownerFirmId, facilityId: fac.id });
+                  }
+                }}
+              >
+                🏚 Sell — {formatMoney(sellValue)}
+              </button>
+            </div>
+          )}
         </div>
       )}
 

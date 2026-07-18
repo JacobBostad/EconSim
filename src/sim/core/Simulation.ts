@@ -47,6 +47,7 @@ import { worldImportMult } from '../data/worldEvents';
 import { CHAIN_BLUEPRINTS, chainCost } from '../data/chains';
 import { performAcquisition } from './Acquisition';
 import { upgradeFacility } from './Upgrades';
+import { sellFacility } from './Demolition';
 import { performExport } from './Trade';
 import { landCostMultiplier, landValueAt } from './LandValue';
 import type { Contract } from '../entities/Contract';
@@ -215,6 +216,9 @@ export class Simulation {
       }
       case 'UPGRADE_FACILITY':
         upgradeFacility(s, command.firmId, command.facilityId);
+        return;
+      case 'SELL_FACILITY':
+        sellFacility(s, command.firmId, command.facilityId);
         return;
       case 'CIVIC_ACTION':
         this.civicAction(command.firmId, command.action);

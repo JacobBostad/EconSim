@@ -45,6 +45,7 @@ export type Command =
   | { type: 'SET_AUTO_PRICE'; firmId: FirmId; productId: ProductId; enabled: boolean }
   | { type: 'BUILD_CHAIN'; firmId: FirmId; productId: ProductId }
   | { type: 'UPGRADE_FACILITY'; firmId: FirmId; facilityId: FacilityId }
+  | { type: 'SELL_FACILITY'; firmId: FirmId; facilityId: FacilityId }
   | { type: 'CIVIC_ACTION'; firmId: FirmId; action: 'festival' | 'fund_home' }
   | {
       type: 'SET_EXPORT_ORDER';
