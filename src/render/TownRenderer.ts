@@ -101,6 +101,10 @@ export class TownRenderer {
   private dragMoved = false;
   private hoverId: string | null = null;
 
+  // minimap (bottom-left, only while the viewport crops the town)
+  private miniRect: { x: number; y: number; w: number; h: number } | null = null;
+  private miniDragging = false;
+
   // animation
   private smooth = new Map<string, Vec>();
   private trails: Trail[] = [];
@@ -264,14 +268,25 @@ export class TownRenderer {
     this.panY += m.y - after.y;
   };
   private onDown = (e: MouseEvent): void => {
+    const m = this.localMouse(e);
+    if (this.miniHit(m)) {
+      // Minimap navigation wins over map interaction (including build mode).
+      this.miniDragging = true;
+      this.miniNavigate(m);
+      return;
+    }
     this.camGlide = null;
     this.dragging = true;
     this.dragMoved = false;
-    this.dragStart = this.localMouse(e);
+    this.dragStart = m;
   };
   private onMove = (e: MouseEvent): void => {
     const m = this.localMouse(e);
     this.mouse = m;
+    if (this.miniDragging) {
+      this.miniNavigate(m);
+      return;
+    }
     if (this.dragging) {
       const dx = m.x - this.dragStart.x;
       const dy = m.y - this.dragStart.y;
@@ -283,6 +298,7 @@ export class TownRenderer {
     }
   };
   private onUp = (e: MouseEvent): void => {
+    if (this.miniDragging) { this.miniDragging = false; return; }
     if (this.dragging && !this.dragMoved) this.handleClick(this.localMouse(e));
     this.dragging = false;
   };
@@ -387,6 +403,7 @@ export class TownRenderer {
       this.drawBuildGhost(s, time.hour);
     }
     this.drawHud(time);
+    this.drawMinimap(s);
     this.drawHover(s);
   }
 
@@ -1299,8 +1316,97 @@ export class TownRenderer {
     ctx.fillText(`${icon}  Day ${time.day + 1} · ${hh}:00`, 20, 25);
   }
 
+  // --- minimap ----------------------------------------------------------
+  private miniHit(m: Vec): boolean {
+    const r = this.miniRect;
+    return !!r && m.x >= r.x - 5 && m.x <= r.x + r.w + 5 && m.y >= r.y - 5 && m.y <= r.y + r.h + 5;
+  }
+
+  /** Center the camera on the world point under a minimap position. */
+  private miniNavigate(m: Vec): void {
+    const r = this.miniRect;
+    if (!r) return;
+    const { minX, minY, maxX, maxY } = this.view;
+    const fx = Math.max(0, Math.min(1, (m.x - r.x) / r.w));
+    const fy = Math.max(0, Math.min(1, (m.y - r.y) / r.h));
+    const wx = minX + fx * (maxX - minX);
+    const wy = minY + fy * (maxY - minY);
+    const sc = this.effScale();
+    this.autoFit = false;
+    this.camGlide = null;
+    this.panX = -(wx - this.view.cx) * sc;
+    this.panY = -(wy - this.view.cy) * sc;
+  }
+
+  /** Bottom-left town overview with the current viewport framed; click or
+   * drag it to fly the camera. Hidden whenever the whole town is already on
+   * screen — at the fit view it would just duplicate the map. */
+  private drawMinimap(s: GameState): void {
+    const tl = this.s2w(s, { x: 0, y: 0 });
+    const br = this.s2w(s, { x: this.cssW, y: this.cssH });
+    const { minX, minY, maxX, maxY } = this.view;
+    if (tl.x <= minX && tl.y <= minY && br.x >= maxX && br.y >= maxY) {
+      this.miniRect = null;
+      return;
+    }
+    const w = maxX - minX, h = maxY - minY;
+    const k = Math.min(150 / w, 112 / h);
+    const mw = w * k, mh = h * k;
+    const mx = 14, my = this.cssH - mh - 14;
+    this.miniRect = { x: mx, y: my, w: mw, h: mh };
+    const toMini = (p: Vec): Vec => ({ x: mx + (p.x - minX) * k, y: my + (p.y - minY) * k });
+
+    const ctx = this.ctx;
+    ctx.fillStyle = 'rgba(13,17,23,0.85)';
+    this.roundRectPath(mx - 5, my - 5, mw + 10, mh + 10, 8); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,0.10)'; ctx.lineWidth = 1;
+    this.roundRectPath(mx - 5, my - 5, mw + 10, mh + 10, 8); ctx.stroke();
+
+    ctx.save();
+    this.roundRectPath(mx, my, mw, mh, 4); ctx.clip();
+
+    const [g0] = TownRenderer.GROUND_BY_SEASON[seasonOf(s)]!;
+    ctx.globalAlpha = 0.30;
+    ctx.fillStyle = g0;
+    ctx.fillRect(mx, my, mw, mh);
+    ctx.globalAlpha = 1;
+
+    const g = this.roadGrid();
+    ctx.strokeStyle = 'rgba(210,210,205,0.35)'; ctx.lineWidth = 1;
+    ctx.beginPath();
+    for (const y of g.hYs) {
+      const a = toMini({ x: g.x0, y }), b = toMini({ x: g.x1, y });
+      ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y);
+    }
+    for (const x of g.vXs) {
+      const a = toMini({ x, y: g.y0 }), b = toMini({ x, y: g.y1 });
+      ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y);
+    }
+    ctx.stroke();
+
+    for (const id in s.facilities) {
+      const f = s.facilities[id]!;
+      const p = toMini(f.location);
+      const player = f.ownerFirmId === s.playerFirmId;
+      const d = f.type === 'home' && f.defId !== 'apartment' ? 2.6 : 3.6;
+      ctx.fillStyle = f.defId === 'apartment' ? APARTMENT_FILL : BUILDING_FILL[f.type];
+      ctx.fillRect(p.x - d / 2, p.y - d / 2, d, d);
+      if (player) {
+        ctx.strokeStyle = '#58a6ff'; ctx.lineWidth = 1;
+        ctx.strokeRect(p.x - d / 2 - 1, p.y - d / 2 - 1, d + 2, d + 2);
+      }
+    }
+
+    const va = toMini({ x: Math.max(minX, tl.x), y: Math.max(minY, tl.y) });
+    const vb = toMini({ x: Math.min(maxX, br.x), y: Math.min(maxY, br.y) });
+    ctx.strokeStyle = 'rgba(255,255,255,0.9)'; ctx.lineWidth = 1.3;
+    ctx.strokeRect(va.x, va.y, Math.max(4, vb.x - va.x), Math.max(4, vb.y - va.y));
+    ctx.restore();
+  }
+
   private drawHover(s: GameState): void {
     if (!this.mouse) { this.hoverId = null; return; }
+    if (this.miniHit(this.mouse)) { this.hoverId = null; return; }
     this.hoverId = this.pick(s, this.mouse);
     if (!this.hoverId || this.cb.getBuildMode()) return;
     const label = this.hoverLabel(s, this.hoverId);

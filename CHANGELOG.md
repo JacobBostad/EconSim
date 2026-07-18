@@ -171,6 +171,12 @@ engine tests), probed with headless balance runs, and guarded by CI.
 - **Camera glide to selection**: selecting an off-screen entity from a list
   (event log, citizen/facility tables) glides the camera to it — click it
   and the map takes you there; any drag or wheel cancels the glide.
+- **Minimap**: whenever the viewport crops the town (zoomed or panned), a
+  bottom-left overview appears — season-tinted ground, the road grid,
+  building dots in their legend colors with player holdings ringed in blue,
+  and a white frame showing exactly where you're looking. Click or drag it
+  to fly the camera. It disappears at the fit view, where it would only
+  duplicate the map.
 - **Placement clearance**: manual builds reject ground within 3 world units
   of an existing facility — the ghost turns red and names what's in the way,
   and a blocked click keeps build mode active instead of eating the money on
