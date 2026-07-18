@@ -88,13 +88,13 @@ export const FUND_HOME_COST = dollars(3000);
 
 // --- Immigration / town growth ---------------------------------------------
 /** New citizens move in only while average satisfaction is at least this. */
-export const IMMIGRATION_MIN_SATISFACTION = 60;
+export const IMMIGRATION_MIN_SATISFACTION = 55;
 /**
  * ...and the labor market is tight: unemployed ≤ max(floor, rate × population).
  * People move toward opportunity — creating jobs is what grows the town.
  */
-export const IMMIGRATION_MAX_UNEMPLOYED_FLOOR = 5;
-export const IMMIGRATION_MAX_UNEMPLOYED_RATE = 0.15;
+export const IMMIGRATION_MAX_UNEMPLOYED_FLOOR = 8;
+export const IMMIGRATION_MAX_UNEMPLOYED_RATE = 0.22;
 /** Hard caps so the town grows but stays lean. */
 export const MAX_HOMES = 40;
 export const MAX_CITIZENS = 80;
