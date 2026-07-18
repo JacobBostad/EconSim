@@ -59,11 +59,21 @@ export const LOAN_MIN_CREDIT = dollars(5000);
 /** Objective: grow company valuation to this to "win" (sandbox continues). */
 export const OBJECTIVE_VALUATION = dollars(50000);
 
-/** Escalating objectives after the first win — the sandbox always has a goal. */
+/**
+ * Escalating objectives after the first win — the sandbox always has a goal.
+ *
+ * Rungs re-priced from measurement (600-day runs, 3 seeds): the strongest
+ * scripted player plateaus near $28k, the richest AI incumbent near $64k,
+ * and the whole Cozy economy sums to roughly $210k — so the old Magnate
+ * ($150k) demanded most of the town and Empire ($400k) was provably
+ * unreachable even owning everything. Now Tycoon stays a stretch above
+ * strong play, Magnate means out-valuing every incumbent, and Empire means
+ * approaching whole-town scale — epic, but no longer imaginary.
+ */
 export const OBJECTIVE_LADDER: { valuation: number; title: string }[] = [
   { valuation: OBJECTIVE_VALUATION, title: 'Tycoon' },
-  { valuation: dollars(150000), title: 'Magnate' },
-  { valuation: dollars(400000), title: 'Business Empire' },
+  { valuation: dollars(100000), title: 'Magnate' },
+  { valuation: dollars(200000), title: 'Business Empire' },
 ];
 
 // --- Stock market ----------------------------------------------------------

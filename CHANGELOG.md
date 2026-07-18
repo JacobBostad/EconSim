@@ -235,6 +235,15 @@ engine tests), probed with headless balance runs, and guarded by CI.
 
 ## Measured findings (kept as design, documented in code)
 
+- **The endgame ladder's top rungs were imaginary** (probed: bot v4's
+  strategy plus apartment compounding, 600 days × 3 seeds): the scripted
+  player plateaus near $28k valuation, the richest AI incumbent near $64k,
+  and the whole Cozy economy sums to ~$210k — the old Magnate ($150k)
+  demanded owning most of the town and Empire ($400k) was unreachable even
+  owning *everything*. Re-priced: Tycoon stays $50k (a real stretch above
+  strong play), Magnate $100k (out-value every incumbent), Business Empire
+  $200k (approach whole-town scale — epic, but achievable in a long
+  Bustling game). The chronicle finale is live content again.
 - **The festival was a trap at $1,500** (probed: 6 seeds, paired 100-day
   runs, world events silenced): its direct revenue lift for a typical
   single-chain player is ~$50–200 — the 25% demand bump for 3 days just

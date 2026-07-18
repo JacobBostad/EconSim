@@ -173,7 +173,7 @@ export const ACHIEVEMENT_DEFS: AchievementDef[] = [
     id: 'empire',
     name: 'Business Empire',
     icon: '🌆',
-    description: 'Company valued at $100,000 — twice the objective.',
+    description: 'Company valued at $100,000 — Magnate territory.',
     hint: 'Keep going: $100,000 company value.',
     check: (s) => companyValuation(s, s.playerFirmId).valuation >= dollars(100000),
   },
