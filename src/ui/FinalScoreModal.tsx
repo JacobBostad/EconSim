@@ -68,6 +68,15 @@ export function FinalScoreModal(): React.ReactElement | null {
         {line('Town satisfaction', s.satisfactionPts, 150, `${s.satisfaction.toFixed(0)}/100`)}
         {line('Peak market share', s.sharePts, 150, `${Math.round(s.peakShare * 100)}%`)}
         {line('Export revenue', s.exportPts, 100, formatMoney(s.exportRevenue))}
+        {s.difficultyMult !== 1 && (
+          <div className="kv small">
+            <span className="k">Difficulty bonus</span>
+            <span>
+              <span className="mono">×{s.difficultyMult.toFixed(2)}</span>
+              <span className="muted"> · {s.rawTotal} raw → {s.total}</span>
+            </span>
+          </div>
+        )}
         <p className="small muted" style={{ marginTop: 10 }}>
           Same seed + scenario + difficulty replays identically — beat your line
           or challenge a friend to it. The full leaderboard lives in Awards.

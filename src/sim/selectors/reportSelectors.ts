@@ -145,7 +145,10 @@ export function quarterReport(state: GameState, quarter: number): QuarterReport 
 export const CHALLENGE_END_DAY = 200;
 
 export interface ChallengeScore {
-  total: number; // 0–1000
+  total: number; // 0–1000 raw points × difficulty multiplier
+  /** Difficulty scaling applied to the raw sum (0.85 / 1.0 / 1.15). */
+  difficultyMult: number;
+  rawTotal: number;
   valuation: number;
   valuationPts: number; // up to 600
   satisfaction: number;
@@ -177,9 +180,15 @@ export function challengeScore(state: GameState): ChallengeScore {
   const satisfactionPts = Math.round(150 * clamp(satisfaction / 100, 0, 1));
   const sharePts = Math.round(150 * clamp(peakShare, 0, 1));
   const exportPts = Math.round(100 * clamp(exportRevenue / 2_000_000, 0, 1)); // $20k caps it
+  const rawTotal = valuationPts + satisfactionPts + sharePts + exportPts;
+  // Harder starts are worth more — equal output on Brutal beats it on Relaxed.
+  const difficultyMult =
+    state.config.difficulty === 'brutal' ? 1.15 : state.config.difficulty === 'relaxed' ? 0.85 : 1;
 
   return {
-    total: valuationPts + satisfactionPts + sharePts + exportPts,
+    total: Math.round(rawTotal * difficultyMult),
+    difficultyMult,
+    rawTotal,
     valuation,
     valuationPts,
     satisfaction,

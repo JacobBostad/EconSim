@@ -48,4 +48,24 @@ describe('Challenge mode', () => {
     // Deterministic: same state, same score.
     expect(challengeScore(state).total).toBe(s.total);
   });
+
+  it('scales the total by difficulty', () => {
+    const forge = (difficulty: 'relaxed' | 'standard' | 'brutal') => {
+      const state = createInitialState(1, configForDifficulty(difficulty));
+      const player = state.firms[state.playerFirmId]!;
+      player.cash = dollars(100000);
+      for (const cid in state.citizens) state.citizens[cid]!.satisfaction = 70;
+      return challengeScore(state);
+    };
+    const relaxed = forge('relaxed');
+    const standard = forge('standard');
+    const brutal = forge('brutal');
+    expect(relaxed.difficultyMult).toBe(0.85);
+    expect(standard.difficultyMult).toBe(1);
+    expect(brutal.difficultyMult).toBe(1.15);
+    // Same raw output ranks by difficulty (cash differs slightly by start
+    // cash preset, so compare via the multiplier on each raw total).
+    expect(relaxed.total).toBe(Math.round(relaxed.rawTotal * 0.85));
+    expect(brutal.total).toBe(Math.round(brutal.rawTotal * 1.15));
+  });
 });
