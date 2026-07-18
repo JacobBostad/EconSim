@@ -206,7 +206,11 @@ hireable managers, a real commodity market, and shared daily play.
   the Bleed. The crisis is visible everywhere it should be: a red
   families-near-leaving tag and lifetime families-lost count in the
   Population tab, a Chronicle stat line, and an Intro mention (all
-  verified live in the browser).
+  verified live in the browser), plus a quiet two-note departure sting
+  when a family goes. Golden save v6 pins the era for migration safety —
+  a real Dust Hollow town captured mid-exodus (day 30, four families
+  gone, pressure 18) that must load and keep unfolding forever; its
+  Population-tab crisis shot joined the README.
 - **Follow mode**: a 🎥 Follow button on any citizen puts the camera on
   their day — commute, shopping trips, and, if you've been paying them
   well, the day they earn their gold circlet. Esc or grabbing the map

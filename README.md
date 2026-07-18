@@ -347,7 +347,9 @@ gap that's the player's opening, and each has its own social character
 (shown on the scenario card): Gold Rush mints affluence on its own, Mill
 Country stays a worker town until someone lifts it (earning the Lifted the
 Town achievement), and Dust Hollow opens with the company gone and families
-already packing — stop the emigration and you've Stopped the Bleed. Mill Country's mills all import their raw goods: build the
+already packing — stop the emigration and you've Stopped the Bleed.
+
+![Dust Hollow, day 31: the population chart falls, the Population tab flags families near leaving after 18 straight days of misery, four households already gone by name in the event log — until someone builds jobs and shelves](docs/media/media-dusthollow.png) Mill Country's mills all import their raw goods: build the
 farms and mines they lack and every factory in town becomes your wholesale
 customer. Boomtown Flats starts with every home full — immigration waits on
 whoever builds the housing, and rival landlords want the same ground. Facility upgrades (L1→L3) raise storage, speed, and crew

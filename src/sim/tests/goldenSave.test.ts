@@ -4,6 +4,7 @@ import fixture2Json from './fixtures/golden-save-v2.json';
 import fixture3Json from './fixtures/golden-save-v3.json';
 import fixture4Json from './fixtures/golden-save-v4.json';
 import fixture5Json from './fixtures/golden-save-v5.json';
+import fixture6Json from './fixtures/golden-save-v6.json';
 import { Simulation } from '../core/Simulation';
 import { deserialize, serialize } from '../persistence/saveLoad';
 import { totalMoneySupply } from '../core/GameState';
@@ -200,5 +201,38 @@ describe('Golden save fixture v5 (four-pillar era)', () => {
     expect(totalMoneySupply(sim.getState())).toBe(supply0);
     // The open forward settled (delivered or defaulted) once its day passed.
     expect(sim.getState().firms[state.playerFirmId]!.forwards.length).toBe(0);
+  });
+});
+
+/**
+ * Golden save v6 — the emigration era (Dust Hollow, day 30, seed 11): a town
+ * captured mid-exodus. Zero AI firms, emigration pressure deep past the grace
+ * period, four families already gone, 🧳 events in the log. Same contract as
+ * ever: never regenerate to paper over a break.
+ */
+describe('Golden save fixture v6 (emigration era)', () => {
+  const raw6 = JSON.stringify(fixture6Json);
+
+  it('loads mid-crisis with the emigration fields intact', () => {
+    const state = deserialize(raw6);
+    expect(Object.values(state.firms).filter((f) => f.ownerType === 'ai')).toHaveLength(0);
+    expect(state.emigrationDepartures).toBeGreaterThan(0);
+    expect(state.emigrationPressure).toBeGreaterThan(0);
+    expect(state.events.some((e) => e.message.includes('packed up and left town'))).toBe(true);
+    // Departed citizens are fully unlinked: no home lists a ghost resident.
+    for (const f of Object.values(state.facilities)) {
+      for (const id of f.residentIds) expect(state.citizens[id]).toBeTruthy();
+      for (const id of f.employees) expect(state.citizens[id]).toBeTruthy();
+    }
+    const again = deserialize(serialize(state));
+    expect(serialize(again)).toBe(serialize(state));
+  });
+
+  it('the crisis keeps unfolding after load — money conserved', () => {
+    const state = deserialize(raw6);
+    const supply0 = totalMoneySupply(state);
+    const sim = new Simulation(state);
+    expect(() => sim.run(ticksPerDay(state.config) * 5)).not.toThrow();
+    expect(totalMoneySupply(sim.getState())).toBe(supply0);
   });
 });

@@ -109,6 +109,14 @@ export function playReceivership(): void {
   note(ac, 110, 640, 700, 'sawtooth', 0.038);
 }
 
+/** A family left town: two quiet falling notes — a door closing. */
+export function playDeparture(): void {
+  const ac = audio();
+  if (!ac) return;
+  note(ac, 293.7, 0, 280, 'sine', 0.045);
+  note(ac, 220, 240, 420, 'sine', 0.04);
+}
+
 /** Challenge finish: a four-note fanfare. */
 export function playFanfare(): void {
   const ac = audio();
