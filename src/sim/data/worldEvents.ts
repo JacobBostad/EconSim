@@ -170,6 +170,21 @@ export const WORLD_EVENT_DEFS: WorldEventDef[] = [
     effects: { demand: { bread: 1.6 } },
   },
   {
+    id: 'coffee_craze',
+    name: 'Third-Wave Coffee Craze',
+    icon: '☕',
+    headline: 'A third-wave coffee craze hits — the town cannot get enough!',
+    description:
+      'Citizens buy about 70% more coffee per trip while it lasts. If nobody roasts locally yet, this is the moment to open the roastery.',
+    severity: 'info',
+    minDays: 3,
+    maxDays: 7,
+    weight: 7,
+    exclusiveGroup: 'fad',
+    earliestDay: 25, // coffee shops are a mid-game entry; the fad follows them
+    effects: { demand: { coffee: 1.7 } },
+  },
+  {
     id: 'diy_craze',
     name: 'DIY Renovation Craze',
     icon: '🔨',
@@ -246,6 +261,21 @@ export const WORLD_EVENT_DEFS: WorldEventDef[] = [
     exclusiveGroup: 'trade',
     earliestDay: 8,
     effects: { importMarkup: 1.5, tradePrice: { all: 0.9 } },
+  },
+  {
+    id: 'trade_fair',
+    name: 'Regional Trade Fair',
+    icon: '🛳️',
+    headline: 'A regional trade fair opens — buyers from both ports bid everything up.',
+    description:
+      'Port Rosa and Ironvale pay about 25% over their usual centers while the fair runs. Ship warehouse stockpiles now; standing orders route to the best price automatically.',
+    severity: 'success',
+    minDays: 4,
+    maxDays: 7,
+    weight: 6,
+    exclusiveGroup: 'trade',
+    earliestDay: 20,
+    effects: { tradePrice: { all: 1.25 } },
   },
 ];
 

@@ -7,6 +7,7 @@ import {
   worldSpendingMult,
   worldTransportMult,
   worldImportMult,
+  worldTradePriceMult,
   activeWorldEvents,
 } from '../data/worldEvents';
 import { deserialize, serialize } from '../persistence/saveLoad';
@@ -56,6 +57,20 @@ describe('World events', () => {
     expect(views.map((v) => v.def.id).sort()).toEqual(
       ['boom', 'bread_craze', 'drought', 'fuel_spike', 'tariffs'],
     );
+  });
+
+  it('the coffee craze lifts coffee demand and the trade fair lifts all port prices', () => {
+    const sim = newSim(1);
+    const state = sim.getState();
+    expect(worldDemandMult(state, 'coffee')).toBe(1);
+    state.worldEvents.push({ defId: 'coffee_craze', startDay: 0, endDay: 5 });
+    expect(worldDemandMult(state, 'coffee')).toBeCloseTo(1.7);
+    expect(worldDemandMult(state, 'bread')).toBe(1);
+
+    const before = worldTradePriceMult(state, 'tools');
+    state.worldEvents.push({ defId: 'trade_fair', startDay: 0, endDay: 5 });
+    expect(worldTradePriceMult(state, 'tools')).toBeCloseTo(before * 1.25);
+    expect(worldTradePriceMult(state, 'grain')).toBeCloseTo(1.25);
   });
 
   it('a drought halves farm production progress', () => {

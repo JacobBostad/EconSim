@@ -187,6 +187,10 @@ engine tests), probed with headless balance runs, and guarded by CI.
   every probed seed — the price controller passes the import premium
   through, so the town works but pays for it until someone builds farms).
 - Missions, achievements, intro, README, and media all teach the new systems.
+- Two new world events: ☕ **Third-Wave Coffee Craze** (+70% coffee demand,
+  mid-game onward — the fad follows the roasteries) and 🛳️ **Regional Trade
+  Fair** (both ports pay ~25% over center for a few days — the good-news
+  mirror of tariffs; ship your stockpiles).
 - Sound stings: receivership, challenge fanfare, rival openings, poach alerts.
 - Chronicle viewable anytime; apartments/roasteries visually distinct.
 

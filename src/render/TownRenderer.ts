@@ -595,6 +595,8 @@ export class TownRenderer {
     mine_collapse: 'rgba(130,105,80,0.10)',
     rich_vein: 'rgba(90,220,220,0.05)',
     tariffs: 'rgba(70,110,170,0.06)',
+    coffee_craze: 'rgba(160,110,60,0.05)',
+    trade_fair: 'rgba(120,190,210,0.05)',
   };
 
   private smogT = 0;
