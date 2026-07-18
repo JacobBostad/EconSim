@@ -24,6 +24,8 @@ export const FIRE_SALE_DAILY_CHANCE = 0.08;
 export const FIRE_SALE_WINDOW_DAYS = 4;
 /** A facility must be losing at least this much (7-day EMA net) to be offered. */
 export const FIRE_SALE_LOSS_FLOOR = -10_00;
+/** A lapsed offer keeps that facility off the block for this many days. */
+export const FIRE_SALE_COOLDOWN_DAYS = 30;
 
 /** Independent deterministic stream per (seed, day) — see header. */
 function saleRoll(seed: number, day: number): number {
@@ -33,13 +35,29 @@ function saleRoll(seed: number, day: number): number {
   return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
 }
 
-/** The worst sustained loser among AI-owned sellable facilities, if any. */
-function worstAIFacility(state: GameState) {
+/**
+ * The worst sustained loser among sellable facilities of STRUGGLING AI
+ * firms. Internal cost attribution makes healthy chains' input facilities
+ * (mines, farms) look like per-facility losers, but a profitable firm
+ * doesn't fire-sale its own supply line — the seller must be losing money
+ * at the firm level (7-day view) or already distressed. A facility whose
+ * last offer lapsed recently is off the block (cooldown), so the ticker
+ * doesn't nag about the same building every week.
+ */
+function worstAIFacility(state: GameState, day: number) {
   let worst: { id: string; net: number } | null = null;
+  const cooled = state.lastLapsedFireSale;
   for (const fid in state.facilities) {
     const f = state.facilities[fid]!;
     if (f.type === 'home' || f.type === 'importer' || f.status === 'closed') continue;
-    if (state.firms[f.ownerFirmId]?.ownerType !== 'ai') continue;
+    const firm = state.firms[f.ownerFirmId];
+    if (firm?.ownerType !== 'ai') continue;
+    if (cooled && cooled.facilityId === fid && day < cooled.day + FIRE_SALE_COOLDOWN_DAYS) continue;
+    const recent = firm.accounting.dailyHistory.slice(-7);
+    const firmNet = recent.length
+      ? recent.reduce((s, d) => s + d.netProfit, 0) / recent.length
+      : 0;
+    if (firm.bankruptcyStatus === 'healthy' && firmNet >= 0) continue;
     const net = f.pnlEma.net;
     if (net > FIRE_SALE_LOSS_FLOOR) continue;
     if (!worst || net < worst.net) worst = { id: fid, net };
@@ -59,6 +77,7 @@ export function runFireSaleSystem(ctx: SimContext): void {
     if (!stillValid || day > active.deadlineDay) {
       state.facilityOffer = null;
       if (stillValid) {
+        state.lastLapsedFireSale = { facilityId: active.facilityId, day };
         emitEvent(state, 'info', 'finance',
           `🏷️ The fire sale on ${fac.name} has ended — ${state.firms[active.sellerFirmId]?.name ?? 'the seller'} took it off the block.`);
       }
@@ -68,7 +87,7 @@ export function runFireSaleSystem(ctx: SimContext): void {
 
   if (day < FIRE_SALE_EARLIEST_DAY) return;
   if (saleRoll(state.seed, day) >= FIRE_SALE_DAILY_CHANCE) return;
-  const worst = worstAIFacility(state);
+  const worst = worstAIFacility(state, day);
   if (!worst) return;
   const fac = state.facilities[worst.id]!;
   const seller = state.firms[fac.ownerFirmId]!;

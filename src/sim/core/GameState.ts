@@ -145,6 +145,8 @@ export interface GameState {
   facilityOffer: FacilityOffer | null;
   /** Lifetime fire-sale purchases (achievements/records). */
   fireSalesBought: number;
+  /** Last lapsed fire sale — that facility cools down before re-listing. */
+  lastLapsedFireSale: { facilityId: FacilityId; day: number } | null;
 
   idCounters: IdCounters;
   selectedEntityId: EntityId | null;

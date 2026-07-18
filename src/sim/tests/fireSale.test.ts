@@ -6,7 +6,11 @@ import { deserialize, serialize } from '../persistence/saveLoad';
 import { FIRE_SALE_LOSS_FLOOR } from '../systems/FireSaleSystem';
 import { FIRE_SALE_RATE } from '../core/FireSale';
 
-/** Force an AI facility into a sustained-loser shape so an offer can roll. */
+/**
+ * Force an AI facility into a sustained-loser shape — and its owner into a
+ * firm-level loss — so an offer can roll (profitable firms never fire-sale;
+ * the trigger requires the seller to be struggling).
+ */
 function bleedWorstAIFacility(sim: ReturnType<typeof newSim>) {
   const state = sim.getState();
   const fac = Object.values(state.facilities).find(
@@ -15,6 +19,13 @@ function bleedWorstAIFacility(sim: ReturnType<typeof newSim>) {
   fac.pnlEma.revenue = 0;
   fac.pnlEma.cost = 50_00;
   fac.pnlEma.net = -50_00;
+  const firm = state.firms[fac.ownerFirmId]!;
+  const last = firm.accounting.dailyHistory[firm.accounting.dailyHistory.length - 1];
+  if (last) {
+    for (const d of firm.accounting.dailyHistory.slice(-7)) d.netProfit = -30_00;
+  } else {
+    firm.bankruptcyStatus = 'distressed';
+  }
   return fac;
 }
 

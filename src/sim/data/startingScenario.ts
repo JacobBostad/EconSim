@@ -231,6 +231,7 @@ export function createInitialState(
     rushOrdersMissed: 0,
     facilityOffer: null,
     fireSalesBought: 0,
+    lastLapsedFireSale: null,
     townHistory: [],
     idCounters: counters,
     selectedEntityId: null,

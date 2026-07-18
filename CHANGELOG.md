@@ -241,6 +241,14 @@ engine tests), probed with headless balance runs, and guarded by CI.
   the same stream-safe hash rng as rush orders, so no calibrated outcome
   re-dealt; which facility goes up is deterministic (the worst sustained
   loser). New 🏷️ Bargain Hunter achievement.
+  *Tuned by cadence probe* (4 scenarios × 300 unattended days): the first
+  cut let profitable firms offer their own supply lines (internal cost
+  attribution makes healthy chains' mines and farms look like per-facility
+  losers) and re-listed the same building every week — one run offered
+  Granite Mine ten times. Now the seller must be struggling at the firm
+  level (negative 7-day profit or distressed) and a lapsed offer keeps
+  that facility off the block for 30 days. Re-probed: 9–12 varied offers
+  per 300 days (~monthly), story-coherent sellers.
 - **Rush orders**: once the player owns a warehouse, a port's buyer
   occasionally calls for a bulk load — 40–120 units of something the player
   stages or produces, delivered to the ports within six days for a bonus of

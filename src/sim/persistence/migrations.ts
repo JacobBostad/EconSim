@@ -74,6 +74,7 @@ function normalize(state: GameState): GameState {
   state.rushOrdersMissed = state.rushOrdersMissed ?? 0;
   state.facilityOffer = state.facilityOffer ?? null;
   state.fireSalesBought = state.fireSalesBought ?? 0;
+  state.lastLapsedFireSale = state.lastLapsedFireSale ?? null;
   state.config.maxHomes = state.config.maxHomes ?? 40;
   state.config.maxCitizens = state.config.maxCitizens ?? 80;
   state.config.playerStartCash = state.config.playerStartCash ?? 15000 * 100;
