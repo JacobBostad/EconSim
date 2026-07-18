@@ -946,6 +946,47 @@ export class TownRenderer {
     for (const y of hYs) road(x0, y, x1, y);
     for (const x of vXs) road(x, y0, x, y1);
 
+    // The highway east: the top avenue keeps going toward the trade cities,
+    // fading out at the canvas edge, with a signpost naming where it leads —
+    // Port Rosa and Ironvale are real places, not just numbers in a panel.
+    {
+      const exit = this.w2s(s, { x: x1, y: hYs[1]! }); // middle avenue: clear of top chrome
+      const edgeX = this.cssW + 40;
+      if (exit.x < this.cssW) {
+        const grad = ctx.createLinearGradient(exit.x, 0, Math.min(edgeX, exit.x + 420), 0);
+        grad.addColorStop(0, '#565b61');
+        grad.addColorStop(1, 'rgba(86,91,97,0)');
+        ctx.strokeStyle = grad;
+        ctx.lineWidth = roadW;
+        ctx.lineCap = 'butt';
+        ctx.beginPath(); ctx.moveTo(exit.x, exit.y); ctx.lineTo(edgeX, exit.y); ctx.stroke();
+        ctx.setLineDash([7, 9]);
+        ctx.strokeStyle = 'rgba(235,225,180,0.45)';
+        ctx.lineWidth = Math.max(1, roadW * 0.09);
+        ctx.beginPath(); ctx.moveTo(exit.x, exit.y); ctx.lineTo(edgeX, exit.y); ctx.stroke();
+        ctx.setLineDash([]);
+
+        // signpost just past the last intersection, north side of the road
+        const sc = this.effScale();
+        const px = exit.x + sc * 2.2;
+        const py = exit.y - roadW * 0.85;
+        const k = Math.min(1.35, Math.max(0.8, sc / 9)); // gentle zoom scaling
+        ctx.strokeStyle = '#6b5a43'; ctx.lineWidth = 2.5 * k; ctx.lineCap = 'round';
+        ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(px, py - 26 * k); ctx.stroke();
+        ctx.font = `600 ${Math.round(9 * k)}px system-ui`;
+        ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+        const boards: [string, number][] = [['Port Rosa →', -22], ['Ironvale →', -12]];
+        for (const [label, dy] of boards) {
+          const w = ctx.measureText(label).width + 10;
+          ctx.fillStyle = '#7a6a50';
+          this.roundRectPath(px - 2, py + dy * k - 6 * k, w, 12 * k, 2);
+          ctx.fill();
+          ctx.fillStyle = '#f2ead8';
+          ctx.fillText(label, px + 3, py + dy * k);
+        }
+      }
+    }
+
     // driveways for businesses only — homes sit on their residential streets,
     // and a driveway per house turned the neighborhoods into a picket fence.
     ctx.lineCap = 'round';

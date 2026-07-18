@@ -197,6 +197,10 @@ engine tests), probed with headless balance runs, and guarded by CI.
   center, applied per-frame while held so movement glides instead of
   stuttering on key repeat. Ignored while typing in a field; released
   keys clear on window blur so the camera never runs away.
+- **The highway east**: the middle avenue continues past the last
+  intersection and fades toward the horizon, with a signpost naming where
+  it leads — Port Rosa and Ironvale are real places on the map now, not
+  just numbers in the trade panel.
 - **Minimap**: whenever the viewport crops the town (zoomed or panned), a
   bottom-left overview appears — season-tinted ground, the road grid,
   building dots in their legend colors with player holdings ringed in blue,
