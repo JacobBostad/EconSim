@@ -55,7 +55,11 @@ export function PopulationDashboard(): React.ReactElement {
 
       <h3>
         Town Trends{' '}
-        {phase !== 'steady' && (
+        {state.emigrationPressure > 0 ? (
+          <span className="tag red" style={{ verticalAlign: 'middle' }}>
+            🧳 Families near leaving — day {state.emigrationPressure} of misery
+          </span>
+        ) : phase !== 'steady' && (
           <span className={`tag ${phase === 'boom' ? 'green' : 'amber'}`} style={{ verticalAlign: 'middle' }}>
             {phase === 'boom' ? '📈 Hiring boom' : '🚶 Absorbing arrivals'}
           </span>
@@ -83,6 +87,12 @@ export function PopulationDashboard(): React.ReactElement {
         </div>
       ) : (
         <p className="muted small">Trends appear after the first full day.</p>
+      )}
+      {state.emigrationDepartures > 0 && (
+        <p className="muted small" style={{ marginTop: 4 }}>
+          🧳 {state.emigrationDepartures} {state.emigrationDepartures === 1 ? 'family has' : 'families have'} left
+          town for good — misery past day 10 starts the wagons rolling; one good day stops them.
+        </p>
       )}
 
       <h3>Satisfaction Anatomy</h3>

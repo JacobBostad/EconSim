@@ -46,8 +46,10 @@ export function Intro(): React.ReactElement | null {
               🥂 affluent) and each rung shops differently — court a tier by
               hanging a 🏷️ <strong>Discount</strong> or ✨
               <strong> Premium</strong> sign on your store (earn it: real low
-              prices, or real quality). Watch the ladder in
-              <strong> Population</strong>.</p>
+              prices, or real quality). Prosperous towns attract newcomers;
+              a neglected one 🧳 <strong>loses families</strong> — and one
+              scenario, 🏚️ <strong>Dust Hollow</strong>, opens mid-exodus.
+              Watch the ladder in <strong>Population</strong>.</p>
           </div>
           <div>
             <h4>Trade, seasons, and the town</h4>

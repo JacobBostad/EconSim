@@ -74,6 +74,9 @@ export function ChronicleModal(): React.ReactElement | null {
             <div className="kv small"><span className="k">Employees</span><span className="mono">{player?.employees.length ?? 0}</span></div>
             <div className="kv small"><span className="k">Facilities</span><span className="mono">{player?.facilities.length ?? 0}</span></div>
             <div className="kv small"><span className="k">Export earnings</span><span className="mono">{formatMoney(exportRev)}</span></div>
+            {state.emigrationDepartures > 0 && (
+              <div className="kv small"><span className="k">🧳 Families lost</span><span className="mono">{state.emigrationDepartures}</span></div>
+            )}
             {(player?.acquiredNames.length ?? 0) > 0 && (
               <div className="kv small"><span className="k">Acquired</span><span>{player!.acquiredNames.join(', ')}</span></div>
             )}

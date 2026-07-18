@@ -203,7 +203,10 @@ hireable managers, a real commodity market, and shared daily play.
   floor; one bread chain built from starting cash stops the bleed inside
   three weeks (probed, three seeds). Rescuing any bleeding town — families
   left, pressure zeroed, satisfaction back above 50 — earns ⛑️ Stopped
-  the Bleed.
+  the Bleed. The crisis is visible everywhere it should be: a red
+  families-near-leaving tag and lifetime families-lost count in the
+  Population tab, a Chronicle stat line, and an Intro mention (all
+  verified live in the browser).
 - **Follow mode**: a 🎥 Follow button on any citizen puts the camera on
   their day — commute, shopping trips, and, if you've been paying them
   well, the day they earn their gold circlet. Esc or grabbing the map
