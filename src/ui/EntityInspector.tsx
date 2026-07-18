@@ -15,8 +15,8 @@ import { FacilityActions } from './FacilityModal';
 import { FormulaTooltip } from './FormulaTooltip';
 import { formatMoney } from '../utils/formatMoney';
 import { getProduct } from '../sim/data/products';
-import { citizenActionLabel } from '../sim/selectors/citizenSelectors';
-import { firmPnLToday, firmPnLLifetime, firmFacilities, firmWarnings } from '../sim/selectors/companySelectors';
+import { citizenActionLabel, populationStats } from '../sim/selectors/citizenSelectors';
+import { firmPnLToday, firmPnLLifetime, firmFacilities, firmWarnings, rivalTopWage } from '../sim/selectors/companySelectors';
 import { getPersonality } from '../sim/data/personalities';
 import { facilityProfitContribution } from '../sim/selectors/facilitySelectors';
 import { clamp } from '../utils/clamp';
@@ -169,6 +169,7 @@ function FirmView({ firm, state }: { firm: Firm; state: GameState }): React.Reac
         <span className="mono" style={{ color: firm.debt > 0 ? 'var(--amber)' : undefined }}>{formatMoney(firm.debt)}</span>
       </div>
       {firm.ownerType === 'player' && <FinanceControls firmId={firm.id} />}
+      {firm.ownerType === 'player' && <WageControls firm={firm} state={state} />}
 
       <div className="section-title">P&L Today</div>
       <PnL p={today} />
@@ -194,6 +195,68 @@ function FirmView({ firm, state }: { firm: Firm; state: GameState }): React.Reac
           {warnings.map((w, i) => <div className="small" key={i} style={{ color: 'var(--amber)' }}>⚠ {w}</div>)}
         </>
       )}
+    </div>
+  );
+}
+
+/**
+ * The wage lever: pay above the poaching bar (1.15×) to pull skilled workers
+ * from rivals — or watch yours walk when a rival out-pays you.
+ */
+function WageControls({ firm, state }: { firm: Firm; state: GameState }): React.ReactElement {
+  const dispatch = useGameStore((s) => s.dispatch);
+  const pop = populationStats(state);
+  const rivalTop = rivalTopWage(state, firm.id);
+  const wage = firm.wagePolicy.baseWage;
+  const poachRisk = rivalTop >= wage * 1.15;
+  const poachPower = wage >= rivalTop * 1.15;
+  const beatMarket = Math.round(rivalTop * 1.16);
+  return (
+    <div className="card" style={{ marginTop: 6 }}>
+      <div className="section-title" style={{ margin: 0 }}>Wages</div>
+      <div className="kv small">
+        <span className="k">Your base wage</span>
+        <span className="mono">{formatMoney(wage)}/day</span>
+      </div>
+      <div className="kv small">
+        <span className="k">Town average</span>
+        <span className="mono">{formatMoney(pop.averageWage)}/day</span>
+      </div>
+      <div className="kv small">
+        <span className="k">Top rival</span>
+        <span className="mono">{formatMoney(rivalTop)}/day</span>
+      </div>
+      {poachRisk && (
+        <div className="small" style={{ color: 'var(--amber)' }}>
+          ⚠ A rival pays ≥1.15× your wage — your workers may defect.
+        </div>
+      )}
+      {poachPower && (
+        <div className="small" style={{ color: 'var(--green)' }}>
+          ✓ You out-pay every rival by 15%+ — skilled workers will come to you.
+        </div>
+      )}
+      <div className="row" style={{ gap: 6, marginTop: 4 }}>
+        <button
+          disabled={wage <= 100}
+          onClick={() => dispatch({ type: 'SET_WAGE', firmId: firm.id, wage: Math.max(100, wage - 100) })}
+        >
+          −$1
+        </button>
+        <button onClick={() => dispatch({ type: 'SET_WAGE', firmId: firm.id, wage: wage + 100 })}>
+          +$1
+        </button>
+        <button
+          disabled={wage >= beatMarket}
+          title="Set your wage 16% above the top rival — enough to poach their workers"
+          onClick={() => dispatch({ type: 'SET_WAGE', firmId: firm.id, wage: beatMarket })}
+        >
+          Beat market — {formatMoney(beatMarket)}
+        </button>
+      </div>
+      <div className="small muted" style={{ marginTop: 4 }}>
+        Applies to all {firm.employees.length} current employees immediately.
+      </div>
     </div>
   );
 }

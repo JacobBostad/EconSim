@@ -241,7 +241,10 @@ Downtown premiums buy real customers via the distance term in store scoring.
 
 **Labor market** (`LaborSystem.ts`): workers carry a skill multiplier
 (~0.85→1.3 with tenure; crews produce at average skill) and jump to firms
-paying ≥15% more — wage policy poaches veterans or loses yours.
+paying ≥15% more — wage policy poaches veterans or loses yours. The Wages
+card in your firm inspector shows the town average and top rival wage with a
+one-click "Beat market"; AI firms answer back, raising wages up to ~1.5× when
+they can't fill slots and drifting down when labor is slack.
 
 **M&A** (`core/Acquisition.ts`): buy out AI rivals at 1.3× valuation (0.9×
 distressed, credit for held shares) and absorb everything; flush AI firms
@@ -357,10 +360,8 @@ income, etc. Config is part of saved state.
 
 ## Known limitations
 
-- One city; product catalog is three consumer chains (bread, tools, clothes);
-  one AI strategy archetype per chain.
-- Labor market is "instant hire from the unemployed"; no wage-driven poaching
-  yet (the architecture leaves room for it).
+- One city; the consumer catalog is three staple chains (bread, tools,
+  clothes) plus the two luxury crafts.
 - AI stores are deliberately single-product (running a general store is a
   player edge); AI expansion opens retail outlets only (capped) and AI-initiated
   M&A is limited to rescue takeovers of distressed rivals.

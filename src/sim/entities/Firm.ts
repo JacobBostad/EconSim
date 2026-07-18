@@ -28,6 +28,8 @@ export interface FirmStrategy {
   gluttStreak: Record<ProductId, number>;
   /** Consecutive days of negative operating profit. */
   lossStreak: number;
+  /** The wage this firm started with — the floor its wage drifts back to. */
+  startingWage?: number;
 }
 
 export function emptyStrategy(kind: FirmStrategy['kind']): FirmStrategy {

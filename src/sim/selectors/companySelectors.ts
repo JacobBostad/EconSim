@@ -136,6 +136,18 @@ export function firmWarnings(state: GameState, firmId: FirmId): string[] {
   return warnings;
 }
 
+/** Highest base wage any OTHER player/AI firm pays — the poaching bar. */
+export function rivalTopWage(state: GameState, firmId: FirmId): number {
+  let top = 0;
+  for (const fid in state.firms) {
+    if (fid === firmId) continue;
+    const f = state.firms[fid]!;
+    if (f.ownerType !== 'player' && f.ownerType !== 'ai') continue;
+    top = Math.max(top, f.wagePolicy.baseWage);
+  }
+  return top;
+}
+
 export interface DailyInsight {
   day: number;
   net: number;

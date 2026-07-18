@@ -40,7 +40,10 @@ export function runAIStrategySystem(ctx: SimContext): void {
   for (const fid in state.firms) {
     const firm = state.firms[fid]!;
     if (firm.ownerType !== 'ai') continue;
-    if (firm.bankruptcyStatus !== 'insolvent') restaff(ctx, firm.id);
+    if (firm.bankruptcyStatus !== 'insolvent') {
+      manageWages(ctx, firm.id);
+      restaff(ctx, firm.id);
+    }
     adjustPrices(ctx, firm.id);
     if (firm.bankruptcyStatus === 'healthy') {
       manageAdBudget(ctx, firm.id);
@@ -441,6 +444,59 @@ function maybeUpgrade(ctx: SimContext, firmId: string): void {
     if (firm.cash - cost < 30000_00) continue;
     upgradeFacility(state, firmId, facId);
     return;
+  }
+}
+
+/**
+ * Wage counterplay: labor is a market too. When a firm has unfilled slots and
+ * the unemployed pool is dry (usually because the player out-paid everyone),
+ * it raises its base wage toward a cap; with a full roster and slack labor it
+ * drifts back down. Keeps the player's wage lever powerful but not free.
+ */
+const AI_WAGE_CAP_MULT = 1.5; // × the firm's starting wage
+const AI_WAGE_RAISE = 1.04; // per tight-labor day
+const AI_WAGE_DECAY = 0.98; // per slack day above the floor
+
+function manageWages(ctx: SimContext, firmId: string): void {
+  const { state } = ctx;
+  const firm = state.firms[firmId]!;
+  const floor = firm.strategy.startingWage ?? firm.wagePolicy.baseWage;
+  if (!firm.strategy.startingWage) firm.strategy.startingWage = floor;
+
+  let unfilled = 0;
+  for (const facId of firm.facilities) {
+    const fac = state.facilities[facId];
+    if (!fac || fac.status === 'closed') continue;
+    const desired = fac.activeRecipeId
+      ? Math.min(fac.workerCapacity, getRecipe(fac.activeRecipeId).laborRequired)
+      : fac.type === 'retail'
+        ? Math.min(fac.workerCapacity, 2)
+        : 0;
+    unfilled += Math.max(0, desired - fac.employees.length);
+  }
+  let unemployed = 0;
+  for (const cid in state.citizens) {
+    if (state.citizens[cid]!.employmentStatus === 'unemployed') unemployed += 1;
+  }
+
+  const wage = firm.wagePolicy.baseWage;
+  let next = wage;
+  if (unfilled > 0 && unemployed === 0 && firm.cash > 10000_00) {
+    next = Math.min(Math.round(floor * AI_WAGE_CAP_MULT), Math.round(wage * AI_WAGE_RAISE));
+  } else if (unfilled === 0 && unemployed >= 3 && wage > floor) {
+    next = Math.max(floor, Math.round(wage * AI_WAGE_DECAY));
+  }
+  if (next !== wage) {
+    firm.wagePolicy.baseWage = next;
+    // Current staff ride the same wage — retention parity with SET_WAGE.
+    for (const cid of firm.employees) {
+      const cit = state.citizens[cid];
+      if (cit) cit.wage = next;
+    }
+    if (next > wage) {
+      emitEvent(state, 'info', 'ai',
+        `${firm.name} raised wages to ${next}¢/day to attract scarce workers.`, firm.id);
+    }
   }
 }
 
