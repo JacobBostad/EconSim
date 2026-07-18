@@ -21,6 +21,7 @@ export function MapView(): React.ReactElement {
         onPick: (id) => useGameStore.getState().select(id),
         getSelectedId: () => useGameStore.getState().sim.getState().selectedEntityId,
         getBuildMode: () => useGameStore.getState().buildDefId != null,
+        getBuildDefId: () => useGameStore.getState().buildDefId,
         getFlowOverlay: () => useGameStore.getState().flowOverlay,
         onBuildAt: (world) => {
           const store = useGameStore.getState();

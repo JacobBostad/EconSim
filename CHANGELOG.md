@@ -123,6 +123,9 @@ engine tests), probed with headless balance runs, and guarded by CI.
 - Chimney smoke only while a factory is actually producing; trucks are drawn
   box trucks with product-tinted cargo; citizens are little walking figures
   with activity-colored clothes.
+- **Build-mode ghost**: placing a facility shows the actual 2.5D building
+  translucent under the cursor with the land-adjusted price at that spot
+  (red when unaffordable), so location cost is felt before the click.
 
 ## Content & polish
 

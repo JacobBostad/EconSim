@@ -17,7 +17,8 @@ import type { GameState } from '../sim/core/GameState';
 import type { FacilityType } from '../sim/entities/Facility';
 import type { CitizenActivity } from '../sim/entities/Citizen';
 import { computeTime } from '../sim/core/Tick';
-import { landValueAt } from '../sim/core/LandValue';
+import { landValueAt, landCostMultiplier } from '../sim/core/LandValue';
+import { getFacilityDef } from '../sim/data/facilityDefinitions';
 import { seasonOf } from '../sim/data/seasons';
 import { getProduct } from '../sim/data/products';
 import { formatMoney } from '../utils/formatMoney';
@@ -71,6 +72,9 @@ export interface RendererCallbacks {
   onPick: (id: string | null) => void;
   getSelectedId: () => string | null;
   getBuildMode: () => boolean;
+  /** Which facility def is being placed (null when not in build mode) —
+   * drives the cursor ghost preview. */
+  getBuildDefId: () => string | null;
   getFlowOverlay: () => boolean;
   onBuildAt: (world: Vec) => void;
 }
@@ -317,7 +321,10 @@ export class TownRenderer {
     this.drawNightTint(time.hour);
     this.drawNightLights(s, time.hour);
     this.drawWorldEventAmbiance(s, dt);
-    if (this.cb.getBuildMode()) this.drawLandValueOverlay(s);
+    if (this.cb.getBuildMode()) {
+      this.drawLandValueOverlay(s);
+      this.drawBuildGhost(s, time.hour);
+    }
     this.drawHud(time);
     this.drawHover(s);
   }
@@ -455,6 +462,62 @@ export class TownRenderer {
     ctx.textAlign = 'center';
     ctx.fillText('Land value: green = cheap (0.8×) · red = premium (1.6×)', this.cssW / 2, 23);
     ctx.restore();
+  }
+
+  /**
+   * Cursor ghost while placing: the actual 2.5D building at ~65% opacity with
+   * the land-adjusted price at that spot, so location cost is felt before the
+   * click instead of discovered after it.
+   */
+  private drawBuildGhost(s: GameState, hour: number): void {
+    const defId = this.cb.getBuildDefId();
+    if (!defId || !this.mouse) return;
+    const def = getFacilityDef(defId as Parameters<typeof getFacilityDef>[0]);
+    const world = this.s2w(s, this.mouse);
+    if (world.x < this.view.minX || world.x > this.view.maxX ||
+        world.y < this.view.minY || world.y > this.view.maxY) return;
+
+    const ctx = this.ctx;
+    const sc = this.effScale();
+    const isApartment = defId === 'apartment';
+    const size = (isApartment ? 2.0 : def.type === 'home' ? 1.45 : 2.6) * sc;
+    const sp = this.mouse;
+    const cost = Math.round(def.buildCost * landCostMultiplier(landValueAt(s, world)));
+    const cash = s.firms[s.playerFirmId]?.cash ?? 0;
+    const affordable = cash >= cost;
+
+    ctx.save();
+    ctx.globalAlpha = 0.65;
+    ctx.fillStyle = 'rgba(28,38,32,0.28)';
+    ctx.beginPath();
+    ctx.ellipse(sp.x + size * 0.25, sp.y + size * 0.42, size * 1.15, size * 0.4, 0, 0, Math.PI * 2);
+    ctx.fill();
+    drawBuilding(def.type, defId, {
+      ctx,
+      x: sp.x,
+      y: sp.y + size * 0.4,
+      w: size,
+      fill: isApartment ? APARTMENT_FILL : BUILDING_FILL[def.type],
+      closed: false,
+      player: true,
+      level: 1,
+      night: Math.max(0, this.nightAmount(hour) - 0.2),
+    });
+    ctx.restore();
+
+    // price chip under the ghost — red when the firm can't cover it
+    const label = formatMoney(cost);
+    ctx.font = '700 12px system-ui, sans-serif';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    const tw = ctx.measureText(label).width;
+    const cy = sp.y + size * 0.75;
+    ctx.fillStyle = affordable ? 'rgba(8,12,18,0.78)' : 'rgba(60,12,12,0.85)';
+    this.roundRectPath(sp.x - tw / 2 - 6, cy, tw + 12, 17, 4); ctx.fill();
+    ctx.strokeStyle = affordable ? 'rgba(126,231,135,0.5)' : 'rgba(248,113,113,0.7)';
+    ctx.lineWidth = 1;
+    this.roundRectPath(sp.x - tw / 2 - 6, cy, tw + 12, 17, 4); ctx.stroke();
+    ctx.fillStyle = affordable ? '#7ee787' : '#f87171';
+    ctx.fillText(label, sp.x, cy + 3);
   }
 
   // --- world-event ambiance ---------------------------------------------
