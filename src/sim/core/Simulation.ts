@@ -46,7 +46,7 @@ import { CHAIN_BLUEPRINTS, chainCost } from '../data/chains';
 import { performAcquisition } from './Acquisition';
 import { upgradeFacility } from './Upgrades';
 import { sellFacility } from './Demolition';
-import { performExport } from './Trade';
+import { performExport, pickBestCity } from './Trade';
 import { landCostMultiplier, landValueAt } from './LandValue';
 import type { Contract } from '../entities/Contract';
 
@@ -471,7 +471,8 @@ export class Simulation {
       emitEvent(s, 'warning', 'logistics', 'Exports ship from warehouses — stage goods there first.', fac.id);
       return;
     }
-    performExport(s, command.firmId, command.facilityId, command.productId, command.quantity);
+    const cityId = command.cityId ?? pickBestCity(s, command.productId).cityId;
+    performExport(s, command.firmId, command.facilityId, command.productId, command.quantity, 'Exported', cityId);
   }
 
   /**

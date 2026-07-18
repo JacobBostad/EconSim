@@ -61,7 +61,7 @@ describe('AI personalities', () => {
       }
       mine.outputInventory = {};
       addStock(mine.outputInventory, 'minerals', 26, 60);
-      state.tradeCity.pricesByProduct['minerals'] = Math.round(getProduct('minerals').basePrice * 1.3);
+      state.tradeCities['port_rosa']!.pricesByProduct['minerals'] = Math.round(getProduct('minerals').basePrice * 1.3);
       state.tick = ticksPerDay(state.config);
       runAIStrategySystem(makeContext(state));
       return granite.exportRevenue;

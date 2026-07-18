@@ -27,6 +27,7 @@ import { addStock, type Inventory } from '../entities/Inventory';
 import { makeCitizenNeeds } from '../entities/factories';
 import { getFacilityDef } from './facilityDefinitions';
 import { getProduct, CONSUMER_PRODUCT_IDS, ALL_PRODUCT_IDS } from './products';
+import { TRADE_CITY_IDS, cityBias } from './tradeCities';
 import { FIRST_NAMES, LAST_NAMES } from './names';
 import { dollars } from './constants';
 import { defaultPersonalityFor, defaultCeoFor } from './personalities';
@@ -219,7 +220,7 @@ export function createInitialState(
     worldEvents: [],
     achievements: [],
     missions: [],
-    tradeCity: { pricesByProduct: {} },
+    tradeCities: {},
     townHistory: [],
     idCounters: counters,
     selectedEntityId: null,
@@ -227,9 +228,14 @@ export function createInitialState(
   };
   const b: Builder = { state, rng: new Rng(state), counters };
 
+  for (const cid of TRADE_CITY_IDS) state.tradeCities[cid] = { pricesByProduct: {} };
   for (const pid of ALL_PRODUCT_IDS) {
     state.marketStats[pid] = emptyMarketStat(pid);
-    state.tradeCity.pricesByProduct[pid] = getProduct(pid).basePrice;
+    for (const cid of TRADE_CITY_IDS) {
+      state.tradeCities[cid]!.pricesByProduct[pid] = Math.round(
+        getProduct(pid).basePrice * cityBias(cid, pid),
+      );
+    }
   }
 
   // --- World firm (owns homes; sink for external costs) ------------------

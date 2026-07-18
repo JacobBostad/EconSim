@@ -64,7 +64,7 @@ describe('morningBriefing', () => {
     sim.dispatch({ type: 'BUILD_CHAIN', firmId: player.id, productId: 'bread' });
     const factory = player.facilities.map((id) => state.facilities[id]!).find((f) => f.type === 'factory')!;
     addStock(factory.outputInventory, 'bread', 40, 60);
-    state.tradeCity.pricesByProduct['bread'] = Math.round(getProduct('bread').basePrice * 1.5);
+    state.tradeCities['port_rosa']!.pricesByProduct['bread'] = Math.round(getProduct('bread').basePrice * 1.5);
 
     const advice = morningBriefing(state);
     expect(advice.some((a) => a.icon === '🚢' && a.text.includes('Bread'))).toBe(true);

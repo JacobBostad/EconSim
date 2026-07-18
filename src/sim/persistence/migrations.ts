@@ -19,6 +19,7 @@ import { emptyFacilityDailyStats } from '../entities/Facility';
 import { getProduct } from '../data/products';
 import { getFacilityDef } from '../data/facilityDefinitions';
 import { defaultPersonalityFor, defaultCeoFor, type PersonalityId } from '../data/personalities';
+import { TRADE_CITY_IDS, cityBias } from '../data/tradeCities';
 
 type Raw = Record<string, unknown>;
 
@@ -164,11 +165,24 @@ function normalize(state: GameState): GameState {
     }
   }
   // ...and give the market a stat entry for them.
-  state.tradeCity = state.tradeCity ?? { pricesByProduct: {} };
   for (const pid of ALL_PRODUCT_IDS) {
     state.marketStats[pid] = state.marketStats[pid] ?? emptyMarketStat(pid);
-    state.tradeCity.pricesByProduct[pid] =
-      state.tradeCity.pricesByProduct[pid] ?? getProduct(pid).basePrice;
+  }
+  // Trade cities: single-city saves carried `tradeCity` (Port Rosa); move it
+  // into the keyed map and seed any city (or product) the save predates.
+  const legacyCity = (state as unknown as { tradeCity?: { pricesByProduct: Record<string, number> } }).tradeCity;
+  state.tradeCities = state.tradeCities ?? {};
+  if (legacyCity && !state.tradeCities['port_rosa']) {
+    state.tradeCities['port_rosa'] = legacyCity;
+  }
+  delete (state as unknown as { tradeCity?: unknown }).tradeCity;
+  for (const cid of TRADE_CITY_IDS) {
+    state.tradeCities[cid] = state.tradeCities[cid] ?? { pricesByProduct: {} };
+    for (const pid of ALL_PRODUCT_IDS) {
+      state.tradeCities[cid]!.pricesByProduct[pid] =
+        state.tradeCities[cid]!.pricesByProduct[pid] ??
+        Math.round(getProduct(pid).basePrice * cityBias(cid, pid));
+    }
   }
   return state;
 }

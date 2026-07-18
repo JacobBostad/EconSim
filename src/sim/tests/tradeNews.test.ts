@@ -27,7 +27,7 @@ describe('Port Rosa follows world news', () => {
     const sim = newSim(4);
     const state = sim.getState();
     const base = getProduct('grain').basePrice;
-    state.tradeCity.pricesByProduct['grain'] = base;
+    state.tradeCities['port_rosa']!.pricesByProduct['grain'] = base;
     state.worldEvents.push({ defId: 'drought', startDay: 0, endDay: 60 });
     const tpd = ticksPerDay(state.config);
     for (let d = 1; d <= 10; d++) {
@@ -35,7 +35,7 @@ describe('Port Rosa follows world news', () => {
       runTradeCitySystem(makeContext(state));
     }
     // Reversion pulls toward 1.5× base; ten days is plenty to clear 1.15×.
-    expect(state.tradeCity.pricesByProduct['grain']!).toBeGreaterThan(base * 1.15);
+    expect(state.tradeCities['port_rosa']!.pricesByProduct['grain']!).toBeGreaterThan(base * 1.15);
   });
 
   it('fuel spikes scale the export freight fee', () => {
@@ -50,7 +50,7 @@ describe('Port Rosa follows world news', () => {
     const wh = createFacility(state, 'warehouse', player.id, { x: 40, y: 40 });
     player.facilities.push(wh.id);
     addStock(wh.inputInventory, 'bread', 10, 60);
-    state.tradeCity.pricesByProduct['bread'] = 1000;
+    state.tradeCities['port_rosa']!.pricesByProduct['bread'] = 1000;
     const revenue = performExport(state, player.id, wh.id, 'bread', 10);
     expect(revenue).toBe(Math.round(10 * 1000 * (1 - EXPORT_FREIGHT_FEE * 2.2)));
   });

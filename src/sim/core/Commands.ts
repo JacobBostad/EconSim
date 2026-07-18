@@ -61,6 +61,8 @@ export type Command =
       facilityId: FacilityId;
       productId: ProductId;
       quantity: number;
+      /** Destination trade city; defaults to the best net price if omitted. */
+      cityId?: string;
     }
   | { type: 'SET_WAGE'; firmId: FirmId; wage: number }
   | { type: 'HIRE_WORKER'; facilityId: FacilityId; citizenId: CitizenId | null }

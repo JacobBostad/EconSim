@@ -15,6 +15,7 @@ import { isDayBoundary, isHourBoundary } from '../core/Tick';
 import { ALL_PRODUCT_IDS } from '../data/products';
 import { safeDiv } from '../../utils/math';
 import { getQuantity } from '../entities/Inventory';
+import { pickBestCity } from '../core/Trade';
 
 export function runMarketStatsSystem(ctx: SimContext): void {
   if (isHourBoundary(ctx.state.tick, ctx.config)) computeInventoryTotals(ctx);
@@ -66,7 +67,8 @@ function finalizeAndReset(ctx: SimContext): void {
       unmetDemand: stat.unmetDemand,
       totalInventory: stat.totalInventory,
       sharesByFirm: { ...shares },
-      tradePrice: state.tradeCity.pricesByProduct[pid] ?? 0,
+      // Chart the best-paying city's quote (the price an exporter would take).
+      tradePrice: pickBestCity(state, pid).price,
     });
     if (stat.history.length > state.config.maxDailyHistory) {
       stat.history.splice(0, stat.history.length - state.config.maxDailyHistory);

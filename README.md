@@ -276,13 +276,17 @@ distressed, credit for held shares) and absorb everything; flush AI firms
 rescue-acquire dying rivals too. Objectives escalate on a ladder (Tycoon
 $50k → Magnate $150k → Business Empire $400k).
 
-**Inter-city trade** (`TradeCitySystem.ts`, `core/Trade.ts`): Port Rosa, a
-distant trade city, prices every product on a bounded daily random walk
-(0.6×–1.8× base). Stage goods in a warehouse and EXPORT at Port Rosa's price
-minus 8% freight — manually, or with **standing orders** ("auto-export ≥1.3×,
-keep 10") executed daily after the price walk. AI firms broker their surpluses
-at a steeper 15% fee. Booms/gluts make the news; the Market dashboard charts
-Port Rosa prices.
+**Inter-city trade** (`TradeCitySystem.ts`, `core/Trade.ts`,
+`data/tradeCities.ts`): two distant markets price every product on bounded
+daily random walks (0.6×–1.8× of each city's center). 🚢 **Port Rosa** is the
+balanced port; 🚂 **Ironvale**, an industrial inland hub, pays up for tools,
+minerals and finery but discounts food — and its higher freight (×1.15) eats
+into the premium. The two walks are anti-correlated, so arbitrage spreads
+open and close. Stage goods in a warehouse and EXPORT at the best city's
+price minus ~8% freight — manually, or with **standing orders** ("auto-export
+≥1.3×, keep 10") that route to the better port daily after the price walk. AI
+firms broker their surpluses at a steeper 15% fee, also to the best payer.
+Booms/gluts make the news; the Market dashboard charts the best export quote.
 
 **Luxury tier**: pastries (grain) and jewelry (minerals) satisfy a 'luxury'
 need that only grows for satisfied, well-off citizens. Their recipes demand

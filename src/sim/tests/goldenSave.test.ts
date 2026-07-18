@@ -29,7 +29,7 @@ describe('Golden save fixture', () => {
     expect(Object.keys(player.sharesHeld).length).toBe(1);
     expect(state.achievements.length).toBeGreaterThan(0);
     expect(state.missions.length).toBeGreaterThan(0);
-    expect(Object.keys(state.tradeCity.pricesByProduct).length).toBeGreaterThanOrEqual(8);
+    expect(Object.keys(state.tradeCities['port_rosa']!.pricesByProduct).length).toBeGreaterThanOrEqual(8);
     // Round-trip stability: loading a re-serialized load changes nothing.
     const again = deserialize(serialize(state));
     expect(serialize(again)).toBe(serialize(state));

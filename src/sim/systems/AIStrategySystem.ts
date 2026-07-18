@@ -32,6 +32,8 @@ import { acquisitionCost, performAcquisition } from '../core/Acquisition';
 import { landCostMultiplier, landValueAt } from '../core/LandValue';
 import { MAX_FACILITY_LEVEL, upgradeCost, upgradeFacility } from '../core/Upgrades';
 import { getPersonality, ceoQuote } from '../data/personalities';
+import { pickBestCity } from '../core/Trade';
+import { getTradeCity } from '../data/tradeCities';
 
 export function runAIStrategySystem(ctx: SimContext): void {
   if (!isDayBoundary(ctx.state.tick, ctx.config)) return;
@@ -329,20 +331,22 @@ function maybeExportSurplus(ctx: SimContext, firmId: string): void {
       const keepHere = Math.max(keep, reserved);
       if (have <= keepHere + 10) continue;
       const product = getProduct(pid);
-      const tradePrice = state.tradeCity.pricesByProduct[pid] ?? product.basePrice;
-      if (tradePrice < product.basePrice * AI_EXPORT_MIN_MULT) continue;
+      // Brokered AI exports route to whichever city pays best today.
+      const best = pickBestCity(state, pid);
+      const cityName = getTradeCity(best.cityId).name;
+      if (best.price < product.basePrice * AI_EXPORT_MIN_MULT) continue;
       const qty = Math.min(have - keepHere, 40);
-      const revenue = Math.round(qty * tradePrice * (1 - AI_EXPORT_FEE));
+      const revenue = Math.round(qty * best.price * (1 - AI_EXPORT_FEE));
       removeStock(fac.outputInventory, pid, qty);
       recordTransaction(state, {
         from: WORLD_ACCOUNT, to: firmAccount(firmId), amount: revenue,
         firmId, category: 'revenue', productId: pid, quantity: qty,
-        note: `Exported ${qty} ${product.name} to Port Rosa (brokered)`,
+        note: `Exported ${qty} ${product.name} to ${cityName} (brokered)`,
       });
       firm.exportRevenue += revenue;
       if (revenue >= 200_00) {
         emitEvent(state, 'info', 'ai',
-          `${firm.name} exported ${qty} ${product.name} to Port Rosa for ${revenue}¢.${ceoQuote(rng, firm, 'export')}`, fac.id);
+          `${firm.name} exported ${qty} ${product.name} to ${cityName} for ${revenue}¢.${ceoQuote(rng, firm, 'export')}`, fac.id);
       }
       return; // one export per firm per day
     }

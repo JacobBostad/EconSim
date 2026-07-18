@@ -61,7 +61,7 @@ describe('Luxury tier', () => {
     }
     const loaded = deserialize(JSON.stringify(raw));
     expect(loaded.marketStats['pastries']).toBeTruthy();
-    expect(loaded.tradeCity.pricesByProduct['jewelry']).toBeGreaterThan(0);
+    expect(loaded.tradeCities['port_rosa']!.pricesByProduct['jewelry']).toBeGreaterThan(0);
     for (const cid in loaded.citizens) {
       expect(loaded.citizens[cid]!.needs.some((n) => n.productId === 'jewelry')).toBe(true);
     }

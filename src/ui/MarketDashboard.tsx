@@ -5,6 +5,8 @@ import { formatMoney } from '../utils/formatMoney';
 import { FormulaTooltip } from './FormulaTooltip';
 import { TrendCard } from './Sparkline';
 import { CONSUMER_PRODUCT_IDS, getProduct } from '../sim/data/products';
+import { pickBestCity } from '../sim/core/Trade';
+import { getTradeCity } from '../sim/data/tradeCities';
 
 export function MarketDashboard(): React.ReactElement {
   const sim = useGameStore((s) => s.sim);
@@ -43,11 +45,15 @@ export function MarketDashboard(): React.ReactElement {
               <td className="mono">{r.averageQuality.toFixed(0)}</td>
               <td className="mono">{r.totalInventory}</td>
               {(() => {
-                const tradePrice = state.tradeCity.pricesByProduct[r.productId] ?? r.basePrice;
-                const mult = tradePrice / r.basePrice;
+                const best = pickBestCity(state, r.productId);
+                const mult = best.price / r.basePrice;
                 return (
-                  <td className="mono" style={{ color: mult >= 1.3 ? 'var(--green)' : mult <= 0.75 ? 'var(--red)' : undefined }}>
-                    {formatMoney(tradePrice)}
+                  <td
+                    className="mono"
+                    title={`Best export price today: ${getTradeCity(best.cityId).name}`}
+                    style={{ color: mult >= 1.3 ? 'var(--green)' : mult <= 0.75 ? 'var(--red)' : undefined }}
+                  >
+                    {getTradeCity(best.cityId).emoji}{formatMoney(best.price)}
                   </td>
                 );
               })()}

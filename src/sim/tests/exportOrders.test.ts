@@ -26,7 +26,7 @@ describe('Standing export orders', () => {
     // Pin the price above target right before the day boundary fires.
     const tpd = ticksPerDay(state.config);
     sim.run(tpd - state.tick % tpd - 1);
-    state.tradeCity.pricesByProduct['bread'] = Math.round(getProduct('bread').basePrice * 1.79);
+    state.tradeCities['port_rosa']!.pricesByProduct['bread'] = Math.round(getProduct('bread').basePrice * 1.79);
     const exportRevBefore = player.exportRevenue;
     sim.run(1); // day boundary: price walk (stays within bounds) + standing orders
 
@@ -40,7 +40,7 @@ describe('Standing export orders', () => {
     sim.dispatch({ type: 'SET_EXPORT_ORDER', facilityId: wh.id, productId: 'bread', minMult: 1.5, keep: 0 });
     const tpd = ticksPerDay(state.config);
     sim.run(tpd - state.tick % tpd - 1);
-    state.tradeCity.pricesByProduct['bread'] = getProduct('bread').basePrice; // 1.0x
+    state.tradeCities['port_rosa']!.pricesByProduct['bread'] = getProduct('bread').basePrice; // 1.0x
     sim.run(1);
     // Walk step is ±12%, so it cannot reach 1.5× in one day from 1.0×.
     expect(getQuantity(wh.inputInventory, 'bread')).toBe(50);

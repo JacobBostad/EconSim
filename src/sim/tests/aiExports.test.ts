@@ -13,7 +13,7 @@ describe('AI exports to Port Rosa', () => {
     const foods = findFirmByName(state, 'Sunrise Foods');
     const bakery = findFacilityByName(state, 'Sunrise Bakery');
     addStock(bakery.outputInventory, 'bread', 80, 60);
-    state.tradeCity.pricesByProduct['bread'] = Math.round(getProduct('bread').basePrice * 1.5);
+    state.tradeCities['port_rosa']!.pricesByProduct['bread'] = Math.round(getProduct('bread').basePrice * 1.5);
     const cashBefore = foods.cash;
     const supply0 = totalMoneySupply(state);
 
@@ -34,7 +34,7 @@ describe('AI exports to Port Rosa', () => {
     const foods = findFirmByName(state, 'Sunrise Foods');
     const bakery = findFacilityByName(state, 'Sunrise Bakery');
     addStock(bakery.outputInventory, 'bread', 80, 60);
-    state.tradeCity.pricesByProduct['bread'] = getProduct('bread').basePrice; // 1.0×
+    state.tradeCities['port_rosa']!.pricesByProduct['bread'] = getProduct('bread').basePrice; // 1.0×
     state.tick = ticksPerDay(state.config);
     runAIStrategySystem(makeContext(state));
     expect(foods.exportRevenue).toBe(0);

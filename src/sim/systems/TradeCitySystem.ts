@@ -1,14 +1,20 @@
 /**
- * TradeCitySystem — "Port Rosa", the distant trade city.
+ * TradeCitySystem — the distant trade cities (Port Rosa, Ironvale).
  *
- * Port Rosa is an off-map market with its own price for every product,
- * updated once per day as a bounded, seeded random walk around base price
- * (0.6×–1.8×). Goods staged in a warehouse can be EXPORTed there at the
- * current price minus a freight fee — classic arbitrage gameplay: stockpile
- * when local goods are cheap, ship when Port Rosa pays.
+ * Each city is an off-map market with its own price for every product,
+ * updated once per day as a bounded, seeded random walk around a per-city
+ * center: base price × world-event shift × the city's product bias (Ironvale
+ * pays up for industry, discounts food). Goods staged in a warehouse can be
+ * EXPORTed at a city's price minus its freight fee — classic arbitrage:
+ * stockpile when local goods are cheap, ship to whichever port pays.
  *
- * Threshold crossings (boom above 1.45×, glut below 0.7×) are announced in
- * the event log so the Gazette carries trade news.
+ * Both cities share one jitter draw per product with opposite signs, so the
+ * walks are anti-correlated: spreads between the ports open and close, and
+ * the rng stream stays identical to the single-city era (save-compatible
+ * determinism).
+ *
+ * Threshold crossings (boom above 1.45× the city's center, glut below 0.7×)
+ * are announced in the event log so the Gazette carries trade news.
  */
 
 import type { SimContext } from '../core/GameState';
@@ -24,8 +30,9 @@ import {
 } from '../data/constants';
 import { clamp } from '../../utils/clamp';
 import { getQuantity } from '../entities/Inventory';
-import { performExport } from '../core/Trade';
+import { performExport, pickBestCity } from '../core/Trade';
 import { worldTradePriceMult } from '../data/worldEvents';
+import { TRADE_CITY_IDS, getTradeCity, cityBias } from '../data/tradeCities';
 
 /** Daily reversion strength toward the (event-shifted) price center. */
 const TRADE_CENTER_PULL = 0.12;
@@ -42,36 +49,45 @@ function updatePrices(ctx: SimContext): void {
 
   for (const pid of ALL_PRODUCT_IDS) {
     const base = getProduct(pid).basePrice;
-    const prev = state.tradeCity.pricesByProduct[pid] ?? base;
-    // Random walk with a gentle pull toward the event-shifted center: a
-    // drought makes Port Rosa pay up for grain, a recession discounts
-    // everything — so world news is also trade news.
-    const center = base * worldTradePriceMult(state, pid);
-    const walked = prev * (1 + ctx.rng.jitter(TRADE_WALK_STEP));
-    const next = Math.round(
-      clamp(
-        walked + (center - walked) * TRADE_CENTER_PULL,
-        base * TRADE_PRICE_MIN_MULT,
-        base * TRADE_PRICE_MAX_MULT,
-      ),
-    );
-    state.tradeCity.pricesByProduct[pid] = next;
+    // One rng draw per product, shared by all cities (see header).
+    const jitter = ctx.rng.jitter(TRADE_WALK_STEP);
 
-    const prevMult = prev / base;
-    const nextMult = next / base;
-    if (prevMult < TRADE_BOOM_MULT && nextMult >= TRADE_BOOM_MULT) {
-      emitEvent(state, 'success', 'economy',
-        `🚢 Port Rosa is paying a premium for ${getProduct(pid).name} (${nextMult.toFixed(2)}× base) — exports are lucrative.`);
-    } else if (prevMult > TRADE_GLUT_MULT && nextMult <= TRADE_GLUT_MULT) {
-      emitEvent(state, 'info', 'economy',
-        `🚢 ${getProduct(pid).name} glut in Port Rosa — export prices have collapsed (${nextMult.toFixed(2)}× base).`);
+    for (const cid of TRADE_CITY_IDS) {
+      const city = getTradeCity(cid);
+      const book = state.tradeCities[cid] ?? (state.tradeCities[cid] = { pricesByProduct: {} });
+      const bias = cityBias(cid, pid);
+      const prev = book.pricesByProduct[pid] ?? Math.round(base * bias);
+      // Random walk with a gentle pull toward the event-shifted, city-biased
+      // center: a drought makes ports pay up for grain, a recession discounts
+      // everything — so world news is also trade news.
+      const center = base * worldTradePriceMult(state, pid) * bias;
+      const walked = prev * (1 + jitter * city.walkSign);
+      const next = Math.round(
+        clamp(
+          walked + (center - walked) * TRADE_CENTER_PULL,
+          base * bias * TRADE_PRICE_MIN_MULT,
+          base * bias * TRADE_PRICE_MAX_MULT,
+        ),
+      );
+      book.pricesByProduct[pid] = next;
+
+      const prevMult = prev / (base * bias);
+      const nextMult = next / (base * bias);
+      if (prevMult < TRADE_BOOM_MULT && nextMult >= TRADE_BOOM_MULT) {
+        emitEvent(state, 'success', 'economy',
+          `${city.emoji} ${city.name} is paying a premium for ${getProduct(pid).name} (${(next / base).toFixed(2)}× base) — exports are lucrative.`);
+      } else if (prevMult > TRADE_GLUT_MULT && nextMult <= TRADE_GLUT_MULT) {
+        emitEvent(state, 'info', 'economy',
+          `${city.emoji} ${getProduct(pid).name} glut in ${city.name} — export prices have collapsed (${(next / base).toFixed(2)}× base).`);
+      }
     }
   }
 }
 
 /**
  * Standing export orders: after the day's prices land, warehouses with a rule
- * "auto-export when ≥ minMult × base, keep N" sell their surplus hands-free.
+ * "auto-export when ≥ minMult × base, keep N" sell their surplus hands-free —
+ * routed to whichever city nets the most after freight.
  */
 function runStandingOrders(ctx: SimContext): void {
   const { state } = ctx;
@@ -81,13 +97,13 @@ function runStandingOrders(ctx: SimContext): void {
     for (const pid in fac.exportOrders) {
       const order = fac.exportOrders[pid]!;
       const base = getProduct(pid).basePrice;
-      const price = state.tradeCity.pricesByProduct[pid] ?? base;
-      if (price < base * order.minMult) continue;
+      const best = pickBestCity(state, pid);
+      if (best.price < base * order.minMult) continue;
       const have =
         getQuantity(fac.inputInventory, pid) + getQuantity(fac.outputInventory, pid);
       const qty = have - order.keep;
       if (qty <= 0) continue;
-      performExport(state, fac.ownerFirmId, fac.id, pid, qty, 'Standing order shipped');
+      performExport(state, fac.ownerFirmId, fac.id, pid, qty, 'Standing order shipped', best.cityId);
     }
   }
 }

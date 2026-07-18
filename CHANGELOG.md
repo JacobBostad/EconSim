@@ -25,6 +25,11 @@ engine tests), probed with headless balance runs, and guarded by CI.
 - **Port Rosa follows world news**: trade prices mean-revert toward
   event-shifted centers (droughts raise grain there too); fuel spikes scale
   export freight. Exporters never ship stock their own shelves are waiting on.
+- **Ironvale, a second trade city**: an industrial inland hub that pays up for
+  tools, minerals and finery but discounts food, behind pricier freight. Its
+  price walk is anti-correlated with Port Rosa's, so arbitrage spreads open
+  and close — exports, standing orders, and AI brokers all route to whichever
+  port nets more.
 - **Debt is a lifecycle, not a state**: AI firms deleverage when cash-rich
   instead of carrying expansion loans forever; receivership offers a one-click
   emergency loan against remaining credit; the advisor flags heavy debt

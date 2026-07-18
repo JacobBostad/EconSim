@@ -21,6 +21,8 @@ import { CENTS } from '../sim/data/constants';
 import { upgradeCost } from '../sim/core/Upgrades';
 import { sellRefund } from '../sim/core/Demolition';
 import { pricingInsight } from '../sim/selectors/marketSelectors';
+import { pickBestCity, cityPrice } from '../sim/core/Trade';
+import { TRADE_CITY_IDS, getTradeCity } from '../sim/data/tradeCities';
 
 export function FacilityActions({ fac }: { fac: Facility }): React.ReactElement {
   const sim = useGameStore((s) => s.sim);
@@ -71,26 +73,47 @@ export function FacilityActions({ fac }: { fac: Facility }): React.ReactElement 
         </div>
       )}
 
-      {/* Warehouse: export to Port Rosa */}
+      {/* Warehouse: export to the trade cities */}
       {fac.type === 'warehouse' && isPlayer && (
         <div className="card">
-          <div className="section-title" style={{ marginTop: 0 }}>🚢 Export to Port Rosa</div>
+          <div className="section-title" style={{ marginTop: 0 }}>🚢 Export — Port Rosa & Ironvale</div>
           <p className="muted small" style={{ margin: '0 0 6px' }}>
-            Port Rosa's prices drift daily (0.6×–1.8× base) and follow world events; freight takes 8% (more during fuel spikes).
-            Stage goods here via supply contracts, then sell when prices spike.
+            Each city's prices drift daily around its own bias (Ironvale pays up
+            for industry, discounts food) and follow world events; freight takes
+            ~8% (more during fuel spikes, more to inland Ironvale). Ship to
+            whichever port pays — the button routes each product to today's best
+            net price.
           </p>
           {ALL_PRODUCT_IDS.map((pid) => {
             const qty = getQuantity(fac.inputInventory, pid) + getQuantity(fac.outputInventory, pid);
-            const price = state.tradeCity.pricesByProduct[pid] ?? getProduct(pid).basePrice;
-            const mult = price / getProduct(pid).basePrice;
             if (qty <= 0) return null;
+            const base = getProduct(pid).basePrice;
+            const best = pickBestCity(state, pid);
             return (
               <div className="row between small" key={pid} style={{ marginBottom: 4 }}>
                 <span>{getProduct(pid).name} × {qty}</span>
-                <span className="mono" style={{ color: mult >= 1.3 ? 'var(--green)' : mult <= 0.75 ? 'var(--red)' : undefined }}>
-                  {formatMoney(price)} ({mult.toFixed(2)}×)
+                <span className="mono">
+                  {TRADE_CITY_IDS.map((cid) => {
+                    const price = cityPrice(state, cid, pid);
+                    const mult = price / base;
+                    const isBest = cid === best.cityId;
+                    return (
+                      <span
+                        key={cid}
+                        title={`${getTradeCity(cid).name}: ${formatMoney(price)} (${mult.toFixed(2)}× base)`}
+                        style={{
+                          marginLeft: 6,
+                          color: mult >= 1.3 ? 'var(--green)' : mult <= 0.75 ? 'var(--red)' : undefined,
+                          fontWeight: isBest ? 700 : 400,
+                        }}
+                      >
+                        {getTradeCity(cid).emoji}{formatMoney(price)}
+                      </span>
+                    );
+                  })}
                 </span>
                 <button
+                  title={`Ships to ${getTradeCity(best.cityId).name} (best net price today)`}
                   onClick={() =>
                     dispatch({ type: 'EXPORT_GOODS', firmId: fac.ownerFirmId, facilityId: fac.id, productId: pid, quantity: qty })
                   }

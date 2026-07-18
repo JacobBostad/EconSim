@@ -14,6 +14,8 @@ import { spendingPower } from './citizenSelectors';
 import { getProduct } from '../data/products';
 import { getQuantity } from '../entities/Inventory';
 import { formatMoney } from '../../utils/formatMoney';
+import { pickBestCity } from '../core/Trade';
+import { getTradeCity } from '../data/tradeCities';
 
 export interface Advice {
   icon: string;
@@ -98,21 +100,22 @@ export function morningBriefing(state: GameState): Advice[] {
     });
   }
 
-  // 5. Trade: Port Rosa pays a premium for something you actually hold.
+  // 5. Trade: some port pays a premium for something you actually hold.
   for (const facId of player.facilities) {
     const fac = state.facilities[facId];
     if (!fac) continue;
     let found = false;
-    for (const pid in state.tradeCity.pricesByProduct) {
-      const price = state.tradeCity.pricesByProduct[pid]!;
+    for (const pid of Object.keys(state.marketStats)) {
+      const best = pickBestCity(state, pid);
       const base = getProduct(pid).basePrice;
-      if (price < base * 1.3) continue;
+      if (best.price < base * 1.3) continue;
       const held = getQuantity(fac.inputInventory, pid) + getQuantity(fac.outputInventory, pid);
       if (held >= 10) {
+        const city = getTradeCity(best.cityId);
         items.push({
-          icon: '🚢',
+          icon: city.emoji,
           severity: 'info',
-          text: `Port Rosa pays ${(price / base).toFixed(2)}× base for ${getProduct(pid).name} and you hold ${held} — stage them in a warehouse and export.`,
+          text: `${city.name} pays ${(best.price / base).toFixed(2)}× base for ${getProduct(pid).name} and you hold ${held} — stage them in a warehouse and export.`,
         });
         found = true;
         break;
