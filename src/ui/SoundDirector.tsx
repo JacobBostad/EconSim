@@ -45,7 +45,13 @@ export function SoundDirector(): React.ReactElement | null {
         fresh.push(ev.message);
         if (fresh.length > 20) break; // sound at most once per burst anyway
       }
+      const playerName = player?.name ?? '';
       if (fresh.some((m) => m.includes('left you for'))) playPoachAlert();
+      // Wholesale moments that name the player: winning a customer is good
+      // news, being dropped for gouging is bad news.
+      else if (playerName && fresh.some((m) =>
+        m.includes(`locally from ${playerName}`) || m.includes(`order to ${playerName}`))) playNews('good');
+      else if (playerName && fresh.some((m) => m.includes(`dropped ${playerName}`))) playNews('bad');
       else if (fresh.some((m) => m.includes('opens a roastery') || m.includes('built') && m.includes('Residences'))) playBuildChime();
     }
 
