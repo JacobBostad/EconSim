@@ -48,7 +48,7 @@ import { CHAIN_BLUEPRINTS, chainCost } from '../data/chains';
 import { performAcquisition } from './Acquisition';
 import { upgradeFacility } from './Upgrades';
 import { sellFacility } from './Demolition';
-import { performExport, pickBestCity } from './Trade';
+import { performExport, performCityPurchase, pickBestCity } from './Trade';
 import { landCostMultiplier, landValueAt } from './LandValue';
 import { placementBlocker } from './Placement';
 import { WHOLESALE_MULT_MIN, WHOLESALE_MULT_MAX } from './Wholesale';
@@ -288,6 +288,12 @@ export class Simulation {
           `🤝 ${cand.name} signed on to run ${where} (${formatMoney(cand.salaryPerDay)}/day).`, facilityId ?? command.firmId);
         return;
       }
+      case 'BUY_FROM_CITY':
+        performCityPurchase(
+          s, command.firmId, command.facilityId, command.productId,
+          command.quantity, command.cityId,
+        );
+        return;
       case 'FIRE_MANAGER': {
         const firm = s.firms[command.firmId];
         if (!firm) return;

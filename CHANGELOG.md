@@ -129,6 +129,15 @@ engine tests), probed with headless balance runs, and guarded by CI.
   orders unattended and keeps standing export orders on every stocked
   warehouse. Hired from the Player Holdings inspector; one per role,
   $28–52/day, seniority buys extra duties and sharper price floors.
+- **Commodity desk** (Pillar 3): the trade-city price walks are now playable
+  in both directions — buy goods FROM Port Rosa or Ironvale at price +
+  freight into a warehouse, hold the position (storage is the limit), and
+  export the spike later. Temporal arbitrage joins spatial: buy the 0.7×
+  dip, sell the 1.5× spike, pay freight both ways. Probed at 76%/300d ROI
+  ceiling for a perfectly disciplined bot before warehouse costs — a real
+  edge that doesn't dominate running a business, so freight stayed
+  symmetric at ~8%. The AI deliberately doesn't speculate; the desk is a
+  player edge, like the wizard.
 
 - **Coffee**: a cheap everyday product (grain → roastery → café) nobody serves
   at start — a first-mover mainstream niche, wizardable, with AI contest.

@@ -58,6 +58,15 @@ export type Command =
       keep: number;
     }
   | {
+      type: 'BUY_FROM_CITY';
+      firmId: FirmId;
+      /** Destination warehouse (storage is the position limit). */
+      facilityId: FacilityId;
+      productId: ProductId;
+      quantity: number;
+      cityId: string;
+    }
+  | {
       type: 'EXPORT_GOODS';
       firmId: FirmId;
       facilityId: FacilityId;

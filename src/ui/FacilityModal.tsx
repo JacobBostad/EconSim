@@ -23,7 +23,7 @@ import { upgradeCost } from '../sim/core/Upgrades';
 import { TRAINING_COST_PER_WORKER, TRAINING_SKILL_GAIN, SKILL_MAX } from '../sim/systems/LaborSystem';
 import { sellRefund } from '../sim/core/Demolition';
 import { pricingInsight } from '../sim/selectors/marketSelectors';
-import { pickBestCity, cityPrice } from '../sim/core/Trade';
+import { pickBestCity, cityPrice, exportFreightFee } from '../sim/core/Trade';
 import { TRADE_CITY_IDS, getTradeCity } from '../sim/data/tradeCities';
 import { managerCandidates, managerDuties } from '../sim/systems/ManagerSystem';
 import { computeTime } from '../sim/core/Tick';
@@ -199,6 +199,14 @@ export function FacilityActions({ fac }: { fac: Facility }): React.ReactElement 
           {ALL_PRODUCT_IDS.every(
             (pid) => getQuantity(fac.inputInventory, pid) + getQuantity(fac.outputInventory, pid) <= 0,
           ) && <div className="muted small">Nothing staged — wire a supply contract into this warehouse.</div>}
+
+          <div className="section-title">📈 Commodity desk (buy from the cities)</div>
+          <p className="muted small" style={{ margin: '0 0 6px' }}>
+            Buy at a city's price plus freight and hold it here — storage is your
+            position limit. Buy dips (red quotes), export spikes (green): the
+            same walk you sell into can be bought from.
+          </p>
+          <CommodityDesk fac={fac} />
 
           <div className="section-title">Standing orders (auto-export daily)</div>
           {ALL_PRODUCT_IDS.filter(
@@ -681,6 +689,57 @@ function MarketingControls({
           </div>
         </>
       )}
+    </div>
+  );
+}
+
+/** Buy-side of the trade cities: pick a product/quantity, see each city's
+ * delivered cost (price + freight), and take a position in the warehouse. */
+function CommodityDesk({ fac }: { fac: Facility }): React.ReactElement {
+  const sim = useGameStore((s) => s.sim);
+  const dispatch = useGameStore((s) => s.dispatch);
+  const state = sim.getState();
+  const [buyPid, setBuyPid] = useState('grain');
+  const [buyQty, setBuyQty] = useState(50);
+  const base = getProduct(buyPid).basePrice;
+  return (
+    <div className="row small" style={{ gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+      <select value={buyPid} onChange={(e) => setBuyPid(e.target.value)}>
+        {ALL_PRODUCT_IDS.map((pid) => (
+          <option key={pid} value={pid}>{getProduct(pid).name}</option>
+        ))}
+      </select>
+      <input
+        type="number"
+        min={1}
+        value={buyQty}
+        style={{ width: 60 }}
+        onChange={(e) => {
+          const v = parseInt(e.target.value, 10);
+          if (Number.isFinite(v)) setBuyQty(Math.max(1, v));
+        }}
+      />
+      {TRADE_CITY_IDS.map((cid) => {
+        const price = cityPrice(state, cid, buyPid);
+        const fee = exportFreightFee(state, cid);
+        const unit = Math.round(price * (1 + fee));
+        const mult = price / base;
+        return (
+          <button
+            key={cid}
+            title={`${getTradeCity(cid).name}: ${formatMoney(price)} (${mult.toFixed(2)}× base) + ${(fee * 100).toFixed(0)}% freight = ${formatMoney(unit)}/unit delivered`}
+            style={{ color: mult <= 0.8 ? 'var(--green)' : mult >= 1.2 ? 'var(--red)' : undefined }}
+            onClick={() =>
+              dispatch({
+                type: 'BUY_FROM_CITY', firmId: fac.ownerFirmId, facilityId: fac.id,
+                productId: buyPid, quantity: buyQty, cityId: cid,
+              })
+            }
+          >
+            {getTradeCity(cid).emoji} Buy @ {formatMoney(unit)}
+          </button>
+        );
+      })}
     </div>
   );
 }

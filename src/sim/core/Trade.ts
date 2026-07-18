@@ -11,7 +11,7 @@ import { emitEvent, recordTransaction } from './GameState';
 import { firmAccount, WORLD_ACCOUNT } from './Transactions';
 import type { FirmId, FacilityId, ProductId } from './Id';
 import { getProduct } from '../data/products';
-import { getQuantity, removeStock } from '../entities/Inventory';
+import { getQuantity, removeStock, addStock, totalUnits } from '../entities/Inventory';
 import { EXPORT_FREIGHT_FEE } from '../data/constants';
 import { worldTransportMult } from '../data/worldEvents';
 import { getTradeCity, TRADE_CITY_IDS, type TradeCityId } from '../data/tradeCities';
@@ -30,6 +30,52 @@ export interface ExportQuote {
   cityId: TradeCityId;
   price: number; // raw quoted price, cents
   netPrice: number; // after freight, cents
+}
+
+/**
+ * Commodity desk (docs/design/commodity-market.md): buy goods FROM a trade
+ * city into a warehouse at its quoted price plus the same freight the sell
+ * side pays. Storage is the position limit; money books as importPurchase
+ * (firm → world) so conservation holds. Returns units actually bought.
+ */
+export function performCityPurchase(
+  state: GameState,
+  firmId: FirmId,
+  facilityId: FacilityId,
+  productId: ProductId,
+  quantity: number,
+  cityId: string = 'port_rosa',
+): number {
+  const firm = state.firms[firmId];
+  const fac = state.facilities[facilityId];
+  if (!firm || !fac || fac.ownerFirmId !== firmId || fac.type !== 'warehouse') return 0;
+  const product = getProduct(productId);
+  const room =
+    fac.storageCapacity - totalUnits(fac.inputInventory) - totalUnits(fac.outputInventory);
+  const qty = Math.min(Math.max(0, Math.round(quantity)), Math.max(0, room));
+  if (qty <= 0) return 0;
+  const unitCost = Math.round(cityPrice(state, cityId, productId) * (1 + exportFreightFee(state, cityId)));
+  const cost = unitCost * qty;
+  if (firm.cash < cost) {
+    emitEvent(state, 'danger', 'player',
+      `Cannot afford ${qty} ${product.name} from ${getTradeCity(cityId).name} (${formatMoney(cost)}).`, firmId);
+    return 0;
+  }
+  recordTransaction(state, {
+    from: firmAccount(firmId),
+    to: WORLD_ACCOUNT,
+    amount: cost,
+    firmId,
+    category: 'importPurchase',
+    productId,
+    quantity: qty,
+    note: `Bought ${qty} ${product.name} from ${getTradeCity(cityId).name} @ ${formatMoney(unitCost)}`,
+  });
+  addStock(fac.inputInventory, productId, qty, product.defaultQuality);
+  const city = getTradeCity(cityId);
+  emitEvent(state, 'success', 'logistics',
+    `${city.emoji} Bought ${qty} ${product.name} from ${city.name} at ${formatMoney(unitCost)}/unit (freight in).`, facilityId);
+  return qty;
 }
 
 /** The best-paying city for a product after freight. */
