@@ -180,6 +180,12 @@ hireable managers, a real commodity market, and shared daily play.
   nobody departs, yet). The Gazette gains a 🎩 Society column: the ladder's
   daily counts, the citizen on the longest climbing streak, and the newest
   affluent household.
+- **Scenario social character**: every scenario card sells its town's tier
+  story up front — one probe-grounded line (Gold Rush mints affluence on
+  its own; Mill Country is "a worker town waiting for someone to lift it")
+  under the description on New Game. Lifting Mill Country to a
+  comfortable-or-better majority earns 🌅 Lifted the Town, an achievement
+  no other scenario can grant.
 - **Follow mode**: a 🎥 Follow button on any citizen puts the camera on
   their day — commute, shopping trips, and, if you've been paying them
   well, the day they earn their gold circlet. Esc or grabbing the map

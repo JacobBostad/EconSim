@@ -91,6 +91,7 @@ export function NewGameModal(): React.ReactElement | null {
               <div style={{ fontSize: 20 }}>{sc.icon}</div>
               <div style={{ fontWeight: 700 }}>{sc.name}</div>
               <div className="small" style={{ opacity: 0.85 }}>{sc.description}</div>
+              <div className="muted small" style={{ marginTop: 4, fontStyle: 'italic' }}>{sc.society}</div>
             </button>
           ))}
         </div>

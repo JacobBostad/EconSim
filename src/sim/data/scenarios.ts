@@ -48,6 +48,9 @@ export interface ScenarioDef {
   name: string;
   icon: string;
   description: string;
+  /** The town's social character through the prosperity-tier lens — one
+   * line, grounded in 300-day unattended probe measurements. */
+  society: string;
   aiChains: AiChainSpec[];
   /**
    * Starting homes (default 20, two citizens each). Fewer homes = a housing
@@ -130,6 +133,7 @@ export const SCENARIOS: Record<string, ScenarioDef> = {
     icon: '🏘️',
     description:
       'The classic town: three AI firms cover bread, tools, and clothes. Compete anywhere.',
+    society: 'A balanced town — a broad working class, and a ladder that is yours to build.',
     aiChains: [breadChain(), toolsChain(), clothesChain()],
   },
   gold_rush: {
@@ -138,6 +142,7 @@ export const SCENARIOS: Record<string, ScenarioDef> = {
     icon: '⛏️',
     description:
       'A mining boomtown: TWO tool companies wage a price war, one bakery feeds everyone — and nobody sells clothes. That gap is yours.',
+    society: 'Mining pay mints affluence — half this town climbs the ladder on its own.',
     aiChains: [
       breadChain({ cash: dollars(32000) }),
       toolsChain(),
@@ -159,6 +164,7 @@ export const SCENARIOS: Record<string, ScenarioDef> = {
     icon: '⚓',
     description:
       'A harbor town obsessed with the export trade: the bakery and the forge both ship their best to Port Rosa, leaving home shelves thin — and nobody sells clothes. Feed the town they forgot, or out-sail them.',
+    society: 'Export wealth showers the docks — affluence comes easy, and the shops that court it thrive.',
     aiChains: [
       breadChain({
         firmName: 'Harbor Loaf Co',
@@ -195,6 +201,7 @@ export const SCENARIOS: Record<string, ScenarioDef> = {
     icon: '🌾',
     description:
       'Breadbasket country: two bakery empires fight for every crumb, a boutique clothes the town — but no one makes tools. Bring the hardware.',
+    society: 'Steady farm towns climb slowly — a solid middle emerges, but real wealth must be grown.',
     aiChains: [
       breadChain(),
       breadChain({
@@ -216,6 +223,7 @@ export const SCENARIOS: Record<string, ScenarioDef> = {
     icon: '🏭',
     description:
       'A town of mills and no fields: every factory buys its raw goods from the Import Terminal at a stiff markup. Build the farms and mines they lack, undercut the importer, and every mill in town becomes your customer.',
+    society: 'A worker town waiting for someone to lift it — import prices eat every paycheck.',
     aiChains: [
       breadChain({
         importerFed: true,
@@ -246,6 +254,7 @@ export const SCENARIOS: Record<string, ScenarioDef> = {
     icon: '🏗️',
     description:
       'Every home is full and the mills are hiring — the boom is here but there is nowhere to live. Immigration stalls until someone builds housing: be the developer, collect the rent, and grow the town that makes you rich. Watch out — rival landlords want the same ground.',
+    society: 'Rents crowd out savings — a town of workers until housing lets people breathe.',
     homes: 13,
     aiChains: [
       breadChain({

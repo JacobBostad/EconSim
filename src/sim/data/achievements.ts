@@ -417,6 +417,20 @@ export const ACHIEVEMENT_DEFS: AchievementDef[] = [
       return up > cits.length / 2;
     },
   },
+  {
+    id: 'town_lifted',
+    name: 'Lifted the Town',
+    icon: '🌅',
+    description: 'Brought a comfortable majority to Mill Country — the worker town that waited.',
+    hint: 'Mill Country stays a worker town on its own: import prices eat every paycheck. Build local farms and mines, cut the cost of living, and raise wages until most citizens climb out of the worker tier.',
+    check: (s) => {
+      if (s.scenarioId !== 'mill_country') return false;
+      const cits = Object.values(s.citizens);
+      if (cits.length < 10) return false;
+      const up = cits.filter((c) => c.tier !== 'worker').length;
+      return up > cits.length / 2;
+    },
+  },
 ];
 
 const DEF_BY_ID: Record<string, AchievementDef> = Object.fromEntries(

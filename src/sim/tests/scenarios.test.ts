@@ -4,6 +4,7 @@ import { createInitialState } from '../data/startingScenario';
 import { SCENARIOS } from '../data/scenarios';
 import { ticksPerDay } from '../core/Tick';
 import { totalMoneySupply } from '../core/GameState';
+import { ACHIEVEMENT_DEFS } from '../data/achievements';
 
 describe('Scenario variants', () => {
   it('the default town matches the classic three chains', () => {
@@ -52,6 +53,31 @@ describe('Scenario variants', () => {
   it('an unknown scenario id falls back to the default town', () => {
     const state = createInitialState(1, undefined, 'nope');
     expect(Object.values(state.firms).some((f) => f.name === 'Sunrise Foods')).toBe(true);
+  });
+
+  it('every scenario sells its social character up front', () => {
+    for (const sc of Object.values(SCENARIOS)) {
+      expect(sc.society.length).toBeGreaterThan(20);
+      expect(sc.society).not.toBe(sc.description);
+    }
+  });
+
+  it('Lifted the Town only fires in Mill Country', () => {
+    const def = ACHIEVEMENT_DEFS.find((a) => a.id === 'town_lifted')!;
+    const lift = (state: ReturnType<typeof createInitialState>) => {
+      for (const c of Object.values(state.citizens)) c.tier = 'comfortable';
+    };
+
+    const mill = createInitialState(7, undefined, 'mill_country');
+    expect(def.check(mill)).toBe(false); // everyone starts a worker
+    lift(mill);
+    expect(def.check(mill)).toBe(true);
+
+    // The identical tier picture in the default town earns nothing here —
+    // Meadowbrook was never the town that needed lifting.
+    const meadow = createInitialState(7, undefined, 'meadowbrook');
+    lift(meadow);
+    expect(def.check(meadow)).toBe(false);
   });
 });
 
