@@ -389,6 +389,14 @@ export const ACHIEVEMENT_DEFS: AchievementDef[] = [
     },
   },
   {
+    id: 'market_wizard',
+    name: 'Market Wizard',
+    icon: '📈',
+    description: 'Delivered a forward contract locked at a 1.3×+ spike.',
+    hint: 'On the warehouse commodity desk, lock a city\'s spiked price as a forward, then buy or produce the goods cheaper and deliver before the deadline.',
+    check: (s) => (player(s)?.forwardWins ?? 0) >= 1,
+  },
+  {
     id: 'high_society',
     name: 'High Society',
     icon: '🥂',

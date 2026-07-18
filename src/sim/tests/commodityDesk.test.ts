@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { newSim } from './helpers';
 import { totalMoneySupply } from '../core/GameState';
-import { cityPrice, exportFreightFee } from '../core/Trade';
+import { cityPrice, exportFreightFee, impactedFillPrice } from '../core/Trade';
 import { getQuantity, totalUnits } from '../entities/Inventory';
 import { getProduct } from '../data/products';
 import type { Simulation } from '../core/Simulation';
@@ -24,7 +24,8 @@ describe('Commodity desk', () => {
     const cash0 = player.cash;
 
     const unit = Math.round(
-      cityPrice(state, 'ironvale', 'grain') * (1 + exportFreightFee(state, 'ironvale')),
+      impactedFillPrice(cityPrice(state, 'ironvale', 'grain'), 40, 1) *
+        (1 + exportFreightFee(state, 'ironvale')),
     );
     sim.dispatch({
       type: 'BUY_FROM_CITY', firmId: player.id, facilityId: wh.id,

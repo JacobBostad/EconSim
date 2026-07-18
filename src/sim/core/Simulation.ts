@@ -66,6 +66,7 @@ import { runMissionSystem } from '../systems/MissionSystem';
 import { runMarketStatsSystem } from '../systems/MarketStatsSystem';
 import { runAIStrategySystem } from '../systems/AIStrategySystem';
 import { runManagerSystem, managerCandidates } from '../systems/ManagerSystem';
+import { runForwardSystem, sellForward } from '../systems/ForwardSystem';
 import { runEventLogSystem } from '../systems/EventLogSystem';
 import { runBankruptcySystem } from '../systems/BankruptcySystem';
 import { runMarketingSystem } from '../systems/MarketingSystem';
@@ -95,6 +96,7 @@ const SYSTEMS: SystemFn[] = [
   // --- daily roll-ups (each guards on the day boundary internally) ---
   runWorldEventSystem, // roll/expire world events first so the day sees them
   runTradeCitySystem, // Port Rosa price walk (daily)
+  runForwardSystem, // settle due forwards right after prices land (no rng)
   runRushOrderSystem, // rush offers/expiry after prices land (own rng stream)
   runFireSaleSystem, // rival fire-sale offers/expiry (own rng stream)
   runMarketStatsSystem, // finalize previous day's stats; hourly inventory totals
@@ -288,6 +290,12 @@ export class Simulation {
           `🤝 ${cand.name} signed on to run ${where} (${formatMoney(cand.salaryPerDay)}/day).`, facilityId ?? command.firmId);
         return;
       }
+      case 'SELL_FORWARD':
+        sellForward(
+          s, command.firmId, command.productId, command.quantity,
+          command.cityId, command.deliveryDay, computeTime(s.tick, s.config).day,
+        );
+        return;
       case 'BUY_FROM_CITY':
         performCityPurchase(
           s, command.firmId, command.facilityId, command.productId,

@@ -47,11 +47,43 @@ they'd otherwise put into retail (which compounds). Symmetric 8% freight
 makes speculation a genuinely profitable sideline that does not dominate
 operating a business, so no extra buy-side penalty was added.
 
+## Phase 2 — forwards, price impact (SHIPPED)
+
+**Forward contracts.** `SELL_FORWARD` locks today's city quote for
+delivery 3–10 days out (max 2 open, ≤200 units). On the due day, staged
+warehouse goods are pulled and paid at the locked price minus that day's
+freight (freight risk stays live); short units cost a 15% default
+penalty. This is shorting with a delivery truck: lock a spike, buy the
+dip later, deliver. `market_wizard` achievement for delivering a forward
+locked ≥1.3× base.
+
+**Price impact — the finding that reshaped the phase.** Probing the
+forward design exposed that Phase 1 had shipped a money printer:
+
+- A shorting bot on the real recorded walks won 97% of trades for
+  $48k/300d (worst trade −$16) — anti-correlated cities mean "lock A's
+  spike, buy from B cheap" is riskless.
+- Worse, plain instant cross-city arbitrage (buy B, export A, same day)
+  was profitable on **300 of 300 probed days**, ~$1,300/day at 200 units.
+
+The fix is market microstructure, not fees: **trades move the quote**.
+Every desk buy, export, and forward lock fills along a linear impact
+curve (0.15%/unit, so a 200-unit order averages 15% slippage) and leaves
+the city's quoted price moved by the full amount (clamped to the walk
+band; the daily center-pull heals it). Applies to everyone, AI exports
+included — a glut softens prices for real now. Re-probed live:
+
+| Strategy (100 days, real commands) | cash delta |
+| --- | --- |
+| greedy 200-unit best-spread round trips | **−$25,997** |
+| patient 50-unit trips, ≥5% edge only | **+$3,809** (~$38/day) |
+
+Greed loses, craft earns a modest sideline, and the 4-seed unattended
+town probe is byte-identical to baseline (AI trade sizes round below
+impact). That's a market.
+
 ## Later phases
 
-- Forward contracts (sell goods you don't hold yet at today's price —
-  shorting with a delivery deadline and a default penalty).
-- A speculation achievement (buy under 0.8×, sell the same lot over 1.4×).
 - Market-moving world events with pre-announcements ("Ironvale tool
   tender next week") so reading the news becomes a trading skill.
 - Gazette coverage of big player trades.

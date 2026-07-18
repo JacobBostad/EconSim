@@ -67,6 +67,15 @@ export type Command =
       cityId: string;
     }
   | {
+      type: 'SELL_FORWARD';
+      firmId: FirmId;
+      productId: ProductId;
+      quantity: number;
+      cityId: string;
+      /** Absolute game day to deliver by (3–10 days out). */
+      deliveryDay: number;
+    }
+  | {
       type: 'EXPORT_GOODS';
       firmId: FirmId;
       facilityId: FacilityId;

@@ -138,6 +138,17 @@ engine tests), probed with headless balance runs, and guarded by CI.
   edge that doesn't dominate running a business, so freight stayed
   symmetric at ~8%. The AI deliberately doesn't speculate; the desk is a
   player edge, like the wizard.
+- **Forward contracts + price impact**: lock a city's spiked price today,
+  deliver within 3–10 days from any warehouse — shorting with a delivery
+  truck (miss the delivery and pay a 15% default penalty; 📈 Market Wizard
+  for delivering a 1.3×+ lock). Probing forwards exposed that the desk was
+  a money printer — instant cross-city arbitrage profited every single day
+  and a shorting bot won 97% of trades — so the market got real
+  microstructure: **every trade moves the quote** (0.15%/unit, orders fill
+  along the impact curve, the daily walk heals it). Measured live: greedy
+  200-unit round trips now lose $26k/100d while patient 50-unit trading
+  with a real edge earns ~$38/day. Craft beats greed, the town probe is
+  unchanged, and AI gluts soften prices for real.
 
 - **Coffee**: a cheap everyday product (grain → roastery → café) nobody serves
   at start — a first-mover mainstream niche, wizardable, with AI contest.

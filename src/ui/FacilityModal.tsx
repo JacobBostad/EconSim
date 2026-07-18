@@ -26,6 +26,7 @@ import { pricingInsight } from '../sim/selectors/marketSelectors';
 import { pickBestCity, cityPrice, exportFreightFee } from '../sim/core/Trade';
 import { TRADE_CITY_IDS, getTradeCity } from '../sim/data/tradeCities';
 import { managerCandidates, managerDuties } from '../sim/systems/ManagerSystem';
+import { FORWARD_MAX_OPEN } from '../sim/systems/ForwardSystem';
 import { computeTime } from '../sim/core/Tick';
 
 export function FacilityActions({ fac }: { fac: Facility }): React.ReactElement {
@@ -740,6 +741,49 @@ function CommodityDesk({ fac }: { fac: Facility }): React.ReactElement {
           </button>
         );
       })}
+      {(() => {
+        const firm = state.firms[fac.ownerFirmId];
+        if (!firm) return null;
+        const day = computeTime(state.tick, state.config).day;
+        const canLock = firm.forwards.length < FORWARD_MAX_OPEN;
+        return (
+          <>
+            <span className="muted" style={{ marginLeft: 4 }}>· forward (deliver in 7d):</span>
+            {TRADE_CITY_IDS.map((cid) => {
+              const price = cityPrice(state, cid, buyPid);
+              const mult = price / base;
+              return (
+                <button
+                  key={`fwd-${cid}`}
+                  disabled={!canLock}
+                  title={canLock
+                    ? `Lock ${getTradeCity(cid).name}'s ${formatMoney(price)} (${mult.toFixed(2)}× base) for ${buyQty} ${getProduct(buyPid).name}, deliver from any warehouse by day ${day + 7}. Come up short and pay a 15% default penalty.`
+                    : 'Two open forwards is the limit — deliver or wait.'}
+                  style={{ color: mult >= 1.3 ? 'var(--green)' : undefined }}
+                  onClick={() =>
+                    dispatch({
+                      type: 'SELL_FORWARD', firmId: fac.ownerFirmId, productId: buyPid,
+                      quantity: buyQty, cityId: cid, deliveryDay: day + 7,
+                    })
+                  }
+                >
+                  {getTradeCity(cid).emoji} Lock @ {formatMoney(price)}
+                </button>
+              );
+            })}
+            {firm.forwards.map((f) => (
+              <span
+                key={f.id}
+                className="badge small"
+                title={`Deliver ${f.quantity} ${getProduct(f.productId).name} to ${getTradeCity(f.cityId).name} by day ${f.deliveryDay} at the locked ${formatMoney(f.lockedPrice)}/unit (minus that day's freight). Short units cost a 15% penalty.`}
+                style={{ color: f.deliveryDay - day <= 2 ? 'var(--amber)' : undefined }}
+              >
+                📜 {f.quantity} {getProduct(f.productId).name} → {getTradeCity(f.cityId).emoji} day {f.deliveryDay} @ {formatMoney(f.lockedPrice)}
+              </span>
+            ))}
+          </>
+        );
+      })()}
     </div>
   );
 }

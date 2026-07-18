@@ -12,9 +12,49 @@ import { firmAccount, WORLD_ACCOUNT } from './Transactions';
 import type { FirmId, FacilityId, ProductId } from './Id';
 import { getProduct } from '../data/products';
 import { getQuantity, removeStock, addStock, totalUnits } from '../entities/Inventory';
-import { EXPORT_FREIGHT_FEE } from '../data/constants';
+import { EXPORT_FREIGHT_FEE, TRADE_PRICE_MIN_MULT, TRADE_PRICE_MAX_MULT } from '../data/constants';
 import { worldTransportMult } from '../data/worldEvents';
-import { getTradeCity, TRADE_CITY_IDS, type TradeCityId } from '../data/tradeCities';
+import { getTradeCity, TRADE_CITY_IDS, cityBias, type TradeCityId } from '../data/tradeCities';
+
+/**
+ * Price impact: trading against a city MOVES its quote — buying pushes the
+ * price up, selling (or hedging demand with a forward) pushes it down, at
+ * 0.15%/unit clamped to the walk's legal band. This is what makes the
+ * commodity desk a market instead of a money printer: probes showed that
+ * without impact, instant cross-city round trips profit every single day
+ * (~$1.3k/day at 200 units) and forwards short-circuit into riskless
+ * spatial arb (97% win rate). With impact, a 200-unit trade moves the
+ * quote 30% against you — the first trade wins, repetition self-defeats,
+ * and the daily walk's center-pull heals the market over following days.
+ * Applies to every export (AI gluts soften prices too — same economics
+ * for everyone).
+ */
+export const PRICE_IMPACT_PER_UNIT = 0.0015;
+
+/** Average fill price for a trade of `qty` against a linear impact curve —
+ * you get the first unit at the quote and the last at the fully-moved
+ * price, so the fill averages the midpoint. Large orders pay their own
+ * market impact instead of dumping it all on the next trader. */
+export function impactedFillPrice(price: number, qty: number, direction: 1 | -1): number {
+  return price * (1 + direction * (qty * PRICE_IMPACT_PER_UNIT) / 2);
+}
+
+export function applyPriceImpact(
+  state: GameState,
+  cityId: string,
+  productId: ProductId,
+  quantity: number,
+  direction: 1 | -1,
+): void {
+  const book = state.tradeCities[cityId];
+  if (!book) return;
+  const center = getProduct(productId).basePrice * cityBias(cityId, productId);
+  const cur = book.pricesByProduct[productId] ?? Math.round(center);
+  const moved = cur * (1 + direction * quantity * PRICE_IMPACT_PER_UNIT);
+  book.pricesByProduct[productId] = Math.round(
+    Math.max(center * TRADE_PRICE_MIN_MULT, Math.min(center * TRADE_PRICE_MAX_MULT, moved)),
+  );
+}
 
 /** Freight fee for a city, scaled by fuel conditions, capped so exports never go negative-margin by fee alone. */
 export function exportFreightFee(state: GameState, cityId: string = 'port_rosa'): number {
@@ -54,7 +94,10 @@ export function performCityPurchase(
     fac.storageCapacity - totalUnits(fac.inputInventory) - totalUnits(fac.outputInventory);
   const qty = Math.min(Math.max(0, Math.round(quantity)), Math.max(0, room));
   if (qty <= 0) return 0;
-  const unitCost = Math.round(cityPrice(state, cityId, productId) * (1 + exportFreightFee(state, cityId)));
+  const unitCost = Math.round(
+    impactedFillPrice(cityPrice(state, cityId, productId), qty, 1) *
+      (1 + exportFreightFee(state, cityId)),
+  );
   const cost = unitCost * qty;
   if (firm.cash < cost) {
     emitEvent(state, 'danger', 'player',
@@ -72,6 +115,7 @@ export function performCityPurchase(
     note: `Bought ${qty} ${product.name} from ${getTradeCity(cityId).name} @ ${formatMoney(unitCost)}`,
   });
   addStock(fac.inputInventory, productId, qty, product.defaultQuality);
+  applyPriceImpact(state, cityId, productId, qty, 1); // buying moves the quote up
   const city = getTradeCity(cityId);
   emitEvent(state, 'success', 'logistics',
     `${city.emoji} Bought ${qty} ${product.name} from ${city.name} at ${formatMoney(unitCost)}/unit (freight in).`, facilityId);
@@ -114,8 +158,9 @@ export function performExport(
   const qty = Math.min(Math.max(0, Math.round(quantity)), inInput + inOutput);
   if (qty <= 0) return 0;
 
-  const price = cityPrice(state, cityId, productId);
-  // Fuel spikes hit freight too — the fee scales with transport conditions.
+  // Fuel spikes hit freight too — the fee scales with transport conditions;
+  // large orders slide down the impact curve as they fill.
+  const price = impactedFillPrice(cityPrice(state, cityId, productId), qty, -1);
   const revenue = Math.round(qty * price * (1 - exportFreightFee(state, cityId)));
 
   const fromInput = Math.min(qty, inInput);
@@ -136,6 +181,7 @@ export function performExport(
   fac.dailyStats.revenue += revenue; // exports are the warehouse's earnings
   firm.exportRevenue += revenue;
   firm.exportRevenueByCity[cityId] = (firm.exportRevenueByCity[cityId] ?? 0) + revenue;
+  applyPriceImpact(state, cityId, productId, qty, -1); // a glut softens the quote
   emitEvent(state, 'success', 'logistics',
     `${city.emoji} ${note} to ${city.name}: ${qty} ${product.name} for ${formatMoney(revenue)} (after freight).`, fac.id);
   creditRushOrder(state, firmId, productId, qty);

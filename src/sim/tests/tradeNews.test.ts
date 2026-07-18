@@ -4,7 +4,7 @@ import { makeContext } from '../core/GameState';
 import { ticksPerDay } from '../core/Tick';
 import { worldTradePriceMult } from '../data/worldEvents';
 import { runTradeCitySystem } from '../systems/TradeCitySystem';
-import { performExport, exportFreightFee } from '../core/Trade';
+import { performExport, impactedFillPrice, exportFreightFee } from '../core/Trade';
 import { getProduct } from '../data/products';
 import { addStock } from '../entities/Inventory';
 import { createFacility } from '../entities/factories';
@@ -52,6 +52,6 @@ describe('Port Rosa follows world news', () => {
     addStock(wh.inputInventory, 'bread', 10, 60);
     state.tradeCities['port_rosa']!.pricesByProduct['bread'] = 1000;
     const revenue = performExport(state, player.id, wh.id, 'bread', 10);
-    expect(revenue).toBe(Math.round(10 * 1000 * (1 - EXPORT_FREIGHT_FEE * 2.2)));
+    expect(revenue).toBe(Math.round(10 * impactedFillPrice(1000, 10, -1) * (1 - EXPORT_FREIGHT_FEE * 2.2)));
   });
 });

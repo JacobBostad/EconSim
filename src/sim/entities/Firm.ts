@@ -86,6 +86,24 @@ export interface Firm {
   /** Hired managers running slices of this firm's operations (delegation —
    * see docs/design/managers.md). */
   managers: Manager[];
+  /** Open forward contracts (commodity desk shorting — see
+   * docs/design/commodity-market.md). */
+  forwards: ForwardContract[];
+  /** Lifetime forward deliveries locked at ≥1.3× base (achievement). */
+  forwardWins: number;
+}
+
+/** A promise to deliver goods to a trade city by a deadline at a price
+ * locked when the contract was signed — shorting with a delivery truck. */
+export interface ForwardContract {
+  id: string;
+  productId: ProductId;
+  quantity: number;
+  cityId: string;
+  /** Gross city price per unit locked at signing (cents); settlement pays
+   * this minus that day's freight. */
+  lockedPrice: number;
+  deliveryDay: number;
 }
 
 /** What a hired manager runs: one store, or a firm-wide function. */

@@ -11,7 +11,7 @@ import {
   EXPORT_FREIGHT_FEE,
 } from '../data/constants';
 import { cityBias } from '../data/tradeCities';
-import { pickBestCity } from '../core/Trade';
+import { pickBestCity, impactedFillPrice } from '../core/Trade';
 
 describe('Port Rosa trade', () => {
   it('prices random-walk daily within bounds, deterministically', () => {
@@ -47,7 +47,7 @@ describe('Port Rosa trade', () => {
 
     sim.dispatch({ type: 'EXPORT_GOODS', firmId: player.id, facilityId: wh.id, productId: 'bread', quantity: 30 });
 
-    const expected = Math.round(30 * price * (1 - EXPORT_FREIGHT_FEE));
+    const expected = Math.round(30 * impactedFillPrice(price, 30, -1) * (1 - EXPORT_FREIGHT_FEE));
     expect(player.cash).toBe(cashBefore + expected);
     expect(getQuantity(wh.inputInventory, 'bread')).toBe(0);
     expect(totalMoneySupply(state)).toBe(supply0);
@@ -130,6 +130,8 @@ describe('Ironvale — the second trade city', () => {
     const cashBefore = player.cash;
     sim.dispatch({ type: 'EXPORT_GOODS', firmId: player.id, facilityId: wh.id, productId: 'tools', quantity: 20 });
     const fee = Math.min(0.5, EXPORT_FREIGHT_FEE * 1.15);
-    expect(player.cash).toBe(cashBefore + Math.round(20 * Math.round(base * 1.6) * (1 - fee)));
+    expect(player.cash).toBe(
+      cashBefore + Math.round(20 * impactedFillPrice(Math.round(base * 1.6), 20, -1) * (1 - fee)),
+    );
   });
 });

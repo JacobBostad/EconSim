@@ -131,6 +131,8 @@ function newFirm(
     wholesaleSpend: 0,
     wholesaleEarned: 0,
     managers: [],
+    forwards: [],
+    forwardWins: 0,
   };
   b.state.firms[id] = firm;
   return firm;
