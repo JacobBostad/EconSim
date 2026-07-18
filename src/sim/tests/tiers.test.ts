@@ -150,6 +150,17 @@ describe('Prosperity tiers', () => {
     expect(aNeed.urgency).toBeGreaterThan(wNeed.urgency);
   });
 
+  it('ladder achievements unlock on the scan after the town climbs', () => {
+    const sim = newSim(10);
+    const state = sim.getState();
+    const cits = Object.values(state.citizens);
+    cits[0]!.tier = 'affluent';
+    for (const c of cits) if (c.tier === 'worker') c.tier = 'comfortable';
+    sim.run(ticksPerDay(state.config));
+    expect(state.achievements.some((a) => a.id === 'high_society')).toBe(true);
+    expect(state.achievements.some((a) => a.id === 'rising_tide')).toBe(true);
+  });
+
   it('pre-tier saves migrate with a sensible snapshot guess', () => {
     const state = newSim(2).getState();
     const cit = firstCitizen(state);

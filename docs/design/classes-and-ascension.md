@@ -81,10 +81,14 @@ probes forced: **a sign must be earned or it does nothing.**
   wanted. Unattended 4-seed probe with AI adoption: pop/sat within noise of
   the Phase-2 baseline (69.3/57.2 vs 72.5/58.1).
 
-**Phase 4 — ascension as spectacle.** Gazette lines and toasts when
-citizens climb ("Wade Garin moved up — steady wages at the tool works"),
-tier counts in town history charts, tier-colored citizen dots, ascension
-achievements (achievements only — the mission chain is sequential).
+**Phase 4 — ascension as spectacle (SHIPPED).** Affluent ascents make the
+event feed/Gazette (Phase 1); per-day tier counts recorded in townHistory
+(pre-tier saves migrate as all-worker days); "Middle class share" and
+"Affluent citizens" 60-day trend cards beside the Prosperity Ladder; on
+the map, affluent citizens wear a gold circlet and comfortable citizens a
+white collar; achievements `high_society` (first affluent citizen) and
+`rising_tide` (comfortable+affluent majority, min pop 10). Intro and
+README teach the ladder and positioning.
 
 ## Save compatibility
 

@@ -103,6 +103,13 @@ engine tests), probed with headless balance runs, and guarded by CI.
   draft "price image" penalty (discount shoppers walk away at high prices)
   was probed at −5 town satisfaction and cut — a lying sign now simply does
   nothing instead of punishing the whole town.
+- **Ascension as spectacle** (Phase 4): the ladder is visible everywhere —
+  tier counts join the daily town history with "Middle class share" and
+  "Affluent citizens" trend charts in the Population tab; affluent citizens
+  stroll the map wearing a gold circlet (comfortable citizens get a white
+  collar); ascents to affluent make the Gazette; and two achievements
+  celebrate the climb (🥂 High Society for the town's first affluent citizen,
+  🌊 Rising Tide when comfortable-or-better citizens outnumber workers).
 
 ## Player features
 

@@ -41,9 +41,13 @@ export function Intro(): React.ReactElement | null {
             <p>Citizens work, earn wages, and shop. Rival firms with named
               CEOs run <strong>bread</strong>, <strong>tools</strong>, and
               <strong> clothes</strong> chains — nobody serves
-              <strong> coffee</strong> yet. World events shake things up, the
-              town grows when it prospers, and prosperity is cyclical: watch
-              the trends in <strong>Population</strong>.</p>
+              <strong> coffee</strong> yet. Citizens climb a
+              <strong> prosperity ladder</strong> (🔧 worker → 🏠 comfortable →
+              🥂 affluent) and each rung shops differently — court a tier by
+              hanging a 🏷️ <strong>Discount</strong> or ✨
+              <strong> Premium</strong> sign on your store (earn it: real low
+              prices, or real quality). Watch the ladder in
+              <strong> Population</strong>.</p>
           </div>
           <div>
             <h4>Trade, seasons, and the town</h4>

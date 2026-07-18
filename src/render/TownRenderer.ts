@@ -1275,6 +1275,15 @@ export class TownRenderer {
       ctx.fillStyle = '#f0d4b0';
       ctx.beginPath(); ctx.arc(bx, by - 3.4 * scale, 1.7 * scale, 0, Math.PI * 2); ctx.fill();
       ctx.strokeStyle = 'rgba(0,0,0,0.35)'; ctx.lineWidth = 0.7; ctx.stroke();
+      // Prosperity at a glance: a gold circlet for the affluent, a crisp
+      // white collar for the comfortable — workers stay plain.
+      if (c.tier === 'affluent') {
+        ctx.fillStyle = '#ffd54a';
+        ctx.beginPath(); ctx.arc(bx, by - 5.0 * scale, 0.8 * scale, 0, Math.PI * 2); ctx.fill();
+      } else if (c.tier === 'comfortable') {
+        ctx.fillStyle = 'rgba(255,255,255,0.75)';
+        ctx.fillRect(bx - 1.1 * scale, by - 1.9 * scale, 2.2 * scale, 0.6 * scale);
+      }
     }
     // draw + decay trails
     for (let i = this.trails.length - 1; i >= 0; i--) {

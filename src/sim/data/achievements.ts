@@ -388,6 +388,27 @@ export const ACHIEVEMENT_DEFS: AchievementDef[] = [
       return p.accounting.dailyHistory.some((d) => d.cash < 0);
     },
   },
+  {
+    id: 'high_society',
+    name: 'High Society',
+    icon: '🥂',
+    description: 'The town has its first affluent citizen.',
+    hint: 'Prosperity takes weeks of steady income, high satisfaction, and savings or fine housing — pay above market and build apartments to hurry it along.',
+    check: (s) => Object.values(s.citizens).some((c) => c.tier === 'affluent'),
+  },
+  {
+    id: 'rising_tide',
+    name: 'Rising Tide',
+    icon: '🌊',
+    description: 'Most of the town lives comfortably (or better).',
+    hint: 'When comfortable + affluent citizens outnumber workers, your economy is genuinely lifting people — wages, satisfaction, and full shelves all feed the climb.',
+    check: (s) => {
+      const cits = Object.values(s.citizens);
+      if (cits.length < 10) return false;
+      const up = cits.filter((c) => c.tier !== 'worker').length;
+      return up > cits.length / 2;
+    },
+  },
 ];
 
 const DEF_BY_ID: Record<string, AchievementDef> = Object.fromEntries(

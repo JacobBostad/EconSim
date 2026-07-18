@@ -270,6 +270,20 @@ labor) opens immigration. The Population tab decomposes this live and prices
 each product's shortage in equilibrium points — stagnation always names its
 cause.
 
+**Prosperity ladder** (`TierSystem.ts`, design in
+`docs/design/classes-and-ascension.md`): every citizen sits on a
+🔧 worker → 🏠 comfortable → 🥂 affluent ladder, derived daily with
+hysteresis (days of steady income + satisfaction to climb, sustained
+floor-failure to slip). Tiers change demand **additively** — affluent
+citizens drink 1.5× the coffee, tolerate premium prices, and unlock luxury
+cravings; workers keep the calibrated baseline (probes showed any
+per-capita cut contracts the whole town). Stores answer with
+**positioning**: a 🏷️ Discount sign (earned by pricing ≤95% of market)
+courts workers; a ✨ Premium sign (earned by shelf quality ≥60) courts the
+affluent and supports 15% higher prices — unearned signs do nothing. AI
+CEOs adopt formats in character. The Population tab charts the ladder;
+gold circlets mark affluent citizens on the map.
+
 **AI supply elasticity** (`AIStrategySystem.ts`): shortage signals (finished-
 product unmet > sold, routed upstream through contracts) climb a ladder —
 over-crew (to 2.5× output) → level upgrades → widen shelf contracts → double

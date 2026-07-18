@@ -167,6 +167,27 @@ export function PopulationDashboard(): React.ReactElement {
             );
           })()}
         </div>
+        {history.length >= 2 && (
+          <>
+            <TrendCard
+              label="Middle class share (60d)"
+              latest={`${Math.round(
+                ((history[history.length - 1]!.comfortable + history[history.length - 1]!.affluent) /
+                  Math.max(1, history[history.length - 1]!.population)) * 100,
+              )}%`}
+              points={history.slice(-60).map(
+                (h) => (h.comfortable + h.affluent) / Math.max(1, h.population),
+              )}
+              color="var(--accent)"
+            />
+            <TrendCard
+              label="Affluent citizens (60d)"
+              latest={String(history[history.length - 1]!.affluent)}
+              points={history.slice(-60).map((h) => h.affluent)}
+              color="var(--green)"
+            />
+          </>
+        )}
       </div>
 
       <h3>Spending Power</h3>

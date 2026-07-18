@@ -16,6 +16,8 @@ describe('Town history', () => {
     expect(last.avgSatisfaction).toBeGreaterThan(0);
     expect(last.avgSatisfaction).toBeLessThanOrEqual(100);
     expect(last.employed).toBeLessThanOrEqual(last.population);
+    // Prosperity-ladder counts partition the population exactly.
+    expect(last.workers + last.comfortable + last.affluent).toBe(last.population);
 
     // Bounded by config.
     sim.run(ticksPerDay(state.config) * (state.config.maxDailyHistory + 20));
@@ -30,9 +32,33 @@ describe('Town history', () => {
     expect(reloaded.townHistory).toEqual([]);
   });
 
+  it('pre-tier history rows migrate as all-worker days', () => {
+    const sim = newSim(2);
+    const state = sim.getState();
+    sim.dispatch({ type: 'RESUME' });
+    sim.run(ticksPerDay(state.config) * 3 + 1);
+    const raw = JSON.parse(serialize(state)) as {
+      townHistory: Record<string, unknown>[];
+    };
+    for (const d of raw.townHistory) {
+      delete d.workers;
+      delete d.comfortable;
+      delete d.affluent;
+    }
+    const reloaded = deserialize(JSON.stringify(raw));
+    for (const d of reloaded.townHistory) {
+      expect(d.workers).toBe(d.population);
+      expect(d.comfortable).toBe(0);
+      expect(d.affluent).toBe(0);
+    }
+  });
+
   it('classifies the cycle phase from the employment trend', () => {
     const mk = (rates: number[]): TownDay[] =>
-      rates.map((r, i) => ({ day: i, population: 100, employed: Math.round(r * 100), avgSatisfaction: 60, avgCash: 1000 }));
+      rates.map((r, i) => ({
+        day: i, population: 100, employed: Math.round(r * 100), avgSatisfaction: 60, avgCash: 1000,
+        workers: 100, comfortable: 0, affluent: 0,
+      }));
     expect(cyclePhase(mk(Array(20).fill(0.6)))).toBe('steady');
     expect(cyclePhase(mk([...Array(15).fill(0.5), ...Array(5).fill(0.6)]))).toBe('boom');
     expect(cyclePhase(mk([...Array(15).fill(0.7), ...Array(5).fill(0.55)]))).toBe('absorbing');

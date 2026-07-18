@@ -70,6 +70,12 @@ function normalize(state: GameState): GameState {
   state.config.challengeMode = state.config.challengeMode ?? false;
   state.scenarioId = state.scenarioId ?? 'meadowbrook';
   state.townHistory = state.townHistory ?? [];
+  for (const d of state.townHistory) {
+    // Pre-tier saves: treat history as all-worker (honest default).
+    d.workers = d.workers ?? d.population;
+    d.comfortable = d.comfortable ?? 0;
+    d.affluent = d.affluent ?? 0;
+  }
   state.rushOrder = state.rushOrder ?? null;
   state.rushOrdersCompleted = state.rushOrdersCompleted ?? 0;
   state.rushOrdersMissed = state.rushOrdersMissed ?? 0;

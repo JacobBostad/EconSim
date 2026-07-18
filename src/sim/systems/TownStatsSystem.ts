@@ -14,6 +14,10 @@ export interface TownDay {
   employed: number;
   avgSatisfaction: number;
   avgCash: number;
+  /** Prosperity-ladder counts (recorded after TierSystem's daily pass). */
+  workers: number;
+  comfortable: number;
+  affluent: number;
 }
 
 export function runTownStatsSystem(ctx: SimContext): void {
@@ -24,12 +28,18 @@ export function runTownStatsSystem(ctx: SimContext): void {
   let employed = 0;
   let satisfaction = 0;
   let cash = 0;
+  let workers = 0;
+  let comfortable = 0;
+  let affluent = 0;
   for (const cid in state.citizens) {
     const c = state.citizens[cid]!;
     population += 1;
     satisfaction += c.satisfaction;
     cash += c.cash;
     if (c.employmentStatus === 'employed') employed += 1;
+    if (c.tier === 'affluent') affluent += 1;
+    else if (c.tier === 'comfortable') comfortable += 1;
+    else workers += 1;
   }
   if (population === 0) return;
 
@@ -39,6 +49,9 @@ export function runTownStatsSystem(ctx: SimContext): void {
     employed,
     avgSatisfaction: satisfaction / population,
     avgCash: Math.round(cash / population),
+    workers,
+    comfortable,
+    affluent,
   });
   if (state.townHistory.length > ctx.config.maxDailyHistory) {
     state.townHistory.splice(0, state.townHistory.length - ctx.config.maxDailyHistory);
