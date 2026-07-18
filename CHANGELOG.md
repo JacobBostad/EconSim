@@ -201,6 +201,10 @@ engine tests), probed with headless balance runs, and guarded by CI.
 
 ## Measured findings (kept as design, documented in code)
 
+- **Shares play pays** (probed at day 100, two seeds): a 45% stake in the
+  top rival costs ~$25k and returns ~$25/day in dividends — roughly a 35%
+  annualized yield at the 30% payout ratio, so stake-building is a real
+  late-game strategy and the credit toward a full buyout compounds it.
 - **Personality spread** (300 days × 4 seeds, Meadowbrook): Brand Builders
   spend 2.5× a Price Fighter's ad budget ($81 vs $32/day) and hold the
   highest prices (1.29× base vs 1.22×); Expansionists end with the most
