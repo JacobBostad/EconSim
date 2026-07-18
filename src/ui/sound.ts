@@ -99,3 +99,38 @@ export function playNews(kind: 'good' | 'bad' | 'neutral'): void {
     note(ac, 440, 0, 180, 'sine', 0.045);
   }
 }
+
+/** Receivership: a slow, somber descent. */
+export function playReceivership(): void {
+  const ac = audio();
+  if (!ac) return;
+  note(ac, 196, 0, 380, 'sawtooth', 0.045);
+  note(ac, 146.8, 300, 420, 'sawtooth', 0.04);
+  note(ac, 110, 640, 700, 'sawtooth', 0.038);
+}
+
+/** Challenge finish: a four-note fanfare. */
+export function playFanfare(): void {
+  const ac = audio();
+  if (!ac) return;
+  note(ac, 523.3, 0, 150, 'triangle', 0.07);
+  note(ac, 659.3, 130, 150, 'triangle', 0.07);
+  note(ac, 784, 260, 150, 'triangle', 0.07);
+  note(ac, 1046.5, 390, 450, 'sine', 0.065);
+}
+
+/** A rival opened something (roastery, residences): a soft build chime. */
+export function playBuildChime(): void {
+  const ac = audio();
+  if (!ac) return;
+  note(ac, 392, 0, 160, 'sine', 0.04);
+  note(ac, 587.3, 140, 240, 'sine', 0.035);
+}
+
+/** One of your workers was poached: a sharp double tick. */
+export function playPoachAlert(): void {
+  const ac = audio();
+  if (!ac) return;
+  note(ac, 1244.5, 0, 70, 'square', 0.035);
+  note(ac, 932.3, 90, 110, 'square', 0.035);
+}
