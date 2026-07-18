@@ -25,6 +25,13 @@ export const CHAIN_BLUEPRINTS: Record<string, ChainBlueprint> = {
     producerRecipeId: 'grow_grain',
     factoryRecipeId: 'bake_bread',
   },
+  coffee: {
+    productId: 'coffee',
+    inputProductId: 'grain',
+    producerDefId: 'farm',
+    producerRecipeId: 'grow_grain',
+    factoryRecipeId: 'roast_coffee',
+  },
   tools: {
     productId: 'tools',
     inputProductId: 'minerals',

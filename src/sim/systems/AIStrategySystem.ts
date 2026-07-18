@@ -26,7 +26,7 @@ import { createFacility } from '../entities/factories';
 import type { Contract } from '../entities/Contract';
 import { hireCitizen, findUnemployed } from './LaborSystem';
 import { clamp } from '../../utils/clamp';
-import { CENTS, RND_QUALITY_GAIN_PER_1000 } from '../data/constants';
+import { CENTS, RND_QUALITY_GAIN_PER_1000, MAX_RETAIL_PRODUCTS } from '../data/constants';
 import { companyValuation } from '../selectors/companySelectors';
 import { acquisitionCost, performAcquisition } from '../core/Acquisition';
 import { landCostMultiplier, landValueAt } from '../core/LandValue';
@@ -43,6 +43,7 @@ export function runAIStrategySystem(ctx: SimContext): void {
     if (firm.bankruptcyStatus !== 'insolvent') {
       manageWages(ctx, firm.id);
       restaff(ctx, firm.id);
+      maybeBoostProduction(ctx, firm.id);
     }
     adjustPrices(ctx, firm.id);
     if (firm.bankruptcyStatus === 'healthy') {
@@ -52,6 +53,7 @@ export function runAIStrategySystem(ctx: SimContext): void {
       maybeBuyShares(ctx, firm.id);
       maybeExportSurplus(ctx, firm.id);
       maybeUpgrade(ctx, firm.id);
+      maybeEnterCoffee(ctx, firm.id);
       maybeEnterLuxury(ctx, firm.id);
       if (maybeRescueAcquisition(ctx, firm.id)) continue; // firm map changed
     }
@@ -431,6 +433,77 @@ function maybeEnterLuxury(ctx: SimContext, firmId: string): void {
     `💎 ${firm.name} enters the luxury market: ${getProduct(luxury).name} at ${boutique.name}!${ceoQuote(rng, firm, 'luxury')}`, boutique.id);
 }
 
+/**
+ * Mid-game coffee entry: coffee ships as a market nobody serves — a fat
+ * mainstream niche. Once a firm is comfortable it may build a roastery,
+ * wire grain (own farm or the importer), and add coffee to an existing
+ * store's assortment. Cheaper and earlier than luxury entry, so the
+ * player's uncontested morning rush has a clock on it.
+ */
+const COFFEE_ENTRY_DAY = 45;
+const COFFEE_ENTRY_CASH = 30000_00;
+const COFFEE_ENTRY_CHANCE = 0.06;
+
+function maybeEnterCoffee(ctx: SimContext, firmId: string): void {
+  const { state, rng } = ctx;
+  const firm = state.firms[firmId]!;
+  if (ctx.time.day < COFFEE_ENTRY_DAY || firm.cash < COFFEE_ENTRY_CASH) return;
+  // One entry per firm. Multiple entrants are fine — coffee on several
+  // staple shelves rides existing shopping trips via baskets (measured
+  // healthier than a single scarce seller that pulls dedicated trips).
+  for (const facId of firm.facilities) {
+    if (state.facilities[facId]?.retailProductIds.includes('coffee')) return;
+  }
+  // A store with a free assortment slot is required.
+  let store: import('../entities/Facility').Facility | null = null;
+  for (const facId of firm.facilities) {
+    const fac = state.facilities[facId];
+    if (fac?.type === 'retail' && fac.status !== 'closed' && fac.retailProductIds.length < MAX_RETAIL_PRODUCTS) {
+      store = fac;
+      break;
+    }
+  }
+  if (!store) return;
+  if (!rng.chance(COFFEE_ENTRY_CHANCE)) return;
+
+  const loc = {
+    x: clamp(52 + rng.jitter(10), 8, state.config.mapWidth - 8),
+    y: clamp(33 + rng.jitter(4), 8, state.config.mapHeight - 8),
+  };
+  const cost = Math.round(getFacilityDef('factory').buildCost * landCostMultiplier(landValueAt(state, loc)));
+  if (firm.cash - cost < 15000_00) return;
+
+  const roastery = createFacility(state, 'factory', firmId, loc, { name: `${firm.name.split(' ')[0]} Roastery` });
+  roastery.activeRecipeId = 'roast_coffee';
+  roastery.buildCost = cost;
+  recordTransaction(state, { from: firmAccount(firmId), to: WORLD_ACCOUNT, amount: cost, firmId, category: 'buildSpend', note: 'Built roastery' });
+  for (let i = 0; i < 2; i++) { const c = findUnemployed(state); if (c) hireCitizen(state, roastery.id, c); }
+
+  // Grain comes from the importer, never the local farms: measured on seed 5,
+  // roasteries siphoning farm grain cut the town's bread supply ~30% and
+  // crashed satisfaction to 9 — coffee must be additive, not cannibalizing.
+  const grainSource = Object.values(state.facilities).find((f) => f.type === 'importer')?.id ?? null;
+  const wire = (src: string, dest: string, pid: string, t: number, r: number, m: number): void => {
+    const id = nextId(state.idCounters, 'ctr');
+    const contract: Contract = {
+      id, ownerFirmId: firmId, sourceFacilityId: src, destinationFacilityId: dest,
+      productId: pid, targetQuantity: t, reorderPoint: r, maxInventory: m,
+      transportCost: 0, active: true,
+    };
+    state.contracts[id] = contract;
+  };
+  if (grainSource) wire(grainSource, roastery.id, 'grain', 24, 10, 50);
+  wire(roastery.id, store.id, 'coffee', 30, 12, 60);
+
+  store.retailProductIds.push('coffee');
+  firm.pricesByProduct['coffee'] = getProduct('coffee').basePrice;
+  firm.adBudgetByProduct['coffee'] = 8_00;
+  firm.qualityByProduct['coffee'] = getProduct('coffee').defaultQuality;
+
+  emitEvent(state, 'warning', 'ai',
+    `☕ ${firm.name} opens a roastery — coffee is now on the shelves at ${store.name}.${ceoQuote(rng, firm, 'expand')}`, store.id);
+}
+
 /** Flush AI firms level up a production facility now and then. */
 function maybeUpgrade(ctx: SimContext, firmId: string): void {
   const { state, rng } = ctx;
@@ -498,6 +571,57 @@ function manageWages(ctx: SimContext, firmId: string): void {
         `${firm.name} raised wages to ${next}¢/day to attract scarce workers.`, firm.id);
     }
   }
+}
+
+/**
+ * Supply elasticity: when a firm's product shows chronic unmet demand, it
+ * staffs its production facility BEYOND the recipe's labor requirement —
+ * over-crewing scales output up to 2.5× (the same growth lever the player
+ * has). Without this, one bakery feeds the whole town forever and every
+ * demand-side addition tips the staple market into permanent shortage.
+ */
+function maybeBoostProduction(ctx: SimContext, firmId: string): void {
+  const { state } = ctx;
+  const firm = state.firms[firmId]!;
+  if (firm.cash < 15000_00) return;
+  for (const facId of firm.facilities) {
+    const fac = state.facilities[facId];
+    if (!fac || fac.status === 'closed' || !fac.activeRecipeId) continue;
+    if (fac.employees.length >= fac.workerCapacity) continue;
+    const outPid = getRecipe(fac.activeRecipeId).outputs[0]?.productId;
+    if (!outPid) continue;
+    const yesterday = state.marketStats[outPid]?.history.slice(-1)[0];
+    const finished = state.marketStats[
+      getFinishedProductFor(state, fac, outPid)
+    ]?.history.slice(-1)[0];
+    const signal = finished ?? yesterday;
+    if (!signal || signal.unmetDemand <= signal.unitsSold) continue;
+    const cid = findUnemployed(state);
+    if (!cid || !hireCitizen(state, fac.id, cid)) continue;
+    return; // one boost per firm per day
+  }
+}
+
+/**
+ * The consumer product a raw producer ultimately feeds (grain -> bread for a
+ * bakery-owning firm), so shortage signals reach upstream. Falls back to the
+ * facility's own output.
+ */
+function getFinishedProductFor(
+  state: import('../core/GameState').GameState,
+  fac: import('../entities/Facility').Facility,
+  outPid: string,
+): string {
+  for (const cid in state.contracts) {
+    const c = state.contracts[cid]!;
+    if (!c.active || c.sourceFacilityId !== fac.id || c.productId !== outPid) continue;
+    const dest = state.facilities[c.destinationFacilityId];
+    if (dest?.activeRecipeId) {
+      const finished = getRecipe(dest.activeRecipeId).outputs[0]?.productId;
+      if (finished && finished !== outPid) return finished;
+    }
+  }
+  return outPid;
 }
 
 function restaff(ctx: SimContext, firmId: string): void {

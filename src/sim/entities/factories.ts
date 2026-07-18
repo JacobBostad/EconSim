@@ -87,8 +87,10 @@ export function makeCitizenNeeds(rng: Rng): CitizenNeed[] {
       // mover owns the morning rush.
       productId: 'coffee',
       urgency: rng.range(0.1, 0.6),
-      urgencyGrowthPerDay: rng.range(0.45, 0.65),
-      preferredQuantity: 2,
+      // One cup a day (~20% of a base wage): a habit, not a wallet drain —
+      // at 2 cups/day coffee ate ~44% of income and starved staple demand.
+      urgencyGrowthPerDay: rng.range(0.35, 0.5),
+      preferredQuantity: 1,
       maxAffordablePriceMultiplier: rng.range(1.5, 1.9),
       lastSatisfiedTick: 0,
     },
@@ -140,8 +142,8 @@ export function defaultNeedFor(productId: string): CitizenNeed | null {
     return {
       productId: 'coffee',
       urgency: 0.3,
-      urgencyGrowthPerDay: 0.5,
-      preferredQuantity: 2,
+      urgencyGrowthPerDay: 0.42,
+      preferredQuantity: 1,
       maxAffordablePriceMultiplier: 1.7,
       lastSatisfiedTick: 0,
     };

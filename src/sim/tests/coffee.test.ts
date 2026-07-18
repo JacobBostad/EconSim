@@ -6,6 +6,7 @@ import { addStock, getQuantity } from '../entities/Inventory';
 import { serialize, deserialize } from '../persistence/saveLoad';
 import { CONSUMER_PRODUCT_IDS } from '../data/products';
 import { ticksPerDay } from '../core/Tick';
+import { runAIStrategySystem } from '../systems/AIStrategySystem';
 
 describe('Coffee', () => {
   it('is a consumer product and every fresh citizen wants it', () => {
@@ -77,5 +78,57 @@ describe('Coffee', () => {
     state.tick = state.config.ticksPerHour * 10; // work hours
     for (let i = 0; i < 4; i++) runProductionSystem(makeContext(state));
     expect(getQuantity(bakery.outputInventory, 'coffee')).toBeGreaterThan(0);
+  });
+});
+
+describe('Coffee ecosystem', () => {
+  it('the chain wizard builds a working coffee chain', () => {
+    const sim = newSim(5);
+    const state = sim.getState();
+    const player = state.firms[state.playerFirmId]!;
+    player.cash = 50000_00;
+    sim.dispatch({ type: 'BUILD_CHAIN', firmId: player.id, productId: 'coffee' });
+    expect(player.facilities.length).toBe(3);
+    const store = player.facilities.map((id) => state.facilities[id]!).find((f) => f.type === 'retail')!;
+    expect(store.retailProductIds).toEqual(['coffee']);
+    expect(player.autoPriceByProduct['coffee']).toBe(true);
+    sim.run(ticksPerDay(state.config) * 8 + 1);
+    expect(player.accounting.lifetime.revenue).toBeGreaterThan(0);
+  });
+
+  it('a flush AI firm eventually opens a roastery (and never before day 45)', () => {
+    const sim = newSim(6);
+    const state = sim.getState();
+    const foods = Object.values(state.firms).find((f) => f.name === 'Sunrise Foods')!;
+    foods.cash = 60000_00;
+    const tpd = ticksPerDay(state.config);
+    const sellsCoffee = () =>
+      foods.facilities.some((id) => state.facilities[id]?.retailProductIds.includes('coffee'));
+
+    // Before the day gate: many strategy passes, no entry.
+    for (let d = 1; d <= 40; d++) {
+      state.tick = tpd * d;
+      runAIStrategySystem(makeContext(state));
+    }
+    expect(sellsCoffee()).toBe(false);
+
+    // After the gate: the 6%/day roll lands well within 150 forged days.
+    let entered = false;
+    for (let d = 46; d <= 200 && !entered; d++) {
+      state.tick = tpd * d;
+      foods.cash = Math.max(foods.cash, 60000_00);
+      runAIStrategySystem(makeContext(state));
+      entered = sellsCoffee();
+    }
+    expect(entered).toBe(true);
+    const roastery = foods.facilities
+      .map((id) => state.facilities[id]!)
+      .find((f) => f.activeRecipeId === 'roast_coffee');
+    expect(roastery).toBeTruthy();
+    expect(
+      Object.values(state.contracts).some(
+        (c) => c.sourceFacilityId === roastery!.id && c.productId === 'coffee',
+      ),
+    ).toBe(true);
   });
 });

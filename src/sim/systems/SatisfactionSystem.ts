@@ -16,8 +16,10 @@ import { clamp } from '../../utils/clamp';
 const URGENCY_CAP = 3;
 
 /** Going hungry hurts much more than missing a new tool or outfit; a missed
- * luxury barely registers. */
-function needWeight(productId: string): number {
+ * luxury barely registers. Shared with trip planning: citizens prioritize
+ * shopping by FELT urgency (urgency × this weight), so a scarce new craving
+ * can never hijack the daily trip away from staples. */
+export function needWeight(productId: string): number {
   const p = getProduct(productId);
   if (p.satisfactionWeight !== undefined) return p.satisfactionWeight;
   const t = p.needType;

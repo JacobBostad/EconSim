@@ -34,6 +34,10 @@ export function isShopTime(ctx: SimContext): boolean {
  * citizen from buying bread.
  */
 function shoppableNeeds(ctx: SimContext, cit: Citizen): Citizen['needs'] {
+  // Raw urgency, deliberately NOT weighted by satisfaction impact: buying a
+  // need drops its urgency below the others, which is what rotates trips
+  // across products. (A weighted sort was tried and measured: staples then
+  // outrank everything permanently and tools/clothes trips never recur.)
   return cit.needs
     .filter((n) => n.urgency >= ctx.config.needUrgencyThreshold)
     .sort((a, b) => b.urgency - a.urgency);
