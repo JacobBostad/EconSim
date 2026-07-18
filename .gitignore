@@ -8,3 +8,5 @@ coverage
 *.log
 
 e2e/.artifacts/
+shot-*.png
+*.tsbuildinfo

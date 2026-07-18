@@ -32,7 +32,7 @@ await page.screenshot({ path: 'e2e/.artifacts/shot-wizard.png' });
 for (const tab of ['Company', 'Market', 'Awards']) {
   await page.getByRole('button', { name: tab, exact: true }).click();
   await page.waitForTimeout(400);
-  await page.screenshot({ path: `shot-${tab.toLowerCase()}.png` });
+  await page.screenshot({ path: `e2e/.artifacts/shot-${tab.toLowerCase()}.png` });
   await page.getByRole('button', { name: /Close/ }).click();
 }
 
