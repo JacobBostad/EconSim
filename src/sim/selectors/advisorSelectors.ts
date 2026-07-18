@@ -114,6 +114,25 @@ export function morningBriefing(state: GameState): Advice[] {
     }
   }
 
+  // 2c. The wage-ratchet trap: matching rival wages every cycle can feed
+  // payroll past what the shops earn (measured: a bot doing exactly this
+  // plateaued with ~$0 cash while profitable rivals compounded). Fires only
+  // on a sustained pattern — real staff, real revenue, and a 7-day view
+  // where wages alone eat most of it while the firm runs at a loss.
+  if (hist.length >= 5 && player.employees.length > 0) {
+    const recent = hist.slice(-7);
+    const wages = recent.reduce((s, d) => s + d.wages, 0);
+    const revenue = recent.reduce((s, d) => s + d.revenue, 0);
+    const operating = recent.reduce((s, d) => s + d.operatingProfit, 0);
+    if (revenue > 0 && operating < 0 && wages >= revenue * 0.6) {
+      items.push({
+        icon: '⚖️',
+        severity: 'warning',
+        text: `Payroll is eating ${Math.round((wages / revenue) * 100)}% of revenue (7-day view) and you're running at a loss — wages have outpaced what your shops earn. Grow sales or trim staff before out-bidding rivals again.`,
+      });
+    }
+  }
+
   // 3. Labor: a rival out-pays your crew past the poaching bar.
   const rivalWage = rivalTopWage(state, player.id);
   if (player.employees.length > 0 && rivalWage >= player.wagePolicy.baseWage * 1.15) {

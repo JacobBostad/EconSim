@@ -125,6 +125,12 @@ engine tests), probed with headless balance runs, and guarded by CI.
 - **Cash runway countdown**: when the 7-day average burn would empty the
   till within 15 days, the Advisor leads with "~N days of cash left" (danger
   at ≤5) — missed payroll and receivership used to arrive with no countdown.
+- **Wage-ratchet warning**: when 7-day payroll eats 60%+ of revenue while
+  the firm runs at a loss, the Advisor says so and names the way out (grow
+  sales or trim staff before out-bidding rivals again). Born from the
+  plateau probe, where a bot matching rival wages every cycle fed payroll
+  past margin and flatlined with ~$0 cash while profitable rivals
+  compounded. Quiet when you're profitable — earning your payroll is fine.
 - Mid-game dashboard sweep: the Company quality chip shows the product's
   real default quality instead of 0 for products without R&D spend; the
   Bottlenecks panel groups 3+ identical reasons into one counted line with

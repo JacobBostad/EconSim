@@ -41,6 +41,44 @@ describe('morningBriefing', () => {
     expect(morningBriefing(state).find((a) => a.icon === '⏳')).toBeUndefined();
   });
 
+  it('warns when payroll swamps revenue during a sustained loss', () => {
+    const sim = newSim(1);
+    const state = sim.getState();
+    const player = state.firms[state.playerFirmId]!;
+    player.employees.push(Object.keys(state.citizens)[0]!);
+    for (let d = 1; d <= 6; d++) {
+      player.accounting.dailyHistory.push({
+        ...snap(d, -10_00, 5000_00),
+        revenue: 100_00,
+        wages: 80_00,
+      });
+    }
+    const advice = morningBriefing(state);
+    const wageTrap = advice.find((a) => a.icon === '⚖️')!;
+    expect(wageTrap).toBeTruthy();
+    expect(wageTrap.severity).toBe('warning');
+    expect(wageTrap.text).toContain('80% of revenue');
+  });
+
+  it('stays quiet about payroll when profitable or when wages are proportionate', () => {
+    const sim = newSim(1);
+    const state = sim.getState();
+    const player = state.firms[state.playerFirmId]!;
+    player.employees.push(Object.keys(state.citizens)[0]!);
+    // Profitable at high wage share — earning your payroll is fine.
+    for (let d = 1; d <= 6; d++) {
+      player.accounting.dailyHistory.push({ ...snap(d, 20_00, 5000_00), revenue: 100_00, wages: 70_00 });
+    }
+    expect(morningBriefing(state).find((a) => a.icon === '⚖️')).toBeUndefined();
+
+    // Losing, but wages are a minor share — the loss is something else.
+    player.accounting.dailyHistory.length = 0;
+    for (let d = 1; d <= 6; d++) {
+      player.accounting.dailyHistory.push({ ...snap(d, -10_00, 5000_00), revenue: 100_00, wages: 30_00 });
+    }
+    expect(morningBriefing(state).find((a) => a.icon === '⚖️')).toBeUndefined();
+  });
+
   it('flags a losing day with its dominant cost', () => {
     const sim = newSim(1);
     const state = sim.getState();
