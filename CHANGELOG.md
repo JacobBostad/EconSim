@@ -196,6 +196,14 @@ hireable managers, a real commodity market, and shared daily play.
   all six scenarios × two seeds: zero pressure accumulated anywhere —
   only genuinely neglected towns qualify (Mill Country's worst dip is
   satisfaction 44).
+- **Dust Hollow, the turnaround scenario**: a seventh town that opens IN
+  the crisis — the company pulled out, there are no stores and no
+  employers, satisfaction collapses past the emigration bar by ~day 13 and
+  wagons roll from ~day 24. Unattended it drains toward the population
+  floor; one bread chain built from starting cash stops the bleed inside
+  three weeks (probed, three seeds). Rescuing any bleeding town — families
+  left, pressure zeroed, satisfaction back above 50 — earns ⛑️ Stopped
+  the Bleed.
 - **Follow mode**: a 🎥 Follow button on any citizen puts the camera on
   their day — commute, shopping trips, and, if you've been paying them
   well, the day they earn their gold circlet. Esc or grabbing the map

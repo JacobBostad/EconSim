@@ -72,6 +72,7 @@ describe('Emigration (the mutter made real)', () => {
     runMiserableDays(state, EMIGRATION_GRACE_DAYS + 20);
     const goneIds = [...before].filter((id) => !state.citizens[id]);
     expect(goneIds.length).toBeGreaterThan(0);
+    expect(state.emigrationDepartures).toBe(goneIds.length);
     expect(totalMoneySupply(state)).toBe(supply0);
 
     for (const id of goneIds) {

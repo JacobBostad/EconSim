@@ -273,6 +273,21 @@ export const SCENARIOS: Record<string, ScenarioDef> = {
       }),
     ],
   },
+  dust_hollow: {
+    id: 'dust_hollow',
+    name: 'Dust Hollow',
+    icon: '🏚️',
+    description:
+      'The company pulled out and took every job with it: no stores, no employers — just boarded-up storefronts and families already packing. Build fast enough to give them a reason to stay.',
+    society:
+      'A dying town — satisfaction is collapsing and the wagons start loading within weeks. You are the last chance.',
+    // 48 citizens, zero AI firms: satisfaction slides below the emigration
+    // bar (~day 13) and households leave from ~day 24 until someone builds
+    // jobs and shelves. Probed: one bread chain from starting cash stops the
+    // bleed inside three weeks; unattended the town drains toward the floor.
+    homes: 24,
+    aiChains: [],
+  },
 };
 
 export const DEFAULT_SCENARIO_ID = 'meadowbrook';

@@ -34,7 +34,9 @@ describe('Scenario variants', () => {
       const state = sim.getState();
       expect(totalMoneySupply(state)).toBe(s0);
       const aiAlive = Object.values(state.firms).filter((f) => f.ownerType === 'ai');
-      expect(aiAlive.length).toBeGreaterThanOrEqual(2); // rescue M&A may merge one
+      if (SCENARIOS[id]!.aiChains.length >= 2) {
+        expect(aiAlive.length).toBeGreaterThanOrEqual(2); // rescue M&A may merge one
+      }
       for (const f of aiAlive) expect(f.cash).toBeGreaterThan(-100000);
     }
   });
@@ -60,6 +62,35 @@ describe('Scenario variants', () => {
       expect(sc.society.length).toBeGreaterThan(20);
       expect(sc.society).not.toBe(sc.description);
     }
+  });
+
+  it('Dust Hollow opens in crisis: satisfaction collapses and families leave', () => {
+    const sim = new Simulation(createInitialState(11, undefined, 'dust_hollow'));
+    sim.dispatch({ type: 'RESUME' });
+    const state = sim.getState();
+    expect(Object.values(state.firms).filter((f) => f.ownerType === 'ai')).toHaveLength(0);
+    const pop0 = Object.keys(state.citizens).length;
+    const supply0 = totalMoneySupply(state);
+    sim.run(ticksPerDay(state.config) * 30);
+    // Probed: the bar breaks ~day 13, the first wagon rolls ~day 24.
+    expect(state.events.some((e) => e.message.includes('packed up and left town'))).toBe(true);
+    expect(Object.keys(state.citizens).length).toBeLessThan(pop0);
+    expect(state.emigrationDepartures).toBeGreaterThan(0);
+    expect(totalMoneySupply(state)).toBe(supply0);
+  });
+
+  it('Stopped the Bleed needs departures, zero pressure, and a recovered town', () => {
+    const def = ACHIEVEMENT_DEFS.find((a) => a.id === 'stopped_the_bleed')!;
+    const state = createInitialState(3, undefined, 'meadowbrook');
+    expect(def.check(state)).toBe(false); // nobody has left
+    state.emigrationDepartures = 2;
+    state.emigrationPressure = 4;
+    expect(def.check(state)).toBe(false); // still under pressure
+    state.emigrationPressure = 0;
+    for (const c of Object.values(state.citizens)) c.satisfaction = 60;
+    expect(def.check(state)).toBe(true);
+    for (const c of Object.values(state.citizens)) c.satisfaction = 45;
+    expect(def.check(state)).toBe(false); // town not truly recovered
   });
 
   it('Lifted the Town only fires in Mill Country', () => {

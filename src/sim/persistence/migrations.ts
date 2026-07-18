@@ -84,6 +84,7 @@ function normalize(state: GameState): GameState {
   state.fireSalesBought = state.fireSalesBought ?? 0;
   state.deskTrades = state.deskTrades ?? 0;
   state.emigrationPressure = state.emigrationPressure ?? 0;
+  state.emigrationDepartures = state.emigrationDepartures ?? 0;
   state.lastLapsedFireSale = state.lastLapsedFireSale ?? null;
   // Prosperity tiers: pre-tier saves get a one-shot snapshot guess (no
   // streak history), then TierSystem takes over with hysteresis.

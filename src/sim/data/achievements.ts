@@ -418,6 +418,20 @@ export const ACHIEVEMENT_DEFS: AchievementDef[] = [
     },
   },
   {
+    id: 'stopped_the_bleed',
+    name: 'Stopped the Bleed',
+    icon: '⛑️',
+    description: 'Families were leaving town — and you turned it around.',
+    hint: 'When emigration starts, the fix is jobs and full shelves: build supply for the town, employ people, and hold satisfaction until nobody wants to leave anymore.',
+    check: (s) => {
+      if (s.emigrationDepartures < 1 || s.emigrationPressure !== 0) return false;
+      const cits = Object.values(s.citizens);
+      if (cits.length === 0) return false;
+      const avg = cits.reduce((a, c) => a + c.satisfaction, 0) / cits.length;
+      return avg >= 50;
+    },
+  },
+  {
     id: 'town_lifted',
     name: 'Lifted the Town',
     icon: '🌅',

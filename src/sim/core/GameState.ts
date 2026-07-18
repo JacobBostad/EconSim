@@ -170,6 +170,8 @@ export interface GameState {
    * a single day above the bar resets it to zero.
    */
   emigrationPressure: number;
+  /** Lifetime households lost to emigration (records/achievements). */
+  emigrationDepartures: number;
   /** Last lapsed fire sale — that facility cools down before re-listing. */
   lastLapsedFireSale: { facilityId: FacilityId; day: number } | null;
 

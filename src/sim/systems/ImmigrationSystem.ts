@@ -138,6 +138,7 @@ function runEmigration(
   }
   if (state.selectedEntityId === gone.id) state.selectedEntityId = null;
   delete state.citizens[gone.id];
+  state.emigrationDepartures += 1;
 
   const reason = wasJobless
     ? 'no work to be found'

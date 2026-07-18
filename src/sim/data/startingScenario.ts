@@ -240,6 +240,7 @@ export function createInitialState(
     fireSalesBought: 0,
     deskTrades: 0,
     emigrationPressure: 0,
+    emigrationDepartures: 0,
     lastLapsedFireSale: null,
     townHistory: [],
     idCounters: counters,
