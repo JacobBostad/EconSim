@@ -101,6 +101,29 @@ engine tests), probed with headless balance runs, and guarded by CI.
 - **Daily digests fixed**: production/bottleneck alerts read yesterday's stats
   (the old midnight-status checks could only ever emit false labor alarms).
 
+## Art — the city looks like a city
+
+- **Procedural 2.5D building kit** (`src/render/buildings.ts`): every facility
+  type is a real building in oblique projection — gabled cottages, barns with
+  silos, mine headframes, sawtooth-roofed factories that physically grow with
+  upgrades, curved-roof warehouses, awninged shopfronts (gold awnings mark the
+  player's), container-stacked import terminals, apartment blocks that gain
+  floors per level. Buildings are world-proportional, so zooming in reveals
+  detail instead of miniatures on huge lots.
+- **Daylight palette**: sunlit grass plate with mowing stripes, sidewalked
+  asphalt roads with dashed center lines, tilled farm plots, a paved retail
+  plaza, district ground washes, layered trees.
+- **Seasonal ground**: the whole plate repaints by season — snowfield with
+  frosted furrows and snow-capped trees in winter, tawny autumn, lush spring,
+  warm summer — under the existing weather particles.
+- **Day/night cycle**: a real darkness curve (deepest at 1 am — the old one
+  was inverted and peaked at 1 pm), with a light pass drawn *above* the tint
+  so streetlamps pool on the avenues and lit buildings glow warm (shops
+  brightest, homes cozy, working factories cool blue-white).
+- Chimney smoke only while a factory is actually producing; trucks are drawn
+  box trucks with product-tinted cargo; citizens are little walking figures
+  with activity-colored clothes.
+
 ## Content & polish
 
 - **Port Haven scenario** (exporter CEOs, thin home shelves) joins Meadowbrook,

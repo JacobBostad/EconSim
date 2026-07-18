@@ -12,7 +12,12 @@ It is intentionally small in scope but **not shallow**: goods physically move
 through inventories, money is conserved to the cent, the same seed always
 replays identically, and every important number can explain itself in the UI.
 
-![Town view on day 80 — autumn, a fuel-price spike in the ticker, and the player's bread chain trading](docs/media/media-town.png)
+The town is drawn with a procedural 2.5D building kit — cottages, barns,
+sawtooth factories, awninged shops — on a daylight map that repaints with the
+seasons (snowfields in winter) and falls into a real night, streetlamps and
+lit windows glowing, on a proper day/night curve.
+
+![Town view on day 81 — autumn, the new 2.5D daylight art, and the player's bread chain trading](docs/media/media-town.png)
 
 <p align="center">
   <img src="docs/media/media-company.png" width="49%" alt="Company dashboard: objective progress, trend charts, and the standings table with rival CEOs and their archetypes" />

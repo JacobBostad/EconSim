@@ -251,9 +251,10 @@ export class TownRenderer {
       const d = Math.hypot(sp.x - m.x, sp.y - m.y);
       if (d <= r && d < best.d) { best.id = id; best.d = d; }
     };
+    const psc = this.effScale();
     for (const id in s.facilities) {
       const f = s.facilities[id]!;
-      consider(id, this.drawPos(id, f.location), f.type === 'home' ? 11 : 20);
+      consider(id, this.drawPos(id, f.location), Math.max(11, (f.type === 'home' ? 1.7 : 2.9) * psc));
     }
     for (const id in s.vehicles) {
       const v = s.vehicles[id]!;
@@ -314,6 +315,7 @@ export class TownRenderer {
     this.updateFloaters(s, dt);
     this.drawFloaters();
     this.drawNightTint(time.hour);
+    this.drawNightLights(s, time.hour);
     this.drawWorldEventAmbiance(s, dt);
     if (this.cb.getBuildMode()) this.drawLandValueOverlay(s);
     this.drawHud(time);
@@ -581,8 +583,25 @@ export class TownRenderer {
     this.decor = trees;
   }
 
+  /** Ground + tree palettes per season — winter is a real snowfield, not a
+   * translucent wash that vanishes on bright grass. */
+  private static readonly GROUND_BY_SEASON: Record<string, [string, string]> = {
+    spring: ['#7fae62', '#6b9a51'],
+    summer: ['#8db35e', '#78a04c'],
+    autumn: ['#a5a058', '#8c8c48'],
+    winter: ['#dde4ec', '#c5cfdb'],
+  };
+  private static readonly TREE_BY_SEASON: Record<string, [string, string, string]> = {
+    spring: ['#3e7d3a', '#57994c', 'rgba(200,235,170,0.5)'],
+    summer: ['#3a7434', '#549145', 'rgba(210,230,150,0.5)'],
+    autumn: ['#8a5f2a', '#b07c33', 'rgba(240,200,120,0.55)'],
+    winter: ['#49624f', '#5d7a62', 'rgba(240,246,255,0.85)'],
+  };
+
   private drawGround(s: GameState, _hour: number): void {
     const ctx = this.ctx;
+    const season = seasonOf(s);
+    const winter = season === 'winter';
     // Beyond the town plate: muted neutral so the daylight plate pops.
     ctx.fillStyle = '#20242a';
     ctx.fillRect(0, 0, this.cssW, this.cssH);
@@ -590,19 +609,20 @@ export class TownRenderer {
     const tl = this.w2s(s, { x: this.view.minX, y: this.view.minY });
     const br = this.w2s(s, { x: this.view.maxX, y: this.view.maxY });
     const gw = br.x - tl.x, gh = br.y - tl.y;
+    const [g0, g1] = TownRenderer.GROUND_BY_SEASON[season]!;
     const grad = ctx.createLinearGradient(0, tl.y, 0, br.y);
-    grad.addColorStop(0, '#7fae62');
-    grad.addColorStop(1, '#6b9a51');
+    grad.addColorStop(0, g0);
+    grad.addColorStop(1, g1);
     ctx.fillStyle = grad;
     this.roundRectPathRaw(ctx, tl.x, tl.y, gw, gh, 14); ctx.fill();
 
     ctx.save();
     ctx.beginPath(); this.roundRectPathRaw(ctx, tl.x, tl.y, gw, gh, 14); ctx.clip();
 
-    // mowing stripes: alternating translucent bands give the grass texture
+    // mowing stripes give the grass texture; on snow they read as drifts
     const sc = this.effScale();
     const stripeH = 6 * sc;
-    ctx.fillStyle = 'rgba(255,255,255,0.035)';
+    ctx.fillStyle = winter ? 'rgba(160,180,210,0.05)' : 'rgba(255,255,255,0.035)';
     for (let y = tl.y, i = 0; y < br.y; y += stripeH, i++) {
       if (i % 2 === 0) ctx.fillRect(tl.x, y, gw, stripeH);
     }
@@ -615,8 +635,8 @@ export class TownRenderer {
       g.addColorStop(0, color); g.addColorStop(1, 'rgba(0,0,0,0)');
       ctx.fillStyle = g; ctx.beginPath(); ctx.arc(c.x, c.y, rr, 0, Math.PI * 2); ctx.fill();
     };
-    zone(40, 70, 36, 'rgba(190,215,150,0.20)');  // residential lawns
-    zone(55, 22, 40, 'rgba(180,150,105,0.22)');  // industrial dust
+    if (!winter) zone(40, 70, 36, 'rgba(190,215,150,0.20)');  // residential lawns
+    zone(55, 22, 40, winter ? 'rgba(140,145,155,0.20)' : 'rgba(180,150,105,0.22)');  // industrial dust
     zone(62, 46, 30, 'rgba(205,200,185,0.25)');  // commercial paving
 
     // farm plots: tilled field rows + fence around every farm
@@ -625,11 +645,11 @@ export class TownRenderer {
       if (f.type !== 'farm') continue;
       const c = this.w2s(s, f.location);
       const pw = 11 * sc, ph = 7.5 * sc;
-      ctx.fillStyle = '#a58757';
+      ctx.fillStyle = winter ? '#c2bcae' : '#a58757';
       this.roundRectPathRaw(ctx, c.x - pw, c.y - ph * 0.4, pw * 2, ph * 1.6, 4 * sc * 0.2 + 3);
       ctx.fill();
-      // crop rows
-      ctx.strokeStyle = 'rgba(122,158,82,0.9)';
+      // crop rows (snow settles between the furrows in winter)
+      ctx.strokeStyle = winter ? 'rgba(235,241,248,0.8)' : 'rgba(122,158,82,0.9)';
       ctx.lineWidth = Math.max(1.2, sc * 0.55);
       const rows = 5;
       for (let i = 1; i <= rows; i++) {
@@ -664,21 +684,22 @@ export class TownRenderer {
       }
     }
 
-    // trees: trunk + layered canopy
+    // trees: trunk + layered canopy, tinted by season (snow-capped in winter)
     this.buildDecor(s);
+    const [c0, c1, hi] = TownRenderer.TREE_BY_SEASON[season]!;
     for (const t of this.decor) {
       const p = this.w2s(s, t);
       const rr = Math.max(2, t.r * sc * 0.55);
-      ctx.fillStyle = 'rgba(40,70,35,0.30)';
+      ctx.fillStyle = winter ? 'rgba(60,75,95,0.25)' : 'rgba(40,70,35,0.30)';
       ctx.beginPath(); ctx.ellipse(p.x + rr * 0.3, p.y + rr * 0.75, rr * 0.9, rr * 0.35, 0, 0, Math.PI * 2); ctx.fill();
       ctx.fillStyle = '#6d4c33';
       ctx.fillRect(p.x - rr * 0.12, p.y - rr * 0.1, rr * 0.24, rr * 0.8);
-      ctx.fillStyle = '#3e7d3a';
+      ctx.fillStyle = c0;
       ctx.beginPath(); ctx.arc(p.x, p.y - rr * 0.35, rr, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = '#57994c';
+      ctx.fillStyle = c1;
       ctx.beginPath(); ctx.arc(p.x - rr * 0.25, p.y - rr * 0.55, rr * 0.65, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = 'rgba(200,235,170,0.5)';
-      ctx.beginPath(); ctx.arc(p.x - rr * 0.35, p.y - rr * 0.7, rr * 0.3, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = hi;
+      ctx.beginPath(); ctx.arc(p.x - rr * 0.35, p.y - rr * 0.7, rr * (winter ? 0.42 : 0.3), 0, Math.PI * 2); ctx.fill();
     }
     ctx.restore();
 
@@ -753,13 +774,17 @@ export class TownRenderer {
       const sp = this.w2s(s, p);
       const isHome = f.type === 'home';
       const isApartment = f.defId === 'apartment';
-      const size = isApartment ? 14 : isHome ? 10 : 18;
+      // World-proportional size: buildings occupy real ground, so zooming in
+      // makes them big and detailed instead of leaving miniatures on huge
+      // lots. (~2.6 world units half-width ≈ the old 18px at the fit view.)
+      const sc = this.effScale();
+      const size = (isApartment ? 2.0 : isHome ? 1.45 : 2.6) * sc;
       const player = f.ownerFirmId === s.playerFirmId;
       const sel = id === selected || id === this.hoverId;
 
       // ground shadow (anchored at the building's base)
       ctx.save();
-      ctx.fillStyle = 'rgba(30,45,25,0.30)';
+      ctx.fillStyle = 'rgba(28,38,32,0.28)';
       ctx.beginPath();
       ctx.ellipse(sp.x + size * 0.25, sp.y + size * 0.42, size * 1.15, size * 0.4, 0, 0, Math.PI * 2);
       ctx.fill();
@@ -814,41 +839,76 @@ export class TownRenderer {
       }
 
       if (!isHome) {
-        ctx.beginPath(); ctx.arc(sp.x + size + 3, sp.y - size * 1.1, 3.6, 0, Math.PI * 2);
+        ctx.beginPath(); ctx.arc(sp.x + size + 3, sp.y - size * 1.1, Math.max(3.6, size * 0.18), 0, Math.PI * 2);
         ctx.fillStyle = this.statusColor(f.status); ctx.fill();
         ctx.strokeStyle = 'rgba(0,0,0,0.5)'; ctx.lineWidth = 1; ctx.stroke();
-        // label with readable backdrop
-        ctx.font = '600 10px system-ui, sans-serif';
+        // label with readable backdrop (grows a little with zoom)
+        const fpx = Math.min(13, Math.round(10 * Math.max(1, sc / 7)));
+        ctx.font = `600 ${fpx}px system-ui, sans-serif`;
         ctx.textAlign = 'center'; ctx.textBaseline = 'top';
         const tw = ctx.measureText(f.name).width;
         ctx.fillStyle = 'rgba(8,12,18,0.6)';
-        this.roundRectPath(sp.x - tw / 2 - 4, sp.y + size * 0.65, tw + 8, 13, 3); ctx.fill();
+        this.roundRectPath(sp.x - tw / 2 - 4, sp.y + size * 0.65, tw + 8, fpx + 3, 3); ctx.fill();
         ctx.fillStyle = '#f2f6fa';
         ctx.fillText(f.name, sp.x, sp.y + size * 0.65 + 2);
       }
     }
 
-    // streetlights come on with the night along the avenues
-    if (night > 0.12) {
-      const { minX, minY, maxX, maxY } = this.view;
-      const insetX = (maxX - minX) * 0.08, insetY = (maxY - minY) * 0.08;
-      const y0 = minY + insetY, y1 = maxY - insetY;
-      const midY = (y0 + y1) / 2;
-      ctx.save();
-      for (const ly of [y0, midY, y1]) {
-        for (let lx = minX + insetX + 6; lx < maxX - insetX; lx += 14) {
-          const lp = this.w2s(s, { x: lx, y: ly });
-          const g = ctx.createRadialGradient(lp.x, lp.y, 0, lp.x, lp.y, 16);
-          g.addColorStop(0, `rgba(255,220,140,${0.22 * night})`);
-          g.addColorStop(1, 'rgba(255,220,140,0)');
-          ctx.fillStyle = g;
-          ctx.beginPath(); ctx.arc(lp.x, lp.y, 16, 0, Math.PI * 2); ctx.fill();
-          ctx.fillStyle = `rgba(255,235,180,${Math.min(1, night * 1.6)})`;
-          ctx.beginPath(); ctx.arc(lp.x, lp.y - 6, 1.5, 0, Math.PI * 2); ctx.fill();
-        }
+  }
+
+  /**
+   * Light pass drawn AFTER the night tint so glows punch through the dark
+   * instead of being dimmed by it — streetlamps along the avenues plus warm
+   * halos around every lit building. 'screen' composite keeps it luminous.
+   */
+  private drawNightLights(s: GameState, hour: number): void {
+    const night = Math.max(0, this.nightAmount(hour) - 0.2);
+    if (night <= 0.12) return;
+    const ctx = this.ctx;
+    const sc = this.effScale();
+    ctx.save();
+    ctx.globalCompositeOperation = 'screen';
+
+    // streetlamps along the three avenues
+    const { minX, minY, maxX, maxY } = this.view;
+    const insetX = (maxX - minX) * 0.08, insetY = (maxY - minY) * 0.08;
+    const y0 = minY + insetY, y1 = maxY - insetY;
+    const lampR = Math.max(14, sc * 2.4);
+    for (const ly of [y0, (y0 + y1) / 2, y1]) {
+      for (let lx = minX + insetX + 6; lx < maxX - insetX; lx += 14) {
+        const lp = this.w2s(s, { x: lx, y: ly });
+        const g = ctx.createRadialGradient(lp.x, lp.y, 0, lp.x, lp.y, lampR);
+        g.addColorStop(0, `rgba(255,214,130,${0.34 * night})`);
+        g.addColorStop(1, 'rgba(255,214,130,0)');
+        ctx.fillStyle = g;
+        ctx.beginPath(); ctx.arc(lp.x, lp.y, lampR, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = `rgba(255,240,190,${Math.min(1, night * 1.6)})`;
+        ctx.beginPath(); ctx.arc(lp.x, lp.y - lampR * 0.35, Math.max(1.4, sc * 0.22), 0, Math.PI * 2); ctx.fill();
       }
-      ctx.restore();
     }
+
+    // lit-building halos: homes glow softly, shops brighter, working factories
+    // give off a cooler industrial light
+    for (const id in s.facilities) {
+      const f = s.facilities[id]!;
+      if (f.status === 'closed') continue;
+      const isHome = f.type === 'home';
+      const isApartment = f.defId === 'apartment';
+      const size = (isApartment ? 2.0 : isHome ? 1.45 : 2.6) * sc;
+      const sp = this.w2s(s, this.drawPos(id, f.location));
+      let r = size * 1.5, warm = '255,206,120', a = 0.10 * night;
+      if (f.type === 'retail') { r = size * 1.9; a = 0.17 * night; }
+      else if (isApartment) { r = size * 1.7; a = 0.13 * night; }
+      else if (f.type === 'factory' && f.status === 'active') { warm = '170,205,255'; a = 0.11 * night; }
+      else if (!isHome && f.type !== 'factory') a = 0.08 * night;
+      const cy = sp.y - size * 0.3;
+      const g = ctx.createRadialGradient(sp.x, cy, 0, sp.x, cy, r);
+      g.addColorStop(0, `rgba(${warm},${a})`);
+      g.addColorStop(1, `rgba(${warm},0)`);
+      ctx.fillStyle = g;
+      ctx.beginPath(); ctx.arc(sp.x, cy, r, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.restore();
   }
 
   private drawShipments(s: GameState, dt: number): void {
@@ -865,7 +925,8 @@ export class TownRenderer {
       ctx.beginPath(); ctx.moveTo(sp.x, sp.y); ctx.lineTo(dest.x, dest.y); ctx.stroke(); ctx.setLineDash([]);
       // box truck: shadow, cargo box tinted by product, cab with windshield, wheels
       const ang = Math.atan2(dest.y - sp.y, dest.x - sp.x);
-      ctx.save(); ctx.translate(sp.x, sp.y); ctx.rotate(ang);
+      const tk = Math.min(2.2, Math.max(1, this.effScale() / 7));
+      ctx.save(); ctx.translate(sp.x, sp.y); ctx.rotate(ang); ctx.scale(tk, tk);
       ctx.fillStyle = 'rgba(20,30,20,0.3)';
       ctx.beginPath(); ctx.ellipse(0, 3.5, 9, 3, 0, 0, Math.PI * 2); ctx.fill();
       ctx.fillStyle = '#20242c';
@@ -896,7 +957,8 @@ export class TownRenderer {
       }
       const sel = id === selected;
       const col = ACTIVITY_COLOR[c.activity] ?? '#8b949e';
-      const scale = sel ? 1.4 : 1;
+      const zk = Math.min(2, Math.max(1, this.effScale() / 8));
+      const scale = (sel ? 1.4 : 1) * zk;
       const moving = c.movementState === 'moving';
       // 2-frame walk bob keyed off position so figures animate while walking
       const bob = moving ? Math.sin((sp.x + sp.y + this.smokeT / 90) * 0.9) * 0.8 : 0;
@@ -988,7 +1050,7 @@ export class TownRenderer {
 
   private drawNightTint(hour: number): void {
     const night = this.nightAmount(hour);
-    const a = night * 0.45;
+    const a = night * 0.58;
     if (a <= 0.01) return;
     const ctx = this.ctx;
     ctx.fillStyle = `rgba(8,14,38,${a})`;
