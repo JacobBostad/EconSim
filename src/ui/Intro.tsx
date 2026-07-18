@@ -49,8 +49,10 @@ export function Intro(): React.ReactElement | null {
             <h4>Trade, seasons, and the town</h4>
             <p>Export to <strong>Port Rosa</strong> or industrial
               <strong> Ironvale</strong> — the Gazette's Trade Desk shows which
-              port pays (standing orders route there automatically). Brace for
-              <strong> winter</strong>,
+              port pays (standing orders route there automatically), and once
+              you own a warehouse, watch the ticker for <strong>rush
+              orders</strong>: bulk deliveries on a deadline for a cash bonus.
+              Brace for <strong>winter</strong>,
               sponsor <strong>festivals</strong>, fund homes, upgrade buildings —
               and unlock the <strong>luxury market</strong> with R&amp;D.</p>
           </div>

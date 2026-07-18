@@ -17,10 +17,10 @@ sawtooth factories, awninged shops — on a daylight map that repaints with the
 seasons (snowfields in winter) and falls into a real night, streetlamps and
 lit windows glowing, on a proper day/night curve.
 
-![Town view on day 81 — autumn, the new 2.5D daylight art, and the player's bread chain trading](docs/media/media-town.png)
+![Town view on day 65 — autumn streets at dawn, a rush order ticking in the corner, and the minimap framing the viewport](docs/media/media-town.png)
 
 <p align="center">
-  <img src="docs/media/media-company.png" width="49%" alt="Company dashboard: objective progress, trend charts, and the standings table with rival CEOs and their archetypes" />
+  <img src="docs/media/media-company.png" width="49%" alt="Company dashboard: objective progress, trend charts, and the standings table with rival CEOs, their archetypes, and estimated dividends per stake" />
   <img src="docs/media/media-population.png" width="49%" alt="Population dashboard: town trends, satisfaction anatomy pricing each shortage in equilibrium points, and household spending power" />
 </p>
 
