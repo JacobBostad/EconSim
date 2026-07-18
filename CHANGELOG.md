@@ -65,7 +65,9 @@ engine tests), probed with headless balance runs, and guarded by CI.
 - **Sell/demolish facilities**: half-cost refunds with full reference cleanup —
   mistakes are no longer permanent maintenance drains.
 - **Chain wizard upgrades**: one-click chains arrive auto-priced with a starter
-  ad budget (measured: lifetime net −$1.7k → +$1.2k over 200 unattended days).
+  ad budget, and "managed" (auto-priced) products get the AI's own discipline:
+  shelf contracts widen with demand and ad spend drifts down while the store
+  loses money (downward only — raising spend stays the player's call).
 - **Challenge mode**: scored day-200 runs (valuation-weighted 0–1000,
   difficulty multipliers), local leaderboard, copy-to-clipboard replayable
   dares (deterministic seeds).
@@ -123,6 +125,13 @@ engine tests), probed with headless balance runs, and guarded by CI.
   "fixed" again.
 - **Single-stage expansion backfires**: a second bakery on one farm's grain
   starves both — hence whole-sub-chain duplication.
+- **A lone single-product chain is sub-scale**: re-measured across all five
+  scenarios, an unattended wizard bread chain loses $35–70/day — it needs
+  ~60% market share to cover a 5-person wage bill, which no scenario hands
+  out. Deliberate: the wizard is a launchpad, and every attended strategy
+  the bots play (multi-product store, all-verticals, pure supplier) clears
+  its wealth floors. An earlier "+$1.2k unattended" claim predated the
+  deeper economy and is retired.
 - **Pure grain supply is a sideline, not an empire**: AI roasteries really do
   switch their import lines to a player's farm surplus (measured: first
   customer by day ~51–126 across seeds, ~$1k of wholesale revenue), but

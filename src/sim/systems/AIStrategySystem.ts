@@ -71,12 +71,15 @@ export function runAIStrategySystem(ctx: SimContext): void {
   }
 
   // Player QoL: auto-priced products are "managed" — the same mean-reverting
-  // price controller sets their prices, and the same shelf-widening keeps
-  // their supply contracts sized to demand as the town grows.
+  // price controller sets their prices, the same shelf-widening keeps their
+  // supply contracts sized to demand, and ad spend drifts down toward the
+  // floor while the store loses money (downward only — raising the player's
+  // spend is the player's call). Deterministic; no rng-stream impact.
   const player = state.firms[state.playerFirmId];
   if (player && Object.values(player.autoPriceByProduct).some(Boolean)) {
     adjustPrices(ctx, player.id, true);
     maybeWidenShelves(ctx, player.id, true);
+    trimManagedAds(ctx, player.id);
   }
 }
 
@@ -113,6 +116,28 @@ function manageAdBudget(ctx: SimContext, firmId: string): void {
           `${firm.name} is running a maximum ad campaign for ${getProduct(pid).name}.${ceoQuote(rng, firm, 'ads')}`, firm.id);
       }
     }
+    }
+  }
+}
+
+/**
+ * Ad discipline for the player's managed products: while the selling store's
+ * 7-day P&L is negative, the ad budget steps down toward the AI's floor. The
+ * wizard's starter budget (25% of a young chain's revenue) otherwise burns
+ * forever on a business that can't afford it yet.
+ */
+function trimManagedAds(ctx: SimContext, firmId: string): void {
+  const { state } = ctx;
+  const firm = state.firms[firmId]!;
+  for (const facId of firm.facilities) {
+    const fac = state.facilities[facId];
+    if (!fac || fac.type !== 'retail' || fac.pnlEma.net >= 0) continue;
+    for (const pid of fac.retailProductIds) {
+      if (!firm.autoPriceByProduct[pid]) continue;
+      const budget = firm.adBudgetByProduct[pid] ?? 0;
+      if (budget > AD_BUDGET_FLOOR) {
+        firm.adBudgetByProduct[pid] = Math.max(AD_BUDGET_FLOOR, budget - AD_BUDGET_STEP / 2);
+      }
     }
   }
 }

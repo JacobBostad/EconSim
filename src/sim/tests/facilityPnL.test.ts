@@ -64,6 +64,25 @@ describe('Facility P&L', () => {
     expect(pit!.text).toContain('money pit');
   });
 
+  it('managed products trim ad spend while the store loses money (never below floor, never for manual products)', () => {
+    const sim = newSim(5);
+    const state = sim.getState();
+    const player = state.firms[state.playerFirmId]!;
+    sim.dispatch({ type: 'BUILD_FACILITY', firmId: player.id, defId: 'retail', location: { x: 40, y: 40 } });
+    const store = state.facilities[player.facilities[player.facilities.length - 1]!]!;
+    store.retailProductIds = ['bread', 'tools'];
+    store.pnlEma = { revenue: 0, cost: 40_00, net: -40_00 }; // losing money
+    player.autoPriceByProduct['bread'] = true; // managed
+    player.adBudgetByProduct['bread'] = 15_00;
+    player.adBudgetByProduct['tools'] = 15_00; // manual — must not be touched
+
+    sim.run(ticksPerDay(state.config) + 1);
+
+    expect(player.adBudgetByProduct['bread']!).toBeLessThan(15_00);
+    expect(player.adBudgetByProduct['bread']!).toBeGreaterThanOrEqual(8_00); // AI floor
+    expect(player.adBudgetByProduct['tools']).toBe(15_00);
+  });
+
   it('folds each closed day into the 7-day EMA', () => {
     const sim = newSim(5);
     const state = sim.getState();

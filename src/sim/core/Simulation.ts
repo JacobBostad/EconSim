@@ -428,8 +428,11 @@ export class Simulation {
     }
     // Entering a market where an incumbent has brand and loyal customers takes
     // penetration pricing AND advertising — the AI's own playbook. Default
-    // both on so the wizard hands over a viable business, not a money pit;
-    // either is one toggle to undo in the store inspector.
+    // both on so the wizard hands over a running, self-managing business.
+    // NOTE a lone single-product chain is structurally sub-scale (measured:
+    // it needs ~60% market share to cover a 5-person wage bill) — the wizard
+    // is the launchpad; the game's real arc is adding products to the store,
+    // sourcing wholesale, and exporting. Either default is one toggle to undo.
     if (firm.autoPriceByProduct[bp.productId] === undefined) {
       firm.autoPriceByProduct[bp.productId] = true;
     }
