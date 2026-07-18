@@ -504,6 +504,14 @@ hireable managers, a real commodity market, and shared daily play.
 
 ## Infrastructure
 
+- **Playtest bot v7** guards the pillar era end-to-end through the command
+  surface: a 200-day scripted run whose store is never priced by hand — a
+  hired manager runs it — with an executive logistics desk, R&D into an
+  earned premium sign, announcement trading, and forwards locked on spikes.
+  Measured at seed 9: $21.7k valuation, 8 announcement plays, 6 forward
+  wins, both managers retained ~180 days, 0.30 ms/tick; floors pinned well
+  under those values.
+
 - **Playtest bot v6** (offers era): a 250-day integration regression where
   the three new systems work together — rush orders filled hands-free by a
   standing export order, fire sales bought whenever affordable, crews
