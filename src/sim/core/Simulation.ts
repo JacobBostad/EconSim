@@ -69,6 +69,7 @@ import { runSatisfactionSystem } from '../systems/SatisfactionSystem';
 import { runAccountingSystem } from '../systems/AccountingSystem';
 import { runPayrollSystem } from '../systems/PayrollSystem';
 import { runRentSystem } from '../systems/RentSystem';
+import { runTownStatsSystem } from '../systems/TownStatsSystem';
 import { runCitizenScheduleSystem } from '../systems/CitizenScheduleSystem';
 import { runMovementSystem } from '../systems/MovementSystem';
 import { runLaborSystem, hireCitizen, fireCitizen, findUnemployed } from '../systems/LaborSystem';
@@ -95,6 +96,7 @@ const SYSTEMS: SystemFn[] = [
   runDividendSystem, // distribute completed day's profits to shareholders
   runBankruptcySystem,
   runSatisfactionSystem,
+  runTownStatsSystem, // record daily town vitals after the satisfaction step
   runImmigrationSystem, // a prosperous town attracts new citizens
   runRentSystem, // apartment rent (before accounting snapshots the day)
   runAccountingSystem, // maintenance + snapshot + reset daily accumulators

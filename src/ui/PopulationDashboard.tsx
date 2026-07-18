@@ -11,6 +11,8 @@ import {
 import { macroIndicators } from '../sim/selectors/debugSelectors';
 import { formatMoney } from '../utils/formatMoney';
 import { FormulaTooltip } from './FormulaTooltip';
+import { TrendCard } from './Sparkline';
+import { cyclePhase } from '../sim/systems/TownStatsSystem';
 
 export function PopulationDashboard(): React.ReactElement {
   const sim = useGameStore((s) => s.sim);
@@ -22,6 +24,8 @@ export function PopulationDashboard(): React.ReactElement {
   const labor = laborMarketStats(state);
   const employers = employerBreakdown(state);
   const spend = spendingPower(state);
+  const history = state.townHistory;
+  const phase = cyclePhase(history);
   const maxBucket = Math.max(1, ...labor.skillBuckets.map((b) => b.count));
 
   return (
@@ -46,6 +50,38 @@ export function PopulationDashboard(): React.ReactElement {
         <Stat label="Avg satisfaction" value={`${pop.averageSatisfaction.toFixed(0)}/100`} />
         <Stat label="Unmet needs today" value={String(pop.totalUnmetNeedsToday)} />
       </div>
+
+      <h3>
+        Town Trends{' '}
+        {phase !== 'steady' && (
+          <span className={`tag ${phase === 'boom' ? 'green' : 'amber'}`} style={{ verticalAlign: 'middle' }}>
+            {phase === 'boom' ? '📈 Hiring boom' : '🚶 Absorbing arrivals'}
+          </span>
+        )}
+      </h3>
+      {history.length >= 2 ? (
+        <div className="row" style={{ gap: 10, flexWrap: 'wrap' }}>
+          <TrendCard
+            label="Population (60d)"
+            latest={String(history[history.length - 1]!.population)}
+            points={history.slice(-60).map((h) => h.population)}
+          />
+          <TrendCard
+            label="Employment rate (60d)"
+            latest={`${Math.round((history[history.length - 1]!.employed / Math.max(1, history[history.length - 1]!.population)) * 100)}%`}
+            points={history.slice(-60).map((h) => h.employed / Math.max(1, h.population))}
+            color="var(--accent)"
+          />
+          <TrendCard
+            label="Satisfaction (60d)"
+            latest={history[history.length - 1]!.avgSatisfaction.toFixed(0)}
+            points={history.slice(-60).map((h) => h.avgSatisfaction)}
+            color="var(--green)"
+          />
+        </div>
+      ) : (
+        <p className="muted small">Trends appear after the first full day.</p>
+      )}
 
       <h3>Spending Power</h3>
       <div className="row" style={{ gap: 10, flexWrap: 'wrap', alignItems: 'stretch' }}>

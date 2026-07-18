@@ -219,6 +219,7 @@ export function createInitialState(
     achievements: [],
     missions: [],
     tradeCity: { pricesByProduct: {} },
+    townHistory: [],
     idCounters: counters,
     selectedEntityId: null,
     perf: { lastTickMs: 0, avgTickMs: 0, ticksSimulated: 0 },

@@ -69,6 +69,8 @@ export interface GameState {
   seed: number;
   /** Which starting scenario built this town (for records/leaderboards). */
   scenarioId: string;
+  /** Bounded daily town vitals (population, employment, satisfaction). */
+  townHistory: import('../systems/TownStatsSystem').TownDay[];
   /** Live PRNG state (see Random.ts). Part of state for determinism. */
   rngState: number;
   tick: number;
