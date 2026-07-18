@@ -85,11 +85,23 @@ export function runAccountingSystem(ctx: SimContext): void {
   }
 
   // Snapshot then reset per-day facility stats (yesterdayStats is what the
-  // UI and advisors read — dailyStats is partial for most of the day).
+  // UI and advisors read — dailyStats is partial for most of the day), and
+  // fold the closed day into the 7-day P&L EMA: ship-day/idle-day rhythms
+  // make single days flip-flop, so ranking/advice keys off this instead.
+  const EMA_ALPHA = 1 / 7;
   for (const facId in state.facilities) {
     const fac = state.facilities[facId]!;
     fac.yesterdayStats = fac.dailyStats;
     fac.dailyStats = emptyFacilityDailyStats();
+
+    const owner = state.firms[fac.ownerFirmId];
+    const y = fac.yesterdayStats;
+    const revenue = y.revenue + y.transferOutValue;
+    const wages = owner ? fac.employees.length * owner.wagePolicy.baseWage : 0;
+    const cost = wages + fac.operatingCostPerDay + y.variableCost + y.transferInValue;
+    fac.pnlEma.revenue += (revenue - fac.pnlEma.revenue) * EMA_ALPHA;
+    fac.pnlEma.cost += (cost - fac.pnlEma.cost) * EMA_ALPHA;
+    fac.pnlEma.net = fac.pnlEma.revenue - fac.pnlEma.cost;
   }
   for (const cid in state.citizens) {
     const cit = state.citizens[cid]!;

@@ -204,7 +204,7 @@ export function CompanyDashboard(): React.ReactElement {
 
       <h3>Facilities — yesterday's P&L</h3>
       <table>
-        <thead><tr><th>Facility</th><th>Type</th><th>Staff</th><th>Sold</th><th>Made</th><th>Earned</th><th>Cost</th><th>Net</th></tr></thead>
+        <thead><tr><th>Facility</th><th>Type</th><th>Staff</th><th>Sold</th><th>Made</th><th>Earned</th><th>Cost</th><th>Net</th><th>7d Ø</th></tr></thead>
         <tbody>
           {facilityPnL(state, firm.id).map((r) => (
             <tr key={r.facilityId} style={{ cursor: 'pointer' }} onClick={() => select(r.facilityId)}>
@@ -215,17 +215,19 @@ export function CompanyDashboard(): React.ReactElement {
               <td className="mono">{formatMoney(r.revenue)}</td>
               <td className="mono">{formatMoney(r.cost)}</td>
               <td className="mono" style={{ color: r.net < 0 ? 'var(--red)' : 'var(--green)' }}>{formatMoney(r.net)}</td>
+              <td className="mono" style={{ color: r.emaNet < 0 ? 'var(--red)' : 'var(--green)' }}>{formatMoney(r.emaNet)}</td>
             </tr>
           ))}
-          {facilities.length === 0 && <tr><td colSpan={8} className="muted">No facilities — build some from the left panel.</td></tr>}
+          {facilities.length === 0 && <tr><td colSpan={9} className="muted">No facilities — build some from the left panel.</td></tr>}
         </tbody>
       </table>
       <p className="muted small" style={{ marginTop: 4 }}>
         Internal shipments are credited to the shipper and debited to the
         receiver at market price, so factories and farms show the value they
         create. Wages and upkeep are per-facility; firm-wide spend (ads, R&D,
-        interest, freight) isn't attributed. A red bottom row is your money
-        pit — click it to restaff, reprice, or sell.
+        interest, freight) isn't attributed. Rows rank by the 7-day average
+        (single days swing with ship/idle rhythms) — a red bottom row is your
+        money pit: click it to restaff, reprice, or sell.
       </p>
 
       <h3>Daily History (last {history.length} days)</h3>

@@ -124,6 +124,10 @@ function FacilityView({ fac, state }: { fac: Facility; state: GameState }): Reac
             </span>
             <span className="mono" style={{ color: yNet >= 0 ? 'var(--green)' : 'var(--red)' }}>
               {formatMoney(yNet)} ({formatMoney(yRevenue)} in / {formatMoney(yCost)} out)
+              {' · 7d Ø '}
+              <span style={{ color: fac.pnlEma.net >= 0 ? 'var(--green)' : 'var(--red)' }}>
+                {formatMoney(Math.round(fac.pnlEma.net))}
+              </span>
             </span>
           </div>
         );

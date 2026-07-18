@@ -242,6 +242,8 @@ export interface FacilityPnLRow {
   revenue: number;
   cost: number; // wages + maintenance + variable production cost
   net: number;
+  /** 7-day EMA of net (cents/day) — the stable ranking signal. */
+  emaNet: number;
 }
 
 /**
@@ -252,7 +254,8 @@ export interface FacilityPnLRow {
  * Wages (headcount × base wage) and maintenance are attributed per facility.
  * Firm-wide spends (marketing, R&D, interest, logistics) are not attributed,
  * so rows won't sum exactly to the company's net — this is a tool for finding
- * money pits, not an audit. Sorted best-first: the pit is the bottom row.
+ * money pits, not an audit. Sorted best-first by the 7-day EMA (single days
+ * flip-flop with ship/idle rhythms): the pit is the bottom row.
  */
 export function facilityPnL(state: GameState, firmId: FirmId): FacilityPnLRow[] {
   const firm = state.firms[firmId];
@@ -274,9 +277,10 @@ export function facilityPnL(state: GameState, firmId: FirmId): FacilityPnLRow[] 
       revenue,
       cost,
       net: revenue - cost,
+      emaNet: Math.round(fac.pnlEma.net),
     });
   }
-  rows.sort((a, b) => b.net - a.net);
+  rows.sort((a, b) => b.emaNet - a.emaNet || b.net - a.net);
   return rows;
 }
 

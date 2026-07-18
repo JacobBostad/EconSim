@@ -66,16 +66,17 @@ export function morningBriefing(state: GameState): Advice[] {
     }
   }
 
-  // 2b. The money pit: the worst facility by yesterday's attributed P&L.
+  // 2b. The money pit: the worst facility by 7-day average P&L — single days
+  // flip-flop with ship/idle rhythms, so only a sustained loser gets named.
   // Day ≥ 2 so freshly built towns aren't scolded before the economy runs.
   if (computeTime(state.tick, state.config).day >= 2) {
     const rows = facilityPnL(state, player.id);
     const worst = rows[rows.length - 1];
-    if (worst && worst.net <= -20_00 && worst.status !== 'closed') {
+    if (worst && worst.emaNet <= -20_00 && worst.status !== 'closed') {
       items.push({
         icon: '💸',
         severity: 'warning',
-        text: `${worst.name} is your money pit — lost ${formatMoney(-worst.net)} yesterday after wages and upkeep. Restaff, reprice, or sell it (see Company → Facilities).`,
+        text: `${worst.name} is your money pit — averaging ${formatMoney(-worst.emaNet)}/day of losses after wages and upkeep (7-day view). Restaff, reprice, or sell it (see Company → Facilities).`,
       });
     }
   }

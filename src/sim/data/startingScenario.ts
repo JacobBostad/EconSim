@@ -76,6 +76,7 @@ function newFacility(
     bottleneckReason: null,
     dailyStats: emptyFacilityDailyStats(),
     yesterdayStats: emptyFacilityDailyStats(),
+    pnlEma: { revenue: 0, cost: 0, net: 0 },
     presentWorkers: 0,
     presentSkill: 0,
     builtAtTick: 0,

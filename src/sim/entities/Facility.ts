@@ -104,6 +104,12 @@ export interface Facility {
    * advisors read this instead of the mid-day partial dailyStats.
    */
   yesterdayStats: FacilityDailyStats;
+  /**
+   * 7-day EMA of the facility's attributed P&L (cents/day), updated at the
+   * daily snapshot. Ship-day/idle-day alternation makes single-day numbers
+   * flip-flop; this is the stable signal the P&L table and advisor rank by.
+   */
+  pnlEma: { revenue: number; cost: number; net: number };
   /** Workers physically present and working this tick (set by LaborSystem). */
   presentWorkers: number;
   /** Sum of present workers' skill this tick (crew productivity). */

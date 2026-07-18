@@ -49,17 +49,31 @@ describe('Facility P&L', () => {
     }
   });
 
-  it('the advisor names the money pit after day 2', () => {
+  it('the advisor names the money pit after day 2 (7-day average signal)', () => {
     const sim = newSim(5);
     const state = sim.getState();
     const player = state.firms[state.playerFirmId]!;
     sim.dispatch({ type: 'BUILD_FACILITY', firmId: player.id, defId: 'retail', location: { x: 40, y: 40 } });
-    sim.dispatch({ type: 'HIRE_WORKER', facilityId: player.facilities[player.facilities.length - 1]!, citizenId: null });
-    state.tick = ticksPerDay(state.config) * 3; // day 3, yesterdayStats still zero
+    const store = state.facilities[player.facilities[player.facilities.length - 1]!]!;
+    store.pnlEma = { revenue: 0, cost: 45_00, net: -45_00 }; // sustained loser
+    state.tick = ticksPerDay(state.config) * 3;
 
     const advice = morningBriefing(state);
     const pit = advice.find((a) => a.icon === '💸');
     expect(pit).toBeTruthy();
     expect(pit!.text).toContain('money pit');
+  });
+
+  it('folds each closed day into the 7-day EMA', () => {
+    const sim = newSim(5);
+    const state = sim.getState();
+    sim.run(ticksPerDay(state.config) * 10 + 2);
+    // After 10 days some AI store has a meaningfully non-zero EMA that
+    // reflects real trading (finite, not equal to a single day's net).
+    const emas = Object.values(state.facilities)
+      .filter((f) => f.type === 'retail')
+      .map((f) => f.pnlEma.net);
+    expect(emas.some((n) => n !== 0)).toBe(true);
+    expect(emas.every((n) => Number.isFinite(n))).toBe(true);
   });
 });
