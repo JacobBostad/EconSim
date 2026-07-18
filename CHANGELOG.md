@@ -235,6 +235,19 @@ engine tests), probed with headless balance runs, and guarded by CI.
 
 ## Measured findings (kept as design, documented in code)
 
+- **The scripted-player plateau is strategy shape, not an engine cap**
+  (followed up the ladder probe with book-level dumps and a deeper-play
+  A/B): the bot plateaus near $28k because it fights the bread incumbent
+  head-on with thin staffing while AI niche monopolies compound untouched —
+  the clothes incumbent alone books ~$650/day revenue to the bot's ~$110.
+  Retail staffing works exactly as advertised (a third clerk doubled the
+  store's daily take on the spot), and the AI reaching $50k+ proves
+  compounding works in-engine. The scoreboard paths are the ones the game
+  already teaches: claim uncontested markets (the Advisor's "hungry market"
+  line), supply the town wholesale, export — don't grind a brand war
+  against an entrenched rival with one understaffed shop. Also observed:
+  reflexively out-bidding rival wages every cycle can ratchet payroll past
+  margin — wage defense is a lever, not an autopilot.
 - **The endgame ladder's top rungs were imaginary** (probed: bot v4's
   strategy plus apartment compounding, 600 days × 3 seeds): the scripted
   player plateaus near $28k valuation, the richest AI incumbent near $64k,
