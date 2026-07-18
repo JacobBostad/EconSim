@@ -136,6 +136,52 @@ export function firmWarnings(state: GameState, firmId: FirmId): string[] {
   return warnings;
 }
 
+export interface DailyInsight {
+  day: number;
+  net: number;
+  revenue: number;
+  /** Largest cost bucket of the day. */
+  topCostLabel: string;
+  topCostAmount: number;
+  /** Net change vs the day before (0 when only one day exists). */
+  deltaVsPrior: number;
+  /** Full cost breakdown for a tooltip, largest first, zero buckets omitted. */
+  breakdown: { label: string; amount: number }[];
+}
+
+/**
+ * One-line "why you made/lost money yesterday": the last closed day's net,
+ * its dominant cost, and the trend vs the day before. Null until a full day
+ * has been played.
+ */
+export function dailyInsight(state: GameState, firmId: FirmId): DailyInsight | null {
+  const hist = state.firms[firmId]?.accounting.dailyHistory;
+  if (!hist || hist.length === 0) return null;
+  const d = hist[hist.length - 1]!;
+  const prior = hist.length > 1 ? hist[hist.length - 2]! : null;
+  const buckets: { label: string; amount: number }[] = [
+    { label: 'wages', amount: d.wages },
+    { label: 'goods', amount: d.costOfGoodsSold },
+    { label: 'maintenance', amount: d.maintenance },
+    { label: 'logistics', amount: d.logisticsCost },
+    { label: 'production', amount: d.variableProductionCost },
+    { label: 'marketing', amount: d.marketing },
+    { label: 'R&D', amount: d.rnd },
+    { label: 'interest', amount: d.interest },
+  ]
+    .filter((b) => b.amount > 0)
+    .sort((a, b) => b.amount - a.amount);
+  return {
+    day: d.day,
+    net: d.netProfit,
+    revenue: d.revenue,
+    topCostLabel: buckets[0]?.label ?? 'none',
+    topCostAmount: buckets[0]?.amount ?? 0,
+    deltaVsPrior: prior ? d.netProfit - prior.netProfit : 0,
+    breakdown: buckets,
+  };
+}
+
 export interface Valuation {
   cash: number;
   inventoryValue: number;
