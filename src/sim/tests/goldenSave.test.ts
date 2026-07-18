@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { readFileSync } from 'node:fs';
+import fixtureJson from './fixtures/golden-save-v1.json';
 import { Simulation } from '../core/Simulation';
 import { deserialize, serialize } from '../persistence/saveLoad';
 import { totalMoneySupply } from '../core/GameState';
@@ -14,8 +14,7 @@ import { ticksPerDay } from '../core/Tick';
  * regenerate this fixture to paper over a break.
  */
 describe('Golden save fixture', () => {
-  // vitest runs with the project root as cwd.
-  const raw = readFileSync('src/sim/tests/fixtures/golden-save-v1.json', 'utf-8');
+  const raw = JSON.stringify(fixtureJson);
 
   it('loads through the migration chain intact', () => {
     const state = deserialize(raw);
