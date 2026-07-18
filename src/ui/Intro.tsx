@@ -13,6 +13,28 @@ export function Intro(): React.ReactElement | null {
         <h1>🏙 EconSim</h1>
         <p className="muted">A living town economy — a Capitalism Lab in miniature.</p>
 
+        <div className="card" style={{ margin: '10px 0 14px', padding: '10px 14px' }}>
+          <h4 style={{ margin: '0 0 8px' }}>Your first ten minutes</h4>
+          <ol style={{ margin: 0, paddingLeft: 20, lineHeight: 1.7 }}>
+            <li>
+              Click <strong>🚀 Bread chain</strong> in the left panel — you get a
+              farm, a bakery, and a shop: built, staffed, wired, and priced.
+            </li>
+            <li>
+              Set speed <strong>20×</strong> and watch the money move — green
+              popups are sales, and the 🧭 <strong>Advisor</strong> (right)
+              flags anything going wrong.
+            </li>
+            <li>
+              Follow the <strong>Missions</strong> panel (top left) — each one
+              pays cash and teaches one lever of the game.
+            </li>
+          </ol>
+        </div>
+
+        <p className="muted small" style={{ marginBottom: 6 }}>
+          The deep game — skim now, come back with the <strong>?</strong> button:
+        </p>
         <div className="intro-grid">
           <div>
             <h4>The world runs itself</h4>

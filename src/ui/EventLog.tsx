@@ -10,7 +10,7 @@ export function EventLog(): React.ReactElement {
 
   return (
     <div className="eventlog">
-      {events.length === 0 && <div className="muted small">No events yet. Press Play.</div>}
+      {events.length === 0 && <div className="muted small">No events yet — the log fills as the town wakes up.</div>}
       {events.map((e) => {
         const t = computeTime(e.tick, state.config);
         return (
