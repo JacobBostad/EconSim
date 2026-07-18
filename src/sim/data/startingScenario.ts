@@ -126,6 +126,7 @@ function newFirm(
     autoPriceByProduct: {},
     exportRevenue: 0,
     exportRevenueByCity: {},
+    wholesaleSpend: 0,
   };
   b.state.firms[id] = firm;
   return firm;

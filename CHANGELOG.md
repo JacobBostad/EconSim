@@ -23,12 +23,15 @@ engine tests), probed with headless balance runs, and guarded by CI.
 - **AI market entries**: mid-game roasteries (coffee), late-game luxury,
   apartment landlording under housing squeezes, rescue M&A, share purchases.
 - **Wholesale market**: supply contracts can source from other firms'
-  facilities — the buyer pays ~85% of market price on each shipment (seller
+  facilities — the buyer pays ~70% of market price on each shipment (seller
   books revenue, buyer books COGS), sellers never part with stock their own
   chains reserve, and broke buyers don't get shipped to. Buy local
   intermediates cheaper than importing, or run a pure-supplier strategy.
   (Also fixes what was a free-goods exploit: the UI offered cross-firm
-  sources but nothing charged for them.)
+  sources but nothing charged for them.) Measured: at 85% a wholesale
+  storefront's margin couldn't cover wages; at 70% it roughly breaks even
+  until you add ads, sharper prices, or scale. A Local Sourcing mission and
+  an advisor buy-local hint teach it.
 - **Port Rosa follows world news**: trade prices mean-revert toward
   event-shifted centers (droughts raise grain there too); fuel spikes scale
   export freight. Exporters never ship stock their own shelves are waiting on.

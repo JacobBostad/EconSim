@@ -57,6 +57,27 @@ describe('morningBriefing', () => {
     expect(advice.some((a) => a.icon === '🤝')).toBe(true);
   });
 
+  it('suggests wholesale when the player imports what a local firm has piled up', () => {
+    const sim = newSim(1);
+    const state = sim.getState();
+    const player = state.firms[state.playerFirmId]!;
+    sim.dispatch({ type: 'BUILD_CHAIN', firmId: player.id, productId: 'bread' });
+    const factory = player.facilities.map((id) => state.facilities[id]!).find((f) => f.type === 'factory')!;
+    const importer = Object.values(state.facilities).find((f) => f.type === 'importer')!;
+    sim.dispatch({
+      type: 'CREATE_SUPPLY_CONTRACT', ownerFirmId: player.id,
+      sourceFacilityId: importer.id, destinationFacilityId: factory.id,
+      productId: 'grain', targetQuantity: 20, reorderPoint: 10, maxInventory: 40,
+    });
+    const aiFarm = Object.values(state.facilities).find(
+      (f) => f.type === 'farm' && state.firms[f.ownerFirmId]?.ownerType === 'ai',
+    )!;
+    addStock(aiFarm.outputInventory, 'grain', 50, 60);
+
+    const advice = morningBriefing(state);
+    expect(advice.some((a) => a.text.includes('wholesale contract'))).toBe(true);
+  });
+
   it('spots a Port Rosa premium for goods the player holds, and caps at 5 items', () => {
     const sim = newSim(1);
     const state = sim.getState();

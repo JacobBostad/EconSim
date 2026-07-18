@@ -148,6 +148,14 @@ export const MISSION_DEFS: MissionDef[] = [
     check: (s) => ((player(s)?.exportRevenueByCity ?? {})['ironvale'] ?? 0) >= dollars(500),
   },
   {
+    id: 'local_sourcing',
+    name: 'Local Sourcing',
+    icon: '🤝',
+    description: 'Spend $200 buying wholesale from another firm: create a supply contract whose source is a rival\'s facility (marked "wholesale" in the picker) — ~70% of market price, cheaper than importing.',
+    reward: dollars(1500),
+    check: (s) => (player(s)?.wholesaleSpend ?? 0) >= dollars(200),
+  },
+  {
     id: 'wage_leader',
     name: 'Wage Leader',
     icon: '🤝',

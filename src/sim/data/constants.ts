@@ -27,8 +27,11 @@ export const IMPORT_MARKUP = 1.5;
  * Wholesale (cross-firm supply contracts) trade at this multiple of the
  * market's average retail price — cheaper than shelves, pricier than making
  * it yourself, so buying local beats importing (1.5×) but not integration.
+ * Measured: at 0.85 a wholesale-fed store's 15% gross margin couldn't cover
+ * retail wages (lifetime revenue < COGS over 150 days); 0.70 leaves retail
+ * economics that work at ordinary volume.
  */
-export const WHOLESALE_DISCOUNT = 0.85;
+export const WHOLESALE_DISCOUNT = 0.7;
 
 /** Per-unit transport cost (cents) component for shipments, times distance. */
 export const TRANSPORT_COST_PER_UNIT_DISTANCE = 0.6;

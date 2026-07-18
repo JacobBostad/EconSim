@@ -288,6 +288,14 @@ price minus ~8% freight — manually, or with **standing orders** ("auto-export
 firms broker their surpluses at a steeper 15% fee, also to the best payer.
 Booms/gluts make the news; the Market dashboard charts the best export quote.
 
+**Wholesale market**: supply contracts can source from *other firms'*
+facilities — the buyer pays ~70% of the market's average price on each
+shipment (the seller books it as revenue), sellers never part with stock
+their own chains reserve, and broke buyers don't get shipped to. Buying
+local intermediates beats the importer's 1.5× markup; a pure storefront fed
+entirely by wholesale roughly breaks even until you add advertising, sharper
+prices, or scale — a low-capital entry ramp, not free money.
+
 **Luxury tier**: pastries (grain) and jewelry (minerals) satisfy a 'luxury'
 need that only grows for satisfied, well-off citizens. Their recipes demand
 craft quality ≥75 (invest R&D first). No AI sells luxury at the start — but a
@@ -368,7 +376,9 @@ income, etc. Config is part of saved state.
 - **payroll** — wages move firm→citizen; missed payroll is recorded when broke.
 - **pricing** — AI raises on sellouts, cuts on surplus, stays within bounds.
 - **logistics** — contracts ship goods source→destination; importer sourcing
-  charges the buyer.
+  charges the buyer; cross-firm (wholesale) shipments pay the seller ~70% of
+  market on dispatch, never raid the seller's own reserved stock, and skip
+  buyers who can't pay.
 - **accounting** — firm books match the transaction log; **money supply is
   conserved** across the economy.
 - **saveLoad** — serialize/deserialize restores identical state; save==keep

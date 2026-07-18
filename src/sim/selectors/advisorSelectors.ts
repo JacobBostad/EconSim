@@ -101,6 +101,28 @@ export function morningBriefing(state: GameState): Advice[] {
     });
   }
 
+  // 4b. Sourcing: the player imports something a local firm has piled up —
+  // wholesale runs ~70% of market vs the importer's 1.5× base markup.
+  outer: for (const cid in state.contracts) {
+    const ctr = state.contracts[cid]!;
+    if (!ctr.active || ctr.ownerFirmId !== player.id) continue;
+    const src = state.facilities[ctr.sourceFacilityId];
+    if (!src || src.type !== 'importer') continue;
+    for (const fid in state.facilities) {
+      const fac = state.facilities[fid]!;
+      if (fac.ownerFirmId === player.id || fac.type === 'importer') continue;
+      if (state.firms[fac.ownerFirmId]?.ownerType !== 'ai') continue;
+      if (getQuantity(fac.outputInventory, ctr.productId) >= 30) {
+        items.push({
+          icon: '🤝',
+          severity: 'info',
+          text: `You import ${getProduct(ctr.productId).name}, but ${fac.name} has a local surplus — a wholesale contract (~70% of market) beats the importer's premium.`,
+        });
+        break outer;
+      }
+    }
+  }
+
   // 5. Trade: some port pays a premium for something you actually hold.
   for (const facId of player.facilities) {
     const fac = state.facilities[facId];

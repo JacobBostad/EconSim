@@ -200,6 +200,7 @@ function processReorders(ctx: SimContext): void {
           note: `Wholesale ${qty} ${product.name} from ${state.firms[source.ownerFirmId]?.name ?? 'supplier'}`,
           counterparty: { firmId: source.ownerFirmId, category: 'revenue' },
         });
+        buyer.wholesaleSpend += wholesalePaid;
       }
       removeStock(bag, contract.productId, qty);
     }

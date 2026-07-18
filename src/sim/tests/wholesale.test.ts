@@ -99,6 +99,18 @@ describe('Wholesale (cross-firm) supply contracts', () => {
     expect(getQuantity(store.inputInventory, 'bread')).toBeLessThanOrEqual(30);
   });
 
+  it('tracks wholesaleSpend and satisfies the Local Sourcing mission', async () => {
+    const { sim, state, player } = setupWholesale();
+    state.missions = []; // re-arm missions for this test
+    sim.run(Math.round((ticksPerDay(state.config) / 24) * 2) + 1);
+    expect(player.wholesaleSpend).toBeGreaterThan(0);
+
+    const { getMissionDef } = await import('../data/missions');
+    const mission = getMissionDef('local_sourcing')!;
+    player.wholesaleSpend = 200_00;
+    expect(mission.check(state)).toBe(true);
+  });
+
   it('a buyer who cannot pay gets no shipment (and no goods vanish)', () => {
     const { sim, state, player, store, aiFactory } = setupWholesale();
     state.worldCash += player.cash;
