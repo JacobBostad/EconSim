@@ -22,6 +22,7 @@ describe('Scripted 250-day playtest (bot v3)', () => {
     const pid = player.id;
     let stage = 0;
     let luxTry = false;
+    let wholesaleWired = false;
     const supply0 = totalMoneySupply(state);
     let maxVal = 0;
 
@@ -36,6 +37,20 @@ describe('Scripted 250-day playtest (bot v3)', () => {
         sim.dispatch({ type: 'SET_WAGE', firmId: pid, wage: 16_50 });
         sim.dispatch({ type: 'SET_AD_BUDGET', firmId: pid, productId: 'bread', dailyBudget: 14_00 });
         stage = 1;
+      }
+      // Local sourcing: top up the young store's bread from an AI bakery
+      // wholesale (cheap supply while the own chain ramps, and the Local
+      // Sourcing mission pays for itself).
+      if (stage === 1 && day >= 12 && !wholesaleWired) {
+        const st = store();
+        const aiBakery = Object.values(state.facilities).find(
+          (f) => f.type === 'factory' && state.firms[f.ownerFirmId]?.ownerType === 'ai'
+            && f.recipes.some((r) => r.includes('bread')),
+        );
+        if (st && aiBakery) {
+          sim.dispatch({ type: 'CREATE_SUPPLY_CONTRACT', ownerFirmId: pid, sourceFacilityId: aiBakery.id, destinationFacilityId: st.id, productId: 'bread', targetQuantity: 20, reorderPoint: 8, maxInventory: 40 });
+          wholesaleWired = true;
+        }
       }
       if (stage === 1 && day >= 18 && cash >= 7000_00) {
         sim.dispatch({ type: 'BUILD_FACILITY', firmId: pid, defId: 'farm', location: { x: 30, y: 22 } });

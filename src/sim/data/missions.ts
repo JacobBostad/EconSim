@@ -132,6 +132,16 @@ export const MISSION_DEFS: MissionDef[] = [
     },
   },
   {
+    // Before the export arc: buying wholesale needs nothing but a store and
+    // a rival with surplus, so it comes as soon as the shop is established.
+    id: 'local_sourcing',
+    name: 'Local Sourcing',
+    icon: '🤝',
+    description: 'Spend $200 buying wholesale from another firm: create a supply contract whose source is a rival\'s facility (marked "wholesale" in the picker) — ~70% of market price, cheaper than importing.',
+    reward: dollars(1500),
+    check: (s) => (player(s)?.wholesaleSpend ?? 0) >= dollars(200),
+  },
+  {
     id: 'first_export',
     name: 'Open the Trade Route',
     icon: '🚢',
@@ -146,14 +156,6 @@ export const MISSION_DEFS: MissionDef[] = [
     description: 'Earn $500 of export revenue from Ironvale, the industrial hub — it pays a premium for tools, minerals and finery (see the Gazette\'s Trade Desk for today\'s spreads).',
     reward: dollars(2000),
     check: (s) => ((player(s)?.exportRevenueByCity ?? {})['ironvale'] ?? 0) >= dollars(500),
-  },
-  {
-    id: 'local_sourcing',
-    name: 'Local Sourcing',
-    icon: '🤝',
-    description: 'Spend $200 buying wholesale from another firm: create a supply contract whose source is a rival\'s facility (marked "wholesale" in the picker) — ~70% of market price, cheaper than importing.',
-    reward: dollars(1500),
-    check: (s) => (player(s)?.wholesaleSpend ?? 0) >= dollars(200),
   },
   {
     id: 'wage_leader',
