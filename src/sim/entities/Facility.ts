@@ -76,7 +76,8 @@ export interface Facility {
   recipes: RecipeId[];
   activeRecipeId: RecipeId | null;
   /** For retail facilities: the single product currently offered for sale. */
-  retailProductId: ProductId | null;
+  /** Products this store sells (retail only; up to MAX_RETAIL_PRODUCTS). */
+  retailProductIds: ProductId[];
   operatingCostPerDay: number; // maintenance, cents
   buildCost: number; // cents
   productionProgress: number;

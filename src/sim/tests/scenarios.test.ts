@@ -18,8 +18,8 @@ describe('Scenario variants', () => {
     expect(ai.map((f) => f.name).sort()).toEqual(
       ['Deepvein Mining Co', 'Granite Industries', 'Sunrise Foods'],
     );
-    const toolSellers = Object.values(state.facilities).filter((f) => f.retailProductId === 'tools');
-    const clothesSellers = Object.values(state.facilities).filter((f) => f.retailProductId === 'clothes');
+    const toolSellers = Object.values(state.facilities).filter((f) => f.retailProductIds.includes('tools'));
+    const clothesSellers = Object.values(state.facilities).filter((f) => f.retailProductIds.includes('clothes'));
     expect(toolSellers.length).toBe(2);
     expect(clothesSellers.length).toBe(0);
   });

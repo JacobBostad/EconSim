@@ -39,7 +39,7 @@ export function createFacility(
     storageCapacity: def.storageCapacity,
     recipes: [...def.allowedRecipes],
     activeRecipeId: null,
-    retailProductId: null,
+    retailProductIds: [],
     operatingCostPerDay: def.maintenanceCostPerDay,
     buildCost: def.buildCost,
     productionProgress: 0,

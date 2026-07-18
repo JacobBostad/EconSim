@@ -18,17 +18,18 @@ describe('AI luxury entry', () => {
       foods.cash = Math.max(foods.cash, 150000_00);
       state.tick = tpd * day;
       runAIStrategySystem(makeContext(state));
-      entered = foods.facilities.some((id) => {
-        const pid = state.facilities[id]?.retailProductId;
-        return pid !== null && pid !== undefined && getProduct(pid).needType === 'luxury';
-      });
+      entered = foods.facilities.some((id) =>
+        (state.facilities[id]?.retailProductIds ?? []).some(
+          (pid) => getProduct(pid).needType === 'luxury',
+        ),
+      );
     }
     expect(entered).toBe(true);
     // Grain-based firm chooses pastries, mastered to production threshold.
     expect(foods.qualityByProduct['pastries']).toBeGreaterThanOrEqual(75);
     const boutique = foods.facilities
       .map((id) => state.facilities[id]!)
-      .find((f) => f.retailProductId === 'pastries')!;
+      .find((f) => f.retailProductIds.includes('pastries'))!;
     expect(boutique.employees.length).toBeGreaterThan(0);
     const wired = Object.values(state.contracts).some(
       (c) => c.ownerFirmId === foods.id && c.productId === 'pastries',
@@ -44,7 +45,7 @@ describe('AI luxury entry', () => {
     }
     const luxuryShops = foods.facilities
       .map((id) => state.facilities[id]!)
-      .filter((f) => f.retailProductId && getProduct(f.retailProductId).needType === 'luxury');
+      .filter((f) => f.retailProductIds.some((pid) => getProduct(pid).needType === 'luxury'));
     expect(luxuryShops.length).toBe(1);
   });
 
@@ -60,7 +61,7 @@ describe('AI luxury entry', () => {
       runAIStrategySystem(makeContext(state));
     }
     const anyLuxury = Object.values(state.facilities).some(
-      (f) => f.retailProductId && getProduct(f.retailProductId).needType === 'luxury',
+      (f) => f.retailProductIds.some((pid) => getProduct(pid).needType === 'luxury'),
     );
     expect(anyLuxury).toBe(false);
   });

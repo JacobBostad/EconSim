@@ -129,6 +129,12 @@ function normalize(state: GameState): GameState {
     f.workerCapacity = f.workerCapacity ?? getFacilityDef(f.defId).workerCapacity;
     f.exportOrders = f.exportOrders ?? {};
     f.builtAtTick = f.builtAtTick ?? 0;
+    // Multi-product retail: wrap the legacy single retailProductId.
+    if (!Array.isArray(f.retailProductIds)) {
+      const legacy = (f as unknown as { retailProductId?: string | null }).retailProductId;
+      f.retailProductIds = legacy ? [legacy] : [];
+      delete (f as unknown as { retailProductId?: string | null }).retailProductId;
+    }
   }
   // ...and give the market a stat entry for them.
   state.tradeCity = state.tradeCity ?? { pricesByProduct: {} };

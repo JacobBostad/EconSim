@@ -35,6 +35,7 @@ import {
   LOAN_MIN_CREDIT,
   MAX_STAKE_PCT,
   FESTIVAL_COST,
+  MAX_RETAIL_PRODUCTS,
   FUND_HOME_COST,
   MAX_CITIZENS,
   MAX_HOMES,
@@ -180,6 +181,9 @@ export class Simulation {
         return;
       case 'SET_RETAIL_PRODUCT':
         this.setRetailProduct(command);
+        return;
+      case 'TOGGLE_RETAIL_PRODUCT':
+        this.toggleRetailProduct(command);
         return;
       case 'SET_PRICE':
         this.setPrice(command);
@@ -406,7 +410,7 @@ export class Simulation {
 
     producer.activeRecipeId = bp.producerRecipeId;
     factory.activeRecipeId = bp.factoryRecipeId;
-    store.retailProductId = bp.productId;
+    store.retailProductIds = [bp.productId];
     if (!firm.pricesByProduct[bp.productId]) {
       firm.pricesByProduct[bp.productId] = getProduct(bp.productId).basePrice;
     }
@@ -686,13 +690,37 @@ export class Simulation {
     if (command.productId !== null && !def.allowedProductsForSale.includes(command.productId)) {
       return;
     }
-    fac.retailProductId = command.productId;
-    // Seed a default price if the firm has none yet.
-    if (command.productId) {
-      const firm = this.state.firms[fac.ownerFirmId];
-      if (firm && !firm.pricesByProduct[command.productId]) {
-        firm.pricesByProduct[command.productId] = getProduct(command.productId).basePrice;
-      }
+    // Legacy single-product semantics: replace the whole assortment.
+    fac.retailProductIds = command.productId ? [command.productId] : [];
+    if (command.productId) this.seedDefaultPrice(fac.ownerFirmId, command.productId);
+  }
+
+  /** Add/remove a product from a store's assortment (max MAX_RETAIL_PRODUCTS). */
+  private toggleRetailProduct(
+    command: Extract<Command, { type: 'TOGGLE_RETAIL_PRODUCT' }>,
+  ): void {
+    const fac = this.state.facilities[command.facilityId];
+    if (!fac || fac.type !== 'retail') return;
+    const def = getFacilityDef(fac.defId);
+    if (!def.allowedProductsForSale.includes(command.productId)) return;
+    const idx = fac.retailProductIds.indexOf(command.productId);
+    if (idx >= 0) {
+      fac.retailProductIds.splice(idx, 1);
+      return;
+    }
+    if (fac.retailProductIds.length >= MAX_RETAIL_PRODUCTS) {
+      emitEvent(this.state, 'warning', 'player',
+        `A store can carry at most ${MAX_RETAIL_PRODUCTS} products.`, fac.id);
+      return;
+    }
+    fac.retailProductIds.push(command.productId);
+    this.seedDefaultPrice(fac.ownerFirmId, command.productId);
+  }
+
+  private seedDefaultPrice(firmId: FirmId, productId: string): void {
+    const firm = this.state.firms[firmId];
+    if (firm && !firm.pricesByProduct[productId]) {
+      firm.pricesByProduct[productId] = getProduct(productId).basePrice;
     }
   }
 

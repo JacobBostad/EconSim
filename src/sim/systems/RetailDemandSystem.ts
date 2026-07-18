@@ -59,7 +59,7 @@ export function scoreStore(
   facility: Facility,
   productId: ProductId,
 ): StoreScore | null {
-  if (facility.retailProductId !== productId) return null;
+  if (!facility.retailProductIds.includes(productId)) return null;
   const product = getProduct(productId);
   const home = ctx.state.facilities[citizen.homeFacilityId];
   const refPrice = product.basePrice;
@@ -107,7 +107,7 @@ export function chooseBestStore(
   let bestScore = -Infinity;
   for (const id in ctx.state.facilities) {
     const fac = ctx.state.facilities[id]!;
-    if (fac.retailProductId !== productId) continue;
+    if (!fac.retailProductIds.includes(productId)) continue;
     if (fac.status === 'closed' || fac.employees.length === 0) continue;
     const scored = scoreStore(ctx, citizen, fac, productId);
     if (!scored) continue;
@@ -128,12 +128,21 @@ export function runRetailDemandSystem(ctx: SimContext): void {
     const store = cit.targetFacilityId ? state.facilities[cit.targetFacilityId] : null;
     // Whatever happens, after a shopping visit the citizen heads home.
     sendHome(ctx, cit);
-    if (!store || store.retailProductId == null) continue;
-    const productId = store.retailProductId;
-    const need = cit.needs.find((n) => n.productId === productId);
-    if (!need) continue;
+    if (!store || store.retailProductIds.length === 0) continue;
 
-    attemptPurchase(ctx, cit, store, productId, need);
+    // Basket shopping: while here, buy EVERY need this store can serve (most
+    // urgent first). This is what makes multi-product stores economical —
+    // one staffed storefront, several revenue streams per visit.
+    const wants = cit.needs
+      .filter(
+        (n) =>
+          store.retailProductIds.includes(n.productId) &&
+          n.urgency >= ctx.config.needUrgencyThreshold * 0.6,
+      )
+      .sort((a, b) => b.urgency - a.urgency);
+    for (const need of wants) {
+      attemptPurchase(ctx, cit, store, need.productId, need);
+    }
   }
 }
 

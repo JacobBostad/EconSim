@@ -40,6 +40,7 @@ export type Command =
       facilityId: FacilityId;
       productId: ProductId | null;
     }
+  | { type: 'TOGGLE_RETAIL_PRODUCT'; facilityId: FacilityId; productId: ProductId }
   | { type: 'SET_PRICE'; firmId: FirmId; productId: ProductId; price: number }
   | { type: 'SET_AUTO_PRICE'; firmId: FirmId; productId: ProductId; enabled: boolean }
   | { type: 'BUILD_CHAIN'; firmId: FirmId; productId: ProductId }

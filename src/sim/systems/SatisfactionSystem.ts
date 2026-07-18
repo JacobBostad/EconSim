@@ -32,7 +32,7 @@ const LUXURY_MIN_CASH = 600_00;
 function soldSomewhere(state: import('../core/GameState').GameState, productId: string): boolean {
   for (const fid in state.facilities) {
     const f = state.facilities[fid]!;
-    if (f.retailProductId === productId && f.status !== 'closed' && f.employees.length > 0) {
+    if (f.retailProductIds.includes(productId) && f.status !== 'closed' && f.employees.length > 0) {
       return true;
     }
   }

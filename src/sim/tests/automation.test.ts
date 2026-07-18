@@ -34,7 +34,7 @@ describe('Chain wizard & auto-pricing', () => {
     const store = facs.find((f) => f.type === 'retail')!;
     expect(producer.activeRecipeId).toBe('grow_grain');
     expect(factory.activeRecipeId).toBe('bake_bread');
-    expect(store.retailProductId).toBe('bread');
+    expect(store.retailProductIds).toEqual(['bread']);
     expect(producer.employees.length).toBeGreaterThan(0);
     expect(store.employees.length).toBe(1);
     expect(player.pricesByProduct['bread']).toBe(getProduct('bread').basePrice);

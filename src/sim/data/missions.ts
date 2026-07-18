@@ -69,7 +69,7 @@ export const MISSION_DEFS: MissionDef[] = [
       if (!p) return false;
       return p.facilities.some((fid) => {
         const f = s.facilities[fid];
-        return f?.type === 'retail' && f.retailProductId != null && f.employees.length >= 1;
+        return f?.type === 'retail' && f.retailProductIds.length > 0 && f.employees.length >= 1;
       });
     },
   },

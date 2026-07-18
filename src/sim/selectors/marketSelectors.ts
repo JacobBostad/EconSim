@@ -108,7 +108,7 @@ export function pricingInsight(
   let competitors = 0;
   for (const fid in state.facilities) {
     const f = state.facilities[fid]!;
-    if (f.retailProductId === productId && f.ownerFirmId !== firmId &&
+    if (f.retailProductIds.includes(productId) && f.ownerFirmId !== firmId &&
         f.status !== 'closed' && f.employees.length > 0) {
       competitors++;
     }

@@ -161,77 +161,80 @@ export function FacilityActions({ fac }: { fac: Facility }): React.ReactElement 
         </div>
       )}
 
-      {/* Retail product + price */}
+      {/* Retail assortment + per-product pricing */}
       {fac.type === 'retail' && (
         <div className="card">
-          <div className="section-title" style={{ marginTop: 0 }}>Retail</div>
+          <div className="section-title" style={{ marginTop: 0 }}>
+            Retail — carries {fac.retailProductIds.length}/3 products
+          </div>
           {isPlayer ? (
-            <div className="row between">
-              <span>Sells:</span>
-              <select
-                value={fac.retailProductId ?? ''}
-                onChange={(e) =>
-                  dispatch({
-                    type: 'SET_RETAIL_PRODUCT',
-                    facilityId: fac.id,
-                    productId: e.target.value || null,
-                  })
-                }
-              >
-                <option value="">— none —</option>
-                {def.allowedProductsForSale.map((pid) => (
-                  <option key={pid} value={pid}>{getProduct(pid).name}</option>
-                ))}
-              </select>
+            <div className="row" style={{ gap: 10, flexWrap: 'wrap', marginBottom: 4 }}>
+              {def.allowedProductsForSale.map((pid) => (
+                <label key={pid} className="row small" style={{ cursor: 'pointer', gap: 4 }}>
+                  <input
+                    type="checkbox"
+                    checked={fac.retailProductIds.includes(pid)}
+                    disabled={!fac.retailProductIds.includes(pid) && fac.retailProductIds.length >= 3}
+                    onChange={() =>
+                      dispatch({ type: 'TOGGLE_RETAIL_PRODUCT', facilityId: fac.id, productId: pid })
+                    }
+                  />
+                  {getProduct(pid).name}
+                </label>
+              ))}
             </div>
           ) : (
-            <div className="small">Sells: {fac.retailProductId ? getProduct(fac.retailProductId).name : 'none'}</div>
+            <div className="small">
+              Sells: {fac.retailProductIds.map((pid) => getProduct(pid).name).join(', ') || 'none'}
+            </div>
           )}
-          {fac.retailProductId && firm && (
-            <PriceControl
-              firmId={fac.ownerFirmId}
-              productId={fac.retailProductId}
-              price={firm.pricesByProduct[fac.retailProductId] ?? getProduct(fac.retailProductId).basePrice}
-              editable={isPlayer}
-            />
+          {isPlayer && fac.retailProductIds.length > 1 && (
+            <p className="muted small" style={{ margin: '2px 0 6px' }}>
+              Basket effect: one staffed storefront, several revenue streams — shoppers
+              buy every carried product they need per visit. Wire a supply contract for each.
+            </p>
           )}
-          {fac.retailProductId && firm && isPlayer && (() => {
-            const ins = pricingInsight(state, firm.id, fac.retailProductId);
-            const overWtp = ins.yourPrice > ins.wtpHigh;
-            return (
-              <div className="small muted" style={{ margin: '4px 0', lineHeight: 1.5 }}>
-                Market avg <span className="mono">{ins.marketAvgPrice ? formatMoney(ins.marketAvgPrice) : '—'}</span>
-                {' · '}customers pay up to{' '}
-                <span className="mono" style={{ color: overWtp ? 'var(--red)' : 'var(--green)' }}>
-                  {formatMoney(ins.wtpLow)}–{formatMoney(ins.wtpHigh)}
-                </span>
-                {' '}(brand/quality raise this)
-                {' · '}{ins.competitors} rival store{ins.competitors === 1 ? '' : 's'}
-                {' · '}your share <span className="mono">{(ins.yourShare * 100).toFixed(0)}%</span>
-                {overWtp && <strong style={{ color: 'var(--red)' }}> — priced above what anyone will pay!</strong>}
+          {firm &&
+            fac.retailProductIds.map((pid) => (
+              <div key={pid} style={{ borderTop: '1px solid var(--border)', paddingTop: 6, marginTop: 6 }}>
+                <strong className="small">{getProduct(pid).name}</strong>
+                <PriceControl
+                  firmId={fac.ownerFirmId}
+                  productId={pid}
+                  price={firm.pricesByProduct[pid] ?? getProduct(pid).basePrice}
+                  editable={isPlayer}
+                />
+                {isPlayer && (() => {
+                  const ins = pricingInsight(state, firm.id, pid);
+                  const overWtp = ins.yourPrice > ins.wtpHigh;
+                  return (
+                    <div className="small muted" style={{ margin: '4px 0', lineHeight: 1.5 }}>
+                      Market avg <span className="mono">{ins.marketAvgPrice ? formatMoney(ins.marketAvgPrice) : '—'}</span>
+                      {' · '}customers pay up to{' '}
+                      <span className="mono" style={{ color: overWtp ? 'var(--red)' : 'var(--green)' }}>
+                        {formatMoney(ins.wtpLow)}–{formatMoney(ins.wtpHigh)}
+                      </span>
+                      {' · '}{ins.competitors} rival store{ins.competitors === 1 ? '' : 's'}
+                      {' · '}share <span className="mono">{(ins.yourShare * 100).toFixed(0)}%</span>
+                      {overWtp && <strong style={{ color: 'var(--red)' }}> — priced above what anyone will pay!</strong>}
+                    </div>
+                  );
+                })()}
+                {isPlayer && (
+                  <label className="row small" style={{ marginTop: 2, cursor: 'pointer' }}>
+                    <input
+                      type="checkbox"
+                      checked={firm.autoPriceByProduct[pid] ?? false}
+                      onChange={(e) =>
+                        dispatch({ type: 'SET_AUTO_PRICE', firmId: firm.id, productId: pid, enabled: e.target.checked })
+                      }
+                    />
+                    Auto-price
+                  </label>
+                )}
+                <MarketingControls firm={firm} productId={pid} editable={isPlayer} />
               </div>
-            );
-          })()}
-          {fac.retailProductId && firm && isPlayer && (
-            <label className="row small" style={{ marginTop: 4, cursor: 'pointer' }}>
-              <input
-                type="checkbox"
-                checked={firm.autoPriceByProduct[fac.retailProductId] ?? false}
-                onChange={(e) =>
-                  dispatch({
-                    type: 'SET_AUTO_PRICE',
-                    firmId: firm.id,
-                    productId: fac.retailProductId!,
-                    enabled: e.target.checked,
-                  })
-                }
-              />
-              Auto-price (daily controller: raise on sellouts, cut on surplus)
-            </label>
-          )}
-          {fac.retailProductId && firm && (
-            <MarketingControls firm={firm} productId={fac.retailProductId} editable={isPlayer} />
-          )}
+            ))}
         </div>
       )}
 

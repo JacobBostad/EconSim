@@ -79,8 +79,8 @@ function manageAdBudget(ctx: SimContext, firmId: string): void {
   const firm = state.firms[firmId]!;
   for (const facId of firm.facilities) {
     const fac = state.facilities[facId];
-    if (!fac || fac.type !== 'retail' || !fac.retailProductId) continue;
-    const pid = fac.retailProductId;
+    if (!fac || fac.type !== 'retail') continue;
+    for (const pid of fac.retailProductIds) {
     const share = firm.marketShareByProduct[pid] ?? 0;
     const budget = firm.adBudgetByProduct[pid] ?? 0;
     if (firm.strategy.lossStreak >= 3 || share > 0.7) {
@@ -94,6 +94,7 @@ function manageAdBudget(ctx: SimContext, firmId: string): void {
         emitEvent(state, 'info', 'ai',
           `${firm.name} is running a maximum ad campaign for ${getProduct(pid).name}.`, firm.id);
       }
+    }
     }
   }
 }
@@ -118,8 +119,9 @@ function maybeInvestQuality(ctx: SimContext, firmId: string): void {
   if (firm.cash < 25000_00 /* $25k buffer */) return;
   for (const facId of firm.facilities) {
     const fac = state.facilities[facId];
-    if (!fac || fac.type !== 'retail' || !fac.retailProductId) continue;
-    const pid = fac.retailProductId;
+    if (!fac || fac.type !== 'retail') continue;
+    const pid = fac.retailProductIds[0];
+    if (!pid) continue;
     const cur = firm.qualityByProduct[pid] ?? getProduct(pid).defaultQuality;
     const behindRival = bestRivalQuality(ctx, firmId, pid) > cur + 5;
     if (!behindRival && !rng.chance(0.15)) return;
@@ -152,8 +154,8 @@ function maybeExpand(ctx: SimContext, firmId: string): void {
   let lost = 0;
   for (const id of stores) {
     const fac = state.facilities[id]!;
-    if (!fac.retailProductId) continue;
-    product = fac.retailProductId;
+    if (fac.retailProductIds.length === 0) continue;
+    product = fac.retailProductIds[0]!;
     lost += fac.dailyStats.lostSales;
   }
   if (!product) return;
@@ -191,7 +193,7 @@ function maybeExpand(ctx: SimContext, firmId: string): void {
   }
 
   const fac = createFacility(state, 'retail', firmId, loc, { name: `${firm.name.split(' ')[0]} Outlet ${stores.length + 1}` });
-  fac.retailProductId = product;
+  fac.retailProductIds = [product];
   fac.buildCost = cost;
   fac.operatingCostPerDay = Math.round(def.maintenanceCostPerDay * mult);
   recordTransaction(state, { from: firmAccount(firmId), to: WORLD_ACCOUNT, amount: cost, firmId, category: 'buildSpend', note: 'Built store' });
@@ -339,8 +341,8 @@ function maybeEnterLuxury(ctx: SimContext, firmId: string): void {
   if (ctx.time.day < LUXURY_ENTRY_DAY || firm.cash < LUXURY_ENTRY_CASH) return;
   // Already in luxury? One entry per firm.
   for (const facId of firm.facilities) {
-    const pid = state.facilities[facId]?.retailProductId;
-    if (pid && getProduct(pid).needType === 'luxury') return;
+    const pids = state.facilities[facId]?.retailProductIds ?? [];
+    if (pids.some((p) => getProduct(p).needType === 'luxury')) return;
   }
   if (!rng.chance(LUXURY_ENTRY_CHANCE)) return;
 
@@ -380,7 +382,7 @@ function maybeEnterLuxury(ctx: SimContext, firmId: string): void {
   recordTransaction(state, { from: firmAccount(firmId), to: WORLD_ACCOUNT, amount: wsCost, firmId, category: 'buildSpend', note: 'Built atelier' });
 
   const boutique = createFacility(state, 'retail', firmId, shopLoc, { name: `${firm.name.split(' ')[0]} Luxury Boutique` });
-  boutique.retailProductId = luxury;
+  boutique.retailProductIds = [luxury];
   boutique.buildCost = shopCost;
   recordTransaction(state, { from: firmAccount(firmId), to: WORLD_ACCOUNT, amount: shopCost, firmId, category: 'buildSpend', note: 'Built boutique' });
 
@@ -453,8 +455,8 @@ function adjustPrices(ctx: SimContext, firmId: string, onlyAutoPriced = false): 
 
   for (const facId of firm.facilities) {
     const fac = state.facilities[facId];
-    if (!fac || fac.type !== 'retail' || !fac.retailProductId) continue;
-    const pid = fac.retailProductId;
+    if (!fac || fac.type !== 'retail') continue;
+    for (const pid of fac.retailProductIds) {
     if (onlyAutoPriced && !firm.autoPriceByProduct[pid]) continue;
     const product = getProduct(pid);
     const base = product.basePrice;
@@ -516,5 +518,6 @@ function adjustPrices(ctx: SimContext, firmId: string, onlyAutoPriced = false): 
 
     price = clamp(price, base * config.aiPriceFloorMult, base * config.aiPriceCeilMult);
     firm.pricesByProduct[pid] = Math.round(price);
+    }
   }
 }

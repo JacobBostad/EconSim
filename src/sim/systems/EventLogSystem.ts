@@ -35,8 +35,7 @@ export function runEventLogSystem(ctx: SimContext): void {
       emitEvent(state, 'warning', 'production', `${fac.name}: workers idle — output storage is full.`, fac.id);
     }
 
-    if (fac.type === 'retail' && fac.retailProductId) {
-      const pid = fac.retailProductId;
+    for (const pid of fac.type === 'retail' ? fac.retailProductIds : []) {
       const product = getProduct(pid);
       if (fac.dailyStats.lostSales > 0) {
         emitEvent(

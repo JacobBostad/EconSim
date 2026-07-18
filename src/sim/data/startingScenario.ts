@@ -49,7 +49,7 @@ function newFacility(
   defId: string,
   ownerFirmId: string,
   location: Vec2,
-  opts: { name?: string; activeRecipeId?: string | null; retailProductId?: string | null } = {},
+  opts: { name?: string; activeRecipeId?: string | null; retailProductIds?: string[] } = {},
 ): Facility {
   const def = getFacilityDef(defId);
   const id = nextId(b.counters, 'fac');
@@ -66,7 +66,7 @@ function newFacility(
     storageCapacity: def.storageCapacity,
     recipes: [...def.allowedRecipes],
     activeRecipeId: opts.activeRecipeId ?? null,
-    retailProductId: opts.retailProductId ?? null,
+    retailProductIds: opts.retailProductIds ?? [],
     operatingCostPerDay: def.maintenanceCostPerDay,
     buildCost: def.buildCost,
     productionProgress: 0,
@@ -333,7 +333,7 @@ export function createInitialState(
 
     const shop = newFacility(b, 'retail', firm.id, spec.loc.retail, {
       name: spec.retailName,
-      retailProductId: spec.product,
+      retailProductIds: [spec.product],
     });
     stock(shop.inputInventory, spec.product, spec.stocks.shopIn);
 

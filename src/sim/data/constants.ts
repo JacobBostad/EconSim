@@ -77,6 +77,9 @@ export const TRADE_WALK_STEP = 0.12;
 export const TRADE_BOOM_MULT = 1.45;
 export const TRADE_GLUT_MULT = 0.7;
 
+/** Max products one retail store can carry. */
+export const MAX_RETAIL_PRODUCTS = 3;
+
 // --- Civic actions ----------------------------------------------------------
 /** Sponsoring the 3-day town festival costs this much (paid to the town). */
 export const FESTIVAL_COST = dollars(1500);
