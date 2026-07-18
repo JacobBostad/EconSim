@@ -249,6 +249,11 @@ export class Simulation {
         if (fac) fac.wholesaleEnabled = command.enabled;
         return;
       }
+      case 'SET_POSITIONING': {
+        const fac = s.facilities[command.facilityId];
+        if (fac && fac.type === 'retail') fac.positioning = command.positioning;
+        return;
+      }
       case 'SET_WHOLESALE_PRICE': {
         const fac = s.facilities[command.facilityId];
         if (!fac || !Number.isFinite(command.mult)) return;

@@ -69,6 +69,7 @@ function newFacility(
     recipes: [...def.allowedRecipes],
     activeRecipeId: opts.activeRecipeId ?? null,
     retailProductIds: opts.retailProductIds ?? [],
+    positioning: 'standard',
     operatingCostPerDay: def.maintenanceCostPerDay,
     buildCost: def.buildCost,
     productionProgress: 0,

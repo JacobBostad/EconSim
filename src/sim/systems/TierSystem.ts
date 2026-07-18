@@ -87,6 +87,57 @@ export function tierPriceCapMult(tier: CitizenTier, productId: string): number {
   return PRICE_CAP_MULT[tier][productId] ?? 1;
 }
 
+/**
+ * Phase 3 — store positioning. Both signs must be EARNED or they behave as
+ * standard — a positioning label is a promise, not a buff:
+ * - discount: earned by actually pricing below market (≤ 95% of the going
+ *   average). Earns worker footfall, repels the affluent. No price-cap
+ *   change — an early draft made discount shoppers walk away above 85% of
+ *   their cap, and in low-competition towns that "lying sign" penalty
+ *   drained satisfaction town-wide (probed: −5 sat, −20% pop).
+ * - premium: earned by quality ≥ the bar on the shelf. Earns affluent and
+ *   comfortable appeal plus a 15% higher walkaway cap; repels workers.
+ */
+export const PREMIUM_QUALITY_THRESHOLD = 60;
+/** A discount sign is honest while price ≤ this share of the market avg. */
+export const DISCOUNT_PRICE_RATIO = 0.95;
+
+/** Additive store-score affinity for a citizen tier (scoring is ~0..1). */
+const POSITIONING_AFFINITY: Record<string, Record<CitizenTier, number>> = {
+  discount: { worker: 0.06, comfortable: 0, affluent: -0.08 },
+  standard: { worker: 0, comfortable: 0, affluent: 0 },
+  premium: { worker: -0.08, comfortable: 0.04, affluent: 0.1 },
+};
+
+/** Whether a premium sign is currently EARNED for this product (quality
+ * on the shelf meets the bar); unearned premium behaves as standard. */
+export function premiumEarned(avgQuality: number): boolean {
+  return avgQuality >= PREMIUM_QUALITY_THRESHOLD;
+}
+
+/** Whether a discount sign is EARNED (the store genuinely undercuts). */
+export function discountEarned(price: number, marketAvgPrice: number): boolean {
+  return marketAvgPrice > 0 && price <= marketAvgPrice * DISCOUNT_PRICE_RATIO;
+}
+
+export function positioningAffinity(
+  positioning: string,
+  tier: CitizenTier,
+  opts: { avgQuality: number; price: number; marketAvgPrice: number },
+): number {
+  let effective = positioning;
+  if (positioning === 'premium' && !premiumEarned(opts.avgQuality)) effective = 'standard';
+  if (positioning === 'discount' && !discountEarned(opts.price, opts.marketAvgPrice)) {
+    effective = 'standard';
+  }
+  return POSITIONING_AFFINITY[effective]?.[tier] ?? 0;
+}
+
+/** Walkaway-cap multiplier: only an earned premium sign moves it. */
+export function positioningPriceImage(positioning: string, avgQuality: number): number {
+  return positioning === 'premium' && premiumEarned(avgQuality) ? 1.15 : 1;
+}
+
 function livesInApartment(state: GameState, cit: Citizen): boolean {
   return state.facilities[cit.homeFacilityId]?.defId === 'apartment';
 }

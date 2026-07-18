@@ -27,6 +27,10 @@ export type FacilityType =
   | 'retail'
   | 'importer';
 
+/** Retail market positioning — who the store courts (Phase 3 of the
+ * classes-and-ascension design). */
+export type StorePositioning = 'discount' | 'standard' | 'premium';
+
 export type FacilityStatus =
   | 'active'
   | 'idle'
@@ -97,6 +101,13 @@ export interface Facility {
   /** For retail facilities: the single product currently offered for sale. */
   /** Products this store sells (retail only; up to MAX_RETAIL_PRODUCTS). */
   retailProductIds: ProductId[];
+  /**
+   * Retail market positioning (see docs/design/classes-and-ascension.md):
+   * discount courts workers and caps what shoppers expect to pay; premium
+   * courts the affluent and supports higher prices, but only works with
+   * quality goods on the shelf. Meaningful for retail facilities only.
+   */
+  positioning: StorePositioning;
   operatingCostPerDay: number; // maintenance, cents
   buildCost: number; // cents
   productionProgress: number;

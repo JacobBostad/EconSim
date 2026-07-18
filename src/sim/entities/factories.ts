@@ -40,6 +40,7 @@ export function createFacility(
     recipes: [...def.allowedRecipes],
     activeRecipeId: null,
     retailProductIds: [],
+    positioning: 'standard',
     operatingCostPerDay: def.maintenanceCostPerDay,
     buildCost: def.buildCost,
     productionProgress: 0,

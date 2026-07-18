@@ -26,7 +26,7 @@ import { distance } from '../entities/Location';
 import { getProduct } from '../data/products';
 import { worldDemandMult, worldSpendingMult } from '../data/worldEvents';
 import { seasonDemandMult } from '../data/seasons';
-import { tierPriceCapMult } from './TierSystem';
+import { tierPriceCapMult, positioningAffinity, positioningPriceImage } from './TierSystem';
 import { clamp } from '../../utils/clamp';
 
 /** Price a firm charges for a product (falls back to base price). */
@@ -86,6 +86,14 @@ export function scoreStore(
   const noveltyScore =
     facility.builtAtTick > 0 && ageDays < 15 ? 0.12 * (1 - ageDays / 15) : 0;
 
+  // Positioning: an honest discount sign courts workers; an earned premium
+  // sign courts the affluent — unearned signs do nothing (see TierSystem).
+  const affinity = positioningAffinity(facility.positioning, citizen.tier, {
+    avgQuality: getQuality(facility.inputInventory, productId),
+    price,
+    marketAvgPrice: ctx.state.marketStats[productId]?.averagePrice || refPrice,
+  });
+
   const score =
     availabilityScore * 0.28 +
     priceScore * 0.22 +
@@ -93,7 +101,8 @@ export function scoreStore(
     qualityScore * 0.14 +
     brandScore * 0.12 +
     reliabilityScore * 0.06 +
-    noveltyScore;
+    noveltyScore +
+    affinity;
 
   return { facility, score, price };
 }
@@ -168,13 +177,16 @@ function attemptPurchase(
   const qual = getQuality(store.inputInventory, productId);
   const premium = 1 + brand / 250 + (qual - 50) / 300;
   // Booms/recessions move what citizens will pay; fads move how much they
-  // buy; affluent citizens tolerate premium prices on favorite categories.
+  // buy; affluent citizens tolerate premium prices on favorite categories;
+  // positioning sets the price image (discount shoppers expect discounts,
+  // premium shoppers accept a markup — if the quality earns the sign).
   const maxPrice =
     product.basePrice *
     need.maxAffordablePriceMultiplier *
     premium *
     worldSpendingMult(state) *
-    tierPriceCapMult(cit.tier, productId);
+    tierPriceCapMult(cit.tier, productId) *
+    positioningPriceImage(store.positioning, qual);
 
   const wantQty = Math.max(
     1,

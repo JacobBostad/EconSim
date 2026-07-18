@@ -290,6 +290,32 @@ export function FacilityActions({ fac }: { fac: Facility }): React.ReactElement 
               buy every carried product they need per visit. Wire a supply contract for each.
             </p>
           )}
+          <div className="row small" style={{ gap: 6, alignItems: 'center', margin: '6px 0' }}>
+            <span className="muted">Positioning:</span>
+            {(['discount', 'standard', 'premium'] as const).map((pos) =>
+              isPlayer ? (
+                <button
+                  key={pos}
+                  className={fac.positioning === pos ? 'primary' : ''}
+                  style={{ padding: '2px 8px' }}
+                  onClick={() => dispatch({ type: 'SET_POSITIONING', facilityId: fac.id, positioning: pos })}
+                  title={
+                    pos === 'discount'
+                      ? 'Courts workers; shoppers expect prices ~15% below normal.'
+                      : pos === 'premium'
+                        ? 'Courts affluent shoppers and supports ~15% higher prices — but only with quality ≥ 60 goods on the shelf.'
+                        : 'No tilt — serves every tier evenly.'
+                  }
+                >
+                  {pos === 'discount' ? '🏷️ Discount' : pos === 'premium' ? '✨ Premium' : 'Standard'}
+                </button>
+              ) : fac.positioning === pos ? (
+                <span key={pos} className="badge">
+                  {pos === 'discount' ? '🏷️ Discount' : pos === 'premium' ? '✨ Premium' : 'Standard'}
+                </span>
+              ) : null,
+            )}
+          </div>
           {firm &&
             fac.retailProductIds.map((pid) => (
               <div key={pid} style={{ borderTop: '1px solid var(--border)', paddingTop: 6, marginTop: 6 }}>

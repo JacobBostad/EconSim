@@ -35,6 +35,7 @@ import { acquisitionCost, performAcquisition } from '../core/Acquisition';
 import { landCostMultiplier, landValueAt } from '../core/LandValue';
 import { MAX_FACILITY_LEVEL, upgradeCost, upgradeFacility } from '../core/Upgrades';
 import { getPersonality, ceoQuote } from '../data/personalities';
+import { PREMIUM_QUALITY_THRESHOLD } from './TierSystem';
 import { pickBestCity } from '../core/Trade';
 import { getTradeCity } from '../data/tradeCities';
 
@@ -53,6 +54,7 @@ export function runAIStrategySystem(ctx: SimContext): void {
     }
     adjustPrices(ctx, firm.id);
     if (firm.bankruptcyStatus === 'healthy') {
+      managePositioning(ctx, firm.id);
       manageDebt(ctx, firm.id);
       manageSourcing(ctx, firm.id);
       manageWholesalePricing(ctx, firm.id);
@@ -83,6 +85,46 @@ export function runAIStrategySystem(ctx: SimContext): void {
     adjustPrices(ctx, player.id, true);
     maybeWidenShelves(ctx, player.id, true);
     trimManagedAds(ctx, player.id);
+  }
+}
+
+/**
+ * Store positioning by personality: price fighters run discount formats
+ * (worker footfall over margin), brand builders go premium (their ad/quality
+ * spend earns the sign). Deterministic — no rng draws — and each store
+ * converts at most once, so this is a one-time identity choice, not churn.
+ * Premium conversion waits for the firm's quality investment to reach the
+ * bar on at least one shelf product, matching the "earned sign" rule.
+ */
+function managePositioning(ctx: SimContext, firmId: string): void {
+  const { state } = ctx;
+  const firm = state.firms[firmId]!;
+  const desired =
+    firm.personalityId === 'price_fighter'
+      ? 'discount'
+      : firm.personalityId === 'brand_builder'
+        ? 'premium'
+        : null;
+  if (!desired) return;
+  let converted = false;
+  for (const facId of firm.facilities) {
+    const fac = state.facilities[facId];
+    if (!fac || fac.type !== 'retail' || fac.positioning !== 'standard') continue;
+    if (desired === 'premium') {
+      const qualityReady = fac.retailProductIds.some(
+        (pid) => (firm.qualityByProduct[pid] ?? 50) >= PREMIUM_QUALITY_THRESHOLD,
+      );
+      if (!qualityReady) continue;
+    }
+    fac.positioning = desired;
+    converted = true;
+  }
+  if (converted) {
+    emitEvent(state, 'info', 'ai',
+      desired === 'discount'
+        ? `🏷️ ${firm.name} converts its stores to a discount format — everyday low prices, working-class crowds.`
+        : `✨ ${firm.name} takes its stores upmarket — premium fittings, premium prices.`,
+      firm.id);
   }
 }
 

@@ -90,6 +90,19 @@ engine tests), probed with headless balance runs, and guarded by CI.
   shopkeepers, and no bot floor moved. Four-seed A/B: population and
   satisfaction statistically indistinguishable from baseline, with one probe
   town's AI pastry boutique finding its first unattended customers.
+- **Store positioning** (Phase 3): every store can hang a 🏷️ Discount or
+  ✨ Premium sign — but signs must be **earned** or they do nothing. Discount
+  is earned by genuinely undercutting (≤95% of market average) and wins
+  worker footfall while repelling the affluent; premium is earned by shelf
+  quality ≥ 60 and wins affluent/comfortable shoppers, tolerates 15% higher
+  prices, and repels workers. AI CEOs adopt formats in character (price
+  fighters go discount, brand builders go premium once their quality earns
+  it). Measured in a contested market: flipping one store to premium traded
+  21 worker regulars for a comfortable/affluent clientele — and halved
+  revenue in a worker-majority town. Who you sell to is now a strategy. The
+  draft "price image" penalty (discount shoppers walk away at high prices)
+  was probed at −5 town satisfaction and cut — a lying sign now simply does
+  nothing instead of punishing the whole town.
 
 ## Player features
 

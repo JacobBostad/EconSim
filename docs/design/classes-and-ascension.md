@@ -60,14 +60,26 @@ signal now, and its hysteresis means new money takes a week to become new
 tastes. Bot floors needed no re-baseline — aggregate demand is conserved
 by construction.
 
-**Phase 3 — store positioning.** A per-store lever
-`positioning: discount | standard | premium`:
-- *discount*: −15% price image expectation, affluent citizens shop there
-  reluctantly (score penalty), workers prefer it.
-- *premium*: supports +cap pricing and boosts affluent/comfortable appeal,
-  workers priced out (score penalty); requires quality ≥ threshold to work.
-- AI personalities adopt positioning (price_fighter → discount,
-  brand_builder → premium).
+**Phase 3 — store positioning (SHIPPED).** A per-store lever
+`positioning: discount | standard | premium`, with one governing rule the
+probes forced: **a sign must be earned or it does nothing.**
+- *discount*: earned by genuinely undercutting (price ≤ 95% of the market
+  average). Earns +worker / −affluent store-score affinity. The draft's
+  "price image" walkaway penalty (shoppers refuse >85% of cap at discount
+  stores) was probed to be toxic: in low-competition towns the AI's
+  controller couldn't honor the sign, and the chronic walkaways cost the
+  town −5 satisfaction / −20% population. Earned-by-price replaced it.
+- *premium*: earned by shelf quality ≥ 60. Earns +affluent/+comfortable /
+  −worker affinity and a 15% higher walkaway cap.
+- AI adoption (deterministic, once per store): price_fighter → discount,
+  brand_builder → premium when their quality reaches the bar.
+- Contested-market A/B (day 120 town, player store vs incumbent, same
+  price/stock): premium flipped the store's clientele from 21 workers/0
+  comfortable to 3 workers/4 comfortable/1 affluent — and halved revenue in
+  a worker-majority town. Positioning against the town's tier mix is a real
+  strategic decision, exactly the Cap-Lab-style segmentation the pillar
+  wanted. Unattended 4-seed probe with AI adoption: pop/sat within noise of
+  the Phase-2 baseline (69.3/57.2 vs 72.5/58.1).
 
 **Phase 4 — ascension as spectacle.** Gazette lines and toasts when
 citizens climb ("Wade Garin moved up — steady wages at the tool works"),
