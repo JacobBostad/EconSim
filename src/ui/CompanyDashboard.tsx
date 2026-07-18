@@ -14,6 +14,7 @@ import {
   facilityPnL,
 } from '../sim/selectors/companySelectors';
 import { formatMoney } from '../utils/formatMoney';
+import { getProduct } from '../sim/data/products';
 import {
   OBJECTIVE_VALUATION,
   ACQUISITION_PREMIUM_HEALTHY,
@@ -186,8 +187,8 @@ export function CompanyDashboard(): React.ReactElement {
         <div className="row" style={{ gap: 8, flexWrap: 'wrap', marginTop: 6 }}>
           {Array.from(new Set([...Object.keys(firm.brandByProduct), ...Object.keys(firm.qualityByProduct)])).map((pid) => (
             <div className="card" key={pid} style={{ minWidth: 150, marginBottom: 0 }}>
-              <div className="muted small">{pid}</div>
-              <div className="small">Brand <span className="mono">{(firm.brandByProduct[pid] ?? 0).toFixed(0)}</span> · Quality <span className="mono">{(firm.qualityByProduct[pid] ?? 0).toFixed(0)}</span></div>
+              <div className="muted small">{getProduct(pid).name}</div>
+              <div className="small">Brand <span className="mono">{(firm.brandByProduct[pid] ?? 0).toFixed(0)}</span> · Quality <span className="mono">{(firm.qualityByProduct[pid] ?? getProduct(pid).defaultQuality).toFixed(0)}</span></div>
               <div className="small muted">Ad/day {formatMoney(firm.adBudgetByProduct[pid] ?? 0)}</div>
             </div>
           ))}
