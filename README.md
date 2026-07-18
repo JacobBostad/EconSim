@@ -146,7 +146,7 @@ shops open 08–22; citizens shop after work (or sooner if a need is urgent).
 
 **Production** (`ProductionSystem.ts`)
 ```
-workerFactor      = laborRequired > 0 ? min(1, presentWorkers / laborRequired) : 1
+workerFactor      = laborRequired > 0 ? min(2.5, presentWorkers / laborRequired) × avgCrewSkill : 1
 inputAvailability = all inputs present ? 1 : 0
 efficiency        = baseEfficiency * workerFactor * inputAvailability
 productionProgress += efficiency        (per tick)

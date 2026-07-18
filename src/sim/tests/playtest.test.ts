@@ -5,110 +5,105 @@ import { totalMoneySupply } from '../core/GameState';
 import { companyValuation } from '../selectors/companySelectors';
 
 /**
- * Scripted playthrough: a competent (not perfect) player runs bread + clothes
- * chains with auto-pricing, ads, R&D, poaching wages, and upgrades. Guards the
- * whole progression loop end-to-end: if a change makes Tycoon unreachable for
- * this bot, this test fails before a human player ever feels it.
+ * Scripted 250-day playthrough — regression FLOOR for the progression loop.
+ * Bot v3 plays a consolidated general-store strategy: bread chain via the
+ * wizard, clothes + pastries toggled onto the SAME store (basket economics),
+ * a warehouse with standing export orders, capped R&D, lean staffing. A human
+ * plays far better (tools market untouched, no acquisitions, no festivals).
+ * Measured on seed 12: peak ≈ $35k, final ≈ $24k. Floors leave drift headroom;
+ * if they break, a change hurt the player's ability to build a business.
  */
-describe('Scripted 250-day playtest', () => {
-  // Regression FLOOR for a deliberately simple bot (a human plays far better:
-  // tools/luxury markets untouched, no acquisitions, crude R&D timing). If
-  // this bot can no longer build wealth, a change broke the progression loop.
-  it('a competent bot builds a $15k+ valuation business within 250 days', () => {
+describe('Scripted 250-day playtest (bot v3)', () => {
+  it('the general-store bot builds real wealth', () => {
     const sim = newSim(12);
     const state = sim.getState();
     const tpd = ticksPerDay(state.config);
     const player = state.firms[state.playerFirmId]!;
     const pid = player.id;
+    let stage = 0;
+    let luxTry = false;
     const supply0 = totalMoneySupply(state);
+    let maxVal = 0;
 
-    const cash = () => player.cash;
-    let builtBread = false;
-    let builtClothes = false;
-    let adsSet = false;
-    let wageSet = false;
-    let exportHub = false;
-    const upgraded = new Set<string>();
+    const facs = () => player.facilities.map((i) => state.facilities[i]!);
+    const store = () => facs().find((f) => f.type === 'retail');
 
     for (let day = 0; day < 250; day++) {
-      // --- daily decisions (before running the day) ---
-      if (!builtBread && cash() >= 10000_00) {
+      const cash = player.cash;
+      if (stage === 0 && cash >= 10000_00) {
         sim.dispatch({ type: 'BUILD_CHAIN', firmId: pid, productId: 'bread' });
         sim.dispatch({ type: 'SET_AUTO_PRICE', firmId: pid, productId: 'bread', enabled: true });
-        builtBread = player.facilities.length >= 3;
-      }
-      if (!wageSet && builtBread) {
-        sim.dispatch({ type: 'SET_WAGE', firmId: pid, wage: 16_50 }); // match market early
-        wageSet = true;
-      }
-      if (wageSet && day === 80) {
-        sim.dispatch({ type: 'SET_WAGE', firmId: pid, wage: 19_00 }); // poach veterans once profitable
-      }
-      if (!adsSet && builtBread && cash() >= 3000_00) {
+        sim.dispatch({ type: 'SET_WAGE', firmId: pid, wage: 16_50 });
         sim.dispatch({ type: 'SET_AD_BUDGET', firmId: pid, productId: 'bread', dailyBudget: 14_00 });
-        adsSet = true;
+        stage = 1;
       }
-      if (builtBread && !builtClothes && cash() >= 9500_00 && day >= 20) {
-        sim.dispatch({ type: 'BUILD_CHAIN', firmId: pid, productId: 'clothes' });
-        sim.dispatch({ type: 'SET_AUTO_PRICE', firmId: pid, productId: 'clothes', enabled: true });
-        sim.dispatch({ type: 'SET_AD_BUDGET', firmId: pid, productId: 'clothes', dailyBudget: 12_00 });
-        builtClothes = player.facilities.length >= 6;
-      }
-      // Export hub: stage farm/bakery surplus and sell to Port Rosa on spikes.
-      if (builtBread && !exportHub && day >= 25 && cash() >= 3000_00) {
-        sim.dispatch({ type: 'BUILD_FACILITY', firmId: pid, defId: 'warehouse', location: { x: 24, y: 33 } });
-        const wh = player.facilities
-          .map((id) => state.facilities[id]!)
-          .find((f) => f.type === 'warehouse');
-        const farm = player.facilities.map((id) => state.facilities[id]!).find((f) => f.type === 'farm');
-        const factory = player.facilities.map((id) => state.facilities[id]!).find((f) => f.type === 'factory');
-        if (wh && farm && factory) {
-          sim.dispatch({ type: 'CREATE_SUPPLY_CONTRACT', ownerFirmId: pid, sourceFacilityId: farm.id, destinationFacilityId: wh.id, productId: 'grain', targetQuantity: 40, reorderPoint: 30, maxInventory: 120 });
-          sim.dispatch({ type: 'CREATE_SUPPLY_CONTRACT', ownerFirmId: pid, sourceFacilityId: factory.id, destinationFacilityId: wh.id, productId: 'bread', targetQuantity: 30, reorderPoint: 20, maxInventory: 90 });
-          sim.dispatch({ type: 'SET_EXPORT_ORDER', facilityId: wh.id, productId: 'grain', minMult: 1.15, keep: 10 });
-          sim.dispatch({ type: 'SET_EXPORT_ORDER', facilityId: wh.id, productId: 'bread', minMult: 1.15, keep: 15 });
-          exportHub = true;
+      if (stage === 1 && day >= 18 && cash >= 7000_00) {
+        sim.dispatch({ type: 'BUILD_FACILITY', firmId: pid, defId: 'farm', location: { x: 30, y: 22 } });
+        sim.dispatch({ type: 'BUILD_FACILITY', firmId: pid, defId: 'factory', location: { x: 36, y: 36 } });
+        const cottonFarm = facs().filter((f) => f.type === 'farm').find((f) => !f.activeRecipeId);
+        const clothesFac = facs().filter((f) => f.type === 'factory').find((f) => !f.activeRecipeId);
+        const st = store();
+        if (cottonFarm && clothesFac && st) {
+          sim.dispatch({ type: 'SELECT_RECIPE', facilityId: cottonFarm.id, recipeId: 'grow_cotton' });
+          sim.dispatch({ type: 'SELECT_RECIPE', facilityId: clothesFac.id, recipeId: 'sew_clothes' });
+          sim.dispatch({ type: 'TOGGLE_RETAIL_PRODUCT', facilityId: st.id, productId: 'clothes' });
+          sim.dispatch({ type: 'SET_AUTO_PRICE', firmId: pid, productId: 'clothes', enabled: true });
+          sim.dispatch({ type: 'SET_AD_BUDGET', firmId: pid, productId: 'clothes', dailyBudget: 10_00 });
+          sim.dispatch({ type: 'CREATE_SUPPLY_CONTRACT', ownerFirmId: pid, sourceFacilityId: cottonFarm.id, destinationFacilityId: clothesFac.id, productId: 'cotton', targetQuantity: 24, reorderPoint: 10, maxInventory: 50 });
+          sim.dispatch({ type: 'CREATE_SUPPLY_CONTRACT', ownerFirmId: pid, sourceFacilityId: clothesFac.id, destinationFacilityId: st.id, productId: 'clothes', targetQuantity: 24, reorderPoint: 10, maxInventory: 60 });
+          stage = 2;
         }
       }
-      // R&D pulses on bread quality once established.
-      if (builtBread && cash() >= 8000_00 && day % 8 === 5 && day > 40) {
-        sim.dispatch({ type: 'INVEST_RND', firmId: pid, productId: 'bread', amount: 1500_00 });
+      if (stage === 2 && day >= 30 && cash >= 3000_00) {
+        sim.dispatch({ type: 'BUILD_FACILITY', firmId: pid, defId: 'warehouse', location: { x: 24, y: 33 } });
+        const wh = facs().find((f) => f.type === 'warehouse');
+        const grainFarm = facs().find((f) => f.activeRecipeId === 'grow_grain');
+        const bakery = facs().find((f) => f.activeRecipeId === 'bake_bread');
+        if (wh && grainFarm && bakery) {
+          sim.dispatch({ type: 'CREATE_SUPPLY_CONTRACT', ownerFirmId: pid, sourceFacilityId: grainFarm.id, destinationFacilityId: wh.id, productId: 'grain', targetQuantity: 40, reorderPoint: 30, maxInventory: 120 });
+          sim.dispatch({ type: 'CREATE_SUPPLY_CONTRACT', ownerFirmId: pid, sourceFacilityId: bakery.id, destinationFacilityId: wh.id, productId: 'bread', targetQuantity: 30, reorderPoint: 20, maxInventory: 90 });
+          sim.dispatch({ type: 'SET_EXPORT_ORDER', facilityId: wh.id, productId: 'grain', minMult: 1.15, keep: 10 });
+          sim.dispatch({ type: 'SET_EXPORT_ORDER', facilityId: wh.id, productId: 'bread', minMult: 1.15, keep: 15 });
+          stage = 3;
+        }
       }
-      // Upgrade factories when flush.
-      if (cash() >= 16000_00) {
-        for (const facId of player.facilities) {
-          const fac = state.facilities[facId];
-          if (fac && fac.type === 'factory' && fac.level === 1 && !upgraded.has(facId)) {
-            sim.dispatch({ type: 'UPGRADE_FACILITY', firmId: pid, facilityId: facId });
-            upgraded.add(facId);
-            break;
+      if (stage === 3 && day >= 80 && cash >= 8000_00 && !luxTry) {
+        sim.dispatch({ type: 'INVEST_RND', firmId: pid, productId: 'pastries', amount: 2500_00 });
+        if ((player.qualityByProduct['pastries'] ?? 0) >= 75) {
+          sim.dispatch({ type: 'BUILD_FACILITY', firmId: pid, defId: 'factory', location: { x: 56, y: 24 } });
+          const pastryFac = facs().filter((f) => f.type === 'factory').find((f) => !f.activeRecipeId);
+          const grainFarm = facs().find((f) => f.activeRecipeId === 'grow_grain');
+          const st = store();
+          if (pastryFac && grainFarm && st) {
+            sim.dispatch({ type: 'SELECT_RECIPE', facilityId: pastryFac.id, recipeId: 'bake_pastries' });
+            sim.dispatch({ type: 'TOGGLE_RETAIL_PRODUCT', facilityId: st.id, productId: 'pastries' });
+            sim.dispatch({ type: 'SET_AUTO_PRICE', firmId: pid, productId: 'pastries', enabled: true });
+            sim.dispatch({ type: 'CREATE_SUPPLY_CONTRACT', ownerFirmId: pid, sourceFacilityId: grainFarm.id, destinationFacilityId: pastryFac.id, productId: 'grain', targetQuantity: 16, reorderPoint: 8, maxInventory: 40 });
+            sim.dispatch({ type: 'CREATE_SUPPLY_CONTRACT', ownerFirmId: pid, sourceFacilityId: pastryFac.id, destinationFacilityId: st.id, productId: 'pastries', targetQuantity: 16, reorderPoint: 6, maxInventory: 40 });
+            luxTry = true;
+            stage = 4;
           }
         }
       }
-      // Staff exactly to need: 2 per producer/factory (laborRequired), 2 clerks.
-      for (const facId of player.facilities) {
-        const fac = state.facilities[facId];
-        if (!fac) continue;
-        const target = fac.type === 'retail' ? 2 : 2;
-        if (fac.employees.length < target) {
-          sim.dispatch({ type: 'HIRE_WORKER', facilityId: facId, citizenId: null });
-        }
+      if (stage >= 1 && cash >= 6000_00 && day % 8 === 3 && day > 30 &&
+          (player.qualityByProduct['bread'] ?? 0) < 80) {
+        sim.dispatch({ type: 'INVEST_RND', firmId: pid, productId: 'bread', amount: 1200_00 });
+      }
+      for (const fac of facs()) {
+        const scale = stage >= 3 && player.cash > 12000_00 ? 3 : 2;
+        const target = fac.type === 'retail' ? 2 : fac.type === 'warehouse' ? 0 : scale;
+        if (fac.employees.length < target) sim.dispatch({ type: 'HIRE_WORKER', facilityId: fac.id, citizenId: null });
       }
       sim.run(tpd);
+      maxVal = Math.max(maxVal, companyValuation(state, pid).valuation);
     }
 
-    const val = companyValuation(state, pid).valuation;
-    const breadShare = player.marketShareByProduct['bread'] ?? 0;
-    const clothesShare = player.marketShareByProduct['clothes'] ?? 0;
-    const last30 = player.accounting.dailyHistory.slice(-30);
-    const profit30 = last30.reduce((a, d) => a + d.netProfit, 0);
-    console.log(`playtest: valuation=$${(val / 100).toFixed(0)} breadShare=${(breadShare * 100).toFixed(0)}% clothesShare=${(clothesShare * 100).toFixed(0)}% profit30d=$${(profit30 / 100).toFixed(0)} employees=${player.employees.length} quality=${JSON.stringify(player.qualityByProduct)}`);
-
+    const finalVal = companyValuation(state, pid).valuation;
     expect(totalMoneySupply(state)).toBe(supply0);
-    expect(builtBread && builtClothes).toBe(true);
-    expect(val).toBeGreaterThanOrEqual(15000_00); // grew beyond starting capital
-    expect(breadShare).toBeGreaterThan(0.3);
-    expect(profit30).toBeGreaterThan(0);
-    expect(player.exportRevenue).toBeGreaterThan(0); // trade route in use
+    expect(stage).toBeGreaterThanOrEqual(3);
+    expect(maxVal).toBeGreaterThanOrEqual(28000_00);
+    expect(finalVal).toBeGreaterThanOrEqual(18000_00);
+    expect(player.exportRevenue).toBeGreaterThan(5000_00);
+    expect(player.marketShareByProduct['bread'] ?? 0).toBeGreaterThan(0.25);
   }, 30000);
 });

@@ -70,9 +70,12 @@ export function runProductionSystem(ctx: SimContext): void {
       fac.presentWorkers > 0 && fac.presentSkill > 0
         ? fac.presentSkill / fac.presentWorkers
         : 1;
+    // Staffing beyond laborRequired scales output (up to 2.5×) — hiring is a
+    // real growth lever, employment absorbs the town's labor pool, and full
+    // employment unlocks immigration (the growth flywheel).
     const workerFactor =
       recipe.laborRequired > 0
-        ? Math.min(1, fac.presentWorkers / recipe.laborRequired) *
+        ? Math.min(2.5, fac.presentWorkers / recipe.laborRequired) *
           Math.min(1.3, Math.max(0.7, avgSkill))
         : 1;
 
