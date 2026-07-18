@@ -49,6 +49,12 @@ export interface ScenarioDef {
   icon: string;
   description: string;
   aiChains: AiChainSpec[];
+  /**
+   * Starting homes (default 20, two citizens each). Fewer homes = a housing
+   * crunch: immigration wants in but has nowhere to live until someone —
+   * the player or the AI landlord — builds.
+   */
+  homes?: number;
 }
 
 const breadChain = (over: Partial<AiChainSpec> = {}): AiChainSpec => ({
@@ -231,6 +237,30 @@ export const SCENARIOS: Record<string, ScenarioDef> = {
         cash: dollars(46000),
         stocks: { producerOut: 0, factoryIn: 40, factoryOut: 20, shopIn: 30 },
         staff: { producer: 0, factory: 2, retail: 2 },
+      }),
+    ],
+  },
+  boomtown_flats: {
+    id: 'boomtown_flats',
+    name: 'Boomtown Flats',
+    icon: '🏗️',
+    description:
+      'Every home is full and the mills are hiring — the boom is here but there is nowhere to live. Immigration stalls until someone builds housing: be the developer, collect the rent, and grow the town that makes you rich. Watch out — rival landlords want the same ground.',
+    homes: 13,
+    aiChains: [
+      breadChain({
+        cash: dollars(40000),
+        staff: { producer: 2, factory: 2, retail: 2 },
+      }),
+      toolsChain({
+        cash: dollars(40000),
+        staff: { producer: 2, factory: 2, retail: 2 },
+        personality: 'expansionist',
+      }),
+      clothesChain({
+        cash: dollars(40000),
+        staff: { producer: 2, factory: 2, retail: 2 },
+        personality: 'brand_builder',
       }),
     ],
   },

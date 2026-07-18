@@ -250,7 +250,8 @@ export function createInitialState(
   // --- Homes (residential neighbourhood, lower band) ---------------------
   const homeLocations: Vec2[] = [];
   const cols = 5;
-  for (let i = 0; i < NUM_HOMES; i++) {
+  const numHomes = scenario.homes ?? NUM_HOMES;
+  for (let i = 0; i < numHomes; i++) {
     const col = i % cols;
     const row = Math.floor(i / cols);
     const loc: Vec2 = { x: 16 + col * 11, y: 60 + row * 8 };

@@ -191,6 +191,11 @@ engine tests), probed with headless balance runs, and guarded by CI.
   mid-game onward — the fad follows the roasteries) and 🛳️ **Regional Trade
   Fair** (both ports pay ~25% over center for a few days — the good-news
   mirror of tariffs; ship your stockpiles).
+- **Boomtown Flats scenario** (🏗️, sixth): 13 full homes, three staffed AI
+  chains, and immigration stuck at the door — whoever builds the housing
+  owns the boom. Scenarios gained a `homes` knob for it. Probed 300 days ×
+  3 seeds: AI landlords enter the developer race by day 44–85 and the town
+  more than doubles (26 → 59–71) once housing appears, everyone solvent.
 - Sound stings: receivership, challenge fanfare, rival openings, poach alerts.
 - Chronicle viewable anytime; apartments/roasteries visually distinct.
 

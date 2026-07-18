@@ -312,11 +312,13 @@ genuinely flush AI enters after day 60 with an atelier and boutique.
 fund a new home (two citizens move in immediately) — spend on the town itself.
 
 **Seasons & scenarios**: four 30-day seasons cycle farm output, winter demand,
-and freight; five starting scenarios (Meadowbrook, Gold Rush Gulch, Port
-Haven, Harvest Valley, Mill Country) change which AI chains exist and which
-CEOs run them — each variant leaves a market gap that's the player's opening.
-Mill Country's mills all import their raw goods: build the farms and mines
-they lack and every factory in town becomes your wholesale customer. Facility upgrades (L1→L3) raise storage, speed, and crew
+and freight; six starting scenarios (Meadowbrook, Gold Rush Gulch, Port
+Haven, Harvest Valley, Mill Country, Boomtown Flats) change which AI chains
+exist and which CEOs run them — each variant leaves a market gap that's the
+player's opening. Mill Country's mills all import their raw goods: build the
+farms and mines they lack and every factory in town becomes your wholesale
+customer. Boomtown Flats starts with every home full — immigration waits on
+whoever builds the housing, and rival landlords want the same ground. Facility upgrades (L1→L3) raise storage, speed, and crew
 size; the endgame Chronicle retells your whole run when you reach Business
 Empire.
 
