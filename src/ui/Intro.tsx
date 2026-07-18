@@ -70,7 +70,8 @@ export function Intro(): React.ReactElement | null {
             <h4>Compete on every lever</h4>
             <p><strong>Brand</strong> (ads), <strong>quality</strong> (R&amp;D),
               <strong> wages</strong> (out-pay rivals by 15% to poach their
-              veterans — they answer back), <strong>finance</strong> (loans,
+              veterans — they answer back — or 🎓 <strong>train</strong> your
+              own crew up from the facility view), <strong>finance</strong> (loans,
               shares, outright <strong>acquisitions</strong> — and 🏷️
               <strong> fire-sale bargains</strong> in the ticker when a rival
               stumbles), and
@@ -81,6 +82,13 @@ export function Intro(): React.ReactElement | null {
           </div>
         </div>
 
+        <p className="muted small" style={{ marginTop: 8, marginBottom: 0 }}>
+          Keys: <strong>Space</strong> pause · <strong>1–4</strong> speed ·
+          <strong> arrows</strong> pan · <strong>±</strong> zoom ·
+          <strong> G</strong> gazette · <strong>C</strong> company ·
+          <strong> M</strong> market · <strong>A</strong> awards ·
+          <strong> F</strong> supply flows · <strong>Esc</strong> close
+        </p>
         <button className="intro-go" onClick={() => setShow(false)}>Enter the town →</button>
       </div>
     </div>
