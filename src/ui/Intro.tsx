@@ -31,10 +31,10 @@ export function Intro(): React.ReactElement | null {
           </div>
           <div>
             <h4>Run your company</h4>
-            <p>Follow the <strong>Missions</strong> panel (left) — it walks you
-              from first build to market dominance and pays cash rewards. Build,
-              pick recipes, set prices, hire, and wire <strong>supply
-              contracts</strong>. Earn <strong>Awards</strong> along the way.</p>
+            <p>Follow the <strong>Missions</strong> panel (left) — it pays cash
+              rewards. Run a <strong>general store</strong> (up to 3 products —
+              shoppers buy whole baskets), price to penetrate then charge a
+              premium once you dominate, and staff up: extra hands raise output.</p>
           </div>
           <div>
             <h4>Compete on three levers</h4>

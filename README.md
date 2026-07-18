@@ -162,11 +162,22 @@ distance     = 1 - clamp(dist / maxShoppingDistance, 0, 1)
 quality      = stockQuality / 100
 brand        = firmBrand / 100
 reliability  = prior successful purchases (capped)
+novelty      = builtAtTick > 0 && age < 15d ? 0.12 × (1 − age/15d) : 0
 score = 0.28*availability + 0.22*price + 0.18*distance
-      + 0.14*quality + 0.12*brand + 0.06*reliability   (+ small seeded jitter)
+      + 0.14*quality + 0.12*brand + 0.06*reliability + novelty  (+ seeded jitter)
 ```
 A purchase happens only if the store is open & stocked, the citizen can afford
 it, the need is above threshold, and the price is within their willingness to pay.
+
+**Multi-product stores & baskets**: a store carries up to 3 products
+(`TOGGLE_RETAIL_PRODUCT`). On arrival a shopper buys every carried product they
+need, most urgent first — one staffed storefront, several revenue streams. The
+grand-opening novelty term plus penetration pricing (the auto-pricer dives
+toward 0.78× base while share < 12%) make cold-start retail winnable; at high
+share the same controller drifts prices toward a market-power premium (up to
+~1.45× base), so winning a market genuinely pays. Staffing beyond a recipe's
+labor requirement scales output (up to 2.5×) — hiring is a growth lever, and
+full employment unlocks immigration.
 
 **Accounting** (`AccountingSystem.ts`, `entities/Accounting.ts`)
 ```
@@ -326,8 +337,9 @@ income, etc. Config is part of saved state.
   one AI strategy archetype per chain.
 - Labor market is "instant hire from the unemployed"; no wage-driven poaching
   yet (the architecture leaves room for it).
-- AI expansion currently opens retail outlets only (capped); it doesn't yet add
-  upstream capacity or new product lines, and the AI never initiates M&A.
+- AI stores are deliberately single-product (running a general store is a
+  player edge); AI expansion opens retail outlets only (capped) and AI-initiated
+  M&A is limited to rescue takeovers of distressed rivals.
 
 ## Roadmap
 
