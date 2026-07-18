@@ -58,23 +58,24 @@ describe('Tier-driven town stories', () => {
     expect(b.events.some((e) => e.message.includes('Word of the good life'))).toBe(false);
   });
 
-  it('struggling worker towns mutter about leaving — flavor only, nobody departs', () => {
+  it('struggling worker towns mutter before anyone actually leaves', () => {
     const sim = newSim(7);
     const state = sim.getState();
     // Find a day the hash gate fires for this seed, then run past it with
-    // satisfaction pinned low (all citizens start as workers).
+    // satisfaction pinned low — but ABOVE the emigration bar (42), so the
+    // town grumbles without losing a soul.
     let fireDay = -1;
     for (let d = 1; d < 120; d++) if (emigrationMutter(state.seed, d)) { fireDay = d; break; }
     expect(fireDay).toBeGreaterThan(0);
     const pop0 = Object.keys(state.citizens).length;
     runPinned(sim, fireDay + 2, () => {
       for (const c of Object.values(state.citizens)) {
-        c.satisfaction = 40;
+        c.satisfaction = 45;
         c.tier = 'worker';
       }
     });
     expect(state.events.some((e) => e.message.includes('families talk of leaving'))).toBe(true);
-    // Flavor only: the population never shrank.
+    // Muttering is not moving: above the emigration bar the population holds.
     expect(Object.keys(state.citizens).length).toBeGreaterThanOrEqual(pop0);
   });
 });

@@ -199,6 +199,17 @@ export function morningBriefing(state: GameState): Advice[] {
     if (found) break;
   }
 
+  // Emigration pressure: the town has been miserable for days and families
+  // will start leaving once the grace period runs out. Demand itself is at
+  // stake — every departing household is a customer gone.
+  if (state.emigrationPressure >= 3) {
+    items.push({
+      icon: '🧳',
+      severity: 'warning',
+      text: `Families are close to leaving town — ${state.emigrationPressure} straight days of deep misery. Raise wages, fill shelves, or watch your customers move away.`,
+    });
+  }
+
   const order = { danger: 0, warning: 1, info: 2 };
   items.sort((a, b) => order[a.severity] - order[b.severity]);
   // Announced trade shock still pending: the informed-trader window is open.

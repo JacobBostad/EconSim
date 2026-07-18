@@ -239,6 +239,7 @@ export function createInitialState(
     facilityOffer: null,
     fireSalesBought: 0,
     deskTrades: 0,
+    emigrationPressure: 0,
     lastLapsedFireSale: null,
     townHistory: [],
     idCounters: counters,

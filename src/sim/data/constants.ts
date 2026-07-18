@@ -140,3 +140,19 @@ export const MAX_HOMES = 40;
 export const MAX_CITIZENS = 80;
 /** Cash a new arrival brings (paid from the world account; conserved). */
 export const IMMIGRANT_START_CASH = dollars(400);
+
+// --- Emigration (the mutter made real) --------------------------------------
+/**
+ * A town only loses families under SUSTAINED misery: worker share above the
+ * share bar AND average satisfaction below this, every day for the grace
+ * period. Healthy-but-modest worker towns (Mill Country idles near 50) must
+ * never qualify — this bar is deliberately far below the immigration gate.
+ */
+export const EMIGRATION_MAX_SATISFACTION = 42;
+export const EMIGRATION_MIN_WORKER_SHARE = 0.8;
+/** Consecutive miserable days before anyone actually packs. One good day resets it. */
+export const EMIGRATION_GRACE_DAYS = 10;
+/** Once past the grace period, the daily hash-gated odds a household departs. */
+export const EMIGRATION_DAILY_CHANCE = 0.25;
+/** The town never empties out — departures stop at this population. */
+export const EMIGRATION_MIN_POPULATION = 12;

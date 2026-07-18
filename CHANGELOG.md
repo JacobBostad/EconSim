@@ -176,8 +176,8 @@ hireable managers, a real commodity market, and shared daily play.
 - **Tier-driven town stories**: prosperity is now a magnet — when the
   middle class is broad (40%+ comfortable-or-better), newcomers arrive with
   a trade (+0.1 skill) and the Gazette says why; a struggling all-worker
-  town with low satisfaction mutters about leaving instead (flavor only —
-  nobody departs, yet). The Gazette gains a 🎩 Society column: the ladder's
+  town with low satisfaction mutters about leaving instead (the warning
+  shot before real departures below). The Gazette gains a 🎩 Society column: the ladder's
   daily counts, the citizen on the longest climbing streak, and the newest
   affluent household.
 - **Scenario social character**: every scenario card sells its town's tier
@@ -186,6 +186,16 @@ hireable managers, a real commodity market, and shared daily play.
   under the description on New Game. Lifting Mill Country to a
   comfortable-or-better majority earns 🌅 Lifted the Town, an achievement
   no other scenario can grant.
+- **Emigration made real**: the growth loop now runs in reverse. A town
+  held in deep misery (80%+ workers AND average satisfaction under 42) for
+  10 straight days starts losing households — unemployed first, then the
+  most miserable — savings leaving with them (conserved, the mirror of
+  arrival cash) and the Gazette naming who left and why. One good day
+  resets the clock: rescuing the town stops the bleed immediately, and the
+  advisor warns (🧳) from day three of pressure. Probed 300 days across
+  all six scenarios × two seeds: zero pressure accumulated anywhere —
+  only genuinely neglected towns qualify (Mill Country's worst dip is
+  satisfaction 44).
 - **Follow mode**: a 🎥 Follow button on any citizen puts the camera on
   their day — commute, shopping trips, and, if you've been paying them
   well, the day they earn their gold circlet. Esc or grabbing the map

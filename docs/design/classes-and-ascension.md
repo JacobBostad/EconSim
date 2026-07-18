@@ -86,11 +86,26 @@ magnet: at 40%+ comfortable-or-better, immigrants arrive with +0.1 skill
 (applied after creation — zero extra rng draws, stream-safe) and a "word
 of the good life spreads" arrival story; an all-worker town below 50
 satisfaction occasionally mutters about leaving (hash-gated flavor event —
-mechanical emigration deliberately deferred pending a probe). The Gazette
+the warning shot before Phase 6's real departures). The Gazette
 gains a 🎩 Society column derived live from tier data: daily counts, the
 longest active climbing streak, the newest affluent household. Unattended
 probes stay in band (the skill magnet rarely triggers without a player
 lifting the town — it is the player's reward).
+
+**Phase 6 — emigration made real (SHIPPED).** The mutter now has teeth,
+behind three stacked gates so only genuine neglect qualifies: worker share
+> 80% AND average satisfaction < 42 (the immigration gate is 55; Mill
+Country idles near 50 and never dipped past 44 in probes), sustained for
+10 consecutive days (`state.emigrationPressure`; ONE day above the bar
+resets it — the rescue arc), then a hash-gated 25% daily roll (distinct
+salt from the mutter, zero rng-stream draws). Departure picks the
+unemployed first, then the lowest satisfaction; `fireCitizen` cleans up
+the job, the home's residentIds are filtered, and savings return to the
+world account — the exact mirror of arrival cash, so money supply is
+conserved. Departures floor at population 12, the Gazette names who left
+and why, and the advisor warns (🧳) from pressure day 3. Probe: 300 days
+× six scenarios × two seeds — max pressure 0 everywhere; the bar is
+unreachable without real neglect.
 
 **Phase 4 — ascension as spectacle (SHIPPED).** Affluent ascents make the
 event feed/Gazette (Phase 1); per-day tier counts recorded in townHistory

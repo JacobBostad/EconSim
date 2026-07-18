@@ -9,18 +9,28 @@
  *
  * Growth is the long-run reward loop: a well-run economy attracts people, which
  * grows demand and the labor pool, which enables further expansion.
+ *
+ * The loop also runs in reverse: a worker-heavy town held in deep misery past
+ * a grace period starts losing households (see runEmigration below) — and one
+ * good day stops the bleed.
  */
 
-import type { SimContext } from '../core/GameState';
+import type { SimContext, GameState } from '../core/GameState';
 import { recordTransaction, emitEvent } from '../core/GameState';
 import { citizenAccount, WORLD_ACCOUNT } from '../core/Transactions';
 import { isDayBoundary } from '../core/Tick';
 import { createFacility, createCitizen } from '../entities/factories';
+import { fireCitizen } from './LaborSystem';
 import {
   IMMIGRATION_MIN_SATISFACTION,
   IMMIGRATION_MAX_UNEMPLOYED_FLOOR,
   IMMIGRATION_MAX_UNEMPLOYED_RATE,
   IMMIGRANT_START_CASH,
+  EMIGRATION_MAX_SATISFACTION,
+  EMIGRATION_MIN_WORKER_SHARE,
+  EMIGRATION_GRACE_DAYS,
+  EMIGRATION_DAILY_CHANCE,
+  EMIGRATION_MIN_POPULATION,
 } from '../data/constants';
 
 /**
@@ -51,13 +61,90 @@ export function homeSlotFor(index: number, mapHeight: number): { x: number; y: n
 export const PROSPEROUS_SHARE = 0.4;
 export const PROSPEROUS_SKILL_BONUS = 0.1;
 
-/** Struggling worker towns mutter about leaving (flavor only — probe
- * before ever making anyone actually depart). Hash-gated, no rng draws. */
+/** Struggling worker towns mutter about leaving — the warning shot before
+ * the real departures below. Hash-gated, no rng draws. */
 export function emigrationMutter(seed: number, day: number): boolean {
   let t = (seed ^ Math.imul(day + 53, 0x9e3779b9)) >>> 0;
   t = Math.imul(t ^ (t >>> 15), t | 1);
   t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
   return ((t ^ (t >>> 14)) >>> 0) / 4294967296 < 0.06;
+}
+
+/** Daily departure gate once misery has outlasted the grace period.
+ * Distinct salt from the mutter — the two fire on independent days. */
+export function emigrationRoll(seed: number, day: number): boolean {
+  let t = (seed ^ Math.imul(day + 191, 0x85ebca6b)) >>> 0;
+  t = Math.imul(t ^ (t >>> 15), t | 1);
+  t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+  return ((t ^ (t >>> 14)) >>> 0) / 4294967296 < EMIGRATION_DAILY_CHANCE;
+}
+
+/**
+ * The mutter made real: after EMIGRATION_GRACE_DAYS consecutive days of a
+ * worker-heavy, deeply unsatisfied town, one household starts packing —
+ * unemployed first, then whoever is most miserable. Their savings leave with
+ * them (paid back to the world account, the mirror of arrival cash, so money
+ * stays conserved). One day above the bar resets the pressure to zero:
+ * rescuing the town stops the bleed immediately.
+ *
+ * Returns true when someone departed. No rng draws — hash-gated so the
+ * shared stream is untouched whether or not the town is miserable.
+ */
+function runEmigration(
+  state: GameState,
+  day: number,
+  avgSat: number,
+  workerShare: number,
+  total: number,
+): boolean {
+  const miserable =
+    avgSat < EMIGRATION_MAX_SATISFACTION && workerShare > EMIGRATION_MIN_WORKER_SHARE;
+  if (!miserable) {
+    state.emigrationPressure = 0;
+    return false;
+  }
+  state.emigrationPressure += 1;
+  if (state.emigrationPressure <= EMIGRATION_GRACE_DAYS) return false;
+  if (total <= EMIGRATION_MIN_POPULATION) return false;
+  if (!emigrationRoll(state.seed, day)) return false;
+
+  // Unemployed leave first; among peers, the most miserable. Insertion
+  // order breaks ties, so the pick is deterministic.
+  let pick = null as (typeof state.citizens)[string] | null;
+  for (const cid in state.citizens) {
+    const c = state.citizens[cid]!;
+    if (pick === null) { pick = c; continue; }
+    const cJobless = c.employmentStatus === 'unemployed';
+    const pickJobless = pick.employmentStatus === 'unemployed';
+    if (cJobless !== pickJobless) { if (cJobless) pick = c; continue; }
+    if (c.satisfaction < pick.satisfaction) pick = c;
+  }
+  if (!pick) return false;
+  const gone = pick;
+
+  const wasJobless = gone.employmentStatus === 'unemployed';
+  if (gone.workplaceFacilityId) fireCitizen(state, gone.workplaceFacilityId, gone.id);
+  const home = state.facilities[gone.homeFacilityId];
+  if (home) home.residentIds = home.residentIds.filter((id) => id !== gone.id);
+  if (gone.cash > 0) {
+    recordTransaction(state, {
+      from: citizenAccount(gone.id),
+      to: WORLD_ACCOUNT,
+      amount: gone.cash,
+      firmId: null,
+      category: 'none',
+      note: 'Departed with savings',
+    });
+  }
+  if (state.selectedEntityId === gone.id) state.selectedEntityId = null;
+  delete state.citizens[gone.id];
+
+  const reason = wasJobless
+    ? 'no work to be found'
+    : 'low pay and thin shelves wore them down';
+  emitEvent(state, 'warning', 'economy',
+    `🧳 ${gone.name} packed up and left town — ${reason} (population ${total - 1}).`);
+  return true;
 }
 
 export function runImmigrationSystem(ctx: SimContext): void {
@@ -68,20 +155,24 @@ export function runImmigrationSystem(ctx: SimContext): void {
   let total = 0;
   let satisfactionSum = 0;
   let unemployed = 0;
+  let workers = 0;
   for (const cid in state.citizens) {
     const c = state.citizens[cid]!;
     total += 1;
     satisfactionSum += c.satisfaction;
     if (c.employmentStatus === 'unemployed') unemployed += 1;
+    if (c.tier === 'worker') workers += 1;
   }
-  if (total === 0 || total >= ctx.config.maxCitizens) return;
-  if (satisfactionSum / total < IMMIGRATION_MIN_SATISFACTION) {
+  if (total === 0) return;
+  const avgSat = satisfactionSum / total;
+
+  // Misery is checked before any growth gate — a full town can still bleed.
+  if (runEmigration(state, ctx.time.day, avgSat, workers / total, total)) total -= 1;
+
+  if (total >= ctx.config.maxCitizens) return;
+  if (avgSat < IMMIGRATION_MIN_SATISFACTION) {
     // A struggling worker town doesn't just fail to attract — it mutters.
-    if (satisfactionSum / total < 50 && emigrationMutter(state.seed, ctx.time.day)) {
-      let workers = 0;
-      for (const cid in state.citizens) {
-        if (state.citizens[cid]!.tier === 'worker') workers += 1;
-      }
+    if (avgSat < 50 && emigrationMutter(state.seed, ctx.time.day)) {
       if (workers / total > 0.8) {
         emitEvent(state, 'warning', 'economy',
           '🧳 Around kitchen tables, families talk of leaving — low pay and empty shelves wear a town down.');

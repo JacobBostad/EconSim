@@ -164,6 +164,12 @@ export interface GameState {
   fireSalesBought: number;
   /** Lifetime commodity-desk purchases from the trade cities (missions). */
   deskTrades: number;
+  /**
+   * Consecutive days the town has met the emigration misery bar (worker-heavy
+   * AND deeply unsatisfied). Past the grace period families start leaving;
+   * a single day above the bar resets it to zero.
+   */
+  emigrationPressure: number;
   /** Last lapsed fire sale — that facility cools down before re-listing. */
   lastLapsedFireSale: { facilityId: FacilityId; day: number } | null;
 
