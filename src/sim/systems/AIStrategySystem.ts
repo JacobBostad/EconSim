@@ -500,10 +500,15 @@ function adjustPrices(ctx: SimContext, firmId: string, onlyAutoPriced = false): 
       firm.strategy.gluttStreak[pid] = 0;
       price += (base * 0.78 - price) * 0.25;
     } else {
-      // Selling steadily without sellout: mean-revert toward base price.
+      // Selling steadily: drift toward a market-power target — winners charge
+      // a premium (up to ~1.45× base at dominant share); brand/quality raise
+      // willingness-to-pay to match. Surplus/priced-out branches still cut,
+      // so overreach self-corrects.
       firm.strategy.selloutStreak[pid] = 0;
       firm.strategy.gluttStreak[pid] = 0;
-      price += (base - price) * 0.1;
+      const share = firm.marketShareByProduct[pid] ?? 0;
+      const target = base * (1 + Math.min(0.45, share * 0.55));
+      price += (target - price) * 0.1;
     }
 
     // Defend margin only while the product is actually moving.
