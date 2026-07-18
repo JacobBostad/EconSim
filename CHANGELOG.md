@@ -235,6 +235,14 @@ engine tests), probed with headless balance runs, and guarded by CI.
 
 ## Measured findings (kept as design, documented in code)
 
+- **Full drift verify after the session's balance changes** (ladder,
+  festival, rush orders): all six scenarios plus a Bustling variant, 300
+  unattended days each — money supply conserved everywhere, no NaN in
+  market aggregates, every town alive with all (or all-but-one) AI firms
+  solvent, populations growing where growth is expected (Meadowbrook and
+  Mill Country 40→71-72, Boomtown 26→64), 0.065–0.125 ms/tick, and the
+  re-priced ladder rendering correctly in the objective banner with no
+  stale $150k copy anywhere.
 - **The scripted-player plateau is strategy shape, not an engine cap**
   (followed up the ladder probe with book-level dumps and a deeper-play
   A/B): the bot plateaus near $28k because it fights the bread incumbent
