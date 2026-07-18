@@ -1104,6 +1104,33 @@ export class TownRenderer {
     }
   }
 
+  /** Sidewalk routes for commuters — same street-grid mapping as trucks.
+   * Short hops and absurdly circuitous detours stay as straight cut-acrosses
+   * (people do cut across the green for the house next door). */
+  private citRouteCache = new Map<string, { origin: Vec; key: string; route: Route; walkRoads: boolean }>();
+
+  private citizenPos(s: GameState, id: string, c: { currentLocation: Vec; targetLocation: Vec; movementState: string }): Vec {
+    if (c.movementState !== 'moving') { this.citRouteCache.delete(id); return c.currentLocation; }
+    const g = this.roadGrid();
+    const key = `${c.targetLocation.x},${c.targetLocation.y}|${g.y0.toFixed(1)},${g.y1.toFixed(1)}`;
+    let entry = this.citRouteCache.get(id);
+    if (!entry || entry.key !== key) {
+      const origin = { x: c.currentLocation.x, y: c.currentLocation.y };
+      const route = buildRoute(origin, c.targetLocation, g);
+      const straight = Math.max(1e-6, Math.hypot(c.targetLocation.x - origin.x, c.targetLocation.y - origin.y));
+      const walkRoads = straight >= 6 && route.total / straight <= 2.4;
+      entry = { origin, key, route, walkRoads };
+      this.citRouteCache.set(id, entry);
+      if (this.citRouteCache.size > 400) {
+        for (const cid of this.citRouteCache.keys()) if (!s.citizens[cid]) this.citRouteCache.delete(cid);
+      }
+    }
+    if (!entry.walkRoads) return c.currentLocation;
+    const straight = Math.max(1e-6, Math.hypot(c.targetLocation.x - entry.origin.x, c.targetLocation.y - entry.origin.y));
+    const done = Math.hypot(c.currentLocation.x - entry.origin.x, c.currentLocation.y - entry.origin.y);
+    return routePose(entry.route, done / straight).p;
+  }
+
   private drawCitizens(s: GameState, dt: number): void {
     const ctx = this.ctx;
     const selected = this.cb.getSelectedId();
@@ -1111,7 +1138,7 @@ export class TownRenderer {
     for (const id in s.citizens) {
       const c = s.citizens[id]!;
       const prev = this.smooth.get(id);
-      const p = this.ease(id, c.currentLocation, k);
+      const p = this.ease(id, this.citizenPos(s, id, c), k);
       const sp = this.w2s(s, p);
       // trail when moving
       if (prev && c.movementState === 'moving' && Math.random() < 0.25) {

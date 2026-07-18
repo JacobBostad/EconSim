@@ -123,10 +123,12 @@ engine tests), probed with headless balance runs, and guarded by CI.
 - Chimney smoke only while a factory is actually producing; trucks are drawn
   box trucks with product-tinted cargo; citizens are little walking figures
   with activity-colored clothes.
-- **Trucks drive the roads**: shipment progress is mapped onto a Manhattan
-  polyline over the street grid (origin → avenue → vertical road → door),
-  so deliveries roll down the avenues instead of flying over rooftops —
-  purely cosmetic, the engine's straight-line timing is untouched.
+- **Trucks drive the roads, commuters walk them**: shipment and commute
+  progress is mapped onto Manhattan polylines over the street grid
+  (origin → avenue → vertical road → door), so deliveries roll down the
+  avenues and citizens stream along the sidewalks instead of flying over
+  rooftops — purely cosmetic, the engine's straight-line timing is
+  untouched. Short hops and absurd detours stay as straight cut-acrosses.
 - **Build-mode ghost**: placing a facility shows the actual 2.5D building
   translucent under the cursor with the land-adjusted price at that spot
   (red when unaffordable), so location cost is felt before the click.
