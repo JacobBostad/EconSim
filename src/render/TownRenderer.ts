@@ -21,6 +21,7 @@ import { landValueAt } from '../sim/core/LandValue';
 import { seasonOf } from '../sim/data/seasons';
 import { getProduct } from '../sim/data/products';
 import { formatMoney } from '../utils/formatMoney';
+import { drawBuilding } from './buildings';
 
 interface Vec { x: number; y: number }
 interface Floater { x: number; y: number; vy: number; life: number; maxLife: number; text: string; color: string }
@@ -29,14 +30,16 @@ interface Trail { x: number; y: number; life: number }
 /** Premium housing gets its own hue so landlord holdings read at a glance. */
 const APARTMENT_FILL = '#8a7fc9';
 
+/** Identity colors (legend + chips); the buildings themselves are drawn by
+ * the procedural kit in buildings.ts with matching hues. */
 const BUILDING_FILL: Record<FacilityType, string> = {
-  home: '#5b6b8c',
-  farm: '#6fbf73',
-  mine: '#a98467',
-  factory: '#e0a458',
-  warehouse: '#7f9cc0',
-  retail: '#5ab0ff',
-  importer: '#c08be6',
+  home: '#b06a45',
+  farm: '#b4513c',
+  mine: '#8d6e63',
+  factory: '#c98a4b',
+  warehouse: '#8fa3b8',
+  retail: '#74a8d8',
+  importer: '#b08cc8',
 };
 
 const ACTIVITY_COLOR: Record<CitizenActivity, string> = {
@@ -301,6 +304,7 @@ export class TownRenderer {
     this.updateView(s);
 
     const time = computeTime(s.tick, s.config);
+    this.smokeT += dt * 1000;
     this.drawGround(s, time.hour);
     this.drawRoads(s);
     if (this.cb.getFlowOverlay()) this.drawFlowOverlay(s, dt);
@@ -579,53 +583,112 @@ export class TownRenderer {
 
   private drawGround(s: GameState, _hour: number): void {
     const ctx = this.ctx;
-    ctx.fillStyle = '#0a1119';
+    // Beyond the town plate: muted neutral so the daylight plate pops.
+    ctx.fillStyle = '#20242a';
     ctx.fillRect(0, 0, this.cssW, this.cssH);
 
     const tl = this.w2s(s, { x: this.view.minX, y: this.view.minY });
     const br = this.w2s(s, { x: this.view.maxX, y: this.view.maxY });
     const gw = br.x - tl.x, gh = br.y - tl.y;
     const grad = ctx.createLinearGradient(0, tl.y, 0, br.y);
-    grad.addColorStop(0, '#1c2e22');
-    grad.addColorStop(1, '#15241d');
+    grad.addColorStop(0, '#7fae62');
+    grad.addColorStop(1, '#6b9a51');
     ctx.fillStyle = grad;
     this.roundRectPathRaw(ctx, tl.x, tl.y, gw, gh, 14); ctx.fill();
 
-    // zone tints (soft radial blobs)
+    ctx.save();
+    ctx.beginPath(); this.roundRectPathRaw(ctx, tl.x, tl.y, gw, gh, 14); ctx.clip();
+
+    // mowing stripes: alternating translucent bands give the grass texture
+    const sc = this.effScale();
+    const stripeH = 6 * sc;
+    ctx.fillStyle = 'rgba(255,255,255,0.035)';
+    for (let y = tl.y, i = 0; y < br.y; y += stripeH, i++) {
+      if (i % 2 === 0) ctx.fillRect(tl.x, y, gw, stripeH);
+    }
+
+    // district washes: warm paving near shops, dusty ground near industry
     const zone = (wx: number, wy: number, rad: number, color: string) => {
       const c = this.w2s(s, { x: wx, y: wy });
-      const rr = rad * this.effScale();
+      const rr = rad * sc;
       const g = ctx.createRadialGradient(c.x, c.y, 0, c.x, c.y, rr);
       g.addColorStop(0, color); g.addColorStop(1, 'rgba(0,0,0,0)');
       ctx.fillStyle = g; ctx.beginPath(); ctx.arc(c.x, c.y, rr, 0, Math.PI * 2); ctx.fill();
     };
-    zone(40, 70, 36, 'rgba(70,120,80,0.18)');   // residential
-    zone(55, 22, 40, 'rgba(150,110,60,0.16)');  // industrial
-    zone(62, 46, 30, 'rgba(70,110,160,0.16)');  // commercial
+    zone(40, 70, 36, 'rgba(190,215,150,0.20)');  // residential lawns
+    zone(55, 22, 40, 'rgba(180,150,105,0.22)');  // industrial dust
+    zone(62, 46, 30, 'rgba(205,200,185,0.25)');  // commercial paving
 
-    // trees / bushes
+    // farm plots: tilled field rows + fence around every farm
+    for (const fid in s.facilities) {
+      const f = s.facilities[fid]!;
+      if (f.type !== 'farm') continue;
+      const c = this.w2s(s, f.location);
+      const pw = 11 * sc, ph = 7.5 * sc;
+      ctx.fillStyle = '#a58757';
+      this.roundRectPathRaw(ctx, c.x - pw, c.y - ph * 0.4, pw * 2, ph * 1.6, 4 * sc * 0.2 + 3);
+      ctx.fill();
+      // crop rows
+      ctx.strokeStyle = 'rgba(122,158,82,0.9)';
+      ctx.lineWidth = Math.max(1.2, sc * 0.55);
+      const rows = 5;
+      for (let i = 1; i <= rows; i++) {
+        const yy = c.y - ph * 0.4 + (ph * 1.6 * i) / (rows + 1);
+        ctx.beginPath(); ctx.moveTo(c.x - pw * 0.9, yy); ctx.lineTo(c.x + pw * 0.9, yy); ctx.stroke();
+      }
+      // fence
+      ctx.strokeStyle = 'rgba(120,90,55,0.8)';
+      ctx.lineWidth = Math.max(1, sc * 0.2);
+      this.roundRectPathRaw(ctx, c.x - pw, c.y - ph * 0.4, pw * 2, ph * 1.6, 3);
+      ctx.stroke();
+    }
+
+    // retail plaza: light paving under the shopping cluster
+    let rx = 0, ry = 0, rn = 0;
+    for (const fid in s.facilities) {
+      const f = s.facilities[fid]!;
+      if (f.type === 'retail') { rx += f.location.x; ry += f.location.y; rn++; }
+    }
+    if (rn > 0) {
+      const c = this.w2s(s, { x: rx / rn, y: ry / rn });
+      const rr = 14 * sc;
+      ctx.fillStyle = 'rgba(214,209,196,0.55)';
+      this.roundRectPathRaw(ctx, c.x - rr, c.y - rr * 0.62, rr * 2, rr * 1.24, 8);
+      ctx.fill();
+      // paving joints
+      ctx.strokeStyle = 'rgba(150,145,132,0.35)';
+      ctx.lineWidth = 1;
+      for (let i = 1; i < 4; i++) {
+        const xx = c.x - rr + (rr * 2 * i) / 4;
+        ctx.beginPath(); ctx.moveTo(xx, c.y - rr * 0.62); ctx.lineTo(xx, c.y + rr * 0.62); ctx.stroke();
+      }
+    }
+
+    // trees: trunk + layered canopy
     this.buildDecor(s);
-    ctx.save();
-    ctx.beginPath(); this.roundRectPathRaw(ctx, tl.x, tl.y, gw, gh, 14); ctx.clip();
     for (const t of this.decor) {
       const p = this.w2s(s, t);
-      const rr = Math.max(1.5, t.r * this.effScale() * 0.5);
-      ctx.fillStyle = 'rgba(20,40,28,0.9)';
-      ctx.beginPath(); ctx.arc(p.x, p.y + rr * 0.4, rr, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = '#2f6b40';
-      ctx.beginPath(); ctx.arc(p.x, p.y, rr, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = 'rgba(120,200,140,0.35)';
-      ctx.beginPath(); ctx.arc(p.x - rr * 0.3, p.y - rr * 0.3, rr * 0.45, 0, Math.PI * 2); ctx.fill();
+      const rr = Math.max(2, t.r * sc * 0.55);
+      ctx.fillStyle = 'rgba(40,70,35,0.30)';
+      ctx.beginPath(); ctx.ellipse(p.x + rr * 0.3, p.y + rr * 0.75, rr * 0.9, rr * 0.35, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#6d4c33';
+      ctx.fillRect(p.x - rr * 0.12, p.y - rr * 0.1, rr * 0.24, rr * 0.8);
+      ctx.fillStyle = '#3e7d3a';
+      ctx.beginPath(); ctx.arc(p.x, p.y - rr * 0.35, rr, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#57994c';
+      ctx.beginPath(); ctx.arc(p.x - rr * 0.25, p.y - rr * 0.55, rr * 0.65, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = 'rgba(200,235,170,0.5)';
+      ctx.beginPath(); ctx.arc(p.x - rr * 0.35, p.y - rr * 0.7, rr * 0.3, 0, Math.PI * 2); ctx.fill();
     }
     ctx.restore();
 
-    // vignette for depth
+    // gentle vignette (much lighter than the old night-forest look)
     const vg = ctx.createRadialGradient(
-      this.cssW / 2, this.cssH / 2, Math.min(this.cssW, this.cssH) * 0.3,
-      this.cssW / 2, this.cssH / 2, Math.max(this.cssW, this.cssH) * 0.75,
+      this.cssW / 2, this.cssH / 2, Math.min(this.cssW, this.cssH) * 0.35,
+      this.cssW / 2, this.cssH / 2, Math.max(this.cssW, this.cssH) * 0.8,
     );
     vg.addColorStop(0, 'rgba(0,0,0,0)');
-    vg.addColorStop(1, 'rgba(0,0,0,0.45)');
+    vg.addColorStop(1, 'rgba(10,15,25,0.28)');
     ctx.fillStyle = vg;
     ctx.fillRect(0, 0, this.cssW, this.cssH);
   }
@@ -643,9 +706,14 @@ export class TownRenderer {
     const road = (ax: number, ay: number, bx: number, by: number) => {
       const a = this.w2s(s, { x: ax, y: ay }), b = this.w2s(s, { x: bx, y: by });
       ctx.lineCap = 'round';
-      ctx.strokeStyle = 'rgba(33,40,53,0.95)'; ctx.lineWidth = roadW;
+      // sidewalks first (wider light band under the asphalt)
+      ctx.strokeStyle = 'rgba(206,201,188,0.85)'; ctx.lineWidth = roadW * 1.5;
       ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
-      ctx.strokeStyle = 'rgba(150,160,180,0.30)'; ctx.lineWidth = Math.max(1, roadW * 0.1);
+      // asphalt
+      ctx.strokeStyle = '#565b61'; ctx.lineWidth = roadW;
+      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+      // center line
+      ctx.strokeStyle = 'rgba(235,225,180,0.7)'; ctx.lineWidth = Math.max(1, roadW * 0.09);
       ctx.setLineDash([7, 9]); ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
       ctx.setLineDash([]);
     };
@@ -653,23 +721,32 @@ export class TownRenderer {
     for (const y of hYs) road(x0, y, x1, y);
     for (const x of vXs) road(x, y0, x, y1);
 
-    // driveways: connect each building to the nearest horizontal avenue
-    ctx.strokeStyle = 'rgba(33,40,53,0.9)'; ctx.lineWidth = Math.max(2, roadW * 0.6);
+    // driveways for businesses only — homes sit on their residential streets,
+    // and a driveway per house turned the neighborhoods into a picket fence.
     ctx.lineCap = 'round';
     for (const id in s.facilities) {
       const f = s.facilities[id]!;
+      if (f.type === 'home') continue;
       let ny = hYs[0]!; for (const y of hYs) if (Math.abs(y - f.location.y) < Math.abs(ny - f.location.y)) ny = y;
       const a = this.w2s(s, f.location), bpt = this.w2s(s, { x: f.location.x, y: ny });
+      ctx.strokeStyle = 'rgba(206,201,188,0.6)'; ctx.lineWidth = Math.max(3, roadW * 0.72);
+      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(bpt.x, bpt.y); ctx.stroke();
+      ctx.strokeStyle = 'rgba(125,130,136,0.9)'; ctx.lineWidth = Math.max(2, roadW * 0.5);
       ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(bpt.x, bpt.y); ctx.stroke();
     }
   }
 
+  private smokeT = 0;
+
   private drawFacilities(s: GameState, hour: number): void {
     const ctx = this.ctx;
     const selected = this.cb.getSelectedId();
-    const night = Math.max(0, Math.cos(((hour - 13) / 24) * Math.PI * 2) * 0.5 + 0.5 - 0.35);
-    const order = Object.keys(s.facilities).sort((a, b) =>
-      (s.facilities[a]!.type === 'home' ? 0 : 1) - (s.facilities[b]!.type === 'home' ? 0 : 1));
+    const night = Math.max(0, this.nightAmount(hour) - 0.2);
+    // Painter's order: draw north-most first so nearer buildings overlap
+    // correctly in the oblique projection.
+    const order = Object.keys(s.facilities).sort(
+      (a, b) => s.facilities[a]!.location.y - s.facilities[b]!.location.y,
+    );
     for (const id of order) {
       const f = s.facilities[id]!;
       const p = this.drawPos(id, f.location);
@@ -680,57 +757,64 @@ export class TownRenderer {
       const player = f.ownerFirmId === s.playerFirmId;
       const sel = id === selected || id === this.hoverId;
 
-      // drop shadow
+      // ground shadow (anchored at the building's base)
       ctx.save();
-      ctx.fillStyle = 'rgba(0,0,0,0.32)';
+      ctx.fillStyle = 'rgba(30,45,25,0.30)';
       ctx.beginPath();
-      ctx.ellipse(sp.x, sp.y + size * 0.85, size * 0.95, size * 0.4, 0, 0, Math.PI * 2);
+      ctx.ellipse(sp.x + size * 0.25, sp.y + size * 0.42, size * 1.15, size * 0.4, 0, 0, Math.PI * 2);
       ctx.fill();
       ctx.restore();
 
       if (sel) {
-        ctx.beginPath(); ctx.arc(sp.x, sp.y, size + 11, 0, Math.PI * 2);
-        ctx.fillStyle = 'rgba(88,166,255,0.22)'; ctx.fill();
-      }
-      this.drawBuildingIcon(
-        sp.x, sp.y, size, f.type,
-        isApartment ? APARTMENT_FILL : BUILDING_FILL[f.type],
-        f.status === 'closed',
-      );
-      // Apartments read as premium: a small rooftop accent line.
-      if (isApartment) {
-        ctx.strokeStyle = '#e8d28a';
-        ctx.lineWidth = 1.6;
         ctx.beginPath();
-        ctx.moveTo(sp.x - size * 0.55, sp.y - size * 0.95);
-        ctx.lineTo(sp.x + size * 0.55, sp.y - size * 0.95);
-        ctx.stroke();
+        ctx.ellipse(sp.x, sp.y + size * 0.3, size * 1.5, size * 0.65, 0, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(88,166,255,0.30)'; ctx.fill();
       }
-      // Upgrade pips: one gold dot per level above 1, along the icon's top edge.
+
+      // the building itself (anchor = ground line, so base sits at sp.y+size*0.4)
+      drawBuilding(f.type, f.defId, {
+        ctx,
+        x: sp.x,
+        y: sp.y + size * 0.4,
+        w: size,
+        fill: isApartment ? APARTMENT_FILL : BUILDING_FILL[f.type],
+        closed: f.status === 'closed',
+        player,
+        level: f.level,
+        night: f.status === 'closed' ? 0 : night,
+      });
+
+      // chimney smoke while a factory is actually producing
+      if (f.type === 'factory' && f.status === 'active') {
+        const chx = sp.x + size * (0.95 + (f.level - 1) * 0.12) * 0.55 + size * 0.12;
+        const chy = sp.y + size * 0.4 - size * (0.95 + (f.level - 1) * 0.22) - size * 0.75;
+        ctx.save();
+        for (let i = 0; i < 3; i++) {
+          const t = (this.smokeT / 1000 + i * 0.7) % 2.1;
+          const a = Math.max(0, 0.34 - t * 0.16);
+          if (a <= 0) continue;
+          ctx.globalAlpha = a;
+          ctx.fillStyle = '#d7d7d2';
+          ctx.beginPath();
+          ctx.arc(chx + Math.sin(t * 2 + i) * size * 0.14 + t * size * 0.2, chy - t * size * 0.75, size * (0.14 + t * 0.16), 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.restore();
+        ctx.globalAlpha = 1;
+      }
+
+      // Upgrade pips stay as a quick-read cue on top of the physical growth.
       if (f.level > 1) {
-        const ctx2 = this.ctx;
-        ctx2.fillStyle = '#f0c040';
+        ctx.fillStyle = '#f0c040';
         for (let li = 0; li < f.level - 1; li++) {
-          ctx2.beginPath();
-          ctx2.arc(sp.x - size * 0.35 + li * size * 0.35, sp.y - size * 1.05, Math.max(1.4, size * 0.13), 0, Math.PI * 2);
-          ctx2.fill();
+          ctx.beginPath();
+          ctx.arc(sp.x - size * 0.3 + li * size * 0.35, sp.y - size * 1.7, Math.max(1.4, size * 0.12), 0, Math.PI * 2);
+          ctx.fill();
         }
       }
 
-      // lit windows at night (life after dark)
-      if (night > 0.05 && f.status !== 'closed') {
-        ctx.fillStyle = `rgba(255,214,120,${Math.min(0.9, night * 1.3)})`;
-        const u = size / 10;
-        const wins = isApartment ? [[-3, -2], [2, -2], [-3, 2], [2, 2]] : isHome ? [[-3, 0]] : [[-5, 2], [0, 2], [5, 2]];
-        for (const [wx, wy] of wins) ctx.fillRect(sp.x + wx! * u - u, sp.y + wy! * u, u * 1.8, u * 1.8);
-      }
-
-      if (player) {
-        ctx.strokeStyle = '#f0c64c'; ctx.lineWidth = 2.5;
-        this.roundRectPath(sp.x - size, sp.y - size, size * 2, size * 2, 6); ctx.stroke();
-      }
       if (!isHome) {
-        ctx.beginPath(); ctx.arc(sp.x + size - 2, sp.y - size + 2, 3.8, 0, Math.PI * 2);
+        ctx.beginPath(); ctx.arc(sp.x + size + 3, sp.y - size * 1.1, 3.6, 0, Math.PI * 2);
         ctx.fillStyle = this.statusColor(f.status); ctx.fill();
         ctx.strokeStyle = 'rgba(0,0,0,0.5)'; ctx.lineWidth = 1; ctx.stroke();
         // label with readable backdrop
@@ -738,73 +822,33 @@ export class TownRenderer {
         ctx.textAlign = 'center'; ctx.textBaseline = 'top';
         const tw = ctx.measureText(f.name).width;
         ctx.fillStyle = 'rgba(8,12,18,0.6)';
-        this.roundRectPath(sp.x - tw / 2 - 4, sp.y + size + 2, tw + 8, 13, 3); ctx.fill();
-        ctx.fillStyle = '#eaf1f8';
-        ctx.fillText(f.name, sp.x, sp.y + size + 4);
+        this.roundRectPath(sp.x - tw / 2 - 4, sp.y + size * 0.65, tw + 8, 13, 3); ctx.fill();
+        ctx.fillStyle = '#f2f6fa';
+        ctx.fillText(f.name, sp.x, sp.y + size * 0.65 + 2);
       }
     }
-  }
 
-  private drawBuildingIcon(x: number, y: number, r: number, type: FacilityType, fill: string, closed: boolean): void {
-    const ctx = this.ctx;
-    ctx.globalAlpha = closed ? 0.45 : 1;
-    // tile with top-light gradient + border + inner highlight
-    const g = ctx.createLinearGradient(0, y - r, 0, y + r);
-    g.addColorStop(0, this.lighten(fill, 0.22));
-    g.addColorStop(1, this.lighten(fill, -0.14));
-    ctx.fillStyle = g;
-    this.roundRectPath(x - r, y - r, r * 2, r * 2, 6); ctx.fill();
-    ctx.strokeStyle = 'rgba(0,0,0,0.4)'; ctx.lineWidth = 1.5;
-    this.roundRectPath(x - r, y - r, r * 2, r * 2, 6); ctx.stroke();
-    ctx.strokeStyle = 'rgba(255,255,255,0.18)'; ctx.lineWidth = 1;
-    this.roundRectPath(x - r + 1.5, y - r + 1.5, r * 2 - 3, r * 2 - 3, 5); ctx.stroke();
-
-    ctx.fillStyle = 'rgba(10,15,20,0.72)';
-    ctx.strokeStyle = 'rgba(10,15,20,0.72)';
-    ctx.lineWidth = 2;
-    const u = r / 10; // unit
-    ctx.beginPath();
-    switch (type) {
-      case 'home': // roof triangle + door
-        ctx.moveTo(x - 6 * u, y + 1 * u); ctx.lineTo(x, y - 6 * u); ctx.lineTo(x + 6 * u, y + 1 * u); ctx.closePath(); ctx.fill();
-        ctx.fillRect(x - 1.5 * u, y + 1 * u, 3 * u, 5 * u);
-        break;
-      case 'farm': // wheat stalk
-        ctx.lineWidth = 1.6; ctx.moveTo(x, y + 7 * u); ctx.lineTo(x, y - 6 * u); ctx.stroke();
-        for (let i = 0; i < 3; i++) {
-          const yy = y - 6 * u + i * 4 * u;
-          ctx.beginPath(); ctx.moveTo(x, yy); ctx.lineTo(x - 4 * u, yy - 2 * u); ctx.stroke();
-          ctx.beginPath(); ctx.moveTo(x, yy); ctx.lineTo(x + 4 * u, yy - 2 * u); ctx.stroke();
+    // streetlights come on with the night along the avenues
+    if (night > 0.12) {
+      const { minX, minY, maxX, maxY } = this.view;
+      const insetX = (maxX - minX) * 0.08, insetY = (maxY - minY) * 0.08;
+      const y0 = minY + insetY, y1 = maxY - insetY;
+      const midY = (y0 + y1) / 2;
+      ctx.save();
+      for (const ly of [y0, midY, y1]) {
+        for (let lx = minX + insetX + 6; lx < maxX - insetX; lx += 14) {
+          const lp = this.w2s(s, { x: lx, y: ly });
+          const g = ctx.createRadialGradient(lp.x, lp.y, 0, lp.x, lp.y, 16);
+          g.addColorStop(0, `rgba(255,220,140,${0.22 * night})`);
+          g.addColorStop(1, 'rgba(255,220,140,0)');
+          ctx.fillStyle = g;
+          ctx.beginPath(); ctx.arc(lp.x, lp.y, 16, 0, Math.PI * 2); ctx.fill();
+          ctx.fillStyle = `rgba(255,235,180,${Math.min(1, night * 1.6)})`;
+          ctx.beginPath(); ctx.arc(lp.x, lp.y - 6, 1.5, 0, Math.PI * 2); ctx.fill();
         }
-        break;
-      case 'mine': // mountain + pick
-        ctx.moveTo(x - 7 * u, y + 6 * u); ctx.lineTo(x - 1 * u, y - 6 * u); ctx.lineTo(x + 3 * u, y + 0 * u);
-        ctx.lineTo(x + 5 * u, y - 3 * u); ctx.lineTo(x + 8 * u, y + 6 * u); ctx.closePath(); ctx.fill();
-        break;
-      case 'factory': // building + chimney + smoke
-        ctx.fillRect(x - 7 * u, y - 1 * u, 9 * u, 7 * u);
-        ctx.fillRect(x + 3 * u, y - 6 * u, 3 * u, 12 * u);
-        ctx.globalAlpha = (closed ? 0.45 : 1) * 0.5;
-        ctx.beginPath(); ctx.arc(x + 4.5 * u, y - 8 * u, 2 * u, 0, Math.PI * 2); ctx.fill();
-        ctx.globalAlpha = closed ? 0.45 : 1;
-        break;
-      case 'warehouse': // box with band
-        ctx.fillRect(x - 7 * u, y - 5 * u, 14 * u, 11 * u);
-        ctx.fillStyle = fill; ctx.fillRect(x - 1.4 * u, y - 5 * u, 2.8 * u, 11 * u);
-        break;
-      case 'retail': // storefront + awning
-        ctx.fillRect(x - 7 * u, y - 1 * u, 14 * u, 7 * u);
-        ctx.fillStyle = '#ffffff'; ctx.globalAlpha = (closed ? 0.45 : 1) * 0.85;
-        ctx.fillRect(x - 7 * u, y - 4 * u, 14 * u, 3 * u);
-        ctx.globalAlpha = closed ? 0.45 : 1;
-        break;
-      case 'importer': // boat
-        ctx.moveTo(x - 8 * u, y + 1 * u); ctx.lineTo(x + 8 * u, y + 1 * u); ctx.lineTo(x + 5 * u, y + 6 * u);
-        ctx.lineTo(x - 5 * u, y + 6 * u); ctx.closePath(); ctx.fill();
-        ctx.fillRect(x - 1 * u, y - 7 * u, 2 * u, 8 * u);
-        break;
+      }
+      ctx.restore();
     }
-    ctx.globalAlpha = 1;
   }
 
   private drawShipments(s: GameState, dt: number): void {
@@ -819,13 +863,20 @@ export class TownRenderer {
       // route line
       ctx.strokeStyle = 'rgba(210,168,255,0.30)'; ctx.lineWidth = 1.5; ctx.setLineDash([4, 5]);
       ctx.beginPath(); ctx.moveTo(sp.x, sp.y); ctx.lineTo(dest.x, dest.y); ctx.stroke(); ctx.setLineDash([]);
-      // truck
+      // box truck: shadow, cargo box tinted by product, cab with windshield, wheels
       const ang = Math.atan2(dest.y - sp.y, dest.x - sp.x);
       ctx.save(); ctx.translate(sp.x, sp.y); ctx.rotate(ang);
-      ctx.fillStyle = '#2b2f3a'; this.roundRectPathRaw(ctx, -7, -4, 14, 8, 2); ctx.fill();
+      ctx.fillStyle = 'rgba(20,30,20,0.3)';
+      ctx.beginPath(); ctx.ellipse(0, 3.5, 9, 3, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#20242c';
+      for (const wx of [-5, 3]) { ctx.beginPath(); ctx.arc(wx, 4, 1.8, 0, Math.PI * 2); ctx.fill(); }
       const col = this.productColor(v.cargo.productId);
-      ctx.fillStyle = col; ctx.fillRect(-6, -3, 7, 6); // cargo
-      ctx.fillStyle = '#11151c'; ctx.fillRect(2, -3, 4, 6); // cab
+      ctx.fillStyle = '#e8e6df'; this.roundRectPathRaw(ctx, -8, -4.5, 11, 9, 1.5); ctx.fill();
+      ctx.fillStyle = col; this.roundRectPathRaw(ctx, -7, -3.5, 9, 7, 1); ctx.fill();
+      ctx.fillStyle = '#c8452c'; this.roundRectPathRaw(ctx, 3, -3.5, 6, 7, 1.5); ctx.fill(); // cab
+      ctx.fillStyle = '#bfe3f5'; ctx.fillRect(6.5, -2.5, 2, 5); // windshield
+      ctx.strokeStyle = 'rgba(0,0,0,0.35)'; ctx.lineWidth = 0.8;
+      this.roundRectPathRaw(ctx, -8, -4.5, 17, 9, 1.5); ctx.stroke();
       ctx.restore();
     }
   }
@@ -845,15 +896,23 @@ export class TownRenderer {
       }
       const sel = id === selected;
       const col = ACTIVITY_COLOR[c.activity] ?? '#8b949e';
-      const rad = sel ? 5 : 3.6;
-      if (c.movementState === 'moving') {
-        ctx.globalAlpha = 0.25; ctx.fillStyle = col;
-        ctx.beginPath(); ctx.arc(sp.x, sp.y, rad + 2.5, 0, Math.PI * 2); ctx.fill();
-        ctx.globalAlpha = 1;
-      }
-      ctx.beginPath(); ctx.arc(sp.x, sp.y, rad, 0, Math.PI * 2);
-      ctx.fillStyle = col; ctx.fill();
-      ctx.lineWidth = 1.2; ctx.strokeStyle = sel ? '#fff' : 'rgba(0,0,0,0.5)'; ctx.stroke();
+      const scale = sel ? 1.4 : 1;
+      const moving = c.movementState === 'moving';
+      // 2-frame walk bob keyed off position so figures animate while walking
+      const bob = moving ? Math.sin((sp.x + sp.y + this.smokeT / 90) * 0.9) * 0.8 : 0;
+      const bx = sp.x, by = sp.y + bob;
+      // little person: shadow, body capsule in activity color, head
+      ctx.fillStyle = 'rgba(20,35,20,0.3)';
+      ctx.beginPath(); ctx.ellipse(bx, sp.y + 3.4 * scale, 2.6 * scale, 1.1 * scale, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = col;
+      this.roundRectPathRaw(ctx, bx - 1.8 * scale, by - 2.2 * scale, 3.6 * scale, 5.4 * scale, 1.8 * scale);
+      ctx.fill();
+      ctx.lineWidth = 1; ctx.strokeStyle = sel ? '#fff' : 'rgba(0,0,0,0.4)';
+      this.roundRectPathRaw(ctx, bx - 1.8 * scale, by - 2.2 * scale, 3.6 * scale, 5.4 * scale, 1.8 * scale);
+      ctx.stroke();
+      ctx.fillStyle = '#f0d4b0';
+      ctx.beginPath(); ctx.arc(bx, by - 3.4 * scale, 1.7 * scale, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = 'rgba(0,0,0,0.35)'; ctx.lineWidth = 0.7; ctx.stroke();
     }
     // draw + decay trails
     for (let i = this.trails.length - 1; i >= 0; i--) {
@@ -920,13 +979,19 @@ export class TownRenderer {
     ctx.globalAlpha = 1;
   }
 
+  /** 0 at 13:00 (bright day), 1 at 01:00 (deep night). The old formula was
+   * inverted (peaked at 1pm) — invisible under the dark theme, glaring in
+   * daylight. */
+  private nightAmount(hour: number): number {
+    return 0.5 - Math.cos(((hour - 13) / 24) * Math.PI * 2) * 0.5;
+  }
+
   private drawNightTint(hour: number): void {
-    // 0 at noon, ~0.5 at midnight
-    const night = Math.cos(((hour - 13) / 24) * Math.PI * 2) * 0.5 + 0.5; // 0..1, peak at night
-    const a = night * 0.42;
+    const night = this.nightAmount(hour);
+    const a = night * 0.45;
     if (a <= 0.01) return;
     const ctx = this.ctx;
-    ctx.fillStyle = `rgba(6,12,30,${a})`;
+    ctx.fillStyle = `rgba(8,14,38,${a})`;
     ctx.fillRect(0, 0, this.cssW, this.cssH);
   }
 
@@ -1011,12 +1076,6 @@ export class TownRenderer {
   }
 
   // --- helpers ----------------------------------------------------------
-  private lighten(hex: string, amt: number): string {
-    const h = hex.replace('#', '');
-    const r = parseInt(h.slice(0, 2), 16), g = parseInt(h.slice(2, 4), 16), b = parseInt(h.slice(4, 6), 16);
-    const adj = (c: number) => Math.max(0, Math.min(255, Math.round(c + amt * 255)));
-    return `rgb(${adj(r)},${adj(g)},${adj(b)})`;
-  }
   private productColor(pid: string): string {
     switch (pid) {
       case 'grain': return '#d9b25a';
