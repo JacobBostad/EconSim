@@ -44,6 +44,25 @@ function soldSomewhere(state: import('../core/GameState').GameState, productId: 
   return false;
 }
 
+/**
+ * Pressure a single need exerts on its owner's equilibrium, from its CURRENT
+ * urgency (pure — no growth step). Shared with the satisfaction-anatomy
+ * selector so the UI decomposition always matches the engine math.
+ */
+export function pressureOf(
+  state: import('../core/GameState').GameState,
+  config: import('../core/SimulationConfig').SimulationConfig,
+  need: { productId: string; urgency: number },
+): number {
+  if (need.urgency <= config.needUrgentThreshold) return 0;
+  const anySeller = soldSomewhere(state, need.productId);
+  return (
+    (need.urgency - config.needUrgentThreshold) *
+    needWeight(need.productId) *
+    (anySeller ? 1 : 0.5)
+  );
+}
+
 export function runSatisfactionSystem(ctx: SimContext): void {
   if (!isDayBoundary(ctx.state.tick, ctx.config)) return;
   const { state, config } = ctx;
@@ -61,15 +80,7 @@ export function runSatisfactionSystem(ctx: SimContext): void {
       } else {
         need.urgency = Math.min(URGENCY_CAP, need.urgency + need.urgencyGrowthPerDay);
       }
-      if (need.urgency > config.needUrgentThreshold) {
-        // Resigned demand: if nobody in town sells it at all, the longing
-        // stings half as much — and becomes a market opportunity instead.
-        const anySeller = soldSomewhere(state, need.productId);
-        unmetPressure +=
-          (need.urgency - config.needUrgentThreshold) *
-          needWeight(need.productId) *
-          (anySeller ? 1 : 0.5);
-      }
+      unmetPressure += pressureOf(state, config, need);
     }
 
     // Satisfaction drifts toward an equilibrium set by circumstances instead

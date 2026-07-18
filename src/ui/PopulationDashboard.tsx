@@ -13,6 +13,7 @@ import { formatMoney } from '../utils/formatMoney';
 import { FormulaTooltip } from './FormulaTooltip';
 import { TrendCard } from './Sparkline';
 import { cyclePhase } from '../sim/systems/TownStatsSystem';
+import { satisfactionAnatomy } from '../sim/selectors/satisfactionSelectors';
 
 export function PopulationDashboard(): React.ReactElement {
   const sim = useGameStore((s) => s.sim);
@@ -26,6 +27,7 @@ export function PopulationDashboard(): React.ReactElement {
   const spend = spendingPower(state);
   const history = state.townHistory;
   const phase = cyclePhase(history);
+  const anatomy = satisfactionAnatomy(state);
   const maxBucket = Math.max(1, ...labor.skillBuckets.map((b) => b.count));
 
   return (
@@ -82,6 +84,45 @@ export function PopulationDashboard(): React.ReactElement {
       ) : (
         <p className="muted small">Trends appear after the first full day.</p>
       )}
+
+      <h3>Satisfaction Anatomy</h3>
+      <div className="row" style={{ gap: 10, flexWrap: 'wrap', alignItems: 'stretch' }}>
+        <div className="card" style={{ minWidth: 250, marginBottom: 0 }}>
+          <div className="muted small" style={{ marginBottom: 4 }}>
+            <FormulaTooltip title="Equilibrium target" explanation="Citizens drift toward 50 + employment (+20 employed / −5 not) + housing (+5 apartments) + provisioning (+15 fully provided, eroded by unmet needs, floor −30). Immigration needs ≥55.">
+              Equilibrium target
+            </FormulaTooltip>
+            <span className="mono"> {anatomy.equilibrium.toFixed(0)}</span>
+            <span className="muted"> (now {anatomy.average.toFixed(0)})</span>
+          </div>
+          <div className="kv small"><span className="k">Base</span><span className="mono">+{anatomy.base}</span></div>
+          <div className="kv small"><span className="k">Employment</span>
+            <span className="mono" style={{ color: anatomy.employmentTerm >= 15 ? 'var(--green)' : 'var(--amber)' }}>
+              {anatomy.employmentTerm >= 0 ? '+' : ''}{anatomy.employmentTerm.toFixed(1)}
+            </span></div>
+          <div className="kv small"><span className="k">Housing</span>
+            <span className="mono">{anatomy.housingTerm >= 0 ? '+' : ''}{anatomy.housingTerm.toFixed(1)}</span></div>
+          <div className="kv small"><span className="k">Provisioning</span>
+            <span className="mono" style={{ color: anatomy.provisioningTerm >= 8 ? 'var(--green)' : 'var(--red)' }}>
+              {anatomy.provisioningTerm >= 0 ? '+' : ''}{anatomy.provisioningTerm.toFixed(1)}
+            </span></div>
+        </div>
+        <div className="card" style={{ minWidth: 250, marginBottom: 0 }}>
+          <div className="muted small" style={{ marginBottom: 4 }}>What shortages cost (points)</div>
+          {anatomy.productDrag.length === 0 && (
+            <div className="small" style={{ color: 'var(--green)' }}>✓ No product is dragging the town down.</div>
+          )}
+          {anatomy.productDrag.slice(0, 5).map((d) => (
+            <div className="row small" key={d.productId} style={{ gap: 6 }}>
+              <span style={{ width: 70 }}>{d.name}</span>
+              <span className="bar" style={{ flex: 1 }}>
+                <span style={{ width: `${Math.min(100, (d.points / Math.max(0.1, anatomy.productDrag[0]!.points)) * 100)}%` }} />
+              </span>
+              <span className="mono" style={{ width: 44, textAlign: 'right' }}>−{d.points.toFixed(1)}</span>
+            </div>
+          ))}
+        </div>
+      </div>
 
       <h3>Spending Power</h3>
       <div className="row" style={{ gap: 10, flexWrap: 'wrap', alignItems: 'stretch' }}>
