@@ -100,6 +100,10 @@ export function NewGameModal(): React.ReactElement | null {
             {records.mostAchievements > 0 && <> · most awards: {records.mostAchievements}</>}
           </p>
         )}
+        <p className="small muted" style={{ marginTop: 10 }}>
+          Your current town is kept as a backup — “↩ Undo New” in the sidebar
+          brings it back.
+        </p>
         <div className="row" style={{ marginTop: 12, gap: 8 }}>
           <label className="small muted" htmlFor="seed-input">Seed (optional)</label>
           <input

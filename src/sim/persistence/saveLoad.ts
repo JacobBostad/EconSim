@@ -11,6 +11,8 @@ import { migrate } from './migrations';
 
 const PREFIX = 'econsim.save.';
 const DEFAULT_SLOT = 'default';
+/** Where the outgoing town is stashed when a new game starts. */
+export const BACKUP_SLOT = 'backup';
 
 export function serialize(state: GameState): string {
   return JSON.stringify(state);

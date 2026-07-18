@@ -14,6 +14,8 @@ export function Controls(): React.ReactElement {
   const load = useGameStore((s) => s.load);
   const setShowNewGame = useGameStore((s) => s.setShowNewGame);
   const hasSaveFn = useGameStore((s) => s.hasSave);
+  const loadBackup = useGameStore((s) => s.loadBackup);
+  const hasBackup = useGameStore((s) => s.hasBackup);
   const state = sim.getState();
 
   return (
@@ -37,6 +39,14 @@ export function Controls(): React.ReactElement {
         <button onClick={save}>💾 Save</button>
         <button onClick={load} disabled={!hasSaveFn()}>📂 Load</button>
         <button onClick={() => setShowNewGame(true)}>🔄 New</button>
+        {hasBackup() && (
+          <button
+            onClick={loadBackup}
+            title="Restore the town you had before the last New Game"
+          >
+            ↩ Undo New
+          </button>
+        )}
         <MuteButton />
       </div>
       <div className="row" style={{ marginTop: 6 }}>

@@ -24,7 +24,7 @@ import { configForDifficulty, type Difficulty } from '../sim/core/SimulationConf
 import type { GameState } from '../sim/core/GameState';
 import type { Command, Speed } from '../sim/core/Commands';
 import type { EntityId, FacilityDefId } from '../sim/core/Id';
-import { saveGame, loadGame, hasSave } from '../sim/persistence/saveLoad';
+import { saveGame, loadGame, hasSave, BACKUP_SLOT } from '../sim/persistence/saveLoad';
 import { recordTownFounded } from '../ui/records';
 
 const DEFAULT_SEED = 20260601;
@@ -70,6 +70,9 @@ interface GameStore {
   save: () => void;
   load: () => void;
   hasSave: () => boolean;
+  /** Restore the town that was running before the last New Game. */
+  loadBackup: () => void;
+  hasBackup: () => boolean;
 
   select: (id: EntityId | null) => void;
   setBuildDef: (defId: FacilityDefId | null) => void;
@@ -139,6 +142,10 @@ export const useGameStore = create<GameStore>((set, get) => {
     },
 
     newGame: (seed = Math.floor(Math.random() * 1_000_000), difficulty = 'standard', scenarioId = 'meadowbrook') => {
+      // The 4s autosave would overwrite the old town within seconds of a new
+      // game — stash it in the backup slot so a mis-click never costs a run.
+      const old = get().sim.getState();
+      if (old.tick > 0) saveGame(old, BACKUP_SLOT);
       get().sim.setState(createInitialState(seed, configForDifficulty(difficulty), scenarioId));
       recordTownFounded();
       set({ buildDefId: null, showNewGame: false });
@@ -159,6 +166,16 @@ export const useGameStore = create<GameStore>((set, get) => {
     },
 
     hasSave: () => hasSave(),
+
+    loadBackup: () => {
+      const loaded = loadGame(BACKUP_SLOT);
+      if (loaded) {
+        get().sim.setState(loaded);
+        bump(true);
+      }
+    },
+
+    hasBackup: () => hasSave(BACKUP_SLOT),
 
     select: (id) => {
       get().sim.dispatch({ type: 'SELECT_ENTITY', entityId: id });
