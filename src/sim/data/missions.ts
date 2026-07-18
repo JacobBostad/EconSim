@@ -135,9 +135,17 @@ export const MISSION_DEFS: MissionDef[] = [
     id: 'first_export',
     name: 'Open the Trade Route',
     icon: '🚢',
-    description: 'Export goods to Port Rosa: build a warehouse, stage goods there via a contract, and hit Export in its inspector.',
+    description: 'Export goods: build a warehouse, stage goods there via a contract, and hit Export in its inspector — it ships to the best-paying port.',
     reward: dollars(2500),
     check: (s) => (player(s)?.exportRevenue ?? 0) > 0,
+  },
+  {
+    id: 'best_port_broker',
+    name: 'Best-Port Broker',
+    icon: '🚂',
+    description: 'Earn $500 of export revenue from Ironvale, the industrial hub — it pays a premium for tools, minerals and finery (see the Gazette\'s Trade Desk for today\'s spreads).',
+    reward: dollars(2000),
+    check: (s) => ((player(s)?.exportRevenueByCity ?? {})['ironvale'] ?? 0) >= dollars(500),
   },
   {
     id: 'wage_leader',

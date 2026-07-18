@@ -86,6 +86,7 @@ function normalize(state: GameState): GameState {
     f.acquiredNames = f.acquiredNames ?? [];
     f.autoPriceByProduct = f.autoPriceByProduct ?? {};
     f.exportRevenue = f.exportRevenue ?? 0;
+    f.exportRevenueByCity = f.exportRevenueByCity ?? {};
     if (f.personalityId === undefined || f.ceoName === undefined) {
       // Old saves: give existing AI firms a deterministic personality + CEO.
       if (f.ownerType === 'ai') {

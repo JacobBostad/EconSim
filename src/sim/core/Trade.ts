@@ -88,6 +88,7 @@ export function performExport(
   fac.dailyStats.unitsShipped += qty;
   fac.dailyStats.revenue += revenue; // exports are the warehouse's earnings
   firm.exportRevenue += revenue;
+  firm.exportRevenueByCity[cityId] = (firm.exportRevenueByCity[cityId] ?? 0) + revenue;
   emitEvent(state, 'success', 'logistics',
     `${city.emoji} ${note} to ${city.name}: ${qty} ${product.name} for ${revenue}¢ (after freight).`, fac.id);
   return revenue;

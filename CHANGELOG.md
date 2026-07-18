@@ -29,7 +29,8 @@ engine tests), probed with headless balance runs, and guarded by CI.
   tools, minerals and finery but discounts food, behind pricier freight. Its
   price walk is anti-correlated with Port Rosa's, so arbitrage spreads open
   and close — exports, standing orders, and AI brokers all route to whichever
-  port nets more.
+  port nets more. The Gazette's **Trade Desk** shows today's biggest spreads;
+  a mission and an Arbitrageur achievement teach the routing game.
 - **Debt is a lifecycle, not a state**: AI firms deleverage when cash-rich
   instead of carrying expansion loans forever; receivership offers a one-click
   emergency loan against remaining credit; the advisor flags heavy debt

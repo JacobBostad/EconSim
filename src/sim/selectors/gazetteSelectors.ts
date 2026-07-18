@@ -6,8 +6,10 @@
 
 import type { GameState } from '../core/GameState';
 import type { GameEvent } from '../core/Events';
-import { CONSUMER_PRODUCT_IDS, getProduct } from '../data/products';
+import { CONSUMER_PRODUCT_IDS, ALL_PRODUCT_IDS, getProduct } from '../data/products';
 import { ticksPerDay } from '../core/Tick';
+import { cityPrice, exportFreightFee } from '../core/Trade';
+import { TRADE_CITY_IDS, getTradeCity } from '../data/tradeCities';
 
 export interface GazetteStory {
   severity: GameEvent['severity'];
@@ -100,4 +102,47 @@ export function gazetteEditions(state: GameState, days: number): GazetteEdition[
     });
   }
   return editions;
+}
+
+export interface TradeDeskRow {
+  productId: string;
+  productName: string;
+  /** Net per-unit price (after each city's freight) at the better port. */
+  bestCityId: string;
+  bestCityName: string;
+  bestCityEmoji: string;
+  bestNet: number;
+  otherNet: number;
+  /** Per-unit advantage of shipping to the better port, cents. */
+  spread: number;
+}
+
+/**
+ * The trade desk: today's biggest per-unit spreads between the trade cities,
+ * net of each city's freight — the products where picking the right port
+ * actually matters. Sorted by spread, largest first.
+ */
+export function tradeDesk(state: GameState, limit = 4): TradeDeskRow[] {
+  const rows: TradeDeskRow[] = [];
+  for (const pid of ALL_PRODUCT_IDS) {
+    const nets = TRADE_CITY_IDS.map((cid) => ({
+      cid,
+      net: Math.round(cityPrice(state, cid, pid) * (1 - exportFreightFee(state, cid))),
+    })).sort((a, b) => b.net - a.net);
+    const best = nets[0]!;
+    const other = nets[nets.length - 1]!;
+    const city = getTradeCity(best.cid);
+    rows.push({
+      productId: pid,
+      productName: getProduct(pid).name,
+      bestCityId: best.cid,
+      bestCityName: city.name,
+      bestCityEmoji: city.emoji,
+      bestNet: best.net,
+      otherNet: other.net,
+      spread: best.net - other.net,
+    });
+  }
+  rows.sort((a, b) => b.spread - a.spread);
+  return rows.slice(0, limit);
 }

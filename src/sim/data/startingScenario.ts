@@ -124,6 +124,7 @@ function newFirm(
     acquiredNames: [],
     autoPriceByProduct: {},
     exportRevenue: 0,
+    exportRevenueByCity: {},
   };
   b.state.firms[id] = firm;
   return firm;

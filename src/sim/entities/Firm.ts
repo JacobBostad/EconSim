@@ -75,6 +75,8 @@ export interface Firm {
   acquiredNames: string[];
   /** Products whose retail price the daily auto-pricer manages (player QoL). */
   autoPriceByProduct: Record<ProductId, boolean>;
-  /** Lifetime revenue earned from Port Rosa exports (cents). */
+  /** Lifetime revenue earned from trade-city exports (cents). */
   exportRevenue: number;
+  /** Lifetime export revenue broken down by trade city id (cents). */
+  exportRevenueByCity: Record<string, number>;
 }

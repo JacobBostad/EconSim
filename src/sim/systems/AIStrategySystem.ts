@@ -344,6 +344,7 @@ function maybeExportSurplus(ctx: SimContext, firmId: string): void {
         note: `Exported ${qty} ${product.name} to ${cityName} (brokered)`,
       });
       firm.exportRevenue += revenue;
+      firm.exportRevenueByCity[best.cityId] = (firm.exportRevenueByCity[best.cityId] ?? 0) + revenue;
       if (revenue >= 200_00) {
         emitEvent(state, 'info', 'ai',
           `${firm.name} exported ${qty} ${product.name} to ${cityName} for ${revenue}¢.${ceoQuote(rng, firm, 'export')}`, fac.id);

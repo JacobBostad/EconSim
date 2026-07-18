@@ -248,9 +248,20 @@ export const ACHIEVEMENT_DEFS: AchievementDef[] = [
     id: 'trade_baron',
     name: 'Trade Baron',
     icon: '🚢',
-    description: 'Earned $2,000 exporting goods to Port Rosa.',
-    hint: 'Stage goods in a warehouse and export when Port Rosa prices spike.',
+    description: 'Earned $2,000 exporting goods to the trade cities.',
+    hint: 'Stage goods in a warehouse and export when trade prices spike.',
     check: (s) => (player(s)?.exportRevenue ?? 0) >= dollars(2000),
+  },
+  {
+    id: 'arbitrageur',
+    name: 'Arbitrageur',
+    icon: '⚖️',
+    description: 'Earned $500 of export revenue from Port Rosa AND $500 from Ironvale.',
+    hint: 'Ironvale pays up for tools, minerals and finery; Port Rosa for the rest. Ship where the spread says.',
+    check: (s) => {
+      const byCity = player(s)?.exportRevenueByCity ?? {};
+      return (byCity['port_rosa'] ?? 0) >= dollars(500) && (byCity['ironvale'] ?? 0) >= dollars(500);
+    },
   },
   {
     id: 'boomtown',
