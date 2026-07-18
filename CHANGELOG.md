@@ -125,6 +125,11 @@ engine tests), probed with headless balance runs, and guarded by CI.
 - **Cash runway countdown**: when the 7-day average burn would empty the
   till within 15 days, the Advisor leads with "~N days of cash left" (danger
   at ≤5) — missed payroll and receivership used to arrive with no countdown.
+- Mid-game dashboard sweep: the Company quality chip shows the product's
+  real default quality instead of 0 for products without R&D spend; the
+  Bottlenecks panel groups 3+ identical reasons into one counted line with
+  clickable facility names; wholesale wins/losses that name the player's
+  firm get good/bad-news sound stings.
 - **Saturation ≠ starvation**: a producer idled by a full output buffer no
   longer triggers the harsh "produced nothing" alarm or the "money pit —
   sell it" advisor line. Both now say what's true and what to do: the chain
