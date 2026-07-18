@@ -31,7 +31,7 @@ import { companyValuation } from '../selectors/companySelectors';
 import { acquisitionCost, performAcquisition } from '../core/Acquisition';
 import { landCostMultiplier, landValueAt } from '../core/LandValue';
 import { MAX_FACILITY_LEVEL, upgradeCost, upgradeFacility } from '../core/Upgrades';
-import { getPersonality } from '../data/personalities';
+import { getPersonality, ceoQuote } from '../data/personalities';
 
 export function runAIStrategySystem(ctx: SimContext): void {
   if (!isDayBoundary(ctx.state.tick, ctx.config)) return;
@@ -76,7 +76,7 @@ const AD_BUDGET_STEP = 4_00;
 const AD_BUDGET_FLOOR = 8_00;
 
 function manageAdBudget(ctx: SimContext, firmId: string): void {
-  const { state } = ctx;
+  const { state, rng } = ctx;
   const firm = state.firms[firmId]!;
   const persona = getPersonality(firm.personalityId);
   const cap = Math.round(AD_BUDGET_CAP * persona.adMult);
@@ -96,7 +96,7 @@ function manageAdBudget(ctx: SimContext, firmId: string): void {
       firm.adBudgetByProduct[pid] = Math.min(cap, budget + step);
       if (budget + step >= cap) {
         emitEvent(state, 'info', 'ai',
-          `${firm.name} is running a maximum ad campaign for ${getProduct(pid).name}.`, firm.id);
+          `${firm.name} is running a maximum ad campaign for ${getProduct(pid).name}.${ceoQuote(rng, firm, 'ads')}`, firm.id);
       }
     }
     }
@@ -215,7 +215,7 @@ function maybeExpand(ctx: SimContext, firmId: string): void {
     };
     state.contracts[id] = contract;
   }
-  emitEvent(state, 'info', 'ai', `${firm.name} opened a new outlet to meet demand for ${getProduct(product).name}.`, fac.id);
+  emitEvent(state, 'info', 'ai', `${firm.name} opened a new outlet to meet demand for ${getProduct(product).name}.${ceoQuote(rng, firm, 'expand')}`, fac.id);
 }
 
 /**
@@ -260,7 +260,7 @@ function maybeBuyShares(ctx: SimContext, firmId: string): void {
   firm.sharesHeld[target] = (firm.sharesHeld[target] ?? 0) + 5;
   const targetName = state.firms[target]!.name;
   emitEvent(state, 'info', 'ai',
-    `${firm.name} bought a 5% stake in ${targetName} (now ${firm.sharesHeld[target]}%).`,
+    `${firm.name} bought a 5% stake in ${targetName} (now ${firm.sharesHeld[target]}%).${ceoQuote(rng, firm, 'shares')}`,
     target);
 }
 
@@ -299,7 +299,7 @@ const AI_EXPORT_MIN_MULT = 1.2;
 const AI_EXPORT_KEEP = 20; // units kept as working stock
 
 function maybeExportSurplus(ctx: SimContext, firmId: string): void {
-  const { state } = ctx;
+  const { state, rng } = ctx;
   const firm = state.firms[firmId]!;
   const keep = Math.round(AI_EXPORT_KEEP * getPersonality(firm.personalityId).exportKeepMult);
   for (const facId of firm.facilities) {
@@ -322,7 +322,7 @@ function maybeExportSurplus(ctx: SimContext, firmId: string): void {
       firm.exportRevenue += revenue;
       if (revenue >= 200_00) {
         emitEvent(state, 'info', 'ai',
-          `${firm.name} exported ${qty} ${product.name} to Port Rosa for ${revenue}¢.`, fac.id);
+          `${firm.name} exported ${qty} ${product.name} to Port Rosa for ${revenue}¢.${ceoQuote(rng, firm, 'export')}`, fac.id);
       }
       return; // one export per firm per day
     }
@@ -413,7 +413,7 @@ function maybeEnterLuxury(ctx: SimContext, firmId: string): void {
   wire(workshop.id, boutique.id, luxury, 20, 8, 45);
 
   emitEvent(state, 'warning', 'ai',
-    `💎 ${firm.name} enters the luxury market: ${getProduct(luxury).name} at ${boutique.name}!`, boutique.id);
+    `💎 ${firm.name} enters the luxury market: ${getProduct(luxury).name} at ${boutique.name}!${ceoQuote(rng, firm, 'luxury')}`, boutique.id);
 }
 
 /** Flush AI firms level up a production facility now and then. */
@@ -499,7 +499,7 @@ function adjustPrices(ctx: SimContext, firmId: string, onlyAutoPriced = false): 
           state,
           'info',
           'ai',
-          `${firm.name} raised ${product.name} prices after repeated sellouts.`,
+          `${firm.name} raised ${product.name} prices after repeated sellouts.${ceoQuote(rng, firm, 'price')}`,
           firm.id,
         );
       }

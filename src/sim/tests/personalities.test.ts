@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { Simulation } from '../core/Simulation';
 import { createInitialState } from '../data/startingScenario';
 import { ticksPerDay } from '../core/Tick';
-import { PERSONALITIES, getPersonality, NEUTRAL } from '../data/personalities';
+import { PERSONALITIES, getPersonality, NEUTRAL, ceoQuote } from '../data/personalities';
 import { makeContext } from '../core/GameState';
 import { runAIStrategySystem } from '../systems/AIStrategySystem';
 
@@ -56,5 +56,28 @@ describe('AI personalities', () => {
       return Object.values(sim.getState().firms).find((f) => f.name === 'Granite Industries')!;
     };
     expect(run('exporter').exportRevenue).toBeGreaterThanOrEqual(run('brand_builder').exportRevenue);
+  });
+});
+
+describe('CEO quotes', () => {
+  it('attaches a deterministic CEO quote to a max-ad-campaign headline', () => {
+    const state = createInitialState(9);
+    const firm = sunrise(state);
+    firm.marketShareByProduct['bread'] = 0.3;
+    firm.cash = 30000_00;
+    firm.adBudgetByProduct['bread'] = 56_00; // one step below the 1.5x cap
+    state.tick = ticksPerDay(state.config);
+    runAIStrategySystem(makeContext(state));
+    const ev = state.events.find((e) => e.message.includes('maximum ad campaign'));
+    expect(ev).toBeTruthy();
+    expect(ev!.message).toContain(firm.ceoName!);
+    expect(ev!.message).toContain('—');
+  });
+
+  it('never quotes a firm without a CEO (the player)', () => {
+    const state = createInitialState(9);
+    const player = state.firms[state.playerFirmId]!;
+    const rng = { pick: <T,>(arr: T[]): T | undefined => arr[0] };
+    expect(ceoQuote(rng, player, 'ads')).toBe('');
   });
 });

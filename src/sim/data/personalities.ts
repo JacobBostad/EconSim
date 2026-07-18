@@ -15,12 +15,17 @@ export type PersonalityId =
   | 'expansionist'
   | 'exporter';
 
+/** Gazette moments a CEO might comment on. */
+export type QuoteKind = 'ads' | 'expand' | 'price' | 'export' | 'luxury' | 'shares';
+
 export interface Personality {
   id: PersonalityId;
   name: string;
   icon: string;
   /** One line for tooltips/dashboards: what to expect from this rival. */
   blurb: string;
+  /** CEO quips attached to gazette headlines, by moment. */
+  quotes: Partial<Record<QuoteKind, string[]>>;
   /** Multiplier on the ad-budget cap (and ramp step). */
   adMult: number;
   /** Multiplier on price-cut depth (priced-out / surplus branches). */
@@ -49,6 +54,7 @@ export const NEUTRAL: Personality = {
   rndChance: 0.15,
   exportKeepMult: 1,
   ceoNames: [],
+  quotes: {},
 };
 
 export const PERSONALITIES: Record<PersonalityId, Personality> = {
@@ -64,6 +70,12 @@ export const PERSONALITIES: Record<PersonalityId, Personality> = {
     rndChance: 0.08,
     exportKeepMult: 1,
     ceoNames: ['Vera Stone', 'Otto Krieg', 'Sal Marchetti'],
+    quotes: {
+      price: ['Nobody undersells us. Nobody.', 'Margins are for cowards.'],
+      ads: ['Ads are noise. Our price tag is the billboard.'],
+      expand: ['Another block, another beachhead.'],
+      shares: ['If you can’t beat them, own them.'],
+    },
   },
   brand_builder: {
     id: 'brand_builder',
@@ -77,6 +89,12 @@ export const PERSONALITIES: Record<PersonalityId, Personality> = {
     rndChance: 0.2,
     exportKeepMult: 1,
     ceoNames: ['Mara Voss', 'Julian Bright', 'Coco Delacroix'],
+    quotes: {
+      ads: ['Quality speaks. We just turn up the volume.', 'A brand is a promise — we advertise ours.'],
+      price: ['We don’t chase discounts. Discounts chase us.'],
+      luxury: ['The finer things were always the plan.'],
+      expand: ['Every storefront is a stage.'],
+    },
   },
   expansionist: {
     id: 'expansionist',
@@ -90,6 +108,12 @@ export const PERSONALITIES: Record<PersonalityId, Personality> = {
     rndChance: 0.12,
     exportKeepMult: 1,
     ceoNames: ['Ada Sterling', 'Ray Calloway', 'Petra Lindqvist'],
+    quotes: {
+      expand: ['Growth is the only moat.', 'See a queue? Build a door.'],
+      ads: ['New neighborhoods need new signs.'],
+      shares: ['Today a stake, tomorrow the street.'],
+      luxury: ['Upmarket is just another market.'],
+    },
   },
   exporter: {
     id: 'exporter',
@@ -103,8 +127,30 @@ export const PERSONALITIES: Record<PersonalityId, Personality> = {
     rndChance: 0.12,
     exportKeepMult: 0.5,
     ceoNames: ['Ines Marlowe', 'Dmitri Volkov', 'June Okafor'],
+    quotes: {
+      export: ['Port Rosa pays better than nostalgia.', 'The tide waits for no warehouse.'],
+      price: ['Local prices are a courtesy, not a strategy.'],
+      expand: ['Every outlet is a harbor.'],
+    },
   },
 };
+
+/**
+ * A CEO quip for a gazette headline, or '' when the firm has no CEO (the
+ * player) or the personality has nothing to say about this moment. Uses the
+ * sim rng so replays stay deterministic.
+ */
+export function ceoQuote(
+  rng: { pick<T>(arr: T[]): T | undefined },
+  firm: { ceoName: string | null; personalityId: string | null },
+  kind: QuoteKind,
+): string {
+  if (!firm.ceoName) return '';
+  const pool = getPersonality(firm.personalityId).quotes[kind];
+  if (!pool || pool.length === 0) return '';
+  const q = rng.pick(pool);
+  return q ? ` “${q}” — ${firm.ceoName}` : '';
+}
 
 const ROTATION: PersonalityId[] = ['brand_builder', 'price_fighter', 'expansionist', 'exporter'];
 
