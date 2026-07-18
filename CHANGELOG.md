@@ -132,6 +132,12 @@ hireable managers, a real commodity market, and shared daily play.
   orders unattended and keeps standing export orders on every stocked
   warehouse. Hired from the Player Holdings inspector; one per role,
   $28–52/day, seniority buys extra duties and sharper price floors.
+- **The manager lifecycle**: managers grow on the job (+0.004 skill/day,
+  capped 1.3) and earn new briefs as they cross the duty gates — a 🎓
+  promotion event marks each one. Every 60 days served, a salary review
+  ratchets pay 12% automatically: hire cheap and train, and patience turns
+  a junior into a well-paid veteran — or fire and re-hire from the weekly
+  market. Delegation now has a career arc.
 - **Commodity desk** (Pillar 3): the trade-city price walks are now playable
   in both directions — buy goods FROM Port Rosa or Ironvale at price +
   freight into a warehouse, hold the position (storage is the limit), and

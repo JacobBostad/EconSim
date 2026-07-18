@@ -77,10 +77,20 @@ $28–52/day):
   standing export order on every stocked warehouse (≥30 units, ship at
   1.35×, keep 10); veterans set a sharper 1.25× floor.
 
+## Phase 3 — the manager lifecycle (SHIPPED)
+
+Managers grow on the job: +0.004 skill per day worked (crew-skill pace),
+capped at 1.3. Because duty gates read live skill, growth simply unlocks
+duties — a junior store hire earns the shelf-sizing brief after ~2–30
+days (depending on starting skill) and eventually the marketing brief,
+each crossing announced with a 🎓 promotion event. The counterweight is
+the **salary review**: every 60 days served, pay ratchets up 12%
+automatically ("they know their worth") — so a cheap junior slowly
+becomes a well-paid veteran, and the hire-cheap-and-train strategy trades
+patience for payroll. The player's lever is the same as ever: firing.
+
 ## Later phases
 
-- Manager quality drift: skill grows slowly on the job (mirrors crew
-  skill), poaching-style salary reviews.
 - AI firms hiring managers of their own (symmetry, if probes show gaps).
 
 ## Phase 1 probe

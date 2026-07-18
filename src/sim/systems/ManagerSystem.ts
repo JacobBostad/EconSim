@@ -28,9 +28,16 @@ import { adjustPrices, maybeWidenShelves, manageSourcing } from './AIStrategySys
 import { performExport } from '../core/Trade';
 import { getQuantity } from '../entities/Inventory';
 import { FIRST_NAMES, LAST_NAMES } from '../data/names';
+import { formatMoney } from '../../utils/formatMoney';
 
 export const SHELF_DUTY_SKILL = 1.05;
 export const MARKETING_DUTY_SKILL = 1.15;
+/** Managers grow on the job — same order of pace as crew skill. */
+export const MANAGER_SKILL_GROWTH_PER_DAY = 0.004;
+export const MANAGER_SKILL_MAX = 1.3;
+/** Salary review cadence and raise: they know their worth. */
+export const SALARY_REVIEW_DAYS = 60;
+export const SALARY_REVIEW_RAISE = 0.12;
 /** Marketing duty: ceiling for the manager's per-product ad budget. */
 export const MANAGER_AD_CAP = 25_00;
 export const MANAGER_AD_STEP = 3_00;
@@ -222,6 +229,29 @@ export function runManagerSystem(ctx: SimContext): void {
         from: firmAccount(fid), to: WORLD_ACCOUNT, amount: mgr.salaryPerDay,
         firmId: fid, category: 'wages', note: `Manager salary — ${mgr.name}`,
       });
+
+      // Growth on the job: skill creeps up daily; crossing a duty gate is
+      // a promotion worth announcing (the gates read live skill, so new
+      // duties simply start running from the next day's pass).
+      const before = mgr.skill;
+      mgr.skill = Math.min(MANAGER_SKILL_MAX, Math.round((mgr.skill + MANAGER_SKILL_GROWTH_PER_DAY) * 1000) / 1000);
+      for (const gate of [SHELF_DUTY_SKILL, MARKETING_DUTY_SKILL]) {
+        if (before < gate && mgr.skill >= gate) {
+          const newDuty = managerDuties(mgr.skill, mgr.role).slice(-1)[0]!;
+          const post = mgr.facilityId ? (state.facilities[mgr.facilityId]?.name ?? 'their store') : `the ${mgr.role} desk`;
+          emitEvent(state, 'success', 'player',
+            `🎓 ${mgr.name} earned the ${newDuty} brief at ${post} — experience pays.`, fid);
+        }
+      }
+
+      // Salary review: every 60 days on the job the pay ratchets up 12% —
+      // they know their worth, and you always hold the other lever (firing).
+      const daysWorked = Math.floor((state.tick - mgr.hiredAtTick) / (ctx.config.ticksPerHour * 24));
+      if (daysWorked > 0 && daysWorked % SALARY_REVIEW_DAYS === 0) {
+        mgr.salaryPerDay = Math.round((mgr.salaryPerDay * (1 + SALARY_REVIEW_RAISE)) / 100) * 100;
+        emitEvent(state, 'info', 'payroll',
+          `${mgr.name}'s salary review: now ${formatMoney(mgr.salaryPerDay)}/day after ${daysWorked} days on the job.`, fid);
+      }
 
       if (mgr.role === 'logistics') {
         runLogisticsDuty(ctx, fid, mgr);

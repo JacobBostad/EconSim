@@ -174,6 +174,38 @@ describe('Managers', () => {
     expect(state.facilities[contract.sourceFacilityId]?.type).not.toBe('importer');
   });
 
+  it('managers grow on the job and earn new duties at the gates', () => {
+    const sim = newSim(3);
+    const state = sim.getState();
+    const player = state.firms[state.playerFirmId]!;
+    const shop = playerStore(sim);
+    sim.dispatch({ type: 'HIRE_MANAGER', firmId: player.id, facilityId: shop.id, candidateIndex: 0 });
+    const mgr = player.managers[0]!;
+    mgr.skill = 1.046; // one good day short of the shelf-sizing gate
+    sim.run(ticksPerDay(state.config) * 2);
+    expect(mgr.skill).toBeGreaterThanOrEqual(1.05);
+    expect(managerDuties(mgr.skill, 'store')).toContain('shelf-sizing');
+    expect(state.events.some((e) => e.message.includes('🎓') && e.message.includes(mgr.name))).toBe(true);
+
+    mgr.skill = 1.299; // the cap holds
+    sim.run(ticksPerDay(state.config) * 3);
+    expect(mgr.skill).toBe(1.3);
+  });
+
+  it('the 60-day salary review ratchets pay 12%', () => {
+    const sim = newSim(3);
+    const state = sim.getState();
+    const player = state.firms[state.playerFirmId]!;
+    const shop = playerStore(sim);
+    sim.dispatch({ type: 'HIRE_MANAGER', firmId: player.id, facilityId: shop.id, candidateIndex: 1 });
+    const mgr = player.managers[0]!;
+    const pay0 = mgr.salaryPerDay;
+    mgr.hiredAtTick = state.tick - 59 * ticksPerDay(state.config); // 59 days served
+    sim.run(ticksPerDay(state.config) * 2);
+    expect(mgr.salaryPerDay).toBe(Math.round((pay0 * 1.12) / 100) * 100);
+    expect(state.events.some((e) => e.message.includes('salary review'))).toBe(true);
+  });
+
   it('old saves migrate with an empty manager roster', () => {
     const sim = newSim(3);
     const raw = JSON.parse(serialize(sim.getState())) as {
