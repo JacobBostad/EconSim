@@ -1,7 +1,11 @@
 import React, { useRef, useState } from 'react';
 import { useGameStore } from '../store/useGameStore';
 import type { Speed } from '../sim/core/Commands';
-import { serialize, deserialize } from '../sim/persistence/saveLoad';
+import {
+  serialize, deserialize, saveGame, loadGame, listSaves, removeSave, saveMeta,
+} from '../sim/persistence/saveLoad';
+import { getScenario } from '../sim/data/scenarios';
+import { formatMoney } from '../utils/formatMoney';
 import { isMuted, setMuted } from './sound';
 
 const SPEEDS: Speed[] = [1, 5, 20, 100];
@@ -51,8 +55,100 @@ export function Controls(): React.ReactElement {
       </div>
       <div className="row" style={{ marginTop: 6 }}>
         <ExportImportButtons />
+        <SaveSlots />
       </div>
     </div>
+  );
+}
+
+/** Reserved slots the UI manages implicitly (autosave / Undo-New stash). */
+const SYSTEM_SLOTS = new Set(['default', 'backup']);
+
+/** Named save slots: park a town, try something risky, come back. */
+function SaveSlots(): React.ReactElement {
+  const sim = useGameStore((s) => s.sim);
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState('');
+  const [bump, setBump] = useState(0); // re-list after save/delete
+
+  const slots = open
+    ? listSaves().filter((s) => !SYSTEM_SLOTS.has(s)).sort()
+    : [];
+  void bump;
+
+  const loadSlot = (slot: string): void => {
+    const loaded = loadGame(slot);
+    if (loaded) {
+      sim.setState(loaded);
+      useGameStore.setState((s) => ({ version: s.version + 1 }));
+      setOpen(false);
+    }
+  };
+
+  return (
+    <>
+      <button onClick={() => setOpen(true)} title="Named save slots — park towns and switch between them">
+        🗂 Slots
+      </button>
+      {open && (
+        <div className="intro-backdrop" onClick={() => setOpen(false)}>
+          <div className="intro-card" onClick={(e) => e.stopPropagation()}>
+            <h3 style={{ margin: '0 0 8px' }}>🗂 Save slots</h3>
+            {slots.length === 0 && (
+              <p className="muted small">No named saves yet — name one below.</p>
+            )}
+            {slots.map((slot) => {
+              const meta = saveMeta(slot);
+              return (
+                <div className="row between small" key={slot} style={{ marginBottom: 4, gap: 8 }}>
+                  <span>
+                    <strong>{slot}</strong>
+                    {meta && (
+                      <span className="muted">
+                        {' '}— day {meta.day}, {getScenario(meta.scenarioId).name},{' '}
+                        {meta.citizens} citizens, {formatMoney(meta.playerCash)}
+                      </span>
+                    )}
+                  </span>
+                  <span className="row" style={{ gap: 4 }}>
+                    <button onClick={() => loadSlot(slot)}>Load</button>
+                    <button onClick={() => { saveGame(sim.getState(), slot); setBump((b) => b + 1); }} title="Overwrite with the current town">
+                      Overwrite
+                    </button>
+                    <button onClick={() => { removeSave(slot); setBump((b) => b + 1); }} title="Delete this save">
+                      ×
+                    </button>
+                  </span>
+                </div>
+              );
+            })}
+            <div className="row" style={{ marginTop: 8, gap: 6 }}>
+              <input
+                placeholder="slot name…"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                style={{ flex: 1 }}
+              />
+              <button
+                disabled={!name.trim() || SYSTEM_SLOTS.has(name.trim())}
+                onClick={() => {
+                  saveGame(sim.getState(), name.trim());
+                  setName('');
+                  setBump((b) => b + 1);
+                }}
+              >
+                Save as
+              </button>
+              <button onClick={() => setOpen(false)}>Close</button>
+            </div>
+            <p className="muted small" style={{ marginTop: 6 }}>
+              The autosave and the ↩ Undo-New stash are managed automatically
+              and aren't listed here.
+            </p>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 

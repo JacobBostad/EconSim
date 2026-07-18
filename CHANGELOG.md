@@ -74,6 +74,8 @@ engine tests), probed with headless balance runs, and guarded by CI.
 - **Receivership**: insolvency pauses the game with an itemized collapse
   report and ways back, instead of silently closing facilities.
 - **Backup slot**: New Game stashes the old town; ↩ Undo New restores it.
+- **Named save slots**: park towns and switch between them — save-as, load,
+  overwrite, delete, each slot listed with day/scenario/population/cash.
 
 ## Legibility — the economy explains itself
 

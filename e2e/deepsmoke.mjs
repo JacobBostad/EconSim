@@ -81,6 +81,20 @@ await page.waitForTimeout(200);
 await page.getByRole('button', { name: /Load/ }).click();
 await page.waitForTimeout(400);
 
+// Named save slots: save-as, reopen, load, delete.
+await page.getByRole('button', { name: /Slots/ }).click();
+await page.waitForTimeout(250);
+await page.getByPlaceholder('slot name…').fill('smoke-test');
+await page.getByRole('button', { name: 'Save as' }).click();
+await page.waitForTimeout(250);
+await page.getByRole('button', { name: 'Load', exact: true }).first().click();
+await page.waitForTimeout(400);
+await page.getByRole('button', { name: /Slots/ }).click();
+await page.waitForTimeout(250);
+await page.getByRole('button', { name: '×', exact: true }).first().click();
+await page.waitForTimeout(150);
+await page.getByRole('button', { name: 'Close' }).click();
+
 console.log(JSON.stringify({ errors, ok: errors.length === 0 }));
 await browser.close();
 process.exit(errors.length === 0 ? 0 : 1);
