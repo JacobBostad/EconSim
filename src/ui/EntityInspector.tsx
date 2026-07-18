@@ -122,6 +122,15 @@ function CitizenView({ c, state }: { c: Citizen; state: GameState }): React.Reac
         <span className="k">Cash</span><span className="mono">{formatMoney(c.cash)}</span>
       </div>
       <div className="kv small"><span className="k">Employer</span><span>{employer?.name ?? 'unemployed'}</span></div>
+      <div className="kv small">
+        <span className="k">Home</span>
+        <span>
+          {state.facilities[c.homeFacilityId]?.name ?? '—'}
+          {state.facilities[c.homeFacilityId]?.defId === 'apartment' && (
+            <span className="muted"> · pays {formatMoney(APARTMENT_RENT_PER_DAY)}/day rent</span>
+          )}
+        </span>
+      </div>
       <div className="kv small"><span className="k">Wage / payday</span><span className="mono">{formatMoney(c.wage)}</span></div>
       <div className="kv small"><span className="k">Skill</span><span className="mono">{c.skill.toFixed(2)}× {c.skill >= 1.2 ? '★' : ''}</span></div>
       <div className="kv small">

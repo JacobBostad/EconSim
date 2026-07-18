@@ -26,6 +26,9 @@ interface Vec { x: number; y: number }
 interface Floater { x: number; y: number; vy: number; life: number; maxLife: number; text: string; color: string }
 interface Trail { x: number; y: number; life: number }
 
+/** Premium housing gets its own hue so landlord holdings read at a glance. */
+const APARTMENT_FILL = '#8a7fc9';
+
 const BUILDING_FILL: Record<FacilityType, string> = {
   home: '#5b6b8c',
   farm: '#6fbf73',
@@ -45,6 +48,10 @@ const ACTIVITY_COLOR: Record<CitizenActivity, string> = {
   shopping: '#f0883e',
   'commuting-home': '#8b949e',
 };
+
+export const LEGEND_EXTRAS: { color: string; label: string }[] = [
+  { color: APARTMENT_FILL, label: 'Apartment' },
+];
 
 export const LEGEND_BUILDINGS: { type: FacilityType; label: string }[] = [
   { type: 'farm', label: 'Farm' },
@@ -661,7 +668,8 @@ export class TownRenderer {
       const p = this.drawPos(id, f.location);
       const sp = this.w2s(s, p);
       const isHome = f.type === 'home';
-      const size = isHome ? 10 : 18;
+      const isApartment = f.defId === 'apartment';
+      const size = isApartment ? 14 : isHome ? 10 : 18;
       const player = f.ownerFirmId === s.playerFirmId;
       const sel = id === selected || id === this.hoverId;
 
@@ -677,7 +685,20 @@ export class TownRenderer {
         ctx.beginPath(); ctx.arc(sp.x, sp.y, size + 11, 0, Math.PI * 2);
         ctx.fillStyle = 'rgba(88,166,255,0.22)'; ctx.fill();
       }
-      this.drawBuildingIcon(sp.x, sp.y, size, f.type, BUILDING_FILL[f.type], f.status === 'closed');
+      this.drawBuildingIcon(
+        sp.x, sp.y, size, f.type,
+        isApartment ? APARTMENT_FILL : BUILDING_FILL[f.type],
+        f.status === 'closed',
+      );
+      // Apartments read as premium: a small rooftop accent line.
+      if (isApartment) {
+        ctx.strokeStyle = '#e8d28a';
+        ctx.lineWidth = 1.6;
+        ctx.beginPath();
+        ctx.moveTo(sp.x - size * 0.55, sp.y - size * 0.95);
+        ctx.lineTo(sp.x + size * 0.55, sp.y - size * 0.95);
+        ctx.stroke();
+      }
       // Upgrade pips: one gold dot per level above 1, along the icon's top edge.
       if (f.level > 1) {
         const ctx2 = this.ctx;
@@ -693,7 +714,7 @@ export class TownRenderer {
       if (night > 0.05 && f.status !== 'closed') {
         ctx.fillStyle = `rgba(255,214,120,${Math.min(0.9, night * 1.3)})`;
         const u = size / 10;
-        const wins = isHome ? [[-3, 0]] : [[-5, 2], [0, 2], [5, 2]];
+        const wins = isApartment ? [[-3, -2], [2, -2], [-3, 2], [2, 2]] : isHome ? [[-3, 0]] : [[-5, 2], [0, 2], [5, 2]];
         for (const [wx, wy] of wins) ctx.fillRect(sp.x + wx! * u - u, sp.y + wy! * u, u * 1.8, u * 1.8);
       }
 
@@ -910,7 +931,7 @@ export class TownRenderer {
       { c: ACTIVITY_COLOR['commuting-to-work'], label: 'Commuting' },
       { c: ACTIVITY_COLOR.home, label: 'At home' },
     ];
-    const rows = LEGEND_BUILDINGS.length + people.length + 2; // +2 headers
+    const rows = LEGEND_BUILDINGS.length + LEGEND_EXTRAS.length + people.length + 2; // +2 headers
     const panelH = rows * 14 + 14;
     const panelW = 116;
     const px = this.cssW - panelW - 12;
@@ -925,6 +946,12 @@ export class TownRenderer {
     ctx.fillText('BUILDINGS', px, y); y += 14;
     for (const item of LEGEND_BUILDINGS) {
       ctx.fillStyle = BUILDING_FILL[item.type];
+      this.roundRectPath(px, y - 5, 10, 10, 2); ctx.fill();
+      ctx.fillStyle = '#cdd9e5'; ctx.font = '10px system-ui';
+      ctx.fillText(item.label, px + 16, y); y += 14;
+    }
+    for (const item of LEGEND_EXTRAS) {
+      ctx.fillStyle = item.color;
       this.roundRectPath(px, y - 5, 10, 10, 2); ctx.fill();
       ctx.fillStyle = '#cdd9e5'; ctx.font = '10px system-ui';
       ctx.fillText(item.label, px + 16, y); y += 14;
