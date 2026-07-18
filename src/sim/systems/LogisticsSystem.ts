@@ -26,6 +26,7 @@ import type { Vehicle } from '../entities/Vehicle';
 import { getProduct } from '../data/products';
 import {
   IMPORT_MARKUP,
+  WHOLESALE_DISCOUNT,
   TRANSPORT_COST_PER_UNIT_DISTANCE,
   TRANSPORT_FLAT_COST,
 } from '../data/constants';
@@ -57,7 +58,12 @@ function processArrivals(ctx: SimContext): void {
     if (dest) {
       addStock(dest.inputInventory, v.cargo.productId, v.cargo.quantity, v.cargo.quality);
       dest.dailyStats.unitsReceived += v.cargo.quantity;
-      dest.dailyStats.transferInValue += transferValue(state, v.cargo.productId, v.cargo.quantity);
+      // Wholesale cargo carries its real purchase price; intra-firm transfers
+      // are valued at market.
+      dest.dailyStats.transferInValue +=
+        v.wholesalePaid && v.wholesalePaid > 0
+          ? v.wholesalePaid
+          : transferValue(state, v.cargo.productId, v.cargo.quantity);
     }
     if (v.transportCost > 0) {
       recordTransaction(state, {
@@ -122,6 +128,7 @@ function processReorders(ctx: SimContext): void {
     const product = getProduct(contract.productId);
     let qty: number;
     let quality: number;
+    let wholesalePaid = 0;
 
     if (isImporter) {
       qty = want;
@@ -152,15 +159,58 @@ function processReorders(ctx: SimContext): void {
       ) {
         bag = source.inputInventory;
       }
-      const avail = getQuantity(bag, contract.productId);
+      let avail = getQuantity(bag, contract.productId);
+
+      // Wholesale: a contract whose source belongs to ANOTHER firm buys the
+      // goods at ship time — sellers are never raided below what their own
+      // supply lines need, and buyers who can't pay don't get shipped to.
+      const crossFirm = source.ownerFirmId !== dest.ownerFirmId;
+      if (crossFirm) {
+        let reserved = 0;
+        for (const cid2 in state.contracts) {
+          const c2 = state.contracts[cid2]!;
+          if (!c2.active || c2.id === contract.id || c2.sourceFacilityId !== source.id) continue;
+          if (c2.productId !== contract.productId) continue;
+          if (state.facilities[c2.destinationFacilityId]?.ownerFirmId !== source.ownerFirmId) continue;
+          reserved += c2.targetQuantity;
+        }
+        avail = Math.max(0, avail - reserved);
+      }
       qty = Math.min(want, avail);
       if (qty <= 0) continue;
       quality = bag[contract.productId]?.quality ?? product.defaultQuality;
+
+      if (crossFirm) {
+        const stat = state.marketStats[contract.productId];
+        const unit = Math.round(
+          (stat && stat.averagePrice > 0 ? stat.averagePrice : product.basePrice) *
+            WHOLESALE_DISCOUNT,
+        );
+        wholesalePaid = unit * qty;
+        const buyer = state.firms[dest.ownerFirmId];
+        if (!buyer || buyer.cash < wholesalePaid) continue; // can't pay -> no shipment
+        recordTransaction(state, {
+          from: firmAccount(dest.ownerFirmId),
+          to: firmAccount(source.ownerFirmId),
+          amount: wholesalePaid,
+          firmId: dest.ownerFirmId,
+          category: 'cogs',
+          productId: contract.productId,
+          quantity: qty,
+          note: `Wholesale ${qty} ${product.name} from ${state.firms[source.ownerFirmId]?.name ?? 'supplier'}`,
+          counterparty: { firmId: source.ownerFirmId, category: 'revenue' },
+        });
+      }
       removeStock(bag, contract.productId, qty);
     }
 
     source.dailyStats.unitsShipped += qty;
-    source.dailyStats.transferOutValue += transferValue(state, contract.productId, qty);
+    if (wholesalePaid > 0) {
+      // Real cash revenue for the seller's facility, not a market estimate.
+      source.dailyStats.revenue += wholesalePaid;
+    } else {
+      source.dailyStats.transferOutValue += transferValue(state, contract.productId, qty);
+    }
 
     const dist = distance(source.location, dest.location);
     // Fuel-price events scale the whole shipment cost.
@@ -184,6 +234,7 @@ function processReorders(ctx: SimContext): void {
       status: 'enroute',
       ticksUntilArrival: ticks,
       transportCost,
+      wholesalePaid,
     };
     state.vehicles[vehicle.id] = vehicle;
   }

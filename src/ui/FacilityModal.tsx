@@ -389,8 +389,14 @@ export function FacilityActions({ fac }: { fac: Facility }): React.ReactElement 
                 <option value="">source facility…</option>
                 {Object.values(state.facilities)
                   .filter((f) => f.id !== fac.id && f.type !== 'home')
+                  .sort((a, b) =>
+                    Number(b.ownerFirmId === fac.ownerFirmId) - Number(a.ownerFirmId === fac.ownerFirmId))
                   .map((f) => (
-                    <option key={f.id} value={f.id}>{f.name}</option>
+                    <option key={f.id} value={f.id}>
+                      {f.ownerFirmId === fac.ownerFirmId || state.firms[f.ownerFirmId]?.ownerType === 'external'
+                        ? f.name
+                        : `${f.name} — ${state.firms[f.ownerFirmId]?.name ?? '?'} (wholesale)`}
+                    </option>
                   ))}
               </select>
               <select value={ctrProduct} onChange={(e) => setCtrProduct(e.target.value)}>
@@ -425,6 +431,11 @@ export function FacilityActions({ fac }: { fac: Facility }): React.ReactElement 
             >
               Create contract
             </button>
+            <p className="muted" style={{ marginTop: 4 }}>
+              Wholesale sources (other firms) charge ~85% of the market's
+              average price per unit, paid on each shipment — cheaper than
+              importing, and they never sell you stock their own chains need.
+            </p>
           </div>
         )}
       </div>

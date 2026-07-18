@@ -23,6 +23,13 @@ export const REFERENCE_QUALITY = 50;
 /** Importer sells raw inputs at this multiple of base price (premium sourcing). */
 export const IMPORT_MARKUP = 1.5;
 
+/**
+ * Wholesale (cross-firm supply contracts) trade at this multiple of the
+ * market's average retail price — cheaper than shelves, pricier than making
+ * it yourself, so buying local beats importing (1.5×) but not integration.
+ */
+export const WHOLESALE_DISCOUNT = 0.85;
+
 /** Per-unit transport cost (cents) component for shipments, times distance. */
 export const TRANSPORT_COST_PER_UNIT_DISTANCE = 0.6;
 /** Flat transport cost (cents) per shipment. */

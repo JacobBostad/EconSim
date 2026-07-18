@@ -165,6 +165,12 @@ export interface TransactionInput {
   productId?: ProductId | null;
   quantity?: number;
   note?: string;
+  /**
+   * When a single money movement is a different line item for each side
+   * (e.g. wholesale: buyer's COGS is the seller's revenue), the counterparty
+   * firm's ledger gets the same amount under its own category.
+   */
+  counterparty?: { firmId: FirmId; category: LedgerCategory };
 }
 
 /**
@@ -199,6 +205,13 @@ export function recordTransaction(
     if (firm) {
       applyToLedger(firm.accounting.lifetime, input.category, amount);
       applyToLedger(firm.accounting.today, input.category, amount);
+    }
+  }
+  if (input.counterparty) {
+    const other = state.firms[input.counterparty.firmId];
+    if (other) {
+      applyToLedger(other.accounting.lifetime, input.counterparty.category, amount);
+      applyToLedger(other.accounting.today, input.counterparty.category, amount);
     }
   }
 
