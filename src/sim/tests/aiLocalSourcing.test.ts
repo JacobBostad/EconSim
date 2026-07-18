@@ -77,6 +77,18 @@ describe('AI local sourcing', () => {
     expect(getQuantity(farm.outputInventory, 'grain')).toBeGreaterThan(0);
   });
 
+  it('selling the supplying facility falls the AI contract back to the importer', () => {
+    const { sim, state, farm, aiImportContract } = setup();
+    sim.run(ticksPerDay(state.config) * 2);
+    expect(state.facilities[aiImportContract!.sourceFacilityId]?.id).toBe(farm.id);
+
+    sim.dispatch({ type: 'SELL_FACILITY', firmId: state.playerFirmId, facilityId: farm.id });
+
+    // The AI's contract survives, re-sourced from the importer.
+    expect(state.contracts[aiImportContract!.id]).toBeTruthy();
+    expect(state.facilities[aiImportContract!.sourceFacilityId]?.type).toBe('importer');
+  });
+
   it('reverts to the importer when the local source runs dry and the chain starves', () => {
     const { sim, state, farm, aiImportContract } = setup();
     sim.run(ticksPerDay(state.config) * 2);

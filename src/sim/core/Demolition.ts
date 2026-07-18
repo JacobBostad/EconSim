@@ -41,11 +41,21 @@ export function sellFacility(state: GameState, firmId: FirmId, facilityId: Facil
   // Crew back to the labor pool (fireCitizen also cleans both employee lists).
   for (const cid of [...fac.employees]) fireCitizen(state, facilityId, cid);
 
-  // Supply contracts touching this facility are void.
+  // Supply contracts touching this facility are void — except other firms'
+  // wholesale contracts that merely SOURCED here: those are their property,
+  // so they fall back to the importer instead of vanishing (deleting them
+  // would silently sever an AI chain's input line forever).
+  const importer = Object.values(state.facilities).find((f) => f.type === 'importer');
   for (const cid in state.contracts) {
     const c = state.contracts[cid]!;
-    if (c.sourceFacilityId === facilityId || c.destinationFacilityId === facilityId) {
+    if (c.destinationFacilityId === facilityId) {
       delete state.contracts[cid];
+    } else if (c.sourceFacilityId === facilityId) {
+      if (c.ownerFirmId !== firmId && importer) {
+        c.sourceFacilityId = importer.id;
+      } else {
+        delete state.contracts[cid];
+      }
     }
   }
 
