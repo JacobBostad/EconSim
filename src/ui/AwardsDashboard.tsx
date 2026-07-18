@@ -2,6 +2,7 @@ import React from 'react';
 import { loadChallengeRuns, challengeShareText } from './records';
 import { formatMoneyShort } from '../utils/formatMoney';
 import { SCENARIOS } from '../sim/data/scenarios';
+import { SHOW_CHRONICLE_EVENT } from './ChronicleModal';
 import { useGameStore } from '../store/useGameStore';
 import { ACHIEVEMENT_DEFS } from '../sim/data/achievements';
 
@@ -38,6 +39,12 @@ export function AwardsDashboard(): React.ReactElement {
             </div>
           );
         })}
+      </div>
+
+      <div className="row" style={{ marginTop: 8 }}>
+        <button onClick={() => window.dispatchEvent(new Event(SHOW_CHRONICLE_EVENT))}>
+          📜 Town Chronicle — the story so far
+        </button>
       </div>
 
       <div className="section-title">🏁 Challenge Leaderboard</div>

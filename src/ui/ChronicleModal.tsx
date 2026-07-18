@@ -55,7 +55,10 @@ export function ChronicleModal(): React.ReactElement | null {
       <div className="intro-card" onClick={(e) => e.stopPropagation()}>
         <h1 style={{ marginTop: 0 }}>📜 The Town Chronicle</h1>
         <p className="muted" style={{ marginTop: -8 }}>
-          {player?.name ?? 'Your company'} — a Business Empire in {day + 1} days.
+          {player?.name ?? 'Your company'} —{' '}
+          {prog.reachedTiers >= finalTier
+            ? `a Business Empire in ${day + 1} days.`
+            : `the story so far, day ${day + 1}.`}
         </p>
 
         {hist.length >= 2 && (
