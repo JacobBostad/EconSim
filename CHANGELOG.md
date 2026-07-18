@@ -1,0 +1,93 @@
+# Changelog — `claude/business-sim-game-enhancement` branch
+
+One continuous development run turning EconSim from a solid simulation into a
+deep, self-explaining economy game. Everything below is tested (119 → 182
+engine tests), probed with headless balance runs, and guarded by CI.
+
+## Economy & AI depth
+
+- **AI rival personalities**: every AI firm has a named CEO with an archetype
+  (🥊 Price Fighter, 📣 Brand Builder, 🏗️ Expansionist, 🚢 Exporter) that
+  tilts shared strategy knobs — ad caps, price-cut depth, penetration targets,
+  expansion appetite, R&D cadence, export retention. CEOs quip on gazette
+  headlines; scenarios pin personalities for flavor.
+- **Wage warfare**: the wage lever got a UI (town average, top rival, poach
+  risk, one-click Beat Market) and AI counterplay — firms raise wages under
+  tight labor (staff ride the raise) and drift back under slack.
+- **Full supply-side elasticity**: shortage signals (finished-product unmet >
+  sold, routed upstream through contracts) climb a ladder — over-crew (2.5×
+  output) → level upgrades → widen shelf contracts → duplicate the entire
+  production sub-chain (producer + factory II) — and reverse under losses
+  (profit-gated boost + downsizing), so booms end in equilibrium instead of
+  insolvency.
+- **AI market entries**: mid-game roasteries (coffee), late-game luxury,
+  apartment landlording under housing squeezes, rescue M&A, share purchases.
+- **Port Rosa follows world news**: trade prices mean-revert toward
+  event-shifted centers (droughts raise grain there too); fuel spikes scale
+  export freight. Exporters never ship stock their own shelves are waiting on.
+- **The affordability thermostat**: the price controller now sees priced-out
+  walkaways and cuts when they outnumber buyers — without it, quality/brand
+  premiums let prices ride the market-power ceiling until town demand quietly
+  died (measured: satisfaction 63 → 28 by day 120).
+
+## Player features
+
+- **Coffee**: a cheap everyday product (grain → roastery → café) nobody serves
+  at start — a first-mover mainstream niche, wizardable, with AI contest.
+- **Real estate**: buildable Apartments collect daily rent, house immigrants,
+  and raise resident satisfaction; distinct premium look on the map.
+- **Sell/demolish facilities**: half-cost refunds with full reference cleanup —
+  mistakes are no longer permanent maintenance drains.
+- **Chain wizard upgrades**: one-click chains arrive auto-priced with a starter
+  ad budget (measured: lifetime net −$1.7k → +$1.2k over 200 unattended days).
+- **Challenge mode**: scored day-200 runs (valuation-weighted 0–1000,
+  difficulty multipliers), local leaderboard, copy-to-clipboard replayable
+  dares (deterministic seeds).
+- **Town size**: Cozy (40 homes / 80 citizens) or Bustling (double, taller
+  map) — ceilings you earn by running a town people want to move to.
+- **Receivership**: insolvency pauses the game with an itemized collapse
+  report and ways back, instead of silently closing facilities.
+- **Backup slot**: New Game stashes the old town; ↩ Undo New restores it.
+
+## Legibility — the economy explains itself
+
+- **🧭 Advisor briefing**: prioritized one-liners (losses and their dominant
+  cost, blocked production, poach risk, hungry markets, export windows).
+- **Satisfaction anatomy**: the equilibrium decomposed (base + employment +
+  housing + provisioning) with each product's shortage priced in points —
+  stagnation always names its cause.
+- **Town trends & business cycles**: 60-day population/employment/satisfaction
+  charts with a live phase badge (Hiring boom / Absorbing arrivals).
+- **Spending power**: household money flows, per-product spend, hungry-market
+  callouts. **Yesterday chip**: last closed day's net in the top bar.
+- **Supply-chain flow overlay (F)**: animated contract routes, volume-scaled,
+  plus Port Rosa export lanes.
+- **Daily digests fixed**: production/bottleneck alerts read yesterday's stats
+  (the old midnight-status checks could only ever emit false labor alarms).
+
+## Content & polish
+
+- **Port Haven scenario** (exporter CEOs, thin home shelves) joins Meadowbrook,
+  Gold Rush Gulch, Harvest Valley.
+- Missions, achievements, intro, README, and media all teach the new systems.
+- Sound stings: receivership, challenge fanfare, rival openings, poach alerts.
+- Chronicle viewable anytime; apartments/roasteries visually distinct.
+
+## Measured findings (kept as design, documented in code)
+
+- **Poverty trap**: some seeds' incumbents can't profitably serve a poor town,
+  so it stagnates below the immigration gate — deliberately preserved as the
+  player's opening (the anatomy panel names it).
+- **Trip rotation**: sorting shopping trips by satisfaction-weighted urgency
+  was measured to destroy need rotation (staples permanently outrank
+  everything); raw urgency is what rotates trips. Documented so it isn't
+  "fixed" again.
+- **Single-stage expansion backfires**: a second bakery on one farm's grain
+  starves both — hence whole-sub-chain duplication.
+
+## Infrastructure
+
+- CI (tests + build + e2e), two golden-save fixtures (legacy + modern), two
+  scripted playtest bots (general store; all-verticals), a 600-day soak,
+  deep browser smoke, and time-averaged balance probes that respect the
+  economy's real cycles. Perf: 0.24ms/tick at day 300 with everything on.
