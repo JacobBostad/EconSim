@@ -24,9 +24,9 @@ import { getQuantity, removeStock } from '../entities/Inventory';
 import { getFacilityDef } from '../data/facilityDefinitions';
 import { createFacility } from '../entities/factories';
 import type { Contract } from '../entities/Contract';
-import { hireCitizen, findUnemployed } from './LaborSystem';
+import { hireCitizen, fireCitizen, findUnemployed } from './LaborSystem';
 import { clamp } from '../../utils/clamp';
-import { CENTS, RND_QUALITY_GAIN_PER_1000, MAX_RETAIL_PRODUCTS } from '../data/constants';
+import { CENTS, RND_QUALITY_GAIN_PER_1000, MAX_RETAIL_PRODUCTS, MAX_HOMES } from '../data/constants';
 import { companyValuation } from '../selectors/companySelectors';
 import { acquisitionCost, performAcquisition } from '../core/Acquisition';
 import { landCostMultiplier, landValueAt } from '../core/LandValue';
@@ -44,6 +44,7 @@ export function runAIStrategySystem(ctx: SimContext): void {
       manageWages(ctx, firm.id);
       restaff(ctx, firm.id);
       maybeBoostProduction(ctx, firm.id);
+      maybeWidenShelves(ctx, firm.id);
     }
     adjustPrices(ctx, firm.id);
     if (firm.bankruptcyStatus === 'healthy') {
@@ -53,6 +54,7 @@ export function runAIStrategySystem(ctx: SimContext): void {
       maybeBuyShares(ctx, firm.id);
       maybeExportSurplus(ctx, firm.id);
       maybeUpgrade(ctx, firm.id);
+      maybeBuildApartment(ctx, firm.id);
       maybeEnterCoffee(ctx, firm.id);
       maybeEnterLuxury(ctx, firm.id);
       if (maybeRescueAcquisition(ctx, firm.id)) continue; // firm map changed
@@ -504,6 +506,57 @@ function maybeEnterCoffee(ctx: SimContext, firmId: string): void {
     `☕ ${firm.name} opens a roastery — coffee is now on the shelves at ${store.name}.${ceoQuote(rng, firm, 'expand')}`, store.id);
 }
 
+/**
+ * AI landlord: when the town has no vacant housing, a flush firm builds an
+ * apartment near the residential blocks — immigration fills it, RentSystem
+ * pays the owner. Keeps real estate a contested vertical, not a player-only
+ * printing press, and keeps the growth flywheel spinning in AI-only towns.
+ */
+const LANDLORD_DAY = 30;
+const LANDLORD_CASH = 35000_00;
+const LANDLORD_CHANCE = 0.1;
+const LANDLORD_MAX_APARTMENTS = 2;
+
+function maybeBuildApartment(ctx: SimContext, firmId: string): void {
+  const { state, rng } = ctx;
+  const firm = state.firms[firmId]!;
+  if (ctx.time.day < LANDLORD_DAY || firm.cash < LANDLORD_CASH) return;
+
+  let owned = 0;
+  let homes = 0;
+  let vacancies = 0;
+  for (const fid in state.facilities) {
+    const f = state.facilities[fid]!;
+    if (f.type !== 'home') continue;
+    homes += 1;
+    if (f.residentIds.length < 2) vacancies += 1;
+    if (f.defId === 'apartment' && f.ownerFirmId === firmId) owned += 1;
+  }
+  if (owned >= LANDLORD_MAX_APARTMENTS) return;
+  if (vacancies > 0 || homes >= MAX_HOMES) return; // only under a housing squeeze
+  if (!rng.chance(LANDLORD_CHANCE)) return;
+
+  const loc = {
+    x: clamp(40 + rng.jitter(24), 8, state.config.mapWidth - 8),
+    y: clamp(64 + rng.jitter(6), 8, state.config.mapHeight - 8),
+  };
+  const def = getFacilityDef('apartment');
+  const cost = Math.round(def.buildCost * landCostMultiplier(landValueAt(state, loc)));
+  if (firm.cash - cost < 20000_00) return;
+
+  const apt = createFacility(state, 'apartment', firmId, loc, {
+    name: `${firm.name.split(' ')[0]} Residences`,
+  });
+  apt.buildCost = cost;
+  apt.operatingCostPerDay = Math.round(def.maintenanceCostPerDay * landCostMultiplier(landValueAt(state, loc)));
+  recordTransaction(state, {
+    from: firmAccount(firmId), to: WORLD_ACCOUNT, amount: cost,
+    firmId, category: 'buildSpend', note: 'Built apartment',
+  });
+  emitEvent(state, 'info', 'ai',
+    `🏢 ${firm.name} built ${apt.name} — new housing for a growing town.${ceoQuote(rng, firm, 'expand')}`, apt.id);
+}
+
 /** Flush AI firms level up a production facility now and then. */
 function maybeUpgrade(ctx: SimContext, firmId: string): void {
   const { state, rng } = ctx;
@@ -583,11 +636,16 @@ function manageWages(ctx: SimContext, firmId: string): void {
 function maybeBoostProduction(ctx: SimContext, firmId: string): void {
   const { state } = ctx;
   const firm = state.firms[firmId]!;
-  if (firm.cash < 15000_00) return;
+  // Expansion only while the business is actually working: without the
+  // loss-streak brake, chronic-shortage hiring bloats payroll past revenue
+  // and the whole AI economy death-spirals by day ~300 (measured in soak).
+  if (firm.cash < 15000_00 || firm.strategy.lossStreak > 0) {
+    if (firm.strategy.lossStreak >= 3) trimProduction(ctx, firmId);
+    return;
+  }
   for (const facId of firm.facilities) {
     const fac = state.facilities[facId];
     if (!fac || fac.status === 'closed' || !fac.activeRecipeId) continue;
-    if (fac.employees.length >= fac.workerCapacity) continue;
     const outPid = getRecipe(fac.activeRecipeId).outputs[0]?.productId;
     if (!outPid) continue;
     const yesterday = state.marketStats[outPid]?.history.slice(-1)[0];
@@ -596,10 +654,79 @@ function maybeBoostProduction(ctx: SimContext, firmId: string): void {
     ]?.history.slice(-1)[0];
     const signal = finished ?? yesterday;
     if (!signal || signal.unmetDemand <= signal.unitsSold) continue;
-    const cid = findUnemployed(state);
-    if (!cid || !hireCitizen(state, fac.id, cid)) continue;
-    return; // one boost per firm per day
+
+    if (fac.employees.length < fac.workerCapacity) {
+      const cid = findUnemployed(state);
+      if (!cid || !hireCitizen(state, fac.id, cid)) continue;
+      return; // one boost per firm per day
+    }
+    // Fully crewed and still short: the next rung of elasticity is a level
+    // upgrade (+1 worker slot, +15% speed) — cheaper gates than the vanity
+    // upgrades in maybeUpgrade, because chronic shortage is a real signal
+    // (measured: a grown town of 56 pins every facility at capacity/L1).
+    if (fac.level < MAX_FACILITY_LEVEL) {
+      const cost = upgradeCost(state, fac.id);
+      if (firm.cash - cost >= 15000_00) {
+        upgradeFacility(state, firmId, fac.id);
+        return;
+      }
+    }
   }
+}
+
+/**
+ * Shelf elasticity: production scaling is useless if the supply contracts
+ * feeding the stores stay sized for the old volume — the surplus just piles
+ * up (or ships to Port Rosa) while shelves stock out. When a store keeps
+ * losing sales, widen its inbound contracts.
+ */
+const SHELF_WIDEN_LOST_SALES = 5;
+const SHELF_TARGET_STEP = 10;
+const SHELF_TARGET_CAP = 120;
+
+function maybeWidenShelves(ctx: SimContext, firmId: string): void {
+  const { state } = ctx;
+  const firm = state.firms[firmId]!;
+  for (const facId of firm.facilities) {
+    const fac = state.facilities[facId];
+    if (!fac || fac.type !== 'retail') continue;
+    if (fac.dailyStats.lostSales <= SHELF_WIDEN_LOST_SALES) continue;
+    for (const cid in state.contracts) {
+      const c = state.contracts[cid]!;
+      if (!c.active || c.destinationFacilityId !== facId) continue;
+      if (c.targetQuantity >= SHELF_TARGET_CAP) continue;
+      c.targetQuantity = Math.min(SHELF_TARGET_CAP, c.targetQuantity + SHELF_TARGET_STEP);
+      c.maxInventory = Math.max(c.maxInventory, Math.round(c.targetQuantity * 1.8));
+      c.reorderPoint = Math.max(c.reorderPoint, Math.round(c.targetQuantity * 0.4));
+      return; // one widening per firm per day
+    }
+  }
+}
+
+/**
+ * The other half of supply elasticity: a firm bleeding money sheds one
+ * over-requirement worker per day from its most over-crewed production
+ * facility, back down to the recipe's labor requirement. Boom hiring must
+ * be reversible or booms end in insolvency instead of equilibrium.
+ */
+function trimProduction(ctx: SimContext, firmId: string): void {
+  const { state } = ctx;
+  const firm = state.firms[firmId]!;
+  let target: string | null = null;
+  let mostExcess = 0;
+  for (const facId of firm.facilities) {
+    const fac = state.facilities[facId];
+    if (!fac || !fac.activeRecipeId) continue;
+    const excess = fac.employees.length - getRecipe(fac.activeRecipeId).laborRequired;
+    if (excess > mostExcess) {
+      mostExcess = excess;
+      target = facId;
+    }
+  }
+  if (!target) return;
+  const fac = state.facilities[target]!;
+  const cid = fac.employees[fac.employees.length - 1];
+  if (cid) fireCitizen(state, target, cid);
 }
 
 /**

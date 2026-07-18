@@ -4,6 +4,7 @@ import { makeContext, totalMoneySupply } from '../core/GameState';
 import { ticksPerDay } from '../core/Tick';
 import { runRentSystem } from '../systems/RentSystem';
 import { runSatisfactionSystem } from '../systems/SatisfactionSystem';
+import { runAIStrategySystem } from '../systems/AIStrategySystem';
 import { APARTMENT_RENT_PER_DAY } from '../data/constants';
 
 function withApartment(seed: number) {
@@ -89,5 +90,51 @@ describe('Apartments', () => {
       (f) => f.type === 'home' && f.residentIds.length < 2,
     );
     expect(withRoom.some((f) => f.id === apt.id)).toBe(true);
+  });
+});
+
+describe('AI landlord', () => {
+  it('a flush AI firm builds an apartment under a housing squeeze (never before day 30)', () => {
+    const sim = newSim(8);
+    const state = sim.getState();
+    const foods = Object.values(state.firms).find((f) => f.name === 'Sunrise Foods')!;
+    foods.cash = 80000_00;
+    // Squeeze: every home full.
+    for (const fid in state.facilities) {
+      const f = state.facilities[fid]!;
+      if (f.type === 'home') {
+        while (f.residentIds.length < 2) f.residentIds.push('cit_pad_' + fid + f.residentIds.length);
+      }
+    }
+    const tpd = ticksPerDay(state.config);
+    const aiApartments = () =>
+      Object.values(state.facilities).filter(
+        (f) => f.defId === 'apartment' && state.firms[f.ownerFirmId]?.ownerType === 'ai',
+      );
+
+    for (let d = 1; d <= 29; d++) {
+      state.tick = tpd * d;
+      runAIStrategySystem(makeContext(state));
+    }
+    expect(aiApartments().length).toBe(0);
+
+    let built = 0;
+    for (let d = 31; d <= 150 && built === 0; d++) {
+      state.tick = tpd * d;
+      foods.cash = Math.max(foods.cash, 80000_00);
+      runAIStrategySystem(makeContext(state));
+      built = aiApartments().length;
+    }
+    expect(built).toBeGreaterThan(0);
+
+    // Caps: keep forging days; no firm exceeds 2 apartments.
+    for (let d = 151; d <= 400; d++) {
+      state.tick = tpd * d;
+      for (const f of Object.values(state.firms)) if (f.ownerType === 'ai') f.cash = 80000_00;
+      runAIStrategySystem(makeContext(state));
+    }
+    const byFirm: Record<string, number> = {};
+    for (const apt of aiApartments()) byFirm[apt.ownerFirmId] = (byFirm[apt.ownerFirmId] ?? 0) + 1;
+    for (const n of Object.values(byFirm)) expect(n).toBeLessThanOrEqual(2);
   });
 });

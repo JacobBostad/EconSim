@@ -16,7 +16,16 @@ describe('Long-run balance (no player action)', () => {
     const tpd = ticksPerDay(state.config);
     const supply0 = totalMoneySupply(state);
 
-    sim.run(tpd * 120 + 1);
+    // The town now grows in waves (immigration spikes unemployment until the
+    // jobs absorb it), so satisfaction is judged as a 30-day average around
+    // day 120 rather than one instant that may land in a trough.
+    sim.run(tpd * 90 + 1);
+    const samples: number[] = [];
+    for (let d = 0; d < 30; d++) {
+      sim.run(tpd);
+      const cs = Object.values(state.citizens);
+      samples.push(cs.reduce((a, c) => a + c.satisfaction, 0) / cs.length);
+    }
 
     expect(totalMoneySupply(state)).toBe(supply0);
 
@@ -28,8 +37,7 @@ describe('Long-run balance (no player action)', () => {
     }
 
     // Satisfaction sits in a dynamic middle band — neither misery nor nirvana.
-    const cits = Object.values(state.citizens);
-    const avgSat = cits.reduce((a, c) => a + c.satisfaction, 0) / cits.length;
+    const avgSat = samples.reduce((a, v) => a + v, 0) / samples.length;
     expect(avgSat).toBeGreaterThan(55);
     expect(avgSat).toBeLessThan(95);
 
