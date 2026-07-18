@@ -316,6 +316,14 @@ engine tests), probed with headless balance runs, and guarded by CI.
   a real browser: crossing $200k mid-play pops the Town Chronicle with the
   valuation sparkline, the milestone timeline, and the endless-mode note,
   and the objective banner flips to "All objectives complete".
+- **AI crews don't need training** (probed after shipping the player's
+  training lever: 2 seeds, 300 unattended days): incumbent AI crews average
+  1.26–1.30 skill — effectively at the 1.3 cap — purely through stable
+  tenure, since on-the-job practice maxes a settled worker in ~50 workdays.
+  The 🎓 workshop is therefore a catch-up tool for the player's newer,
+  churning crews, not an advantage the AI lacks; giving the AI a training
+  behavior would re-deal calibrated outcomes to solve a problem that
+  doesn't exist.
 - **The festival was a trap at $1,500** (probed: 6 seeds, paired 100-day
   runs, world events silenced): its direct revenue lift for a typical
   single-chain player is ~$50–200 — the 25% demand bump for 3 days just
