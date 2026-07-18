@@ -292,6 +292,10 @@ price minus ~8% freight — manually, or with **standing orders** ("auto-export
 ≥1.3×, keep 10") that route to the better port daily after the price walk. AI
 firms broker their surpluses at a steeper 15% fee, also to the best payer.
 Booms/gluts make the news; the Market dashboard charts the best export quote.
+Once you own a warehouse, **rush orders** roll in occasionally (`RushOrderSystem.ts`):
+a port's buyer wants a bulk load (40–120 units) delivered within six days for
+a bonus of ~35% of the order's value on top of normal export revenue — any
+port counts, the ticker tracks progress, and letting one lapse makes the news.
 
 **Wholesale market**: supply contracts can source from *other firms'*
 facilities — the buyer pays the seller's asking price on each shipment

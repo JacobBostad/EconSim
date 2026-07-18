@@ -282,6 +282,14 @@ export const ACHIEVEMENT_DEFS: AchievementDef[] = [
     },
   },
   {
+    id: 'beat_the_clock',
+    name: 'Beat the Clock',
+    icon: '🚚',
+    description: 'Completed a port rush order before the deadline.',
+    hint: 'Rush orders appear in the map ticker once you own a warehouse — stockpile the product and ship it out (any port counts) before the buyer moves on.',
+    check: (s) => s.rushOrdersCompleted >= 1,
+  },
+  {
     id: 'arbitrageur',
     name: 'Arbitrageur',
     icon: '⚖️',

@@ -47,6 +47,9 @@ export function SoundDirector(): React.ReactElement | null {
       }
       const playerName = player?.name ?? '';
       if (fresh.some((m) => m.includes('left you for'))) playPoachAlert();
+      else if (fresh.some((m) => m.includes('Rush order complete'))) playMission();
+      else if (fresh.some((m) => m.includes('Rush order from'))) playNews('good');
+      else if (fresh.some((m) => m.includes('rush order lapsed'))) playNews('bad');
       // Wholesale moments that name the player: winning a customer is good
       // news, being dropped for gouging is bad news.
       else if (playerName && fresh.some((m) =>

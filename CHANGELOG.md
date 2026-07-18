@@ -206,7 +206,17 @@ engine tests), probed with headless balance runs, and guarded by CI.
   owns the boom. Scenarios gained a `homes` knob for it. Probed 300 days ×
   3 seeds: AI landlords enter the developer race by day 44–85 and the town
   more than doubles (26 → 59–71) once housing appears, everyone solvent.
-- Sound stings: receivership, challenge fanfare, rival openings, poach alerts.
+- Sound stings: receivership, challenge fanfare, rival openings, poach alerts,
+  and the rush-order beats (offer, completion, lapse).
+- **Rush orders**: once the player owns a warehouse, a port's buyer
+  occasionally calls for a bulk load — 40–120 units of something the player
+  stages or produces, delivered to the ports within six days for a bonus of
+  ~35% of the order's value (locked at offer time) on top of normal export
+  revenue. Any port counts; the map ticker tracks progress and days left;
+  an unfilled order lapses with a gazette note. Offers roll from a hash of
+  (seed, day) instead of the shared sim rng stream, so bolting the system on
+  didn't re-deal any long-calibrated outcome (every playtest-bot floor
+  passed untouched). New 🚚 Beat the Clock achievement.
 - **Ambient soundtrack**: a quiet generative lo-fi bed — a slow maj7 chord
   pad through a lowpass with a sparse pentatonic music-box line echoing over
   it. Nothing loops verbatim, so it never grates. Daytime is brighter and

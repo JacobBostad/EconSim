@@ -56,6 +56,7 @@ import type { Contract } from '../entities/Contract';
 import { runTimeSystem } from '../systems/TimeSystem';
 import { runWorldEventSystem } from '../systems/WorldEventSystem';
 import { runTradeCitySystem } from '../systems/TradeCitySystem';
+import { runRushOrderSystem } from '../systems/RushOrderSystem';
 import { runAchievementSystem } from '../systems/AchievementSystem';
 import { runMissionSystem } from '../systems/MissionSystem';
 import { runMarketStatsSystem } from '../systems/MarketStatsSystem';
@@ -89,6 +90,7 @@ const SYSTEMS: SystemFn[] = [
   // --- daily roll-ups (each guards on the day boundary internally) ---
   runWorldEventSystem, // roll/expire world events first so the day sees them
   runTradeCitySystem, // Port Rosa price walk (daily)
+  runRushOrderSystem, // rush offers/expiry after prices land (own rng stream)
   runMarketStatsSystem, // finalize previous day's stats; hourly inventory totals
   runAIStrategySystem, // AI reacts using the finalized day (sets ad/R&D/loans)
   runEventLogSystem, // player-facing alerts (before daily stats are reset)

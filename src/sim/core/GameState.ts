@@ -52,6 +52,25 @@ export interface ActiveWorldEvent {
   endDay: number;
 }
 
+/**
+ * A timed bulk-export contract offered to the player: deliver `quantity`
+ * units of the product to the ports (any port — the buyer charters freight
+ * from wherever it lands) before `deadlineDay` ends for a cash bonus on top
+ * of the normal export revenue. At most one is active at a time.
+ */
+export interface RushOrder {
+  /** Flavor + bonus payer: which city's buyer placed the call. */
+  cityId: string;
+  productId: ProductId;
+  quantity: number;
+  filled: number;
+  startDay: number;
+  /** Last day deliveries count; expires when the next day begins. */
+  deadlineDay: number;
+  /** Completion bonus in cents, locked at offer time. */
+  bonusCents: number;
+}
+
 /** A permanently unlocked achievement (def lives in data/achievements.ts). */
 export interface UnlockedAchievement {
   id: string;
@@ -101,6 +120,11 @@ export interface GameState {
   missions: CompletedMission[];
   /** Distant trade cities' per-product export prices (see data/tradeCities). */
   tradeCities: Record<string, { pricesByProduct: Record<ProductId, number> }>;
+  /** Active rush order (timed bulk-export contract), if any. */
+  rushOrder: RushOrder | null;
+  /** Lifetime rush orders completed / let expire (player-facing counters). */
+  rushOrdersCompleted: number;
+  rushOrdersMissed: number;
 
   idCounters: IdCounters;
   selectedEntityId: EntityId | null;

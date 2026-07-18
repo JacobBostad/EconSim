@@ -92,5 +92,38 @@ export function performExport(
   firm.exportRevenueByCity[cityId] = (firm.exportRevenueByCity[cityId] ?? 0) + revenue;
   emitEvent(state, 'success', 'logistics',
     `${city.emoji} ${note} to ${city.name}: ${qty} ${product.name} for ${formatMoney(revenue)} (after freight).`, fac.id);
+  creditRushOrder(state, firmId, productId, qty);
   return revenue;
+}
+
+/**
+ * Count a player export toward the active rush order (any port qualifies —
+ * the buyer charters freight from wherever the goods land) and pay the
+ * locked-in bonus the moment the order fills.
+ */
+function creditRushOrder(
+  state: GameState,
+  firmId: FirmId,
+  productId: ProductId,
+  qty: number,
+): void {
+  const order = state.rushOrder;
+  if (!order || firmId !== state.playerFirmId || productId !== order.productId) return;
+  order.filled += qty;
+  if (order.filled < order.quantity) return;
+  state.rushOrder = null;
+  state.rushOrdersCompleted += 1;
+  recordTransaction(state, {
+    from: WORLD_ACCOUNT,
+    to: firmAccount(firmId),
+    amount: order.bonusCents,
+    firmId,
+    category: 'revenue',
+    productId,
+    quantity: 0, // the shipped units were already booked by their exports
+    note: `Rush order bonus: ${order.quantity} ${getProduct(productId).name} delivered on time`,
+  });
+  const city = getTradeCity(order.cityId);
+  emitEvent(state, 'success', 'economy',
+    `${city.emoji} Rush order complete — ${city.name}'s buyer pays the ${formatMoney(order.bonusCents)} bonus for ${order.quantity} ${getProduct(productId).name} delivered on time.`);
 }
