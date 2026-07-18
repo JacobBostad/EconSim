@@ -171,6 +171,10 @@ engine tests), probed with headless balance runs, and guarded by CI.
 - **Camera glide to selection**: selecting an off-screen entity from a list
   (event log, citizen/facility tables) glides the camera to it — click it
   and the map takes you there; any drag or wheel cancels the glide.
+- **Keyboard camera**: arrow keys pan and +/− zooms about the screen
+  center, applied per-frame while held so movement glides instead of
+  stuttering on key repeat. Ignored while typing in a field; released
+  keys clear on window blur so the camera never runs away.
 - **Minimap**: whenever the viewport crops the town (zoomed or panned), a
   bottom-left overview appears — season-tinted ground, the road grid,
   building dots in their legend colors with player holdings ringed in blue,

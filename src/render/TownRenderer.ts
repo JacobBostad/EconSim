@@ -105,6 +105,9 @@ export class TownRenderer {
   private miniRect: { x: number; y: number; w: number; h: number } | null = null;
   private miniDragging = false;
 
+  // held camera keys (arrows pan, +/- zoom), applied per-frame for smoothness
+  private camKeys = new Set<string>();
+
   // animation
   private smooth = new Map<string, Vec>();
   private trails: Trail[] = [];
@@ -240,6 +243,9 @@ export class TownRenderer {
     window.addEventListener('mousemove', this.onMove);
     window.addEventListener('mouseup', this.onUp);
     c.addEventListener('mouseleave', this.onLeave);
+    window.addEventListener('keydown', this.onKeyDown);
+    window.addEventListener('keyup', this.onKeyUp);
+    window.addEventListener('blur', this.onBlur);
   }
   private unbindEvents(): void {
     const c = this.canvas;
@@ -248,6 +254,50 @@ export class TownRenderer {
     window.removeEventListener('mousemove', this.onMove);
     window.removeEventListener('mouseup', this.onUp);
     c.removeEventListener('mouseleave', this.onLeave);
+    window.removeEventListener('keydown', this.onKeyDown);
+    window.removeEventListener('keyup', this.onKeyUp);
+    window.removeEventListener('blur', this.onBlur);
+  }
+
+  private static readonly CAM_KEYS = new Set([
+    'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', '+', '=', '-', '_',
+  ]);
+  private onKeyDown = (e: KeyboardEvent): void => {
+    const t = e.target as HTMLElement | null;
+    if (t && (t.tagName === 'INPUT' || t.tagName === 'SELECT' || t.tagName === 'TEXTAREA')) return;
+    if (!TownRenderer.CAM_KEYS.has(e.key)) return;
+    e.preventDefault(); // arrows would scroll the page, +/- would zoom it
+    this.camKeys.add(e.key);
+  };
+  private onKeyUp = (e: KeyboardEvent): void => { this.camKeys.delete(e.key); };
+  private onBlur = (): void => { this.camKeys.clear(); };
+
+  /** Held-key camera: arrows pan, +/- zooms about the screen center. Runs
+   * every frame so movement is dt-smooth instead of key-repeat-choppy. */
+  private applyKeyCamera(s: GameState, dt: number): void {
+    if (this.camKeys.size === 0) return;
+    const k = this.camKeys;
+    const pan = 480 * dt;
+    let dx = 0, dy = 0;
+    if (k.has('ArrowLeft')) dx += pan;
+    if (k.has('ArrowRight')) dx -= pan;
+    if (k.has('ArrowUp')) dy += pan;
+    if (k.has('ArrowDown')) dy -= pan;
+    const zin = k.has('+') || k.has('=');
+    const zout = k.has('-') || k.has('_');
+    if (!dx && !dy && zin === zout) return;
+    this.autoFit = false;
+    this.camGlide = null;
+    this.panX += dx;
+    this.panY += dy;
+    if (zin !== zout) {
+      const m = { x: this.cssW / 2, y: this.cssH / 2 };
+      const before = this.s2w(s, m);
+      this.zoom = Math.max(0.4, Math.min(6, this.zoom * Math.exp((zin ? 1.6 : -1.6) * dt)));
+      const after = this.w2s(s, before);
+      this.panX += m.x - after.x;
+      this.panY += m.y - after.y;
+    }
   }
   private localMouse(e: MouseEvent): Vec {
     const r = this.canvas.getBoundingClientRect();
@@ -383,6 +433,7 @@ export class TownRenderer {
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     if (this.autoFit) { this.panX = 0; this.panY = 0; }
     this.updateView(s);
+    this.applyKeyCamera(s, dt);
     this.trackSelection(s, dt);
 
     const time = computeTime(s.tick, s.config);
