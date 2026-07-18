@@ -1,4 +1,7 @@
 import React from 'react';
+import { loadChallengeRuns } from './records';
+import { formatMoneyShort } from '../utils/formatMoney';
+import { SCENARIOS } from '../sim/data/scenarios';
 import { useGameStore } from '../store/useGameStore';
 import { ACHIEVEMENT_DEFS } from '../sim/data/achievements';
 
@@ -36,6 +39,39 @@ export function AwardsDashboard(): React.ReactElement {
           );
         })}
       </div>
+
+      <div className="section-title">🏁 Challenge Leaderboard</div>
+      {(() => {
+        const runs = loadChallengeRuns();
+        if (runs.length === 0) {
+          return (
+            <p className="muted small">
+              No finished challenge runs yet — start one from the New Game dialog
+              (final score at day 200).
+            </p>
+          );
+        }
+        return (
+          <table>
+            <thead>
+              <tr><th>#</th><th>Score</th><th>Valuation</th><th>Town</th><th>Difficulty</th><th>Seed</th><th>Date</th></tr>
+            </thead>
+            <tbody>
+              {runs.map((r, i) => (
+                <tr key={`${r.seed}-${r.at}-${i}`}>
+                  <td>{i + 1}{i === 0 ? ' 🏆' : ''}</td>
+                  <td className="mono">{r.score}</td>
+                  <td className="mono">{formatMoneyShort(r.valuation)}</td>
+                  <td>{SCENARIOS[r.scenarioId]?.name ?? r.scenarioId}</td>
+                  <td>{r.difficulty}</td>
+                  <td className="mono">{r.seed}</td>
+                  <td className="muted small">{r.at}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        );
+      })()}
     </div>
   );
 }

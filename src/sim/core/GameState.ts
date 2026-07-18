@@ -67,6 +67,8 @@ export interface CompletedMission {
 export interface GameState {
   saveVersion: number;
   seed: number;
+  /** Which starting scenario built this town (for records/leaderboards). */
+  scenarioId: string;
   /** Live PRNG state (see Random.ts). Part of state for determinism. */
   rngState: number;
   tick: number;

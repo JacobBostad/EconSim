@@ -73,3 +73,43 @@ export function updateRecords(input: {
   }
   if (dirty) save(r);
 }
+
+// ---------------------------------------------------------------------------
+// Challenge leaderboard (completed day-200 runs)
+// ---------------------------------------------------------------------------
+
+export interface ChallengeRun {
+  score: number;
+  valuation: number;
+  scenarioId: string;
+  difficulty: string;
+  seed: number;
+  /** ISO date the run finished (wall clock, UI-side only). */
+  at: string;
+}
+
+const CHALLENGE_KEY = 'econsim.challenges';
+const MAX_CHALLENGE_RUNS = 50;
+
+export function loadChallengeRuns(): ChallengeRun[] {
+  try {
+    const raw = localStorage.getItem(CHALLENGE_KEY);
+    if (raw) return JSON.parse(raw) as ChallengeRun[];
+  } catch {
+    /* ignore */
+  }
+  return [];
+}
+
+/** Store a finished run; keeps the list sorted by score, capped. */
+export function recordChallengeRun(run: ChallengeRun): void {
+  const runs = loadChallengeRuns();
+  runs.push(run);
+  runs.sort((a, b) => b.score - a.score);
+  runs.length = Math.min(runs.length, MAX_CHALLENGE_RUNS);
+  try {
+    localStorage.setItem(CHALLENGE_KEY, JSON.stringify(runs));
+  } catch {
+    /* ignore */
+  }
+}

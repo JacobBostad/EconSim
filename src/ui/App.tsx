@@ -16,6 +16,7 @@ import { MissionPanel } from './MissionPanel';
 import { SoundDirector } from './SoundDirector';
 import { ReportCardModal } from './ReportCardModal';
 import { ReceivershipModal } from './ReceivershipModal';
+import { FinalScoreModal } from './FinalScoreModal';
 import { RecordsTracker } from './RecordsTracker';
 import { KeyboardShortcuts } from './KeyboardShortcuts';
 import { ChronicleModal } from './ChronicleModal';
@@ -52,6 +53,7 @@ export function App(): React.ReactElement {
       <NewGameModal />
       <ReportCardModal />
       <ReceivershipModal />
+      <FinalScoreModal />
       <SoundDirector />
       <RecordsTracker />
       <KeyboardShortcuts />

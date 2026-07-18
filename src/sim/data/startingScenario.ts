@@ -198,6 +198,7 @@ export function createInitialState(
   const state: GameState = {
     saveVersion: SAVE_VERSION,
     seed,
+    scenarioId: scenario.id,
     rngState: seedToState(seed),
     tick: 0,
     speed: 1,

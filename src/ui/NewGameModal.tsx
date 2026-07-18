@@ -45,6 +45,7 @@ export function NewGameModal(): React.ReactElement | null {
   const [difficulty, setDifficulty] = useState<Difficulty>('standard');
   const [scenarioId, setScenarioId] = useState(DEFAULT_SCENARIO_ID);
   const [seedText, setSeedText] = useState('');
+  const [challenge, setChallenge] = useState(false);
 
   if (!show) return null;
   const records = loadRecords();
@@ -54,7 +55,7 @@ export function NewGameModal(): React.ReactElement | null {
     const seed = Number.isFinite(parsed)
       ? parsed
       : Math.floor(Math.random() * 1_000_000);
-    newGame(seed, difficulty, scenarioId);
+    newGame(seed, difficulty, scenarioId, challenge);
   };
 
   return (
@@ -100,6 +101,10 @@ export function NewGameModal(): React.ReactElement | null {
             {records.mostAchievements > 0 && <> · most awards: {records.mostAchievements}</>}
           </p>
         )}
+        <label className="small" style={{ display: 'block', marginTop: 10 }}>
+          <input type="checkbox" checked={challenge} onChange={(e) => setChallenge(e.target.checked)} />{' '}
+          🏁 Challenge run — final score at day 200, recorded on your leaderboard
+        </label>
         <p className="small muted" style={{ marginTop: 10 }}>
           Your current town is kept as a backup — “↩ Undo New” in the sidebar
           brings it back.

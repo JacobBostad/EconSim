@@ -11,6 +11,8 @@ export type Difficulty = 'relaxed' | 'standard' | 'brutal';
 export interface SimulationConfig {
   /** Chosen difficulty preset (informational; the knobs below carry the effect). */
   difficulty: Difficulty;
+  /** Challenge run: the game ends with a final score at day 200. */
+  challengeMode: boolean;
   /** Player starting cash (cents). */
   playerStartCash: number;
   /** Chance per day that a new world event starts (see WorldEventSystem). */
@@ -79,6 +81,7 @@ export interface SimulationConfig {
 
 export const DEFAULT_CONFIG: SimulationConfig = {
   difficulty: 'standard',
+  challengeMode: false,
   playerStartCash: 15000 * 100,
   worldEventDailyChance: 0.2,
   aiExpandChance: 0.5,

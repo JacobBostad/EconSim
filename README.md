@@ -274,6 +274,12 @@ each variant leaves a market gap that's the player's opening. Facility upgrades 
 size; the endgame Chronicle retells your whole run when you reach Business
 Empire.
 
+**Challenge mode**: tick the 🏁 box on New Game and the run ends with a final
+0–1000 score at day 200 (valuation-weighted, plus town satisfaction, peak
+share, and export revenue). Scores land on a local leaderboard in Awards —
+and since the engine is deterministic, a seed + scenario + difficulty is a
+shareable challenge.
+
 **World events** (`WorldEventSystem.ts`, defs in `data/worldEvents.ts`): once per
 day there is a 20% chance a news event starts (max 2 active, opposites never
 overlap). Events are temporary town-wide modifiers with a headline — economic

@@ -137,3 +137,56 @@ export function quarterReport(state: GameState, quarter: number): QuarterReport 
     score,
   };
 }
+
+// ---------------------------------------------------------------------------
+// Challenge mode — the day-200 final score
+// ---------------------------------------------------------------------------
+
+export const CHALLENGE_END_DAY = 200;
+
+export interface ChallengeScore {
+  total: number; // 0–1000
+  valuation: number;
+  valuationPts: number; // up to 600
+  satisfaction: number;
+  satisfactionPts: number; // up to 150
+  peakShare: number;
+  sharePts: number; // up to 150
+  exportRevenue: number;
+  exportPts: number; // up to 100
+}
+
+/**
+ * The challenge-run score: deterministic, pure, and comparable across runs of
+ * the same scenario/difficulty/seed. Valuation dominates (it is the game's
+ * scoreboard metric), but a thriving town and trade empire pay too.
+ */
+export function challengeScore(state: GameState): ChallengeScore {
+  const player = state.firms[state.playerFirmId];
+  const valuation = companyValuation(state, state.playerFirmId).valuation;
+  const cits = Object.values(state.citizens);
+  const satisfaction = cits.length
+    ? cits.reduce((a, c) => a + c.satisfaction, 0) / cits.length
+    : 0;
+  const peakShare = player
+    ? Object.values(player.marketShareByProduct).reduce((a, v) => Math.max(a, v), 0)
+    : 0;
+  const exportRevenue = player?.exportRevenue ?? 0;
+
+  const valuationPts = Math.round(600 * clamp(valuation / 15_000_000, 0, 1)); // $150k caps it
+  const satisfactionPts = Math.round(150 * clamp(satisfaction / 100, 0, 1));
+  const sharePts = Math.round(150 * clamp(peakShare, 0, 1));
+  const exportPts = Math.round(100 * clamp(exportRevenue / 2_000_000, 0, 1)); // $20k caps it
+
+  return {
+    total: valuationPts + satisfactionPts + sharePts + exportPts,
+    valuation,
+    valuationPts,
+    satisfaction,
+    satisfactionPts,
+    peakShare,
+    sharePts,
+    exportRevenue,
+    exportPts,
+  };
+}
