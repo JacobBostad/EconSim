@@ -19,6 +19,7 @@ import {
   OBJECTIVE_VALUATION,
   ACQUISITION_PREMIUM_HEALTHY,
   ACQUISITION_PREMIUM_DISTRESSED,
+  DIVIDEND_PAYOUT_RATIO,
 } from '../sim/data/constants';
 import { clamp } from '../utils/clamp';
 import { TrendCard } from './Sparkline';
@@ -132,7 +133,27 @@ export function CompanyDashboard(): React.ReactElement {
                 </td>
                 <td className="mono">{formatMoney(e.valuation)}</td>
                 <td className="mono">{e.isPlayer ? '—' : formatMoney(pricePerPct)}</td>
-                <td className="mono">{e.isPlayer ? '—' : `${owned}%`}</td>
+                <td className="mono">
+                  {e.isPlayer ? '—' : `${owned}%`}
+                  {!e.isPlayer && (() => {
+                    // What a stake pays: 30% of the rival's positive daily
+                    // profit is distributed pro-rata (7-day average). Makes
+                    // the ~35%/yr dividend economics visible before buying.
+                    const hist = targetFirm?.accounting.dailyHistory ?? [];
+                    const recent = hist.slice(-7);
+                    if (recent.length === 0) return null;
+                    const avgPool =
+                      (recent.reduce((s, d) => s + Math.max(0, d.netProfit), 0) / recent.length) *
+                      DIVIDEND_PAYOUT_RATIO;
+                    const per5 = (avgPool * 5) / 100;
+                    if (per5 < 1) return null;
+                    return (
+                      <div className="small muted" title="Estimated from the rival's 7-day average profit at the 30% payout ratio. Paid daily, pro-rata to your stake.">
+                        ~{formatMoney(owned > 0 ? (avgPool * owned) / 100 : per5)}/day{owned > 0 ? '' : ' per 5%'}
+                      </div>
+                    );
+                  })()}
+                </td>
                 <td>
                   {!e.isPlayer && (
                     <span className="row" style={{ gap: 4, justifyContent: 'flex-end' }}>
