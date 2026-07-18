@@ -15,7 +15,7 @@ replays identically, and every important number can explain itself in the UI.
 ![Town view on day 80 — autumn, a fuel-price spike in the ticker, and the player's bread chain trading](docs/media/media-town.png)
 
 <p align="center">
-  <img src="docs/media/media-market.png" width="49%" alt="Market dashboard: per-product prices, shares, stockouts, and 60-day trend sparklines" />
+  <img src="docs/media/media-company.png" width="49%" alt="Company dashboard: objective progress, trend charts, and the standings table with rival CEOs and their archetypes" />
   <img src="docs/media/media-gazette.png" width="49%" alt="The Town Gazette: daily newspaper summarizing events, gluts, and P&amp;L" />
 </p>
 
