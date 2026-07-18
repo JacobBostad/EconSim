@@ -16,7 +16,7 @@ replays identically, and every important number can explain itself in the UI.
 
 <p align="center">
   <img src="docs/media/media-company.png" width="49%" alt="Company dashboard: objective progress, trend charts, and the standings table with rival CEOs and their archetypes" />
-  <img src="docs/media/media-gazette.png" width="49%" alt="The Town Gazette: daily newspaper summarizing events, gluts, and P&amp;L" />
+  <img src="docs/media/media-population.png" width="49%" alt="Population dashboard: town trends, satisfaction anatomy pricing each shortage in equilibrium points, and household spending power" />
 </p>
 
 ---
@@ -97,9 +97,9 @@ in a **fixed order**. Daily roll-up systems run first (so the day that just
 ended is finalized before the new day's per-tick systems run):
 
 ```
-TimeSystem → WorldEvents → MarketStats → AIStrategy → EventLog → Marketing →
-Finance → Dividends → Bankruptcy → Satisfaction → Immigration →
-Accounting → Payroll →                                      (daily roll-ups)
+TimeSystem → WorldEvents → TradeCity → MarketStats → AIStrategy → EventLog →
+Marketing → Finance → Dividends → Bankruptcy → Satisfaction → TownStats →
+Immigration → Rent → Accounting → Payroll →                 (daily roll-ups)
 CitizenSchedule → Movement → Labor → Production → Logistics → Retail →
 Achievements → Missions                                     (every tick / hourly)
 ```
@@ -251,6 +251,25 @@ pay daily rent to the owner and live measurably happier; municipal homes stay
 free. With immigration filling vacancies, housing is a fourth business
 vertical — build near the action (land premium) and let the town grow into
 your units.
+
+**Satisfaction & growth** (`SatisfactionSystem.ts`, `selectors/satisfactionSelectors.ts`)
+```
+equilibrium = 50 + (employed ? +20 : −5) + (apartment ? +5 : 0)
+            + clamp(15 − unmetPressure × 12, −30, +15)
+pressure    = Σ over urgent needs: (urgency − threshold) × needWeight × (sold nowhere ? 0.5 : 1)
+```
+Citizens drift 12%/day toward their equilibrium; town-average ≥55 (plus tight
+labor) opens immigration. The Population tab decomposes this live and prices
+each product's shortage in equilibrium points — stagnation always names its
+cause.
+
+**AI supply elasticity** (`AIStrategySystem.ts`): shortage signals (finished-
+product unmet > sold, routed upstream through contracts) climb a ladder —
+over-crew (to 2.5× output) → level upgrades → widen shelf contracts → double
+the whole production sub-chain (producer + factory II) — and reverse under
+losses (boost brake + downsizing), so booms end in equilibrium instead of
+insolvency. Some towns still stagnate in a poverty trap the AI cannot escape:
+that gap is deliberately the player's opening.
 
 **M&A** (`core/Acquisition.ts`): buy out AI rivals at 1.3× valuation (0.9×
 distressed, credit for held shares) and absorb everything; flush AI firms
