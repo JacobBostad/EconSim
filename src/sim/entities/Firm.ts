@@ -88,16 +88,22 @@ export interface Firm {
   managers: Manager[];
 }
 
+/** What a hired manager runs: one store, or a firm-wide function. */
+export type ManagerRole = 'store' | 'logistics' | 'sales';
+
 /** A named, salaried professional who runs one slice of a firm's ops.
  * Not a citizen — an off-map hire paid daily out of the firm's cash. */
 export interface Manager {
   id: string;
   name: string;
-  /** Phase 1: 'store' runs one retail store's pricing/shelves/marketing. */
-  role: 'store';
+  /** 'store' runs one retail store; 'logistics' sizes contracts and sources
+   * wholesale firm-wide; 'sales' works the ports (rush orders, standing
+   * exports). One store manager per store; one of each firm-wide role. */
+  role: ManagerRole;
   /** 0.9–1.3 — sets which duties they cover and the salary they command. */
   skill: number;
   salaryPerDay: number;
-  facilityId: FacilityId;
+  /** The store a 'store' manager runs; null for firm-wide roles. */
+  facilityId: FacilityId | null;
   hiredAtTick: number;
 }

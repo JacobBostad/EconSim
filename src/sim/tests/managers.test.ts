@@ -95,7 +95,7 @@ describe('Managers', () => {
     player.cash = 100; // less than any salary
     sim.run(ticksPerDay(state.config));
     expect(player.managers.length).toBe(0);
-    expect(state.events.some((e) => e.message.includes('resigned as manager'))).toBe(true);
+    expect(state.events.some((e) => e.message.includes('resigned as'))).toBe(true);
   });
 
   it('inserting the system re-deals nothing without a hire', () => {
@@ -105,6 +105,73 @@ describe('Managers', () => {
     a.run(tpd * 20);
     b.run(tpd * 20);
     expect(normalizedSerialize(a.getState())).toBe(normalizedSerialize(b.getState()));
+  });
+
+  it('firm-wide roles have their own candidate pools and a one-per-role cap', () => {
+    const sim = newSim(3);
+    const state = sim.getState();
+    const player = state.firms[state.playerFirmId]!;
+    const store = managerCandidates(state, 10, 'store');
+    const logistics = managerCandidates(state, 10, 'logistics');
+    const sales = managerCandidates(state, 10, 'sales');
+    expect(logistics.map((c) => c.name)).not.toEqual(store.map((c) => c.name));
+    expect(sales.map((c) => c.name)).not.toEqual(logistics.map((c) => c.name));
+    expect(logistics[0]!.salaryPerDay).toBeGreaterThan(store[0]!.salaryPerDay);
+
+    sim.dispatch({ type: 'HIRE_MANAGER', firmId: player.id, role: 'logistics', candidateIndex: 0 });
+    expect(player.managers.filter((m) => m.role === 'logistics').length).toBe(1);
+    expect(player.managers[0]!.facilityId).toBeNull();
+    sim.dispatch({ type: 'HIRE_MANAGER', firmId: player.id, role: 'logistics', candidateIndex: 1 });
+    expect(player.managers.filter((m) => m.role === 'logistics').length).toBe(1); // capped
+  });
+
+  it('the sales manager ships staged goods and completes a rush order unattended', () => {
+    const sim = newSim(3);
+    const state = sim.getState();
+    const player = state.firms[state.playerFirmId]!;
+    player.cash = 100000_00;
+    sim.dispatch({ type: 'BUILD_FACILITY', firmId: player.id, defId: 'warehouse', location: { x: 70, y: 30 } });
+    const wh = state.facilities[player.facilities[player.facilities.length - 1]!]!;
+    addStock(wh.inputInventory, 'bread', 100, 60);
+    const day = computeTime(state.tick, state.config).day;
+    state.rushOrder = {
+      cityId: 'port_rosa', productId: 'bread', quantity: 50, filled: 0,
+      startDay: day, deadlineDay: day + 5, bonusCents: 100_00,
+    };
+    sim.dispatch({ type: 'HIRE_MANAGER', firmId: player.id, role: 'sales', candidateIndex: 1 });
+    const completed0 = state.rushOrdersCompleted;
+    sim.run(ticksPerDay(state.config));
+    expect(state.rushOrdersCompleted).toBe(completed0 + 1);
+    expect(state.rushOrder).toBeNull();
+    // Seasoned hands also left a standing export order on the stocked warehouse.
+    expect(wh.exportOrders['bread']).toBeTruthy();
+  });
+
+  it('the logistics manager swaps an importer contract to cheaper local wholesale', () => {
+    const sim = newSim(3);
+    const state = sim.getState();
+    const player = state.firms[state.playerFirmId]!;
+    player.cash = 100000_00;
+    sim.dispatch({ type: 'BUILD_FACILITY', firmId: player.id, defId: 'factory', location: { x: 90, y: 30 } });
+    const factory = state.facilities[player.facilities[player.facilities.length - 1]!]!;
+    const importer = Object.values(state.facilities).find((f) => f.type === 'importer')!;
+    sim.dispatch({
+      type: 'CREATE_SUPPLY_CONTRACT', ownerFirmId: player.id,
+      sourceFacilityId: importer.id, destinationFacilityId: factory.id,
+      productId: 'grain', targetQuantity: 20, reorderPoint: 10, maxInventory: 40,
+    });
+    // A local AI farm sits on a fat grain surplus, priced at wholesale.
+    const aiFarm = Object.values(state.facilities).find(
+      (f) => f.type === 'farm' && state.firms[f.ownerFirmId]?.ownerType === 'ai',
+    )!;
+    addStock(aiFarm.outputInventory, 'grain', 300, 60);
+
+    sim.dispatch({ type: 'HIRE_MANAGER', firmId: player.id, role: 'logistics', candidateIndex: 1 });
+    sim.run(ticksPerDay(state.config) * 3);
+    const contract = Object.values(state.contracts).find(
+      (c) => c.ownerFirmId === player.id && c.productId === 'grain',
+    )!;
+    expect(state.facilities[contract.sourceFacilityId]?.type).not.toBe('importer');
   });
 
   it('old saves migrate with an empty manager roster', () => {

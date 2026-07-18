@@ -19,6 +19,8 @@ import { citizenActionLabel, populationStats } from '../sim/selectors/citizenSel
 import { firmPnLToday, firmPnLLifetime, firmFacilities, firmWarnings, rivalTopWage } from '../sim/selectors/companySelectors';
 import { getPersonality } from '../sim/data/personalities';
 import { morningBriefing } from '../sim/selectors/advisorSelectors';
+import { managerCandidates, managerDuties } from '../sim/systems/ManagerSystem';
+import { computeTime } from '../sim/core/Tick';
 import { APARTMENT_RENT_PER_DAY } from '../sim/data/constants';
 import { facilityProfitContribution } from '../sim/selectors/facilitySelectors';
 import { clamp } from '../utils/clamp';
@@ -220,6 +222,7 @@ function FirmView({ firm, state }: { firm: Firm; state: GameState }): React.Reac
         <span className="mono" style={{ color: firm.debt > 0 ? 'var(--amber)' : undefined }}>{formatMoney(firm.debt)}</span>
       </div>
       {firm.ownerType === 'player' && <AdvisorCard state={state} />}
+      {firm.ownerType === 'player' && <ExecutiveTeamCard firm={firm} state={state} />}
       {firm.ownerType === 'player' && <FinanceControls firmId={firm.id} />}
       {firm.ownerType === 'player' && <WageControls firm={firm} state={state} />}
 
@@ -264,6 +267,68 @@ function AdvisorCard({ state }: { state: GameState }): React.ReactElement | null
           {a.icon} {a.text}
         </div>
       ))}
+    </div>
+  );
+}
+
+/**
+ * The executive team: firm-wide delegation. A logistics manager sizes shelf
+ * contracts and sources wholesale; a sales manager works the ports. Store
+ * managers are hired per-store from the store's inspector.
+ */
+function ExecutiveTeamCard({ firm, state }: { firm: Firm; state: GameState }): React.ReactElement {
+  const dispatch = useGameStore((s) => s.dispatch);
+  const day = computeTime(state.tick, state.config).day;
+  const roles = [
+    { role: 'logistics' as const, icon: '🚚', label: 'Logistics', blurb: 'sizes shelf contracts, sources wholesale' },
+    { role: 'sales' as const, icon: '🚢', label: 'Sales', blurb: 'fills rush orders, sets standing exports' },
+  ];
+  const storeMgrs = firm.managers.filter((m) => m.role === 'store').length;
+  return (
+    <div className="card" style={{ marginTop: 6 }}>
+      <div className="section-title" style={{ margin: 0 }}>👔 Executive team</div>
+      {roles.map(({ role, icon, label, blurb }) => {
+        const mgr = firm.managers.find((m) => m.role === role);
+        if (mgr) {
+          return (
+            <div className="row small" key={role} style={{ gap: 6, alignItems: 'center', marginTop: 4, flexWrap: 'wrap' }}>
+              <span title={`Duties: ${managerDuties(mgr.skill, role).join(', ')}`}>
+                {icon} <strong>{mgr.name}</strong> — {label} · {formatMoney(mgr.salaryPerDay)}/day
+              </span>
+              <button
+                style={{ padding: '1px 8px' }}
+                onClick={() => dispatch({ type: 'FIRE_MANAGER', firmId: firm.id, managerId: mgr.id })}
+              >
+                Let go
+              </button>
+            </div>
+          );
+        }
+        return (
+          <div className="small" key={role} style={{ marginTop: 4 }}>
+            <span className="muted" title={`Hire a ${label.toLowerCase()} manager — ${blurb}. Candidates rotate weekly.`}>
+              {icon} {label} ({blurb}):
+            </span>
+            <div className="row" style={{ gap: 6, flexWrap: 'wrap', marginTop: 2 }}>
+              {managerCandidates(state, day, role).map((c, i) => (
+                <button
+                  key={c.name}
+                  style={{ padding: '1px 8px' }}
+                  title={`${c.band} — duties: ${managerDuties(c.skill, role).join(', ')}`}
+                  onClick={() => dispatch({ type: 'HIRE_MANAGER', firmId: firm.id, role, candidateIndex: i })}
+                >
+                  {c.name} ({c.band}, {formatMoney(c.salaryPerDay)}/day)
+                </button>
+              ))}
+            </div>
+          </div>
+        );
+      })}
+      <div className="muted small" style={{ marginTop: 4 }}>
+        {storeMgrs > 0
+          ? `${storeMgrs} store manager${storeMgrs === 1 ? '' : 's'} on payroll — see each store's inspector.`
+          : 'Store managers are hired from each store\'s inspector.'}
+      </div>
     </div>
   );
 }

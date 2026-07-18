@@ -737,7 +737,7 @@ function manageWholesalePricing(ctx: SimContext, firmId: string): void {
   }
 }
 
-function manageSourcing(ctx: SimContext, firmId: string): void {
+export function manageSourcing(ctx: SimContext, firmId: string): void {
   const { state } = ctx;
   const firm = state.firms[firmId]!;
 

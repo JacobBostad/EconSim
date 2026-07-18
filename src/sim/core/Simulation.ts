@@ -259,23 +259,33 @@ export class Simulation {
       }
       case 'HIRE_MANAGER': {
         const firm = s.firms[command.firmId];
-        const fac = s.facilities[command.facilityId];
-        if (!firm || !fac || fac.type !== 'retail' || fac.ownerFirmId !== command.firmId) return;
-        if (firm.managers.some((m) => m.facilityId === command.facilityId)) return;
+        if (!firm) return;
+        const role = command.role ?? 'store';
         const day = computeTime(s.tick, s.config).day;
-        const cand = managerCandidates(s, day)[command.candidateIndex];
+        const cand = managerCandidates(s, day, role)[command.candidateIndex];
         if (!cand) return;
+        let facilityId: string | null = null;
+        let where = `${firm.name}'s ${role} desk`;
+        if (role === 'store') {
+          const fac = command.facilityId ? s.facilities[command.facilityId] : undefined;
+          if (!fac || fac.type !== 'retail' || fac.ownerFirmId !== command.firmId) return;
+          if (firm.managers.some((m) => m.role === 'store' && m.facilityId === fac.id)) return;
+          facilityId = fac.id;
+          where = fac.name;
+        } else if (firm.managers.some((m) => m.role === role)) {
+          return; // one firm-wide manager per role
+        }
         firm.managers.push({
           id: nextId(s.idCounters, 'mgr'),
           name: cand.name,
-          role: 'store',
+          role,
           skill: cand.skill,
           salaryPerDay: cand.salaryPerDay,
-          facilityId: command.facilityId,
+          facilityId,
           hiredAtTick: s.tick,
         });
         emitEvent(s, 'success', 'player',
-          `🤝 ${cand.name} signed on to manage ${fac.name} (${formatMoney(cand.salaryPerDay)}/day).`, fac.id);
+          `🤝 ${cand.name} signed on to run ${where} (${formatMoney(cand.salaryPerDay)}/day).`, facilityId ?? command.firmId);
         return;
       }
       case 'FIRE_MANAGER': {
@@ -284,8 +294,11 @@ export class Simulation {
         const mgr = firm.managers.find((m) => m.id === command.managerId);
         if (!mgr) return;
         firm.managers = firm.managers.filter((m) => m.id !== command.managerId);
+        const post = mgr.facilityId
+          ? (s.facilities[mgr.facilityId]?.name ?? 'their store')
+          : `the ${mgr.role} desk`;
         emitEvent(s, 'info', 'player',
-          `${mgr.name} was let go as manager of ${s.facilities[mgr.facilityId]?.name ?? 'their store'}.`, mgr.facilityId);
+          `${mgr.name} was let go from ${post}.`, mgr.facilityId ?? command.firmId);
         return;
       }
       case 'SET_WHOLESALE_PRICE': {

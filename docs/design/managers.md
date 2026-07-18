@@ -62,14 +62,26 @@ rng, so inserting it re-deals nothing; once hired, its duties draw from
 `ctx.rng` exactly like the auto-price path already does (hiring is a
 player action — player actions always re-deal the stream).
 
+## Phase 2 — firm-wide roles (SHIPPED)
+
+Two executive roles round out the team, hired from the player firm's
+"Executive team" card (one of each per firm, own weekly candidate pools,
+$28–52/day):
+
+- **Logistics manager**: firm-wide shelf-contract sizing daily; seasoned
+  hands also run the `manageSourcing` slice (importer contracts swap to
+  the cheapest qualifying local wholesale supplier, and gouging or dried-up
+  suppliers get dropped); veterans work two contracts a day.
+- **Sales manager**: ships staged warehouse goods toward the active rush
+  order every day (the bonus lands unattended); seasoned hands keep a
+  standing export order on every stocked warehouse (≥30 units, ship at
+  1.35×, keep 10); veterans set a sharper 1.25× floor.
+
 ## Later phases
 
-- **Logistics manager** (firm-wide): keeps supply contracts sized, swaps
-  importer contracts to cheaper wholesale — the `manageSourcing` slice.
-- **Sales manager** (firm-wide): standing exports tuned to port spreads,
-  rush orders accepted and staged automatically.
 - Manager quality drift: skill grows slowly on the job (mirrors crew
   skill), poaching-style salary reviews.
+- AI firms hiring managers of their own (symmetry, if probes show gaps).
 
 ## Phase 1 probe
 

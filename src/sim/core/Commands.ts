@@ -18,6 +18,7 @@ import type {
 } from './Id';
 import type { Vec2 } from '../entities/Location';
 import type { StorePositioning } from '../entities/Facility';
+import type { ManagerRole } from '../entities/Firm';
 
 export type Speed = 0 | 1 | 5 | 20 | 100;
 
@@ -68,7 +69,15 @@ export type Command =
   | { type: 'SET_WAGE'; firmId: FirmId; wage: number }
   | { type: 'TOGGLE_WHOLESALE'; facilityId: FacilityId; enabled: boolean }
   | { type: 'SET_POSITIONING'; facilityId: FacilityId; positioning: StorePositioning }
-  | { type: 'HIRE_MANAGER'; firmId: FirmId; facilityId: FacilityId; candidateIndex: number }
+  | {
+      type: 'HIRE_MANAGER';
+      firmId: FirmId;
+      /** The store for a 'store' hire; omit/null for firm-wide roles. */
+      facilityId?: FacilityId | null;
+      candidateIndex: number;
+      /** Defaults to 'store'. */
+      role?: ManagerRole;
+    }
   | { type: 'FIRE_MANAGER'; firmId: FirmId; managerId: string }
   | { type: 'SET_WHOLESALE_PRICE'; facilityId: FacilityId; mult: number }
   | { type: 'HIRE_WORKER'; facilityId: FacilityId; citizenId: CitizenId | null }

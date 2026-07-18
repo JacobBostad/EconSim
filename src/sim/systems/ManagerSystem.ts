@@ -23,8 +23,10 @@ import type { SimContext, GameState } from '../core/GameState';
 import { emitEvent, recordTransaction } from '../core/GameState';
 import { firmAccount, WORLD_ACCOUNT } from '../core/Transactions';
 import { isDayBoundary } from '../core/Tick';
-import type { Manager } from '../entities/Firm';
-import { adjustPrices, maybeWidenShelves } from './AIStrategySystem';
+import type { Manager, ManagerRole } from '../entities/Firm';
+import { adjustPrices, maybeWidenShelves, manageSourcing } from './AIStrategySystem';
+import { performExport } from '../core/Trade';
+import { getQuantity } from '../entities/Inventory';
 import { FIRST_NAMES, LAST_NAMES } from '../data/names';
 
 export const SHELF_DUTY_SKILL = 1.05;
@@ -50,42 +52,132 @@ function mgrRoll(seed: number, week: number, salt: number): number {
   return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
 }
 
+/** Salary bands per role: firm-wide roles command more than a corner shop. */
+const SALARY_BANDS: Record<ManagerRole, Array<{ band: string; lo: number; hi: number }>> = {
+  store: [
+    { band: 'junior', lo: 16_00, hi: 20_00 },
+    { band: 'seasoned', lo: 24_00, hi: 30_00 },
+    { band: 'veteran', lo: 34_00, hi: 42_00 },
+  ],
+  logistics: [
+    { band: 'junior', lo: 28_00, hi: 34_00 },
+    { band: 'seasoned', lo: 36_00, hi: 44_00 },
+    { band: 'veteran', lo: 46_00, hi: 52_00 },
+  ],
+  sales: [
+    { band: 'junior', lo: 28_00, hi: 34_00 },
+    { band: 'seasoned', lo: 36_00, hi: 44_00 },
+    { band: 'veteran', lo: 46_00, hi: 52_00 },
+  ],
+};
+
+const SKILL_BANDS = [
+  { lo: 0.92, hi: 1.02 },
+  { lo: 1.05, hi: 1.12 },
+  { lo: 1.15, hi: 1.28 },
+];
+
+/** Distinct candidate pools per role (names must differ between roles). */
+const ROLE_SALT: Record<ManagerRole, number> = { store: 0, logistics: 100, sales: 200 };
+
 /**
- * The week's hiring market: one candidate per band, derived on demand.
- * Same seed + same week → same candidates, forever.
+ * The week's hiring market for a role: one candidate per band, derived on
+ * demand. Same seed + same week + same role → same candidates, forever.
  */
-export function managerCandidates(state: GameState, day: number): ManagerCandidate[] {
+export function managerCandidates(
+  state: GameState,
+  day: number,
+  role: ManagerRole = 'store',
+): ManagerCandidate[] {
   const week = Math.floor(day / 7);
-  const bands = [
-    { band: 'junior', skillLo: 0.92, skillHi: 1.02, salLo: 16_00, salHi: 20_00 },
-    { band: 'seasoned', skillLo: 1.05, skillHi: 1.12, salLo: 24_00, salHi: 30_00 },
-    { band: 'veteran', skillLo: 1.15, skillHi: 1.28, salLo: 34_00, salHi: 42_00 },
-  ];
-  return bands.map((b, i) => {
-    const first = FIRST_NAMES[Math.floor(mgrRoll(state.seed, week, i * 3) * FIRST_NAMES.length)]!;
-    const last = LAST_NAMES[Math.floor(mgrRoll(state.seed, week, i * 3 + 1) * LAST_NAMES.length)]!;
-    const u = mgrRoll(state.seed, week, i * 3 + 2);
+  const salt = ROLE_SALT[role];
+  return SALARY_BANDS[role].map((b, i) => {
+    const first =
+      FIRST_NAMES[Math.floor(mgrRoll(state.seed, week, salt + i * 3) * FIRST_NAMES.length)]!;
+    const last =
+      LAST_NAMES[Math.floor(mgrRoll(state.seed, week, salt + i * 3 + 1) * LAST_NAMES.length)]!;
+    const u = mgrRoll(state.seed, week, salt + i * 3 + 2);
+    const sk = SKILL_BANDS[i]!;
     return {
       name: `${first} ${last}`,
-      skill: Math.round((b.skillLo + (b.skillHi - b.skillLo) * u) * 100) / 100,
-      salaryPerDay: Math.round((b.salLo + (b.salHi - b.salLo) * u) / 100) * 100,
+      skill: Math.round((sk.lo + (sk.hi - sk.lo) * u) * 100) / 100,
+      salaryPerDay: Math.round((b.lo + (b.hi - b.lo) * u) / 100) * 100,
       band: b.band,
     };
   });
 }
 
 /** The duties a manager of this skill covers (for UI and the daily run). */
-export function managerDuties(skill: number): string[] {
+export function managerDuties(skill: number, role: ManagerRole = 'store'): string[] {
+  if (role === 'logistics') {
+    const d = ['shelf-contract sizing'];
+    if (skill >= SHELF_DUTY_SKILL) d.push('wholesale sourcing');
+    if (skill >= MARKETING_DUTY_SKILL) d.push('double pace');
+    return d;
+  }
+  if (role === 'sales') {
+    const d = ['rush-order fulfillment'];
+    if (skill >= SHELF_DUTY_SKILL) d.push('standing exports');
+    if (skill >= MARKETING_DUTY_SKILL) d.push('sharper price floors');
+    return d;
+  }
   const d = ['pricing'];
   if (skill >= SHELF_DUTY_SKILL) d.push('shelf-sizing');
   if (skill >= MARKETING_DUTY_SKILL) d.push('marketing');
   return d;
 }
 
+/** Sales duty: ship staged goods toward the active rush order, and (with
+ * experience) keep standing export orders on every stocked warehouse. */
+function runSalesDuty(ctx: SimContext, firmId: string, mgr: Manager): void {
+  const { state } = ctx;
+  const firm = state.firms[firmId]!;
+  const order = state.rushOrder;
+  if (order && firmId === state.playerFirmId) {
+    for (const facId of [...firm.facilities]) {
+      const active = state.rushOrder;
+      if (!active) break; // filled — the bonus already landed
+      const fac = state.facilities[facId];
+      if (!fac || fac.type !== 'warehouse') continue;
+      const staged =
+        getQuantity(fac.inputInventory, active.productId) +
+        getQuantity(fac.outputInventory, active.productId);
+      if (staged <= 0) continue;
+      const need = active.quantity - active.filled;
+      performExport(state, firmId, facId, active.productId,
+        Math.min(staged, need), 'Rush order (sales manager)', active.cityId);
+    }
+  }
+  if (mgr.skill >= SHELF_DUTY_SKILL) {
+    // Veterans set a sharper floor: ship at 1.25x instead of holding for 1.35x.
+    const minMult = mgr.skill >= MARKETING_DUTY_SKILL ? 1.25 : 1.35;
+    for (const facId of firm.facilities) {
+      const fac = state.facilities[facId];
+      if (!fac || fac.type !== 'warehouse') continue;
+      for (const inv of [fac.inputInventory, fac.outputInventory]) {
+        for (const pid in inv) {
+          if ((inv[pid]?.quantity ?? 0) >= 30 && !fac.exportOrders[pid]) {
+            fac.exportOrders[pid] = { minMult, keep: 10 };
+          }
+        }
+      }
+    }
+  }
+}
+
+/** Logistics duty: firm-wide shelf sizing, then (with experience) swap
+ * importer contracts to cheaper local wholesale. Veterans work two
+ * contracts a day instead of one. */
+function runLogisticsDuty(ctx: SimContext, firmId: string, mgr: Manager): void {
+  maybeWidenShelves(ctx, firmId, false);
+  if (mgr.skill >= SHELF_DUTY_SKILL) manageSourcing(ctx, firmId);
+  if (mgr.skill >= MARKETING_DUTY_SKILL) maybeWidenShelves(ctx, firmId, false);
+}
+
 function runMarketingDuty(ctx: SimContext, firmId: string, mgr: Manager): void {
   const { state } = ctx;
   const firm = state.firms[firmId]!;
-  const fac = state.facilities[mgr.facilityId];
+  const fac = mgr.facilityId ? state.facilities[mgr.facilityId] : null;
   if (!fac) return;
   for (const pid of fac.retailProductIds) {
     const budget = firm.adBudgetByProduct[pid] ?? 0;
@@ -111,9 +203,9 @@ export function runManagerSystem(ctx: SimContext): void {
     if (firm.managers.length === 0) continue;
 
     for (const mgr of [...firm.managers]) {
-      const fac = state.facilities[mgr.facilityId];
-      // The store was sold or demolished: the job is gone.
-      if (!fac || fac.ownerFirmId !== fid) {
+      const fac = mgr.facilityId ? state.facilities[mgr.facilityId] : null;
+      // A store manager's store was sold or demolished: the job is gone.
+      if (mgr.role === 'store' && (!fac || fac.ownerFirmId !== fid)) {
         firm.managers = firm.managers.filter((m) => m.id !== mgr.id);
         emitEvent(state, 'info', 'payroll',
           `${mgr.name} moved on — the store they managed is no longer ${firm.name}'s.`, fid);
@@ -123,7 +215,7 @@ export function runManagerSystem(ctx: SimContext): void {
       if (firm.cash < mgr.salaryPerDay) {
         firm.managers = firm.managers.filter((m) => m.id !== mgr.id);
         emitEvent(state, 'warning', 'payroll',
-          `${mgr.name} resigned as manager of ${fac.name} — ${firm.name} couldn't cover their salary.`, fid);
+          `${mgr.name} resigned as ${firm.name}'s ${mgr.role} manager — the firm couldn't cover their salary.`, fid);
         continue;
       }
       recordTransaction(state, {
@@ -131,10 +223,16 @@ export function runManagerSystem(ctx: SimContext): void {
         firmId: fid, category: 'wages', note: `Manager salary — ${mgr.name}`,
       });
 
-      // Duties, cheapest-first: pricing for everyone, then by skill.
-      adjustPrices(ctx, fid, false, mgr.facilityId);
-      if (mgr.skill >= SHELF_DUTY_SKILL) maybeWidenShelves(ctx, fid, false, mgr.facilityId);
-      if (mgr.skill >= MARKETING_DUTY_SKILL) runMarketingDuty(ctx, fid, mgr);
+      if (mgr.role === 'logistics') {
+        runLogisticsDuty(ctx, fid, mgr);
+      } else if (mgr.role === 'sales') {
+        runSalesDuty(ctx, fid, mgr);
+      } else if (mgr.facilityId) {
+        // Store duties, cheapest-first: pricing for everyone, then by skill.
+        adjustPrices(ctx, fid, false, mgr.facilityId);
+        if (mgr.skill >= SHELF_DUTY_SKILL) maybeWidenShelves(ctx, fid, false, mgr.facilityId);
+        if (mgr.skill >= MARKETING_DUTY_SKILL) runMarketingDuty(ctx, fid, mgr);
+      }
     }
   }
 }

@@ -122,6 +122,13 @@ engine tests), probed with headless balance runs, and guarded by CI.
   a mispriced store launch for a ~$12.8k hundred-day swing vs hands-off —
   while the $39/day veteran didn't earn their premium in a one-store market.
   Delegation has real economics, not just convenience.
+- **Executive team**: two firm-wide hires complete the delegation ladder —
+  a 🚚 logistics manager sizes shelf contracts across every store and swaps
+  importer contracts to cheaper local wholesale (the same shop-around logic
+  AI buyers use), and a 🚢 sales manager ships staged goods toward rush
+  orders unattended and keeps standing export orders on every stocked
+  warehouse. Hired from the Player Holdings inspector; one per role,
+  $28–52/day, seniority buys extra duties and sharper price floors.
 
 - **Coffee**: a cheap everyday product (grain → roastery → café) nobody serves
   at start — a first-mover mainstream niche, wizardable, with AI contest.
