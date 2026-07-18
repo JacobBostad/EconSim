@@ -51,6 +51,7 @@ const ACTIVITY_COLOR: Record<CitizenActivity, string> = {
 
 export const LEGEND_EXTRAS: { color: string; label: string }[] = [
   { color: APARTMENT_FILL, label: 'Apartment' },
+  { color: 'rgba(255,190,90,0.9)', label: 'Wholesale route (F)' },
 ];
 
 export const LEGEND_BUILDINGS: { type: FacilityType; label: string }[] = [
@@ -369,8 +370,14 @@ export class TownRenderer {
       if (!src || !dst) continue;
       const isPlayer = c.ownerFirmId === s.playerFirmId;
       const width = Math.min(4.5, 1.2 + c.targetQuantity / 25);
-      const color = isPlayer ? 'rgba(90,170,255,0.75)' : 'rgba(170,180,200,0.35)';
-      route(src.location, dst.location, width, color, false);
+      // Wholesale (cross-firm, non-importer) routes glow amber — money is
+      // changing hands between firms along these lines.
+      const wholesale = src.type !== 'importer' && src.ownerFirmId !== dst.ownerFirmId;
+      const playerInvolved = isPlayer || src.ownerFirmId === s.playerFirmId;
+      const color = wholesale
+        ? (playerInvolved ? 'rgba(255,190,90,0.8)' : 'rgba(220,180,120,0.4)')
+        : isPlayer ? 'rgba(90,170,255,0.75)' : 'rgba(170,180,200,0.35)';
+      route(src.location, dst.location, width, color, wholesale);
     }
 
     // Export lanes: any warehouse with a standing order or shipped units today.

@@ -1,7 +1,7 @@
 # Changelog — `claude/business-sim-game-enhancement` branch
 
 One continuous development run turning EconSim from a solid simulation into a
-deep, self-explaining economy game. Everything below is tested (119 → 182
+deep, self-explaining economy game. Everything below is tested (119 → 210
 engine tests), probed with headless balance runs, and guarded by CI.
 
 ## Economy & AI depth
@@ -91,8 +91,9 @@ engine tests), probed with headless balance runs, and guarded by CI.
   create), minus wages, upkeep, and inputs. Best-first table in Company;
   the advisor names your money pit. Facility stats are now snapshotted at
   the daily reset, so advisors read full days instead of mid-day partials.
-- **Supply-chain flow overlay (F)**: animated contract routes, volume-scaled,
-  plus Port Rosa export lanes.
+- **Supply-chain flow overlay (F)**: animated contract routes, volume-scaled;
+  wholesale (cross-firm) routes glow amber, and exporting warehouses get
+  lanes running off toward the trade cities.
 - **Daily digests fixed**: production/bottleneck alerts read yesterday's stats
   (the old midnight-status checks could only ever emit false labor alarms).
 
@@ -133,8 +134,9 @@ engine tests), probed with headless balance runs, and guarded by CI.
 
 ## Infrastructure
 
-- CI (tests + build + e2e), two golden-save fixtures (legacy + modern), two
-  scripted playtest bots (general store; all-verticals), a 600-day soak,
-  deep browser smoke, and time-averaged balance probes that respect the
-  economy's real cycles. Perf: 0.20ms/tick at day 300 with everything on
-  (the night-shopping fix removed more work than the P&L stamps added).
+- CI (tests + build + e2e), three golden-save fixtures (legacy, modern,
+  wholesale-era), three scripted playtest bots (general store; all-verticals;
+  pure supplier), a 600-day soak, deep browser smoke, and time-averaged
+  balance probes that respect the economy's real cycles. Perf: 0.20ms/tick
+  at day 300 with everything on (the night-shopping fix removed more work
+  than the P&L stamps added).
