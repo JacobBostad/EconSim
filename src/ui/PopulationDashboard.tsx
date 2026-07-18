@@ -124,6 +124,51 @@ export function PopulationDashboard(): React.ReactElement {
         </div>
       </div>
 
+      <h3>Prosperity Ladder</h3>
+      <div className="row" style={{ gap: 10, flexWrap: 'wrap', alignItems: 'stretch' }}>
+        <div className="card" style={{ minWidth: 280, marginBottom: 0 }}>
+          {(() => {
+            const tiers = [
+              { id: 'worker' as const, label: '🔧 Workers', color: 'var(--amber)', hint: 'Getting by — staples and tools.' },
+              { id: 'comfortable' as const, label: '🏠 Comfortable', color: 'var(--accent)', hint: 'A decent life: satisfied, with good wages ($18+/day) or savings ($250+).' },
+              { id: 'affluent' as const, label: '🥂 Affluent', color: 'var(--green)', hint: 'Prospering: happy, well-paid ($26+/day) or wealthy, well-housed or saving.' },
+            ];
+            const counts = { worker: 0, comfortable: 0, affluent: 0 };
+            let climbing = 0;
+            for (const c of citizens) {
+              counts[c.tier] += 1;
+              if (c.tierStreak > 0) climbing += 1;
+            }
+            const total = Math.max(1, citizens.length);
+            return (
+              <>
+                <div className="muted small" style={{ marginBottom: 4 }}>
+                  <FormulaTooltip title="Prosperity tiers" explanation="Citizens climb when steady income (good wages or a savings cushion), satisfaction, and — for affluent — good housing or wealth hold for days in a row, and slide back when their tier's floor gives way. Later: each tier shops differently.">
+                    Who's climbing the ladder
+                  </FormulaTooltip>
+                </div>
+                {tiers.map((t) => (
+                  <div className="row small" key={t.id} style={{ gap: 6 }} title={t.hint}>
+                    <span style={{ width: 110 }}>{t.label}</span>
+                    <span className="bar" style={{ flex: 1 }}>
+                      <span style={{ width: `${(counts[t.id] / total) * 100}%`, background: t.color }} />
+                    </span>
+                    <span className="mono" style={{ width: 70, textAlign: 'right' }}>
+                      {counts[t.id]} ({Math.round((counts[t.id] / total) * 100)}%)
+                    </span>
+                  </div>
+                ))}
+                <div className="muted small" style={{ marginTop: 4 }}>
+                  {climbing > 0
+                    ? `${climbing} citizen${climbing === 1 ? ' is' : 's are'} on a streak toward the next tier.`
+                    : 'Nobody is currently on a promotion streak — raise wages and keep shelves full.'}
+                </div>
+              </>
+            );
+          })()}
+        </div>
+      </div>
+
       <h3>Spending Power</h3>
       <div className="row" style={{ gap: 10, flexWrap: 'wrap', alignItems: 'stretch' }}>
         <div className="card" style={{ minWidth: 240, marginBottom: 0 }}>

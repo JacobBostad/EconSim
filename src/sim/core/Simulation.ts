@@ -58,6 +58,7 @@ import { runWorldEventSystem } from '../systems/WorldEventSystem';
 import { runTradeCitySystem } from '../systems/TradeCitySystem';
 import { runRushOrderSystem } from '../systems/RushOrderSystem';
 import { runFireSaleSystem } from '../systems/FireSaleSystem';
+import { runTierSystem } from '../systems/TierSystem';
 import { acceptFacilityOffer } from './FireSale';
 import { runAchievementSystem } from '../systems/AchievementSystem';
 import { runMissionSystem } from '../systems/MissionSystem';
@@ -102,6 +103,7 @@ const SYSTEMS: SystemFn[] = [
   runDividendSystem, // distribute completed day's profits to shareholders
   runBankruptcySystem,
   runSatisfactionSystem,
+  runTierSystem, // prosperity ladder: derives tiers after satisfaction lands
   runTownStatsSystem, // record daily town vitals after the satisfaction step
   runImmigrationSystem, // a prosperous town attracts new citizens
   runRentSystem, // apartment rent (before accounting snapshots the day)

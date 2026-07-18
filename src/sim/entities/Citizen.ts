@@ -16,6 +16,9 @@ import type { Vec2 } from './Location';
 
 export type EmploymentStatus = 'employed' | 'unemployed';
 
+/** Prosperity ladder (see docs/design/classes-and-ascension.md). */
+export type CitizenTier = 'worker' | 'comfortable' | 'affluent';
+
 export type CitizenActivity =
   | 'sleeping' // at home, before work
   | 'commuting-to-work'
@@ -68,6 +71,14 @@ export interface Citizen {
   activity: CitizenActivity;
   satisfaction: number; // 0..100
   employmentStatus: EmploymentStatus;
+  /** Prosperity tier, derived daily with hysteresis by TierSystem. */
+  tier: CitizenTier;
+  /**
+   * Signed streak toward a tier change: positive days meeting the next
+   * tier's entry bar, negative days failing the current tier's floor.
+   * Resets on any tier change or when neither condition holds.
+   */
+  tierStreak: number;
   /** Last facility the citizen successfully bought each product from. */
   lastPurchasedFromByProduct: Record<ProductId, FacilityId>;
   /** Reliability memory: facilityId -> successful purchase count. */

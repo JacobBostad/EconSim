@@ -70,6 +70,14 @@ engine tests), probed with headless balance runs, and guarded by CI.
   walkaways and cuts when they outnumber buyers — without it, quality/brand
   premiums let prices ride the market-power ceiling until town demand quietly
   died (measured: satisfaction 63 → 28 by day 120).
+- **Prosperity tiers** (classes-and-ascension Phase 1): every citizen sits on
+  a worker → comfortable → affluent ladder, derived daily with hysteresis
+  (5–7 consecutive good days to climb, 5 sustained bad days to slip). Bars
+  are probe-calibrated: the unattended labor market pays one flat wage, so
+  each tier accepts savings as an alternative to above-market pay — wealth is
+  the natural climb, generous player wages the shortcut. The Population tab
+  shows the ladder; ascents to affluent make the event feed. Phase 1 changes
+  no behavior yet — tiered demand and store positioning build on it next.
 
 ## Player features
 

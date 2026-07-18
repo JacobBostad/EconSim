@@ -16,6 +16,7 @@ import { CONSUMER_PRODUCT_IDS, ALL_PRODUCT_IDS } from '../data/products';
 import { emptyMarketStat } from '../entities/Market';
 import { defaultNeedFor } from '../entities/factories';
 import { emptyFacilityDailyStats } from '../entities/Facility';
+import { snapshotTier } from '../systems/TierSystem';
 import { getProduct } from '../data/products';
 import { getFacilityDef } from '../data/facilityDefinitions';
 import { defaultPersonalityFor, defaultCeoFor, type PersonalityId } from '../data/personalities';
@@ -75,6 +76,17 @@ function normalize(state: GameState): GameState {
   state.facilityOffer = state.facilityOffer ?? null;
   state.fireSalesBought = state.fireSalesBought ?? 0;
   state.lastLapsedFireSale = state.lastLapsedFireSale ?? null;
+  // Prosperity tiers: pre-tier saves get a one-shot snapshot guess (no
+  // streak history), then TierSystem takes over with hysteresis.
+  for (const cid in state.citizens) {
+    const cit = state.citizens[cid]!;
+    if (cit.tier === undefined) {
+      cit.tierStreak = 0;
+      cit.tier = 'worker';
+      cit.tier = snapshotTier(state, cit);
+    }
+    cit.tierStreak = cit.tierStreak ?? 0;
+  }
   state.config.maxHomes = state.config.maxHomes ?? 40;
   state.config.maxCitizens = state.config.maxCitizens ?? 80;
   state.config.playerStartCash = state.config.playerStartCash ?? 15000 * 100;

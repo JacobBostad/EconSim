@@ -160,6 +160,8 @@ function newCitizen(b: Builder, homeId: string, homeLoc: Vec2): Citizen {
     activity: 'home',
     satisfaction: 70,
     employmentStatus: 'unemployed',
+    tier: 'worker',
+    tierStreak: 0,
     lastPurchasedFromByProduct: {},
     storeReliability: {},
     dailyStats: { day: 0, wagesEarned: 0, spent: 0, purchases: 0, unmetNeeds: 0 },
