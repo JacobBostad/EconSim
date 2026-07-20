@@ -40,10 +40,18 @@ export function PopulationDashboard(): React.ReactElement {
   const maxBucket = Math.max(1, ...labor.skillBuckets.map((b) => b.count));
   const districts = Object.values(state.districts).sort((a, b) => a.id.localeCompare(b.id));
   const crowdByDistrict: Record<string, number> = {};
+  const employedByDistrict: Record<string, number> = {};
   for (const id in state.cohorts) {
     const co = state.cohorts[id]!;
     crowdByDistrict[co.districtId] = (crowdByDistrict[co.districtId] ?? 0) + co.population;
+    employedByDistrict[co.districtId] = (employedByDistrict[co.districtId] ?? 0) + co.employed;
   }
+  // Crowd only exists in City/Metropolis towns. When it's zero everywhere
+  // (every Village), the cohort columns below never render — the card is
+  // pixel-identical to before A3.
+  let totalCrowd = 0;
+  for (const did in crowdByDistrict) totalCrowd += crowdByDistrict[did]!;
+  const anyCrowd = totalCrowd > 0;
   const buildingsByDistrict: Record<string, number> = {};
   for (const id in state.facilities) {
     const loc = state.facilities[id]!.location;
@@ -65,7 +73,11 @@ export function PopulationDashboard(): React.ReactElement {
 
       <h3>Population</h3>
       <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
-        <Stat label="Population" value={String(pop.total)} />
+        <Stat
+          label="Population"
+          value={anyCrowd ? `${pop.total} + ${totalCrowd}` : String(pop.total)}
+          hint={anyCrowd ? 'Named cast (fully simulated) + crowd (cohort population).' : undefined}
+        />
         <Stat label="Employed" value={`${pop.employed} (${(pop.employmentRate * 100).toFixed(0)}%)`} />
         <Stat label="Unemployed" value={String(pop.unemployed)} />
         <Stat label="Avg wage/day" value={formatMoney(pop.averageWage)} />
@@ -137,6 +149,11 @@ export function PopulationDashboard(): React.ReactElement {
                 <span className="mono" style={{ width: 56, textAlign: 'right' }} title="Crowd population (cohorts)">
                   {crowd > 0 ? crowd : '—'}
                 </span>
+                {anyCrowd && (
+                  <span className="mono muted" style={{ width: 64, textAlign: 'right' }} title="Crowd employed / crowd population">
+                    {crowd > 0 ? `${employedByDistrict[d.id] ?? 0}/${crowd}` : '—'}
+                  </span>
+                )}
                 <span className="muted" style={{ width: 80, textAlign: 'right' }}>
                   {buildings} building{buildings === 1 ? '' : 's'}
                 </span>
