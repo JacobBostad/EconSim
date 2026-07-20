@@ -85,6 +85,7 @@ import { runCitizenScheduleSystem } from '../systems/CitizenScheduleSystem';
 import { runMovementSystem } from '../systems/MovementSystem';
 import { runLaborSystem, hireCitizen, fireCitizen, findUnemployed, trainCrew } from '../systems/LaborSystem';
 import { runCohortLaborSystem } from '../systems/CohortLaborSystem';
+import { runCohortDemandSystem } from '../systems/CohortDemandSystem';
 import { runProductionSystem } from '../systems/ProductionSystem';
 import { runLogisticsSystem } from '../systems/LogisticsSystem';
 import { runRetailDemandSystem } from '../systems/RetailDemandSystem';
@@ -126,6 +127,7 @@ const SYSTEMS: SystemFn[] = [
   runMovementSystem,
   runLaborSystem,
   runCohortLaborSystem, // crowd fills remaining slots + counts as present (A3)
+  runCohortDemandSystem, // crowd shops the shelves in shop-window slices (A3)
   runProductionSystem,
   runLogisticsSystem,
   runRetailDemandSystem,

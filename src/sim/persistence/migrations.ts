@@ -23,6 +23,7 @@ import { defaultPersonalityFor, defaultCeoFor, type PersonalityId } from '../dat
 import { TRADE_CITY_IDS, cityBias } from '../data/tradeCities';
 import { marketCap } from '../selectors/companySelectors';
 import { defaultDistrictPartition } from '../data/districts';
+import { seedNeedBuckets } from '../entities/Cohort';
 
 type Raw = Record<string, unknown>;
 
@@ -96,6 +97,12 @@ function normalize(state: GameState): GameState {
   state.config.sizePreset = state.config.sizePreset ?? 'village';
   state.districts = state.districts ?? defaultDistrictPartition(state.config);
   state.cohorts = state.cohorts ?? {};
+  // Cohorts saved before the demand engine landed carry no urgency buckets;
+  // seed them at the baseline default (no-op for Village saves — empty map).
+  for (const cid in state.cohorts) {
+    const co = state.cohorts[cid]!;
+    co.needBuckets = co.needBuckets ?? seedNeedBuckets();
+  }
   state.lastLapsedFireSale = state.lastLapsedFireSale ?? null;
   // Prosperity tiers: pre-tier saves get a one-shot snapshot guess (no
   // streak history), then TierSystem takes over with hysteresis.
