@@ -229,7 +229,7 @@ function earningsPremium(netWorth: number, avgNet: number): number {
  * stakes are excluded; this is the term other firms' marks are built from,
  * which keeps cross-holding valuation a closed form instead of a fixed point.
  */
-function operatingValuationOf(state: GameState, firmId: FirmId): number {
+export function operatingValuationOf(state: GameState, firmId: FirmId): number {
   const firm = state.firms[firmId];
   if (!firm) return 0;
   const inventoryValue = firmInventoryValue(state, firmId);

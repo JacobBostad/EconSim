@@ -193,25 +193,72 @@ price — instant exit, honest spread.
   pre-held-stake buyout discount already rewards (`Acquisition.ts:34`,
   tested at `mna.test.ts:57`).
 
-## Phase 4 — AI as market participant
+## Phase 4 / Arc B2 — AI as market participant (SHIPPED, city-scale)
 
-- **One code path.** AI trades route through `tradeShares` instead of
-  mutating `sharesHeld` directly (`AIStrategySystem.ts:339-344`) — the
-  Phase 2 spread/impact rules apply to everyone or they are not rules.
-- **Yield-based buying.** Target selection by deterministic dividend
-  yield (`avgNet / marketCap`) with a health check, replacing
-  "highest valuation" (`AIStrategySystem.ts:322-333`), which today
-  maximizes the price paid per dividend dollar and happily buys into
-  firms about to fold.
-- **Distress selling.** An insolvent AI liquidates its portfolio
-  before `BankruptcySystem` starts closing facilities — stakes are
-  liquid assets, and today no bankruptcy path reads `sharesHeld` at
-  all. AI stops being a one-way cash sink into equities.
-- **Per-personality dividend policy.** `DIVIDEND_PAYOUT_RATIO` becomes
-  a per-firm policy driven by AI persona (and player-settable), paid
-  from a smoothed profit base matching the UI's own estimate
-  (`CompanyDashboard.tsx:142-154`) rather than one noisy day — giving
-  investors a genuine yield-vs-growth read on each firm.
+All four behaviours ship gated on `sizePreset !== 'village'`. The
+Village 300-day run is an exact rng-state / serialize bit-identity
+contract (the orchestrator re-runs it), and any change to the shared
+rng draw order or the transaction flow would break it — so every B2
+path is made structurally unreachable in a Village. Verified: seeds
+1 / 11 / 777 produce identical `rngState` and serialized state at day
+300 with and without B2 (and the determinism + golden-save suites
+cover it). As shipped:
+
+- **One code path.** AI trades still route through `tradeShares`
+  (`AIStrategySystem.ts` `maybeBuyStakeCity`), so the Phase 2 fee/impact
+  and the new float ledger apply to AI exactly as to the player.
+- **Yield-based buying** (`maybeBuyStakeCity`). Target selection is the
+  highest trailing dividend yield — `smoothedProfitBase / marketCap`,
+  the SAME smoothed base `DividendSystem` pays from
+  (`DividendSystem.smoothedProfitBase`) — among rivals that are healthy,
+  actually earning (`base > 0`), and operating-solvent
+  (`operatingValuationOf > 0`). This replaces the Village path's
+  "highest valuation" rule, which maximised price paid per dividend
+  dollar and bought into firms about to fold.
+  - *RNG discipline (critical).* The city economy is chaotic and the
+    A3 crowd/tier acceptance bands are pinned to its rng trajectory, so
+    the buy keeps the Village path's EXACT draw structure — same `$35k`
+    floor short-circuit, same `rng.chance(0.12)` cadence, same 5% block,
+    same `ceoQuote(rng)` on success — and changes ONLY deterministic
+    logic. Persona appetite therefore expresses "aggressive personalities
+    buy more" through the deterministic stake CAP
+    (`min(MAX_STAKE_PCT, round(25 × stakeAppetite))` — expansionist
+    accumulates toward 40%, exporter stops near 18%), never through
+    frequency, so no rng draw moves.
+- **Distress selling** (`BankruptcySystem.liquidatePortfolio`). A
+  distressed/insolvent AI sells its whole portfolio at market — sorted
+  order, full `tradeShares` fee/impact/realized-P&L — BEFORE any facility
+  is closed. Selling can lift cash back to solvency, in which case the
+  facility close is skipped that tick: the reprieve a real operator buys
+  by liquidating stakes instead of shuttering shops. Player portfolios
+  are never force-sold (the owner decides).
+- **Per-personality dividend stance** (`Personality.dividendMult`, applied
+  in `DividendSystem` at city scale only). Growth personas retain
+  (expansionist 0.85, brand_builder 0.9), income personas distribute
+  (price_fighter 1.1, exporter 1.15); the rotation averages to 1.0. The
+  multiplier tilts ONLY the firm-to-firm holder payments — the
+  public-float world-drain is computed from the neutral
+  `DIVIDEND_PAYOUT_RATIO` base, so the town's dividend sink (and thus the
+  A3 crowd/tier calibration) is unchanged by persona. Village runs
+  `mult = 1` with the neutral remainder, byte-identical to the pre-B2
+  payout.
+
+### Float ledger (resolves the B1 review flag)
+
+B1 review noted that aggregate outside holdings of one target could
+exceed 100% — three 49% holders summed to 147% — because nothing summed
+the float. Decision: **cap the aggregate at 100% with first-come
+priority**, not a founder-retention ledger. It is the natural fit for
+`tradeShares`, which already clamps a buy to `MAX_STAKE_PCT − held`; the
+float cap is one more clamp, `applied ≤ 100 − Σ(everyone's stake in the
+target)`, derived live from `sharesHeld` with no new persisted state and
+no migration. A latecomer is clamped to the remaining float; a target
+with none left rejects the buy. Enforced at city scale only: Village's
+looser (grandfathered) behaviour is held for the bit-identity contract,
+and with Village's 25% AI cap its aggregate never nears 100% anyway — the
+new city yield-buying is the only pressure toward full float. Measured
+(b2-portfolio probe, 300 days): max aggregate float per target stays
+≤ 88% across seeds 11/4/7; no target is ever over-sold.
 
 ## Phase 5 — asset-liquidity sweep
 
@@ -241,6 +288,31 @@ balance-sheet distortions from the assets map get fixed here:
 
 ## Open questions / accepted quirks
 
+- **B2 city valuation drift is AI-side, not a ladder re-pin.** Because
+  yield-buying builds real portfolios, and `companyValuation` marks held
+  stakes as assets (the P1 fix), the *AI* firms' marked valuations rise:
+  the city day-300 valuation MEDIAN moves ~+55–73% (seeds 11/4/7:
+  $27.7k/$25.4k/$26.4k → $44.3k/$39.4k/$45.7k, b2-portfolio probe). This
+  is > the 10% re-pin trigger, but the objective ladder
+  (`constants.ts:73-77`) is NOT re-pinned: it is an ABSOLUTE
+  *player*-valuation win condition pinned on the Village/Cozy economy,
+  and B2 is gated off Village and never auto-builds the player a
+  portfolio — the player's operating valuation is untouched. The drift is
+  the intended cross-holding markup on firms that choose to hold equity,
+  it is bounded (depth-2 marks, no recursion) with positive, bounded
+  unrealized P&L and no wash-trading (turnover ≈ 2.0–2.2, all build-up),
+  and marked stakes still cannot collateralise loans (credit keys off
+  `operatingNetWorth`). Reported per Arc B2 item 7.
+- **A3 cohortRent plateau assertion is one-sided (B2).** B2 diverts some
+  city firm cash from wages into stakes, so the crowd cash pool eases
+  down a few percent in the mid-game instead of sitting dead flat
+  (day-80→120 moved −11.7% on seed 11 vs −5.7% pre-B2). The pool stays
+  well under the `$500/cap` runaway cap and the `<$2/cap/day` drift
+  guard, both untouched. The plateau check (`cohortRent.test.ts`) —
+  which exists to catch the pool CLIMBING — was made one-sided (bound the
+  upward move only), faithful to that intent; a mild bounded decline is
+  now allowed, exactly as the sibling signed-drift guard already allowed
+  it.
 - **Dividend float leakage is an intentional money sink.** The un-held
   public-float share of every dividend pool exits to `WORLD_ACCOUNT`
   (`DividendSystem.ts:56-66`). This is kept deliberately: the town

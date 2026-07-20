@@ -74,13 +74,16 @@ describe('Crowd housing costs (A3 / HD4 — the pool-drift sink)', () => {
     const driftPerDay = (perCapAt[120]! - perCapAt[40]!) / 80;
     expect(driftPerDay).toBeLessThan(200); // < $2.00/cap/day
 
-    // Flat plateau across the last 40 days: the pool has stopped climbing and
-    // just wobbles (immigration dilutes per-capita whenever it fires), so day
-    // 120 sits within a few percent of the day-80 level rather than riding a
-    // trend upward. (The window is now near-flat — days 80-120 span ~$8/cap —
-    // so the old "day 120 is below the window's exact peak" check turned on
-    // sub-dollar noise; this asserts the plateau itself.)
-    expect(Math.abs(perCapAt[120]! - perCapAt[80]!)).toBeLessThan(perCapAt[80]! * 0.1);
+    // Plateau across the last 40 days: the guarded failure mode is the pool
+    // CLIMBING (the pre-sink runaway), so this bounds the UPWARD move — day 120
+    // never rides more than 10% above day 80. A mild downward drift is allowed,
+    // exactly as the signed day-40->120 drift guard above allows it: Arc B2
+    // activates AI equity investment in the city (gated off Village), diverting
+    // some firm cash from wages into stakes, so the mid-game pool eases down a
+    // few percent instead of sitting dead flat. That is not the runaway this
+    // test exists to catch — the $500/cap cap and the <$2/cap/day drift guard
+    // both still hold — so the plateau assertion is one-sided against a climb.
+    expect(perCapAt[120]! - perCapAt[80]!).toBeLessThan(perCapAt[80]! * 0.1);
   });
 
   it('an apartment landlord earns crowd rent from its spare capacity', () => {

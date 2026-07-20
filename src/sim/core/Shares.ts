@@ -77,7 +77,7 @@ export function tradeShares(
 
   const held = firm.sharesHeld[targetFirmId] ?? 0;
   const wanted = Math.round(pct);
-  const applied =
+  let applied =
     wanted > 0
       ? Math.min(wanted, MAX_STAKE_PCT - held)
       : Math.max(wanted, -held);
@@ -88,6 +88,26 @@ export function tradeShares(
         : `No ${target.name} shares to sell.`,
       firmId);
     return false;
+  }
+
+  // Float ledger (Arc B2, city-scale only): there is one company to own, so the
+  // aggregate of EVERY firm's stake in a target can never exceed 100%. B1's
+  // review flagged that nothing enforced this — three outside 49% holders summed
+  // to 147%. First-come priority: a late buyer is clamped to the remaining
+  // float. Village keeps its grandfathered (looser) behavior for the bit-
+  // identity contract — and with 25% AI caps its aggregate never nears 100
+  // anyway; the new city yield-buying is the only pressure toward full float.
+  if (state.config.sizePreset !== 'village' && applied > 0) {
+    let outstanding = 0;
+    for (const hid of Object.keys(state.firms).sort()) {
+      outstanding += state.firms[hid]!.sharesHeld[targetFirmId] ?? 0;
+    }
+    applied = Math.min(applied, Math.max(0, 100 - outstanding));
+    if (applied === 0) {
+      emitEvent(state, 'warning', 'finance',
+        `${target.name} has no public float left to buy.`, firmId);
+      return false;
+    }
   }
 
   const size = Math.abs(applied);
