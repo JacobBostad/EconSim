@@ -17,7 +17,7 @@ import type { GameState } from '../sim/core/GameState';
 import type { FacilityType } from '../sim/entities/Facility';
 import type { CitizenActivity } from '../sim/entities/Citizen';
 import { computeTime } from '../sim/core/Tick';
-import { landValueAt, landCostMultiplier } from '../sim/core/LandValue';
+import { landValueAt, landValueFromIndex, buildHomeIndex, landCostMultiplier } from '../sim/core/LandValue';
 import { placementBlocker } from '../sim/core/Placement';
 import { getFacilityDef } from '../sim/data/facilityDefinitions';
 import { seasonOf } from '../sim/data/seasons';
@@ -654,9 +654,15 @@ export class TownRenderer {
     const cols = Math.ceil(s.config.mapWidth / step) + 1;
     const rows = Math.ceil(s.config.mapHeight / step) + 1;
     const v = new Float32Array(cols * rows);
+    // Snapshot the homes once and sample every cell against it (A4): the grid is
+    // thousands of queries over one unchanged home set, so building the index once
+    // turns an O(cols×rows×facilities) sweep into O(facilities + cols×rows×homes).
+    // landValueFromIndex is byte-identical to the per-cell landValueAt it replaces,
+    // so the overlay is pixel-for-pixel unchanged.
+    const homeIndex = buildHomeIndex(s);
     for (let gy = 0; gy < rows; gy++) {
       for (let gx = 0; gx < cols; gx++) {
-        v[gy * cols + gx] = landValueAt(s, { x: gx * step, y: gy * step });
+        v[gy * cols + gx] = landValueFromIndex(homeIndex, { x: gx * step, y: gy * step });
       }
     }
     this.landGrid = { key, step, cols, rows, v };
