@@ -214,6 +214,10 @@ tr:hover td { background: rgba(255,255,255,0.03); }
   border: 1px solid var(--border); border-radius: 12px;
   padding: 24px 26px; max-width: 680px; width: 100%;
   box-shadow: 0 20px 60px rgba(0,0,0,0.6);
+  /* Keep the card within the viewport and scroll internally — the new-game
+     dialog can grow tall (difficulty, scenario, size, world scale) and its
+     Start button must stay reachable on short screens. */
+  max-height: calc(100vh - 40px); overflow-y: auto;
 }
 .intro-card h1 { margin: 0 0 2px; font-size: 26px; }
 .intro-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 22px; margin: 16px 0; }

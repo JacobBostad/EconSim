@@ -5,6 +5,7 @@ import fixture3Json from './fixtures/golden-save-v3.json';
 import fixture4Json from './fixtures/golden-save-v4.json';
 import fixture5Json from './fixtures/golden-save-v5.json';
 import fixture6Json from './fixtures/golden-save-v6.json';
+import fixture7Json from './fixtures/golden-save-v7.json';
 import { Simulation } from '../core/Simulation';
 import { deserialize, serialize } from '../persistence/saveLoad';
 import { totalMoneySupply } from '../core/GameState';
@@ -234,5 +235,65 @@ describe('Golden save fixture v6 (emigration era)', () => {
     const sim = new Simulation(state);
     expect(() => sim.run(ticksPerDay(state.config) * 5)).not.toThrow();
     expect(totalMoneySupply(sim.getState())).toBe(supply0);
+  });
+});
+
+/**
+ * Golden save v7 — the cohort era (City preset, seed 11, day 120): the first
+ * fixture with a LIVE crowd. Every A3 system has written state: a worker/
+ * comfortable/affluent cohort grid holding the crowd (CohortLaborSystem's
+ * headcount employed, CohortDemandSystem's drained pools), cohort satisfaction
+ * and tier-gate streaks off their seed (CohortSocialSystem), under-supply AI
+ * founders that answered the crowd's demand, and a curator that has swapped
+ * cast members with the crowd to hold the sample representative. Same contract
+ * as v1-v6: never regenerate to paper over a break — add a migration instead.
+ */
+describe('Golden save fixture v7 (cohort era, City preset)', () => {
+  const raw7 = JSON.stringify(fixture7Json);
+
+  it('loads intact with the live crowd and every A3 system populated', () => {
+    const state = deserialize(raw7);
+    // City preset: crowd cohorts are ON.
+    expect(state.config.sizePreset).toBe('city');
+    // The crowd is real population across the district × tier grid, with jobs.
+    const cohorts = Object.values(state.cohorts);
+    const crowdPop = cohorts.reduce((n, c) => n + c.population, 0);
+    const crowdEmployed = cohorts.reduce((n, c) => n + c.employed, 0);
+    expect(crowdPop).toBeGreaterThan(200);
+    expect(crowdEmployed).toBeGreaterThan(0);
+    // Tier gates moved mass off the all-worker bootstrap: a comfortable cohort
+    // now holds people (CohortSocialSystem's promotion route ran).
+    expect(cohorts.some((c) => c.tier === 'comfortable' && c.population > 0)).toBe(true);
+    // Gate hysteresis is streaked and satisfaction has moved off its seed 70.
+    expect(cohorts.some((c) => c.gateStreaks.promote > 0 || c.gateStreaks.demote > 0)).toBe(true);
+    expect(cohorts.some((c) => c.avgSatisfaction !== 70)).toBe(true);
+    // Cohorts carry real cash in a 'cohort' account (drained/refilled by trade).
+    expect(cohorts.reduce((n, c) => n + c.cashPool, 0)).toBeGreaterThan(0);
+    // Under-supply founders answered the crowd — more AI sellers than the
+    // scenario's opening three.
+    const aiFirms = Object.values(state.firms).filter((f) => f.ownerType === 'ai');
+    expect(aiFirms.length).toBeGreaterThanOrEqual(4);
+    // The curator has swapped named citizens with the crowd to stay a faithful
+    // sample; its retirements/promotions leave a trail in the event log.
+    expect(
+      state.events.some((e) => /settled into the crowd|stepped out of/.test(e.message)),
+    ).toBe(true);
+    // No ghost links survive the cohort churn: every home/job id resolves.
+    for (const f of Object.values(state.facilities)) {
+      for (const id of f.residentIds) expect(state.citizens[id]).toBeTruthy();
+      for (const id of f.employees) expect(state.citizens[id]).toBeTruthy();
+    }
+    // Round-trip stability: loading a re-serialized load changes nothing.
+    const again = deserialize(serialize(state));
+    expect(serialize(again)).toBe(serialize(state));
+  });
+
+  it('the cohort city keeps running with money conserved to the cent', () => {
+    const state = deserialize(raw7);
+    const supply0 = totalMoneySupply(state);
+    const sim = new Simulation(state);
+    expect(() => sim.run(ticksPerDay(state.config) * 5)).not.toThrow();
+    expect(totalMoneySupply(sim.getState())).toBe(supply0);
+    expect(Object.keys(sim.getState().citizens).length).toBeGreaterThan(0);
   });
 });
