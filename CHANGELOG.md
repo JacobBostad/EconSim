@@ -7,6 +7,22 @@ thousands via statistical cohorts plus a fully-simulated cast, districts,
 25-30 firms, a broad product catalog, and specialist firm archetypes
 (real estate, investing, business services).
 
+- **Arc A3 complete — the City lives**: the crowd has a society
+  (CohortSocialSystem: satisfaction with real purchase/stockout nudges,
+  tier mobility on cohort-owned wealth signals, desirability-weighted
+  migration), pays rent (apartment blocks house crowd renters for their
+  landlords; everyone else pays the world — the sink that bounds the
+  pools), and the cast stays a faithful largest-remainder sample of it
+  (CastCuratorSystem retire/promote swaps). Supply answers demand: AI
+  founders enter occupied markets on persistent under-supply, and the
+  cast's true staple demand is visible through urgent-need catch-up
+  baskets. Final 300-day acceptance on three seeds: tier bands landed
+  (worker 59-66%, comfortable 32-39%), cast-vs-cohort satisfaction gap
+  1.3-3.5 points, money conserved to the cent, ~0.2ms/tick. City (beta)
+  is selectable in New Game; golden save v7 and City determinism guards
+  lock it in. Affluent stays a thin 2-3% top tier until product breadth
+  and physical districts give luxury a labor supply — measured and
+  documented, not assumed.
 - **The crowd works and shops (A3 slices 1-2)**: non-Village towns now hold
   a real crowd. Worker cohorts bootstrap with cash in the residential
   districts; CohortLaborSystem fills the slots the named cast leaves open
