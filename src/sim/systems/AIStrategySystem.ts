@@ -12,9 +12,10 @@
  * accounting (both still intact at this point in the tick order).
  */
 
-import type { SimContext } from '../core/GameState';
+import type { SimContext, GameState } from '../core/GameState';
 import { formatMoney } from '../../utils/formatMoney';
-import { emitEvent, canAfford, recordTransaction } from '../core/GameState';
+import { emitEvent, canAfford, recordTransaction, addContract, reindexContracts } from '../core/GameState';
+import { contractsBySource, contractsByDest, contractsByOwner } from '../core/ContractIndex';
 import { firmAccount, WORLD_ACCOUNT } from '../core/Transactions';
 import { nextId } from '../core/Id';
 import { isDayBoundary } from '../core/Tick';
@@ -41,24 +42,100 @@ import { PREMIUM_QUALITY_THRESHOLD } from './TierSystem';
 import { pickBestCity } from '../core/Trade';
 import { getTradeCity } from '../data/tradeCities';
 
+/**
+ * Routine-event channels for the daily digest (Arc A5 / HD7). One price/wage/
+ * sourcing line per firm reads fine in a Village (6 AI firms); at City and
+ * Metropolis scale (18/30 firms) those lines flush the 400-cap log within
+ * hours, burying the openings, failures, and takeovers that carry the story.
+ * The digest collapses each channel to one gazette line per day. Village keeps
+ * every individual line for bit-identity — the routing is preset-gated: an
+ * `undefined` buffer means "emit the line exactly as today".
+ */
+export type RoutineDigestChannel = 'price' | 'wages' | 'sourcing';
+export type DigestBuffer = Record<RoutineDigestChannel, Set<string>>;
+
+export function newDigestBuffer(): DigestBuffer {
+  return { price: new Set(), wages: new Set(), sourcing: new Set() };
+}
+
+/**
+ * Route a routine per-firm event. With a buffer (crowd towns) it collapses into
+ * the day's digest, deduped by `firmId` — a firm that reprices three products
+ * still counts once. With no buffer (Village, or the player's own managed
+ * firm) it emits the individual line the log has always carried. Every routine
+ * event routed here is severity `info`, category `ai`.
+ */
+export function routeRoutine(
+  state: GameState,
+  digest: DigestBuffer | undefined,
+  channel: RoutineDigestChannel,
+  firmId: string,
+  message: string,
+  entityId: string | null,
+): void {
+  if (digest) {
+    digest[channel].add(firmId);
+    return;
+  }
+  emitEvent(state, 'info', 'ai', message, entityId);
+}
+
+/**
+ * Flush the day's routine digest into one gazette line per active channel.
+ * Counts are over distinct firms; the ids are sorted first so the aggregation
+ * is deterministic and testable (the count itself is order-independent, but the
+ * sort pins it against any future named-firm variants). Only reached in crowd
+ * towns — a Village never builds a buffer.
+ */
+export function flushRoutineDigest(state: GameState, digest: DigestBuffer): void {
+  const price = [...digest.price].sort();
+  if (price.length > 0) {
+    const n = price.length;
+    emitEvent(state, 'info', 'ai',
+      n === 1
+        ? 'A shopkeeper marked up prices after repeated sellouts.'
+        : `${n} firms marked up prices after repeated sellouts.`);
+  }
+  const wages = [...digest.wages].sort();
+  if (wages.length > 0) {
+    const n = wages.length;
+    emitEvent(state, 'info', 'ai',
+      n === 1
+        ? 'An employer raised wages to chase scarce workers.'
+        : `${n} firms raised wages to chase scarce workers.`);
+  }
+  const sourcing = [...digest.sourcing].sort();
+  if (sourcing.length > 0) {
+    const n = sourcing.length;
+    emitEvent(state, 'info', 'ai',
+      n === 1
+        ? 'A firm reshuffled its suppliers chasing a sharper wholesale price.'
+        : `${n} firms reshuffled suppliers chasing sharper wholesale prices.`);
+  }
+}
+
 export function runAIStrategySystem(ctx: SimContext): void {
   if (!isDayBoundary(ctx.state.tick, ctx.config)) return;
   const { state } = ctx;
+
+  // Crowd towns collapse routine per-firm chatter into daily digests; Village
+  // keeps every line (undefined buffer => individual emits, bit-identity).
+  const digest = ctx.config.sizePreset === 'village' ? undefined : newDigestBuffer();
 
   for (const fid in state.firms) {
     const firm = state.firms[fid]!;
     if (firm.ownerType !== 'ai') continue;
     if (firm.bankruptcyStatus !== 'insolvent') {
-      manageWages(ctx, firm.id);
+      manageWages(ctx, firm.id, digest);
       restaff(ctx, firm.id);
       maybeBoostProduction(ctx, firm.id);
       maybeWidenShelves(ctx, firm.id);
     }
-    adjustPrices(ctx, firm.id);
+    adjustPrices(ctx, firm.id, false, undefined, digest);
     if (firm.bankruptcyStatus === 'healthy') {
       managePositioning(ctx, firm.id);
       manageDebt(ctx, firm.id);
-      manageSourcing(ctx, firm.id);
+      manageSourcing(ctx, firm.id, digest);
       manageWholesalePricing(ctx, firm.id);
       manageAdBudget(ctx, firm.id);
       maybeInvestQuality(ctx, firm.id);
@@ -88,6 +165,9 @@ export function runAIStrategySystem(ctx: SimContext): void {
     maybeWidenShelves(ctx, player.id, true);
     trimManagedAds(ctx, player.id);
   }
+
+  // One gazette line per channel instead of a line per firm (crowd towns only).
+  if (digest) flushRoutineDigest(state, digest);
 }
 
 /**
@@ -299,7 +379,7 @@ function maybeExpand(ctx: SimContext, firmId: string): void {
       id, ownerFirmId: firmId, sourceFacilityId: sourceId, destinationFacilityId: fac.id,
       productId: product, targetQuantity: 40, reorderPoint: 18, maxInventory: 80, transportCost: 0, active: true,
     };
-    state.contracts[id] = contract;
+    addContract(ctx, contract);
   }
   emitEvent(state, 'info', 'ai', `${firm.name} opened a new outlet to meet demand for ${getProduct(product).name}.${ceoQuote(rng, firm, 'expand')}`, fac.id);
 }
@@ -451,7 +531,11 @@ function maybeRescueAcquisition(ctx: SimContext, firmId: string): boolean {
     if (other.ownerType !== 'ai' || other.bankruptcyStatus === 'healthy') continue;
     const cost = acquisitionCost(state, firmId, fid);
     if (firm.cash - cost < RESCUE_KEEP_BUFFER) continue;
-    return performAcquisition(state, firmId, fid);
+    const done = performAcquisition(state, firmId, fid);
+    // Acquisition re-owns the target's facilities and contracts (an owner-key
+    // change on every one) — rebuild the index before any later reader sees it.
+    if (done) reindexContracts(ctx);
+    return done;
   }
   return false;
 }
@@ -480,9 +564,9 @@ function maybeExportSurplus(ctx: SimContext, firmId: string): void {
       // exporter firm ships its own shops' supply and starves the town
       // (measured: Port Haven satisfaction 1/100 by day 90 on every seed).
       let reserved = 0;
-      for (const cid in state.contracts) {
+      for (const cid of contractsBySource(ctx.contractIndex, fac.id)) {
         const c = state.contracts[cid]!;
-        if (c.active && c.sourceFacilityId === fac.id && c.productId === pid) {
+        if (c.active && c.productId === pid) {
           reserved += c.targetQuantity;
         }
       }
@@ -590,7 +674,7 @@ function maybeEnterLuxury(ctx: SimContext, firmId: string): void {
       productId: pid, targetQuantity: t, reorderPoint: r, maxInventory: m,
       transportCost: 0, active: true,
     };
-    state.contracts[id] = contract;
+    addContract(ctx, contract);
   };
   if (sourceId) wire(sourceId, workshop.id, input, 24, 10, 50);
   wire(workshop.id, boutique.id, luxury, 20, 8, 45);
@@ -656,7 +740,7 @@ function maybeEnterCoffee(ctx: SimContext, firmId: string): void {
       productId: pid, targetQuantity: t, reorderPoint: r, maxInventory: m,
       transportCost: 0, active: true,
     };
-    state.contracts[id] = contract;
+    addContract(ctx, contract);
   };
   if (grainSource) wire(grainSource, roastery.id, 'grain', 24, 10, 50);
   wire(roastery.id, store.id, 'coffee', 30, 12, 60);
@@ -800,9 +884,9 @@ function manageWholesalePricing(ctx: SimContext, firmId: string): void {
     if (fac.wholesaleEnabled === false || fac.status === 'closed') continue;
 
     let customers = 0;
-    for (const cid in state.contracts) {
+    for (const cid of contractsBySource(ctx.contractIndex, fac.id)) {
       const c = state.contracts[cid]!;
-      if (!c.active || c.sourceFacilityId !== fac.id) continue;
+      if (!c.active) continue;
       if (state.facilities[c.destinationFacilityId]?.ownerFirmId !== firmId) customers++;
     }
     const mult = fac.wholesalePriceMult ?? WHOLESALE_DISCOUNT;
@@ -821,13 +905,13 @@ function manageWholesalePricing(ctx: SimContext, firmId: string): void {
   }
 }
 
-export function manageSourcing(ctx: SimContext, firmId: string): void {
+export function manageSourcing(ctx: SimContext, firmId: string, digest?: DigestBuffer): void {
   const { state } = ctx;
   const firm = state.firms[firmId]!;
 
-  for (const cid in state.contracts) {
+  for (const cid of contractsByOwner(ctx.contractIndex, firmId)) {
     const contract = state.contracts[cid]!;
-    if (!contract.active || contract.ownerFirmId !== firmId) continue;
+    if (!contract.active) continue;
     const source = state.facilities[contract.sourceFacilityId];
     const dest = state.facilities[contract.destinationFacilityId];
     if (!source || !dest || dest.ownerFirmId !== firmId) continue;
@@ -848,14 +932,15 @@ export function manageSourcing(ctx: SimContext, firmId: string): void {
         if (fac.type === 'warehouse' || fac.wholesaleEnabled === false) continue;
         const sellerType = state.firms[fac.ownerFirmId]?.ownerType;
         if (sellerType !== 'ai' && sellerType !== 'player') continue;
-        if (localSurplus(state, fac, pid) < LOCAL_SOURCE_MIN_SURPLUS) continue;
+        if (localSurplus(state, fac, pid, ctx.contractIndex) < LOCAL_SOURCE_MIN_SURPLUS) continue;
         const unit = wholesaleUnitPrice(state, fac, pid);
         if (unit >= importerUnit * LOCAL_SOURCE_SAVINGS) continue; // not enough savings
         if (!best || unit < best.unit) best = { fac, unit };
       }
       if (best) {
         contract.sourceFacilityId = best.fac.id;
-        emitEvent(state, 'info', 'ai',
+        reindexContracts(ctx); // source key changed — rebucket before any later reader
+        routeRoutine(state, digest, 'sourcing', firm.id,
           `${firm.name} now sources ${product.name} locally from ${state.firms[best.fac.ownerFirmId]!.name} — wholesale beats the importer.`,
           dest.id);
         return; // one switch per firm per day
@@ -872,7 +957,7 @@ export function manageSourcing(ctx: SimContext, firmId: string): void {
       const curUnit = wholesaleUnitPrice(state, source, pid);
       const gouged = curUnit > importerUnit;
       const destHave = getQuantity(dest.inputInventory, pid);
-      if (!cutOff && !gouged && (destHave > 0 || localSurplus(state, source, pid) >= 10)) {
+      if (!cutOff && !gouged && (destHave > 0 || localSurplus(state, source, pid, ctx.contractIndex) >= 10)) {
         // Healthy relationship — but loyalty has a price. If a rival supplier
         // undercuts the current one by 10%+, take the better deal.
         for (const fid in state.facilities) {
@@ -882,10 +967,11 @@ export function manageSourcing(ctx: SimContext, firmId: string): void {
           if (fac.wholesaleEnabled === false) continue;
           const sellerType = state.firms[fac.ownerFirmId]?.ownerType;
           if (sellerType !== 'ai' && sellerType !== 'player') continue;
-          if (localSurplus(state, fac, pid) < LOCAL_SOURCE_MIN_SURPLUS) continue;
+          if (localSurplus(state, fac, pid, ctx.contractIndex) < LOCAL_SOURCE_MIN_SURPLUS) continue;
           if (wholesaleUnitPrice(state, fac, pid) > curUnit * 0.9) continue;
           contract.sourceFacilityId = fac.id;
-          emitEvent(state, 'info', 'ai',
+          reindexContracts(ctx); // source key changed — rebucket before any later reader
+          routeRoutine(state, digest, 'sourcing', firm.id,
             `${firm.name} moved its ${getProduct(pid).name} order to ${state.firms[fac.ownerFirmId]!.name} — a sharper wholesale price.`,
             dest.id);
           return; // one switch per firm per day
@@ -895,7 +981,8 @@ export function manageSourcing(ctx: SimContext, firmId: string): void {
       const importer = Object.values(state.facilities).find((f) => f.type === 'importer');
       if (!importer) continue;
       contract.sourceFacilityId = importer.id;
-      emitEvent(state, 'info', 'ai',
+      reindexContracts(ctx); // source key changed — rebucket before any later reader
+      routeRoutine(state, digest, 'sourcing', firm.id,
         gouged && !cutOff
           ? `${firm.name} dropped ${state.firms[source.ownerFirmId]?.name ?? 'a supplier'} for ${getProduct(pid).name} — pricier than importing.`
           : `${firm.name} switched ${getProduct(pid).name} sourcing back to the importer — the local supplier ran dry.`,
@@ -915,7 +1002,7 @@ const AI_WAGE_CAP_MULT = 1.5; // × the firm's starting wage
 const AI_WAGE_RAISE = 1.04; // per tight-labor day
 const AI_WAGE_DECAY = 0.98; // per slack day above the floor
 
-function manageWages(ctx: SimContext, firmId: string): void {
+function manageWages(ctx: SimContext, firmId: string, digest?: DigestBuffer): void {
   const { state } = ctx;
   const firm = state.firms[firmId]!;
   const floor = firm.strategy.startingWage ?? firm.wagePolicy.baseWage;
@@ -952,7 +1039,7 @@ function manageWages(ctx: SimContext, firmId: string): void {
       if (cit) cit.wage = next;
     }
     if (next > wage) {
-      emitEvent(state, 'info', 'ai',
+      routeRoutine(state, digest, 'wages', firm.id,
         `${firm.name} raised wages to ${formatMoney(next)}/day to attract scarce workers.`, firm.id);
     }
   }
@@ -982,7 +1069,7 @@ function maybeBoostProduction(ctx: SimContext, firmId: string): void {
     if (!outPid) continue;
     const yesterday = state.marketStats[outPid]?.history.slice(-1)[0];
     const finished = state.marketStats[
-      getFinishedProductFor(state, fac, outPid)
+      getFinishedProductFor(state, fac, outPid, ctx.contractIndex)
     ]?.history.slice(-1)[0];
     const signal = finished ?? yesterday;
     if (!signal || signal.unmetDemand <= signal.unitsSold) continue;
@@ -1036,9 +1123,9 @@ function buildSiblingChain(ctx: SimContext, firmId: string, factoryId: string): 
   // owns one — otherwise the importer supplies the sibling too.
   let producer: import('../entities/Facility').Facility | null = null;
   let inputContract: Contract | null = null;
-  for (const cid in state.contracts) {
+  for (const cid of contractsByDest(ctx.contractIndex, factoryId)) {
     const c = state.contracts[cid]!;
-    if (!c.active || c.destinationFacilityId !== factoryId) continue;
+    if (!c.active) continue;
     inputContract = c;
     const src = state.facilities[c.sourceFacilityId];
     if (src && src.ownerFirmId === firmId && src.activeRecipeId) producer = src;
@@ -1083,7 +1170,7 @@ function buildSiblingChain(ctx: SimContext, firmId: string, factoryId: string): 
   const factory2 = build(factory.defId, facLoc, facCost, `${factory.name} II`, factory.activeRecipeId);
   const wire = (src: string, dest: string, base: Contract): void => {
     const id = nextId(state.idCounters, 'ctr');
-    state.contracts[id] = { ...base, id, sourceFacilityId: src, destinationFacilityId: dest };
+    addContract(ctx, { ...base, id, sourceFacilityId: src, destinationFacilityId: dest });
   };
 
   if (producer && prodLoc && producer.activeRecipeId && inputContract) {
@@ -1092,10 +1179,14 @@ function buildSiblingChain(ctx: SimContext, firmId: string, factoryId: string): 
   } else if (inputContract) {
     wire(inputContract.sourceFacilityId, factory2.id, inputContract); // importer-fed
   }
-  // The new line ships to the same destinations as the original factory.
-  for (const cid in state.contracts) {
+  // The new line ships to the same destinations as the original factory. Snapshot
+  // the source bucket first: wiring appends new contracts (sourced from the new
+  // factory, a different bucket), so this list of the original line's outbound
+  // contracts stays fixed as we iterate — matching the original scan, which
+  // never revisited the contracts it was adding.
+  for (const cid of [...contractsBySource(ctx.contractIndex, factoryId)]) {
     const c = state.contracts[cid]!;
-    if (c.active && c.sourceFacilityId === factoryId) {
+    if (c.active) {
       wire(factory2.id, c.destinationFacilityId, c);
     }
   }
@@ -1134,9 +1225,9 @@ export function maybeWidenShelves(
     const fac = state.facilities[facId];
     if (!fac || fac.type !== 'retail') continue;
     if (fac.dailyStats.lostSales <= SHELF_WIDEN_LOST_SALES) continue;
-    for (const cid in state.contracts) {
+    for (const cid of contractsByDest(ctx.contractIndex, facId)) {
       const c = state.contracts[cid]!;
-      if (!c.active || c.destinationFacilityId !== facId) continue;
+      if (!c.active) continue;
       if (managedOnly && !firm.autoPriceByProduct[c.productId]) continue;
       if (c.targetQuantity >= SHELF_TARGET_CAP) continue;
       c.targetQuantity = Math.min(SHELF_TARGET_CAP, c.targetQuantity + SHELF_TARGET_STEP);
@@ -1182,10 +1273,11 @@ function getFinishedProductFor(
   state: import('../core/GameState').GameState,
   fac: import('../entities/Facility').Facility,
   outPid: string,
+  index: import('../core/ContractIndex').ContractIndex,
 ): string {
-  for (const cid in state.contracts) {
+  for (const cid of contractsBySource(index, fac.id)) {
     const c = state.contracts[cid]!;
-    if (!c.active || c.sourceFacilityId !== fac.id || c.productId !== outPid) continue;
+    if (!c.active || c.productId !== outPid) continue;
     const dest = state.facilities[c.destinationFacilityId];
     if (dest?.activeRecipeId) {
       const finished = getRecipe(dest.activeRecipeId).outputs[0]?.productId;
@@ -1222,6 +1314,7 @@ export function adjustPrices(
   firmId: string,
   onlyAutoPriced = false,
   onlyFacilityId?: string,
+  digest?: DigestBuffer,
 ): void {
   const { state, config, rng } = ctx;
   const firm = state.firms[firmId]!;
@@ -1264,10 +1357,11 @@ export function adjustPrices(
       firm.strategy.gluttStreak[pid] = 0;
       price *= 1 + step;
       if ((firm.strategy.selloutStreak[pid] ?? 0) === 3) {
-        emitEvent(
+        routeRoutine(
           state,
-          'info',
-          'ai',
+          digest,
+          'price',
+          firm.id,
           `${firm.name} raised ${product.name} prices after repeated sellouts.${ceoQuote(rng, firm, 'price')}`,
           firm.id,
         );
