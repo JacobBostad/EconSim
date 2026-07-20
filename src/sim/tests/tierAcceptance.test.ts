@@ -79,6 +79,82 @@ describe('Tier-gate acceptance (A3 city calibration)', () => {
     });
   }
 
+  it('seed 11: 300-day joint acceptance — comfortable holds the 40% ceiling and the worker cast/cohort gap stays <= 8', () => {
+    // The load-bearing joint-calibration guard (docs/design/cohorts-and-districts.md,
+    // "Combined re-measure" + the joint numbers that replaced its re-opens note).
+    // Both shipped mechanisms are live here — RetailDemandSystem's worker catch-up
+    // AND CohortSocialSystem's float-savings gates — so this asserts the COMBINED
+    // economy, not either in isolation. Two outcomes, measured as a 15-day trailing
+    // mean (the gates are a chaotic curator<->demotion oscillation; a single day's
+    // comfortable share swings ~6 points and the worker gap spikes to ~9, so the
+    // band is a multi-week mean):
+    //   1. comfortable <= 40% — the ceiling the calibration cured. This FAILS on
+    //      pre-calibration code (comfortable ran 54% at day 300 before the 2x
+    //      demotion + savings-cap + employment-weighted gates landed).
+    //   2. worker cast-vs-cohort satisfaction gap <= 8 — the worker-catch-up
+    //      outcome must not regress under the joint calibration.
+    // Seed 11 only, so one 300-day city run (~3s) carries the guard; the other two
+    // seeds and the full band table live in the tier-joint probe / design doc.
+    const state = createInitialState(11, { ...DEFAULT_CONFIG, sizePreset: 'city' });
+    const sim = new Simulation(state);
+    sim.dispatch({ type: 'RESUME' });
+    const supply0 = totalMoneySupply(state);
+    const tpd = ticksPerDay(state.config);
+
+    const comfortableShares: number[] = [];
+    const workerGaps: number[] = [];
+    for (let day = 1; day <= 300; day++) {
+      sim.run(tpd);
+      if (day <= 285) continue; // 15-day trailing window
+      const pop: Record<CitizenTier, number> = { worker: 0, comfortable: 0, affluent: 0 };
+      let cohortWorkerSatMass = 0;
+      let cohortWorkerPop = 0;
+      for (const cid in state.cohorts) {
+        const c = state.cohorts[cid]!;
+        pop[c.tier] += c.population;
+        if (c.tier === 'worker') {
+          cohortWorkerSatMass += c.avgSatisfaction * c.population;
+          cohortWorkerPop += c.population;
+        }
+      }
+      const crowd = pop.worker + pop.comfortable + pop.affluent;
+      if (crowd > 0) comfortableShares.push(pop.comfortable / crowd);
+
+      let castWorkerSatMass = 0;
+      let castWorkerN = 0;
+      for (const id in state.citizens) {
+        const c = state.citizens[id]!;
+        if (c.tier !== 'worker') continue;
+        castWorkerSatMass += c.satisfaction;
+        castWorkerN += 1;
+      }
+      if (cohortWorkerPop > 0 && castWorkerN > 0) {
+        workerGaps.push(
+          Math.abs(cohortWorkerSatMass / cohortWorkerPop - castWorkerSatMass / castWorkerN),
+        );
+      }
+    }
+
+    const mean = (a: number[]): number => a.reduce((x, y) => x + y, 0) / a.length;
+    const comfortable = mean(comfortableShares);
+    const workerGap = mean(workerGaps);
+
+    // 1. Comfortable band ceiling — the calibration target (measured ~0.33 here,
+    //    ~0.54 before the joint pass). This is the assertion that FAILS on
+    //    pre-calibration code.
+    expect(comfortable).toBeLessThanOrEqual(0.40);
+    // ...and it did not over-demote comfortable out of existence (a real class
+    // remains — the failure mode 2x demotion could have overshot into).
+    expect(comfortable).toBeGreaterThanOrEqual(0.25);
+
+    // 2. Worker cast-vs-cohort satisfaction gap — the worker-catch-up outcome,
+    //    not regressed (measured ~4 here; the joint target is <= 8).
+    expect(workerGap).toBeLessThanOrEqual(8);
+
+    // Every tier move and migration flow carries real money — conserved to the cent.
+    expect(totalMoneySupply(state)).toBe(supply0);
+  });
+
   it('a well-supplied affluent cohort is NOT cratered — the tier system is sound; city luxury supply is the limiter', () => {
     // The live city cannot stock jewelry/pastries at cohort volume (founder
     // luxury chains go labor-starved and insolvent — soak finding), so the

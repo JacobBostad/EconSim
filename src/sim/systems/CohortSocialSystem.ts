@@ -16,9 +16,11 @@
  *      against the COHORT'S OWN wealth signals (its members' wages, its own
  *      per-capita cash, its own satisfaction) — never observed-agent means,
  *      which the shadow-parity probe measured diverge without bound. A matured
- *      streak moves 7%/day × qualifying-fraction of the block into the
- *      neighbouring tier, skimming ±6 satisfaction off the moved mass so the
- *      gate self-limits (promotion removes the happiest; demotion the least).
+ *      streak moves the qualifying-fraction of the block into the neighbouring
+ *      tier — promotion at 7%/day, demotion at 2× that (the over-tier is also
+ *      re-seeded daily by the cast curator, an inflow promotion lacks) — skimming
+ *      ±6 satisfaction off the moved mass so the gate self-limits (promotion
+ *      removes the happiest; demotion the least).
  *
  *   c. MIGRATION — inflow to worker cohorts when the town clears the
  *      immigration bar (∝ district desirability, capped by the size preset's
@@ -71,11 +73,53 @@ const DRIFT_RATE = 0.12;
 /** Continuous tier flow once a streak matures: the 7%/day midpoint of the
  * probe's measured 6-8%/day band, times the qualifying fraction of the block. */
 const TIER_FLOW_RATE = 0.07;
+
+/**
+ * Demotion flows 2× faster than promotion. Promotion is a lone cohort gate, but
+ * the over-tier is ALSO re-seeded every day by the cast curator's backlog drain
+ * — CastCuratorSystem retires over-represented cast comfortable/affluent members
+ * straight into the matching cohort (up to MAX_SWAPS_PER_DAY = 8/day), an inflow
+ * promotion has no counterpart to. The combined economy makes this bite: the
+ * worker catch-up over-provisions cast workers, they promote through the cast
+ * TierSystem, and the curator dumps the surplus into the crowd's comfortable
+ * cohort. A SYMMETRIC 7% demotion cannot clear that extra inflow and comfortable
+ * pins in the 50s (joint soak: 54/83/45% against the 25-40 band; with the cohort
+ * promotion gate forced to `qualFrac = 0` comfortable STILL sat at 48% — proof
+ * the gate is not the driver, the curator re-seed is). Demotion at 2× lands the
+ * comfortable band (45-day mean) at 32/32/39% on seeds 11/4/7, worker 66/66/59,
+ * with the worker cast-vs-cohort gap at 1.3/3.5/3.3.
+ *
+ * Swept against the 300-day × 3-seed bands: 2.0× centers all three in 25-40;
+ * 1.9× and 2.1× each let the (large) seed-to-seed variance push one town's
+ * comfortable just over 40, and 2.2× over-demotes the noisiest seed's crowd
+ * worker cohort enough to blow its cast-vs-cohort gap past 12. The gates are a
+ * chaotic curator↔demotion oscillation, so a single day's share swings ±6; the
+ * band is a multi-week mean, measured deterministically at day 300.
+ */
+const DEMOTION_FLOW_RATE = TIER_FLOW_RATE * 2.0;
 /** Streak holds while the qualifying (or failing) fraction clears this floor. */
 const GATE_HOLD_FRAC = 0.02;
 /** Selection skim: a promotion carries off the top of the satisfaction
  * distribution (+σ), a demotion the bottom (−σ), so the gate self-limits. */
 const SAT_SKIM = 6;
+
+/**
+ * The savings route is a MARGINAL substitute for wages, not a wholesale one.
+ * Cohort pro-rata tier moves equalize per-capita pools across tiers (a
+ * promotion carries a slice of the source pool into the dest, so the pool
+ * tracks the town, not the class), so once the town is cash-rich EVERY tier's
+ * float-adjusted savings clears the cast bars and the proportional savings leg
+ * pins to 1 — the pool stops discriminating tiers (joint-calibration soak:
+ * comfortable ran 54/83/45% against the 25-40 band, an idle 34%-employed block
+ * held whole by its pool). Capping the savings leg at this share forces the
+ * WAGE and SATISFACTION legs to carry the tier discrimination the equalized
+ * pool cannot: savings can lift (or shield) at most half a block on its own;
+ * the rest must be earning the tier. Swept against the 300-day × 3-seed bands
+ * — 0.5 lands worker/comfortable in 50-70 / 25-40 on all three seeds; higher
+ * re-inflates comfortable (the idle block re-coasts on its pool), lower
+ * over-demotes the genuinely-saving districts below the comfortable band.
+ */
+const SAVINGS_ROUTE_CAP = 0.5;
 
 /**
  * The crowd's WORKING FLOAT — the cash that cycles through daily rent + shopping,
@@ -198,10 +242,15 @@ function updateSatisfaction(ctx: SimContext, cohort: Cohort, soldCache: Record<s
 
 /**
  * Promotion and demotion gates evaluated on the cohort's OWN signals. Promotion
- * qualFrac = logistic((sat − satBar)/5)² × max(wageFrac, savingsOk), the square
- * encoding the probe's tail strictness (an individual must clear the bar every
- * day of the streak, not on average). Demotion mirrors it with a fail fraction.
- * A matured streak moves 7%/day × the (qualifying|failing) fraction.
+ * qualFrac = logistic((sat − satBar)/5)² × max(wageFrac, cappedSavings) ×
+ * empShare — the square encodes the probe's tail strictness (clear the bar every
+ * day of the streak, not on average), the savings cap keeps the equalized pool
+ * from gentrifying a block on cash it isn't earning, and the empShare weight
+ * keeps a mostly-idle block from promoting on a saturated wage bar (see the
+ * joint-calibration note on SAVINGS_ROUTE_CAP / DEMOTION_FLOW_RATE). Demotion
+ * mirrors it with a fail fraction. A matured promotion streak moves TIER_FLOW_
+ * RATE/day × qualFrac; demotion moves DEMOTION_FLOW_RATE (2×)/day × failFrac,
+ * the asymmetry clearing the cast curator's daily re-seed of the over-tier.
  */
 function runTierGates(
   state: GameState,
@@ -212,6 +261,7 @@ function runTierGates(
   const pop = cohort.population;
   if (pop <= 0) return;
   const idx = ORDER.indexOf(cohort.tier);
+  const empShare = cohort.employed / pop;
   const perCapitaCash = cohort.cashPool / pop;
   // Genuine savings = per-capita cash above the working float (daily rent +
   // shopping turnover the pool must carry). This is the cohort's nest-egg
@@ -248,10 +298,22 @@ function runTierGates(
     // bar, saturating at 1 by twice the bar. The old binary `perCapita >= bar`
     // promoted the WHOLE block the day the mean crossed, which — with the pool
     // drifting past the bar for every district by mid-run — gentrified the town
-    // (city soak: comfortable ran 53-70% vs the 25-40 band).
+    // (city soak: comfortable ran 53-70% vs the 25-40 band). The savings route
+    // is now also capped to a marginal share (SAVINGS_ROUTE_CAP): the equalized
+    // pool clears the bar for every tier by mid-run, so savings alone must not
+    // gentrify a block — the wage leg carries the rest.
     const savingsFrac = clamp((perCapitaSavings - savingsBar) / savingsBar, 0, 1);
+    const savingsLeg = Math.min(savingsFrac, SAVINGS_ROUTE_CAP);
     const satTerm = logistic((cohort.avgSatisfaction - satBar) / 5);
-    const qualFrac = satTerm * satTerm * Math.max(wageFrac, savingsFrac);
+    // Employment-scaled promotion FLOW (joint calibration). The combined
+    // economy's worker catch-up lifted firm wages until every employed worker
+    // clears the comfortable wage bar (wf18 == empShare in the soak), so the
+    // wage leg alone would advance the whole employed fraction — being jobbed at
+    // $18/day is not the same as being a comfortable class. Weighting the
+    // qualifier by empShare makes promotion read "a block genuinely earning its
+    // way up": a 40%-employed district advances at a fraction of a fully-jobbed
+    // one's rate.
+    const qualFrac = satTerm * satTerm * Math.max(wageFrac, savingsLeg) * empShare;
 
     if (qualFrac > GATE_HOLD_FRAC) {
       cohort.gateStreaks.promote += 1;
@@ -283,13 +345,23 @@ function runTierGates(
     // block coasting on a pool that is mostly working float no longer holds its
     // whole tier by the savings leg — only the share genuinely above the floor.
     const savingsFloorFrac = clamp((perCapitaSavings - savingsFloorBar) / savingsFloorBar, 0, 1);
-    const holdFactor = Math.max(wageFloorFrac, savingsFloorFrac);
+    // Demotion honesty: an unemployed member holds NO wage floor, and the
+    // equalized pool must not shield an idle block wholesale. The savings hold
+    // is both capped (SAVINGS_ROUTE_CAP) AND employment-weighted, so a mostly-
+    // idle over-gentrified block (crowd employment runs ~30-50% at city scale)
+    // is shielded only on its employment-scaled share; the genuinely-earning
+    // fraction (wageFloorFrac) holds the rest. In the combined economy every
+    // employed member clears the $16 floor, so wageFloorFrac ≈ empShare
+    // dominates this max and the block's demotion pressure tracks its idle
+    // share directly — the pool can no longer prop a jobless class up.
+    const savingsShield = Math.min(savingsFloorFrac, SAVINGS_ROUTE_CAP) * empShare;
+    const holdFactor = Math.max(wageFloorFrac, savingsShield);
     const failFrac = 1 - logistic((cohort.avgSatisfaction - satFloorBar) / 5) * holdFactor;
 
     if (failFrac > GATE_HOLD_FRAC) {
       cohort.gateStreaks.demote += 1;
       if (cohort.gateStreaks.demote >= DEMOTION_DAYS) {
-        const move = Math.floor(pop * TIER_FLOW_RATE * failFrac);
+        const move = Math.floor(pop * DEMOTION_FLOW_RATE * failFrac);
         if (move > 0) moveMass(state, cohort, prevTier, move, -SAT_SKIM, facilityIds);
       }
     } else {
