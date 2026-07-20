@@ -70,6 +70,69 @@ export const LEGEND_BUILDINGS: { type: FacilityType; label: string }[] = [
   { type: 'home', label: 'Home' },
 ];
 
+/**
+ * Render-time LOD / culling thresholds, measured in effScale (screen px per
+ * world unit). At or above LOD_GLYPH_SCALE buildings draw the full 2.5-D kit;
+ * below it they collapse to flat footprint glyphs. Below LOD_CITIZEN_SKIP_SCALE
+ * per-agent sprites (cast citizens and ambient crowd dots) are sub-pixel noise
+ * and are skipped wholesale. Culling itself runs at every zoom — offscreen
+ * entities are never drawn regardless of these thresholds. At the classic fit
+ * view effScale is ~11, so the Village at its default zoom stays fully detailed;
+ * LOD only engages when the player zooms out (or on the large City/Metropolis
+ * maps whose fit view sits nearer the threshold).
+ */
+const LOD_GLYPH_SCALE = 5.5;
+const LOD_CITIZEN_SKIP_SCALE = 3.5;
+
+/** LOD is a big-map economy measure. The Village map always fit fully
+ * detailed before A4 — on a narrow canvas its FIT view can dip under the
+ * glyph threshold, which would visibly downgrade the classic game at
+ * default zoom (review finding) — so Village never engages LOD. */
+function lodEnabled(state: { config: { sizePreset: string } }): boolean {
+  return state.config.sizePreset !== 'village';
+}
+/** World-unit margins added around the visible rect before per-entity culling.
+ * Buildings are tall (2.5-D body plus upgrade pips reach ~1.7× their half-width
+ * — up to ~5 world units — above the ground anchor), so they need a deeper
+ * margin than the ground-hugging agents to avoid popping at the top edge.
+ * Ground-hugging agents (citizens, trucks) are culled in screen space with a
+ * small pixel margin, since their sprites are screen-constant in size. */
+const FACILITY_CULL_MARGIN = 7;
+/**
+ * Ambient crowd: one background pedestrian dot per this many cohort residents.
+ * Pinned by eye — dense enough to read as a living city beside the ~40-150
+ * simulated cast, sparse enough to stay cheap once viewport-culled (a 2,000-pop
+ * City district scatters ~80 dots, a 10,000-pop Metropolis district ~400, and
+ * only the visible tiles of either are ever drawn).
+ */
+const AMBIENT_PEOPLE_PER_DOT = 25;
+const AMBIENT_TILE = 6; // world units per hash tile
+const AMBIENT_MAX_DOTS_PER_TILE = 3;
+
+/**
+ * Salted integer hash → [0,1). The same stream-safe xxhash-style finalizer the
+ * sim uses for its rng-free timing gates (see FireSaleSystem.saleRoll); here it
+ * seeds the ambient crowd from (district, day, tile, index) so the dots are a
+ * pure function of the game day — stable within a day (no per-frame flicker),
+ * fresh each morning — and never touch the shared sim rng or Math.random.
+ */
+function hashInts(...vals: number[]): number {
+  let t = 0x9e3779b1 >>> 0;
+  for (let i = 0; i < vals.length; i++) {
+    t = (t ^ Math.imul((vals[i]! | 0) + 1, 0x27d4eb2f)) >>> 0;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+  }
+  t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+  return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+}
+
+/** FNV-1a of a district id → a stable numeric salt for the ambient hash. */
+function strSeed(str: string): number {
+  let h = 0x811c9dc5 >>> 0;
+  for (let i = 0; i < str.length; i++) h = Math.imul(h ^ str.charCodeAt(i), 0x01000193) >>> 0;
+  return h >>> 0;
+}
+
 export interface RendererCallbacks {
   onPick: (id: string | null) => void;
   getSelectedId: () => string | null;
@@ -250,6 +313,21 @@ export class TownRenderer {
       x: this.view.cx + (p.x - this.cssW / 2 - this.panX) / sc,
       y: this.view.cy + (p.y - this.cssH / 2 - this.panY) / sc,
     };
+  }
+
+  /**
+   * The visible world rectangle (screen corners mapped back to world),
+   * expanded by `margin` world units for per-entity culling. s2w is a pure
+   * axis-aligned affine (no rotation), so the screen box maps to an
+   * axis-aligned world box and a point-in-rect test is an exact cull.
+   */
+  private visibleWorldRect(
+    s: GameState,
+    margin: number,
+  ): { minX: number; minY: number; maxX: number; maxY: number } {
+    const a = this.s2w(s, { x: 0, y: 0 });
+    const b = this.s2w(s, { x: this.cssW, y: this.cssH });
+    return { minX: a.x - margin, minY: a.y - margin, maxX: b.x + margin, maxY: b.y + margin };
   }
 
   // --- events -----------------------------------------------------------
@@ -460,6 +538,7 @@ export class TownRenderer {
     this.smokeT += dt * 1000;
     this.drawGround(s, time.hour);
     this.drawRoads(s);
+    this.drawAmbientCrowd(s);
     if (this.cb.getFlowOverlay()) this.drawFlowOverlay(s, dt);
     this.drawFacilities(s, time.hour);
     this.drawShipments(s, dt);
@@ -1024,6 +1103,83 @@ export class TownRenderer {
 
   private smokeT = 0;
 
+  /**
+   * Ambient crowd density — the district-scale background of a city that has
+   * cohort population beyond the simulated cast (world-scale roadmap A4). For
+   * each district with residents we scatter faint pedestrian dots whose count
+   * scales with that district's cohort population; positions come from a pure
+   * hash of (district, day, tile, index), so the crowd is stable within a game
+   * day (no per-frame flicker) and draws nothing from the sim rng.
+   *
+   * A Village has no cohort population (every cohort record stays dark), so
+   * anyPop is 0 and this method draws nothing — the Village is pixel-identical
+   * to before this layer existed. Only the tiles inside the visible rect are
+   * ever visited, so a Metropolis costs no more than a Village once zoomed in.
+   */
+  private drawAmbientCrowd(s: GameState): void {
+    const sc = this.effScale();
+    if (lodEnabled(s) && sc < LOD_CITIZEN_SKIP_SCALE) return; // dots would be sub-pixel — skip
+    const cohortIds = Object.keys(s.cohorts);
+    if (cohortIds.length === 0) return;
+
+    // Cohort population per district (summed across tiers).
+    const popByDistrict: Record<string, number> = {};
+    let anyPop = 0;
+    for (const cid of cohortIds) {
+      const co = s.cohorts[cid]!;
+      if (co.population <= 0) continue;
+      popByDistrict[co.districtId] = (popByDistrict[co.districtId] ?? 0) + co.population;
+      anyPop += co.population;
+    }
+    if (anyPop === 0) return; // dark cohorts (Village) → identical to before
+
+    const day = Math.floor(s.tick / (s.config.ticksPerHour * 24));
+    const cull = this.visibleWorldRect(s, AMBIENT_TILE);
+    const ctx = this.ctx;
+    ctx.save();
+    for (const did of Object.keys(popByDistrict).sort()) {
+      const d = s.districts[did];
+      if (!d) continue;
+      const pop = popByDistrict[did]!;
+      const b = d.bounds;
+      // Visible tile span = district bounds ∩ viewport, in tile coordinates.
+      const tx0 = Math.floor(Math.max(b.x, cull.minX) / AMBIENT_TILE);
+      const ty0 = Math.floor(Math.max(b.y, cull.minY) / AMBIENT_TILE);
+      const tx1 = Math.floor(Math.min(b.x + b.w, cull.maxX) / AMBIENT_TILE);
+      const ty1 = Math.floor(Math.min(b.y + b.h, cull.maxY) / AMBIENT_TILE);
+      if (tx1 < tx0 || ty1 < ty0) continue;
+      // Dots-per-tile from the WHOLE district's tile count, so density tracks
+      // population regardless of how much of the district is on screen.
+      const tilesW = Math.max(1, Math.ceil(b.w / AMBIENT_TILE));
+      const tilesH = Math.max(1, Math.ceil(b.h / AMBIENT_TILE));
+      const perTile = pop / AMBIENT_PEOPLE_PER_DOT / (tilesW * tilesH);
+      const seed = strSeed(did) ^ (s.seed | 0);
+      for (let ty = ty0; ty <= ty1; ty++) {
+        for (let tx = tx0; tx <= tx1; tx++) {
+          // Whole dots + a hashed fractional carry so sparse density still reads.
+          let n = Math.floor(perTile);
+          const carry = perTile - n;
+          if (carry > 0 && hashInts(seed, day, tx, ty, 7) < carry) n += 1;
+          if (n > AMBIENT_MAX_DOTS_PER_TILE) n = AMBIENT_MAX_DOTS_PER_TILE;
+          for (let i = 0; i < n; i++) {
+            const wx = tx * AMBIENT_TILE + hashInts(seed, day, tx, ty, i * 2 + 1) * AMBIENT_TILE;
+            const wy = ty * AMBIENT_TILE + hashInts(seed, day, tx, ty, i * 2 + 2) * AMBIENT_TILE;
+            if (wx < b.x || wx >= b.x + b.w || wy < b.y || wy >= b.y + b.h) continue;
+            const sp = this.w2s(s, { x: wx, y: wy });
+            const r = Math.max(0.8, sc * 0.16);
+            ctx.globalAlpha = 0.26 + hashInts(seed, day, tx, ty, i + 40) * 0.22;
+            ctx.fillStyle = '#c7cdd6';
+            ctx.beginPath();
+            ctx.arc(sp.x, sp.y, r, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        }
+      }
+    }
+    ctx.globalAlpha = 1;
+    ctx.restore();
+  }
+
   private drawFacilities(s: GameState, hour: number): void {
     const ctx = this.ctx;
     const selected = this.cb.getSelectedId();
@@ -1033,9 +1189,15 @@ export class TownRenderer {
     const order = Object.keys(s.facilities).sort(
       (a, b) => s.facilities[a]!.location.y - s.facilities[b]!.location.y,
     );
+    const cull = this.visibleWorldRect(s, FACILITY_CULL_MARGIN);
+    const lod = lodEnabled(s) && this.effScale() < LOD_GLYPH_SCALE;
     for (const id of order) {
       const f = s.facilities[id]!;
       const p = this.drawPos(id, f.location);
+      // Viewport cull: skip anything whose ground anchor is outside the visible
+      // rect (+ margin for building height). This is the big-map win — on a
+      // 260×184 city only the on-screen buildings pay for their 2.5-D draw.
+      if (p.x < cull.minX || p.x > cull.maxX || p.y < cull.minY || p.y > cull.maxY) continue;
       const sp = this.w2s(s, p);
       const isHome = f.type === 'home';
       const isApartment = f.defId === 'apartment';
@@ -1046,6 +1208,27 @@ export class TownRenderer {
       const size = (isApartment ? 2.0 : isHome ? 1.45 : 2.6) * sc;
       const player = f.ownerFirmId === s.playerFirmId;
       const sel = id === selected || id === this.hoverId;
+
+      // LOD: zoomed far out, collapse the 2.5-D kit to a flat footprint glyph
+      // — no shadow, extruded body, chimney smoke, upgrade pips, status dot or
+      // label (all of which are illegible at this scale and dominate frame
+      // time when there are hundreds of buildings on a city map).
+      if (lod) {
+        if (sel) {
+          ctx.beginPath();
+          ctx.ellipse(sp.x, sp.y, size * 1.15, size * 0.95, 0, 0, Math.PI * 2);
+          ctx.fillStyle = 'rgba(88,166,255,0.30)'; ctx.fill();
+        }
+        const gw = size * 1.3;
+        const gr = Math.max(1, size * 0.28);
+        ctx.fillStyle = isApartment ? APARTMENT_FILL : BUILDING_FILL[f.type];
+        this.roundRectPathRaw(ctx, sp.x - gw / 2, sp.y - gw / 2, gw, gw, gr); ctx.fill();
+        if (player) {
+          ctx.strokeStyle = 'rgba(88,166,255,0.9)'; ctx.lineWidth = 1;
+          this.roundRectPathRaw(ctx, sp.x - gw / 2, sp.y - gw / 2, gw, gw, gr); ctx.stroke();
+        }
+        continue;
+      }
 
       // ground shadow (anchored at the building's base)
       ctx.save();
@@ -1140,6 +1323,8 @@ export class TownRenderer {
     for (const ly of g.hYs) {
       for (let lx = g.x0 + 6; lx < g.x1; lx += 14) {
         const lp = this.w2s(s, { x: lx, y: ly });
+        // Cull offscreen lamps (their glow radius is the margin).
+        if (lp.x < -lampR || lp.y < -lampR || lp.x > this.cssW + lampR || lp.y > this.cssH + lampR) continue;
         const g = ctx.createRadialGradient(lp.x, lp.y, 0, lp.x, lp.y, lampR);
         g.addColorStop(0, `rgba(255,214,130,${0.34 * night})`);
         g.addColorStop(1, 'rgba(255,214,130,0)');
@@ -1152,9 +1337,12 @@ export class TownRenderer {
 
     // lit-building halos: homes glow softly, shops brighter, working factories
     // give off a cooler industrial light
+    const cull = this.visibleWorldRect(s, FACILITY_CULL_MARGIN);
     for (const id in s.facilities) {
       const f = s.facilities[id]!;
       if (f.status === 'closed') continue;
+      const loc = f.location;
+      if (loc.x < cull.minX || loc.x > cull.maxX || loc.y < cull.minY || loc.y > cull.maxY) continue;
       const isHome = f.type === 'home';
       const isApartment = f.defId === 'apartment';
       const size = (isApartment ? 2.0 : isHome ? 1.45 : 2.6) * sc;
@@ -1196,9 +1384,13 @@ export class TownRenderer {
   private drawShipments(s: GameState, dt: number): void {
     const ctx = this.ctx;
     const k = Math.min(1, dt * 8);
+    const cull = this.visibleWorldRect(s, FACILITY_CULL_MARGIN);
     for (const id in s.vehicles) {
       const v = s.vehicles[id]!;
       if (v.status !== 'enroute') continue;
+      // Cull trucks whose live position is offscreen (skips route-line + sprite).
+      const lv = v.currentLocation;
+      if (lv.x < cull.minX || lv.x > cull.maxX || lv.y < cull.minY || lv.y > cull.maxY) continue;
       const origin = s.facilities[v.originFacilityId]?.location ?? v.currentLocation;
       const straight = Math.max(1e-6, Math.hypot(v.targetLocation.x - origin.x, v.targetLocation.y - origin.y));
       const done = Math.hypot(v.currentLocation.x - origin.x, v.currentLocation.y - origin.y);
@@ -1266,11 +1458,18 @@ export class TownRenderer {
     const ctx = this.ctx;
     const selected = this.cb.getSelectedId();
     const k = Math.min(1, dt * 6);
-    for (const id in s.citizens) {
+    // LOD floor: below it a citizen sprite is a couple of sub-pixel px, so the
+    // whole per-agent pass is skipped (trails still decay below). Positions are
+    // not eased while skipped — they resnap when the player zooms back in.
+    const drawSprites = !lodEnabled(s) || this.effScale() >= LOD_CITIZEN_SKIP_SCALE;
+    if (drawSprites) for (const id in s.citizens) {
       const c = s.citizens[id]!;
       const prev = this.smooth.get(id);
       const p = this.ease(id, this.citizenPos(s, id, c), k);
       const sp = this.w2s(s, p);
+      // Screen cull: a citizen sprite spans only a few px, so a small margin
+      // around the canvas is an exact cull of the per-agent draw calls.
+      if (sp.x < -16 || sp.y < -16 || sp.x > this.cssW + 16 || sp.y > this.cssH + 16) continue;
       // trail when moving
       if (prev && c.movementState === 'moving' && Math.random() < 0.25) {
         this.trails.push({ x: sp.x, y: sp.y, life: 0.5 });
