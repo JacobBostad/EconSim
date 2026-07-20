@@ -21,6 +21,8 @@
 
 import type { SimContext, GameState } from '../core/GameState';
 import { recordTransaction, emitEvent } from '../core/GameState';
+import type { SimulationConfig } from '../core/SimulationConfig';
+import { SIZE_PRESETS } from '../core/SimulationConfig';
 import { firmAccount, WORLD_ACCOUNT } from '../core/Transactions';
 import { isDayBoundary } from '../core/Tick';
 import { nextId } from '../core/Id';
@@ -37,11 +39,22 @@ import {
   FOUNDER_EARLIEST_DAY,
   FOUNDER_GAP_DAYS,
   FOUNDER_DAILY_CHANCE,
-  FOUNDER_MAX_AI_FIRMS,
   FOUNDER_MIN_POPULATION,
   FOUNDER_CASH,
+  FOUNDER_UNDERSUPPLY_FILL_RATE,
+  FOUNDER_UNDERSUPPLY_WINDOW,
+  FOUNDER_UNDERSUPPLY_DAYS,
+  FOUNDER_UNDERSUPPLY_COOLDOWN,
   dollars,
 } from '../data/constants';
+
+/** The live founder cap: the size preset's `founderMaxAiFirms` (Village
+ * resolves to exactly the FOUNDER_MAX_AI_FIRMS baseline of 6; City 18;
+ * Metropolis 30). Replaces the old hard constant so a bigger town supports
+ * more competitors. */
+export function founderMaxAiFirms(config: SimulationConfig): number {
+  return SIZE_PRESETS[config.sizePreset].founderMaxAiFirms;
+}
 
 /** Staples a founder will move in on. Coffee and luxury stay with the
  * existing late-game AI entries — this system fills the basic gaps. */
@@ -69,7 +82,12 @@ function hashPick(seed: number, day: number, n: number): number {
   return t % n;
 }
 
-function foundFirm(state: GameState, productId: string, day: number): void {
+function foundFirm(
+  state: GameState,
+  productId: string,
+  day: number,
+  entry: 'vacancy' | 'undersupply' = 'vacancy',
+): void {
   const aiCount = Object.values(state.firms).filter((f) => f.ownerType === 'ai').length;
   const pool = FOUNDER_NAMES[productId] ?? [`New ${getProduct(productId).name} Co`];
   const name = pool[hashPick(state.seed, day, pool.length)]!;
@@ -130,10 +148,56 @@ function foundFirm(state: GameState, productId: string, day: number): void {
   }
 
   state.marketGapDays[productId] = 0;
+  // A fresh seller relieves both shortage signals for this staple.
+  state.marketUndersupplyDays[productId] = 0;
   const ceo = firm.ceoName ? ` ${PERSONALITIES[personality]!.icon} ${firm.ceoName} arrives to run it.` : '';
-  emitEvent(state, 'info', 'economy',
-    `📰 New competition: ${name} moves into town to sell ${getProduct(productId).name.toLowerCase()} — nobody else would.${ceo}`,
-    built.store.id);
+  const product = getProduct(productId).name.toLowerCase();
+  const headline =
+    entry === 'undersupply'
+      ? `📰 New competition: ${name} moves into town to sell ${product} — the shelves can't keep up with demand.${ceo}`
+      : `📰 New competition: ${name} moves into town to sell ${product} — nobody else would.${ceo}`;
+  emitEvent(state, 'info', 'economy', headline, built.store.id);
+}
+
+/**
+ * Town-wide population and average satisfaction over the WHOLE population — the
+ * simulated cast plus the crowd cohorts (population-weighted, exactly the mean
+ * ImmigrationSystem/CohortSocialSystem's migration uses). At Village size the
+ * cohort map is empty, so this reduces to the cast-only mean and the founder
+ * gates stay bit-identical to before world-scale.
+ */
+function townPopAndSat(state: GameState): { pop: number; avgSat: number } {
+  let satMass = 0;
+  let pop = 0;
+  for (const id in state.citizens) {
+    satMass += state.citizens[id]!.satisfaction;
+    pop += 1;
+  }
+  for (const cid in state.cohorts) {
+    const co = state.cohorts[cid]!;
+    satMass += co.avgSatisfaction * co.population;
+    pop += co.population;
+  }
+  return { pop, avgSat: pop > 0 ? satMass / pop : 0 };
+}
+
+/**
+ * Smoothed town fill-rate for a staple over the last FOUNDER_UNDERSUPPLY_WINDOW
+ * finalized days: fulfilled / (fulfilled + unmet) from marketStats history
+ * (unitsSold == fulfilledDemand). Returns 1 (fully served) when there is no
+ * recorded demand — an empty market is the total-vacancy path's business, not
+ * the under-supply signal's.
+ */
+function smoothedFillRate(state: GameState, productId: string): number {
+  const hist = state.marketStats[productId]?.history ?? [];
+  let fulfilled = 0;
+  let unmet = 0;
+  for (let i = Math.max(0, hist.length - FOUNDER_UNDERSUPPLY_WINDOW); i < hist.length; i++) {
+    fulfilled += hist[i]!.unitsSold;
+    unmet += hist[i]!.unmetDemand;
+  }
+  const demand = fulfilled + unmet;
+  return demand > 0 ? fulfilled / demand : 1;
 }
 
 export function runAIFounderSystem(ctx: SimContext): void {
@@ -141,29 +205,73 @@ export function runAIFounderSystem(ctx: SimContext): void {
   const { state } = ctx;
   const day = ctx.time.day;
 
-  // Track the gaps every day (cheap, and the counters read well in debug).
+  // Track total-vacancy gaps every day (cheap, and the counters read well in
+  // debug). This runs at every preset — it is the classic Village signal.
   for (const pid of FOUNDER_PRODUCTS) {
     state.marketGapDays[pid] = soldSomewhere(state, pid)
       ? 0
       : (state.marketGapDays[pid] ?? 0) + 1;
   }
 
-  if (day < FOUNDER_EARLIEST_DAY) return;
-  const cits = Object.values(state.citizens);
-  if (cits.length < FOUNDER_MIN_POPULATION) return;
-  const avgSat = cits.reduce((a, c) => a + c.satisfaction, 0) / cits.length;
-  if (avgSat < IMMIGRATION_MIN_SATISFACTION) return;
-  const aiCount = Object.values(state.firms).filter((f) => f.ownerType === 'ai').length;
-  if (aiCount >= FOUNDER_MAX_AI_FIRMS) return;
-  if (state.worldCash < FOUNDER_CASH) return;
-  if (!founderRoll(state.seed, day)) return;
+  // Under-supply streak tracking is CITY-SCALE ONLY. The Village economy was
+  // calibrated (and its founder tests pinned) WITHOUT this signal; a persistent
+  // shortage at a staffed counter is a crowd-scale phenomenon (city-soak
+  // finding (a)). Gating the whole scan on `sizePreset !== 'village'` makes the
+  // under-supply entry structurally impossible to fire in a Village — the
+  // streak counter is never even touched there, so Village stays bit-identical.
+  const cityScale = state.config.sizePreset !== 'village';
+  if (cityScale) {
+    for (const pid of FOUNDER_PRODUCTS) {
+      state.marketUndersupplyDays[pid] =
+        smoothedFillRate(state, pid) < FOUNDER_UNDERSUPPLY_FILL_RATE
+          ? (state.marketUndersupplyDays[pid] ?? 0) + 1
+          : 0;
+    }
+  }
 
-  // One entry per day: the first persistent gap in fixed product order.
-  for (const pid of FOUNDER_PRODUCTS) {
-    if ((state.marketGapDays[pid] ?? 0) >= FOUNDER_GAP_DAYS && CHAIN_BLUEPRINTS[pid]) {
-      if (FOUNDER_CASH >= Math.round(chainCost(CHAIN_BLUEPRINTS[pid]!) * 1.2)) {
-        foundFirm(state, pid, day);
+  if (day < FOUNDER_EARLIEST_DAY) return;
+  // The population gate reads the WHOLE town (cast + crowd) so a small, starved
+  // cast can't stop capital from answering 300 hungry cohort-shoppers. Village:
+  // crowd is empty, so this is the cast headcount, exactly as before.
+  const { pop, avgSat } = townPopAndSat(state);
+  if (pop < FOUNDER_MIN_POPULATION) return;
+  const aiCount = Object.values(state.firms).filter((f) => f.ownerType === 'ai').length;
+  if (aiCount >= founderMaxAiFirms(state.config)) return;
+  if (state.worldCash < FOUNDER_CASH) return;
+
+  const affordable = (pid: string): boolean =>
+    !!CHAIN_BLUEPRINTS[pid] && FOUNDER_CASH >= Math.round(chainCost(CHAIN_BLUEPRINTS[pid]!) * 1.2);
+
+  // (1) Total-vacancy entry (unchanged): hash-gated daily, the first persistent
+  // gap in fixed product order. Keeps the classic "don't chase a struggling
+  // town" satisfaction CEILING — an empty shelf in an unhappy town is the
+  // player's to claim first (this is the gate the Village founder tests pin).
+  // One entry per day; returns once a qualifying gap is found (whether or not
+  // it can afford to build it).
+  if (avgSat >= IMMIGRATION_MIN_SATISFACTION && founderRoll(state.seed, day)) {
+    for (const pid of FOUNDER_PRODUCTS) {
+      if ((state.marketGapDays[pid] ?? 0) >= FOUNDER_GAP_DAYS && CHAIN_BLUEPRINTS[pid]) {
+        if (affordable(pid)) foundFirm(state, pid, day, 'vacancy');
+        return;
       }
+    }
+  }
+
+  // (2) Under-supply entry into an OCCUPIED market — city-scale only, and
+  // rate-limited town-wide so a temporary shock doesn't spawn five bakeries.
+  // Deliberately NOT gated on the immigration satisfaction ceiling: a chronic
+  // paying shortage is exactly what DEPRESSES satisfaction, so requiring a
+  // happy town first would be a deadlock (the shortage blocks its own cure).
+  // The proof the market is alive and "supports another chain" is the paying
+  // demand itself — the fill-rate denominator is real fulfilled+unmet sales,
+  // and a truly empty town fails the population gate above. The 15-day streak
+  // paces entry against noise; the cooldown paces it town-wide.
+  if (!cityScale) return;
+  if (day - state.lastUndersupplyEntryDay < FOUNDER_UNDERSUPPLY_COOLDOWN) return;
+  for (const pid of FOUNDER_PRODUCTS) {
+    if ((state.marketUndersupplyDays[pid] ?? 0) >= FOUNDER_UNDERSUPPLY_DAYS && affordable(pid)) {
+      foundFirm(state, pid, day, 'undersupply');
+      state.lastUndersupplyEntryDay = day;
       return;
     }
   }

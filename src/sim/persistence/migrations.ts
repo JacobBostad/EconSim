@@ -93,6 +93,8 @@ function normalize(state: GameState): GameState {
   state.emigrationPressure = state.emigrationPressure ?? 0;
   state.emigrationDepartures = state.emigrationDepartures ?? 0;
   state.marketGapDays = state.marketGapDays ?? {};
+  state.marketUndersupplyDays = state.marketUndersupplyDays ?? {};
+  state.lastUndersupplyEntryDay = state.lastUndersupplyEntryDay ?? 0;
   state.sharePriceShift = state.sharePriceShift ?? {};
   state.config.sizePreset = state.config.sizePreset ?? 'village';
   state.districts = state.districts ?? defaultDistrictPartition(state.config);

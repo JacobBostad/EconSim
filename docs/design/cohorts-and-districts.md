@@ -433,6 +433,34 @@ competition flagged in Open Questions is live and severe **today**.
   staple capacity, or a smaller opening crowd — a balancing decision for A3,
   measured here rather than assumed.
 
+### City soak — after supply response + shelf fairness (measured)
+
+The two fixes the baseline demanded landed together with slices 3-4
+(`AIFounderSystem` under-supply founding: 7-day-smoothed fill-rate < 0.65
+for 15 days founds into an OCCUPIED market, one entry per 20 days,
+city-scale only; `CohortDemandSystem` per-slice cast stock reservation:
+the crowd's purchasable stock excludes the cast's population-proportional
+share). Combined 300-day × 3-seed re-run:
+
+- **Founders answer the crowd.** AI firms 3 → 6 / 5 / 5; bread unmet
+  collapses from ~940/day (day 10, all seeds) to 120 / 250 / 133 per day
+  at day 300, with ~400 bread/day sold.
+- **The cast survives.** Final cast satisfaction 51.8 / 47.3 / 55.3
+  (baseline 35.9 / 40.6 / 36.8); run-minimum lifts to 32.9 / 31.5 / 31.3
+  (baseline 25.8 / 30.2 / 25.1). The early trough (days ~20-50) remains
+  the weak spot — all founding is gated to day 55+ (`FOUNDER_EARLIEST_DAY`),
+  so the opening crowd/supply imbalance can only be cured by time; whether
+  to lower that gate at city scale (or shrink `crowdStart`) is an open
+  balancing dial.
+- **Pool drift is the remaining wall**: $4.00 / 4.37 / 3.70 per capita/day
+  (baseline $2.66-4.15) — supply growth raises crowd spending, but the
+  satisfaction recovery resumes immigration whose wage inflow offsets it.
+  Bounding the pool needs a real consumption sink (crowd rent is the
+  natural HD4 candidate) or a savings-gate recalibration; the tier
+  savings routes remain distorted until then.
+- Conservation exact (0 cents, all seeds); ~0.15-0.20 ms/tick — under the
+  0.6 ms A3 budget with every A3 system live.
+
 Golden save **v7** is minted here (the first fixture with live
 cohorts) and joins the load / run-conserved / round-trip trio.
 

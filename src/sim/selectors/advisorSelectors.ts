@@ -16,7 +16,8 @@ import { getQuantity } from '../entities/Inventory';
 import { formatMoney } from '../../utils/formatMoney';
 import { pickBestCity } from '../core/Trade';
 import { getTradeCity } from '../data/tradeCities';
-import { FOUNDER_GAP_DAYS, FOUNDER_MAX_AI_FIRMS } from '../data/constants';
+import { FOUNDER_GAP_DAYS } from '../data/constants';
+import { founderMaxAiFirms } from '../systems/AIFounderSystem';
 
 export interface Advice {
   icon: string;
@@ -215,7 +216,7 @@ export function morningBriefing(state: GameState): Advice[] {
   // is watching the same counter the founder system reads — warn while the
   // player can still claim the market instead of meeting a new rival in it.
   const aiFirms = Object.values(state.firms).filter((f) => f.ownerType === 'ai').length;
-  if (aiFirms < FOUNDER_MAX_AI_FIRMS) {
+  if (aiFirms < founderMaxAiFirms(state.config)) {
     for (const pid of ['bread', 'tools', 'clothes']) {
       const gap = state.marketGapDays[pid] ?? 0;
       if (gap < FOUNDER_GAP_DAYS / 2) continue;

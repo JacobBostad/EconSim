@@ -175,8 +175,29 @@ export const FOUNDER_EARLIEST_DAY = 55;
 export const FOUNDER_GAP_DAYS = 20;
 /** Hash-gated daily odds of an entry once every gate is open. */
 export const FOUNDER_DAILY_CHANCE = 0.12;
-/** Total AI firms the town supports before founders stop coming. */
+/** Total AI firms the town supports before founders stop coming. This is the
+ * VILLAGE baseline; the live cap is `SIZE_PRESETS[preset].founderMaxAiFirms`
+ * (village resolves to exactly this 6), read via `founderMaxAiFirms()`. */
 export const FOUNDER_MAX_AI_FIRMS = 6;
+
+// --- AI founders: crowd under-supply response (city-scale only) -------------
+// A second, coexisting founder signal beyond total vacancy: a staple that is
+// SOLD but chronically UNDER-supplied (a queue at the counter, not an empty
+// shelf) draws a competitor into the occupied market. Structurally inert at
+// Village size — the founder loop never scans it there (see AIFounderSystem).
+/** A staple whose smoothed town fill-rate (fulfilled / (fulfilled + unmet))
+ * stays below this is chronically under-supplied. Starting value — measure
+ * against the City soak. */
+export const FOUNDER_UNDERSUPPLY_FILL_RATE = 0.65;
+/** Days to smooth the fill-rate over, read from marketStats daily history. */
+export const FOUNDER_UNDERSUPPLY_WINDOW = 7;
+/** Consecutive under-supplied days before a founder enters an OCCUPIED market.
+ * Starting value to measure. */
+export const FOUNDER_UNDERSUPPLY_DAYS = 15;
+/** Town-wide minimum days between under-supply entries, so a transient shock
+ * (a bad-logistics week, a world-event demand spike) doesn't spawn a glut of
+ * bakeries at once. Starting value to measure. */
+export const FOUNDER_UNDERSUPPLY_COOLDOWN = 20;
 /** Founders only chase towns worth living in (see also the satisfaction
  * gate — the immigration bar). */
 export const FOUNDER_MIN_POPULATION = 30;

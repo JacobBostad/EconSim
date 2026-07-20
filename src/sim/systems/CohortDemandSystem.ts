@@ -90,6 +90,41 @@ const URGENT_BAR = 1.1;
  * default the agent scorer uses for a store a citizen has never visited. */
 const COHORT_RELIABILITY = 0.4;
 
+/**
+ * Cast stock reservation (soak finding (b): the crowd starves the cast).
+ *
+ * Within a shop-window tick the crowd settles BEFORE the cast's
+ * RetailDemandSystem runs, so on a contended shelf the aggregate eats first —
+ * three bakeries cannot feed a 340-person crowd plus a 40-cast, and the cast's
+ * satisfaction craters and it emigrates. Before the crowd buys, reserve the
+ * cast's population-proportional share of a store's CURRENT stock, so
+ * contention becomes proportional instead of ordered: the crowd's purchasable
+ * stock is the shelf minus the reserved cast share.
+ *
+ * This is a fairness FLOOR, not a market distortion. RetailDemandSystem is
+ * untouched — the cast still buys from the full shelf as before; reservation
+ * only constrains the crowd's VIEW of the stock. When the cast doesn't show
+ * up, the reserved units are simply still there next slice. Unmet crowd demand
+ * the reservation withholds books to unmetDemand/lostSales exactly as a
+ * stockout would.
+ *
+ * RESERVE_FACTOR scales the reserved share; 1.0 is full proportional
+ * reservation (a starting value — the soak measures whether the cast recovers
+ * without over-starving the crowd, and this dials the trade-off).
+ */
+const RESERVE_FACTOR = 1.0;
+
+/**
+ * The crowd's purchasable share of a shelf after the cast reservation: the
+ * current stock minus the cast's population-proportional cut (rounded UP, so a
+ * thin shelf still leaves the cast something). Exported for direct testing —
+ * `castShare` in [0, 1] is fixed for the slice; `stock` is read live per store.
+ */
+export function crowdPurchasableStock(stock: number, castShare: number): number {
+  const reserved = Math.ceil(stock * castShare * RESERVE_FACTOR);
+  return Math.max(0, stock - reserved);
+}
+
 // Below these fractions a plan is numerically dead — skip to avoid churning
 // zero-mass trips through the shelves and stats.
 const VISIT_EPS = 0.0002;
@@ -169,10 +204,21 @@ function runSlice(ctx: SimContext): void {
   const sold: Record<string, boolean> = {};
   for (const pid of NEEDSPEC_PRODUCT_IDS) sold[pid] = soldSomewhere(state, pid);
 
+  // Cast reservation share, computed ONCE per slice (not per store): the cast's
+  // town population against the total demand (cast + crowd). A coarse but honest
+  // population-proportional proxy for each side's claim on a contended shelf —
+  // see RESERVE_FACTOR. Integer sums are order-independent, but iterate sorted
+  // to keep with the system's deterministic economic iteration.
+  const castPop = Object.keys(state.citizens).length;
+  let crowdPop = 0;
+  for (const cid of Object.keys(state.cohorts).sort()) crowdPop += state.cohorts[cid]!.population;
+  const denom = castPop + crowdPop;
+  const castShare = denom > 0 ? castPop / denom : 0;
+
   for (const cid of Object.keys(state.cohorts).sort()) {
     const cohort = state.cohorts[cid]!;
     if (cohort.population <= 0) continue;
-    shopCohortSlice(ctx, cohort, openStores, sold);
+    shopCohortSlice(ctx, cohort, openStores, sold, castShare);
   }
 }
 
@@ -242,6 +288,7 @@ function shopCohortSlice(
   cohort: Cohort,
   openStores: Facility[],
   sold: Record<string, boolean>,
+  castShare: number,
 ): void {
   const { state } = ctx;
   const pop = cohort.population;
@@ -329,7 +376,7 @@ function shopCohortSlice(
       for (let i = 0; i < NEED_BUCKETS; i++) eSum += Math.min(1, b[i]! / BASKET_GATE);
       const eligFrac = eSum / NEED_BUCKETS;
       if (eligFrac <= ELIG_EPS) continue;
-      const qty = attemptCohortPurchase(ctx, cohort, store, pid, v, eligFrac);
+      const qty = attemptCohortPurchase(ctx, cohort, store, pid, v, eligFrac, castShare);
       if (qty > 0) fulfilledBy[pid] = (fulfilledBy[pid] ?? 0) + qty;
     }
   }
@@ -352,6 +399,7 @@ function attemptCohortPurchase(
   productId: string,
   visits: number,
   eligFrac: number,
+  castShare: number,
 ): number {
   const { state } = ctx;
   const product = getProduct(productId);
@@ -396,7 +444,13 @@ function attemptCohortPurchase(
   stat.demandAttempts += visits * eligFrac * buyFrac;
 
   const affordableUnits = price > 0 ? cohort.cashPool / price : attempted;
-  const qty = Math.floor(Math.min(attempted, stock, affordableUnits));
+  // Reserve the cast's proportional share of the CURRENT shelf before the crowd
+  // takes any (soak finding (b) — the crowd settles before the cast's
+  // RetailDemandSystem, so an ordered shelf lets the aggregate eat first). The
+  // crowd may only buy from what remains; the cast (RetailDemandSystem) still
+  // sees the full shelf. Withheld units surface as unmet crowd demand below.
+  const crowdStock = crowdPurchasableStock(stock, castShare);
+  const qty = Math.floor(Math.min(attempted, crowdStock, affordableUnits));
   if (qty > 0) {
     const revenue = qty * price;
     removeStock(store.inputInventory, productId, qty);

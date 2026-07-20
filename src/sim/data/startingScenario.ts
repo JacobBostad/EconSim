@@ -246,6 +246,8 @@ export function createInitialState(
     emigrationPressure: 0,
     emigrationDepartures: 0,
     marketGapDays: {},
+    marketUndersupplyDays: {},
+    lastUndersupplyEntryDay: 0,
     sharePriceShift: {},
     districts: defaultDistrictPartition(config),
     cohorts: {},
@@ -256,6 +258,18 @@ export function createInitialState(
     perf: { lastTickMs: 0, avgTickMs: 0, ticksSimulated: 0 },
   };
   const b: Builder = { state, rng: new Rng(state), counters };
+
+  // World-scale cast ceiling: a non-Village preset lifts the immigration caps
+  // to the preset's castTarget (homes hold 2 residents, so ceil(target/2) homes
+  // plus a few spares for odd/partial fills). This only raises the GROWTH
+  // CEILING — physical home PLACEMENT is still the A4 problem (homeSlotFor's
+  // column march saturates the map), so cast growth beyond ~200 stays gated by
+  // the map until district-aware placement lands. Village keeps its 80/40 caps.
+  if (state.config.sizePreset !== 'village') {
+    const target = SIZE_PRESETS[state.config.sizePreset].castTarget;
+    state.config.maxCitizens = Math.max(state.config.maxCitizens, target);
+    state.config.maxHomes = Math.max(state.config.maxHomes, Math.ceil(target / 2) + 4);
+  }
 
   for (const cid of TRADE_CITY_IDS) state.tradeCities[cid] = { pricesByProduct: {} };
   for (const pid of ALL_PRODUCT_IDS) {

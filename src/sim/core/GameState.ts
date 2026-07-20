@@ -183,6 +183,13 @@ export interface GameState {
   emigrationDepartures: number;
   /** Consecutive days each staple has had no staffed seller (AI founders). */
   marketGapDays: Record<string, number>;
+  /** Consecutive days each staple's smoothed town fill-rate has stayed below
+   * the under-supply threshold — the city-scale founder signal for an occupied
+   * but starved market (Village never accumulates it). */
+  marketUndersupplyDays: Record<string, number>;
+  /** Day of the last town-wide under-supply founder entry, for the entry
+   * rate-limit (0 = none yet). */
+  lastUndersupplyEntryDay: number;
   /**
    * Share-price displacement per firm: recent trades push the quote away
    * from fair value (marketCap), decaying back daily. Liquidity noise only —
