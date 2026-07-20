@@ -7,6 +7,25 @@ thousands via statistical cohorts plus a fully-simulated cast, districts,
 25-30 firms, a broad product catalog, and specialist firm archetypes
 (real estate, investing, business services).
 
+- **The crowd works and shops (A3 slices 1-2)**: non-Village towns now hold
+  a real crowd. Worker cohorts bootstrap with cash in the residential
+  districts; CohortLaborSystem fills the slots the named cast leaves open
+  (cast always has priority, firms only hire crowd they can afford) and
+  crowd counts as present crew at the cohort's skill; payroll settles one
+  transaction per firm × cohort plus subsistence for idle crowd.
+  CohortDemandSystem settles crowd purchases through the SAME shelves,
+  store scoring, and market signals as the cast — trip-limited demand with
+  10-bucket urgency distributions per product (the shadow-parity probe's
+  measured model, ported wholesale), in 5 shop-window slices interleaved
+  with cast shopping and restocks. Facility inspector and Population
+  dashboard surface crowd staffing and district employment. Village towns
+  re-verified bit-identical at every slice.
+- **B1 — fair takeovers + control ladder**: full acquisitions cash out
+  minority holders at the acquisition price (cost basis released with
+  realized P&L) instead of clipping stakes; recordTransaction refuses to
+  move money against a dead account (both sides or neither); a 25% stake
+  earns board visibility and a 40% stake blocks hostile takeover of the
+  target.
 - **Shadow-cohort parity probe (A2 spike — the gate for A3)**: a prototype
   cohort demand engine ran beside the live agent town for 300 days × 3
   seeds with zero state mutation (end-of-run rng state matches the A1
