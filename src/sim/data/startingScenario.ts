@@ -26,8 +26,8 @@ import { emptyAccounting } from '../entities/Accounting';
 import { emptyMarketStat } from '../entities/Market';
 import { addStock, type Inventory } from '../entities/Inventory';
 import { makeCitizenNeeds } from '../entities/factories';
-import { getFacilityDef } from './facilityDefinitions';
-import { getProduct, CONSUMER_PRODUCT_IDS, ALL_PRODUCT_IDS } from './products';
+import { getFacilityDef, facilityRecipesForPreset } from './facilityDefinitions';
+import { getProduct, PRODUCT_IDS_BY_PRESET, CONSUMER_PRODUCT_IDS_BY_PRESET } from './products';
 import { TRADE_CITY_IDS, cityBias } from './tradeCities';
 import { FIRST_NAMES, LAST_NAMES } from './names';
 import { dollars } from './constants';
@@ -68,7 +68,7 @@ function newFacility(
     inputInventory: {},
     outputInventory: {},
     storageCapacity: def.storageCapacity,
-    recipes: [...def.allowedRecipes],
+    recipes: facilityRecipesForPreset(def, b.state.config.sizePreset),
     activeRecipeId: opts.activeRecipeId ?? null,
     retailProductIds: opts.retailProductIds ?? [],
     positioning: 'standard',
@@ -150,7 +150,7 @@ function newCitizen(b: Builder, homeId: string, homeLoc: Vec2): Citizen {
   const first = b.rng.pick(FIRST_NAMES) ?? 'Sam';
   const last = b.rng.pick(LAST_NAMES) ?? 'Doe';
   const prefs: Record<string, number> = {};
-  for (const pid of CONSUMER_PRODUCT_IDS) prefs[pid] = b.rng.range(0.85, 1.15);
+  for (const pid of CONSUMER_PRODUCT_IDS_BY_PRESET[b.state.config.sizePreset]) prefs[pid] = b.rng.range(0.85, 1.15);
   const cit: Citizen = {
     id,
     name: `${first} ${last}`,
@@ -160,7 +160,7 @@ function newCitizen(b: Builder, homeId: string, homeLoc: Vec2): Citizen {
     role: 'unemployed',
     wage: 0,
     cash: CITIZEN_START_CASH,
-    needs: makeCitizenNeeds(b.rng),
+    needs: makeCitizenNeeds(b.rng, b.state.config.sizePreset),
     preferences: prefs,
     currentLocation: { ...homeLoc },
     targetLocation: { ...homeLoc },
@@ -280,7 +280,10 @@ export function createInitialState(
   state.districts = defaultDistrictPartition(state.config);
 
   for (const cid of TRADE_CITY_IDS) state.tradeCities[cid] = { pricesByProduct: {} };
-  for (const pid of ALL_PRODUCT_IDS) {
+  // Preset-gated (C1): Village seeds only the classic catalog, so its serialized
+  // marketStats/trade-city books are byte-identical to pre-C1. City/Metropolis
+  // additionally seed the breadth products they actually trade.
+  for (const pid of PRODUCT_IDS_BY_PRESET[state.config.sizePreset]) {
     state.marketStats[pid] = emptyMarketStat(pid);
     for (const cid of TRADE_CITY_IDS) {
       state.tradeCities[cid]!.pricesByProduct[pid] = Math.round(
@@ -457,7 +460,7 @@ function seedCrowd(state: GameState): void {
   // shops (concentrated in the inner district) can't yet reach.
   const primary = residential[0]!;
   const id = cohortId(primary.id, 'worker');
-  const cohort = emptyCohort(primary.id, 'worker');
+  const cohort = emptyCohort(primary.id, 'worker', state.config.sizePreset);
   cohort.population = preset.crowdStart;
   cohort.cashPool = preset.crowdStart * CROWD_START_CASH_PER_CAPITA;
   state.cohorts[id] = cohort;

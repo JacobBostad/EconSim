@@ -46,6 +46,44 @@ export const CHAIN_BLUEPRINTS: Record<string, ChainBlueprint> = {
     producerRecipeId: 'grow_cotton',
     factoryRecipeId: 'sew_clothes',
   },
+  // Arc C1 breadth chains (city/metropolis products) — same producer→factory→
+  // store shape as the shipped chains, so the wizard and AI founder stand them
+  // up through the exact same machinery.
+  meals: {
+    productId: 'meals',
+    inputProductId: 'produce',
+    producerDefId: 'farm',
+    producerRecipeId: 'grow_produce',
+    factoryRecipeId: 'cook_meals',
+  },
+  shoes: {
+    productId: 'shoes',
+    inputProductId: 'leather',
+    producerDefId: 'farm',
+    producerRecipeId: 'tan_leather',
+    factoryRecipeId: 'make_shoes',
+  },
+  furniture: {
+    productId: 'furniture',
+    inputProductId: 'lumber',
+    producerDefId: 'farm',
+    producerRecipeId: 'cut_lumber',
+    factoryRecipeId: 'build_furniture',
+  },
+  appliances: {
+    productId: 'appliances',
+    inputProductId: 'minerals',
+    producerDefId: 'mine',
+    producerRecipeId: 'mine_minerals',
+    factoryRecipeId: 'assemble_appliances',
+  },
+  wine: {
+    productId: 'wine',
+    inputProductId: 'grapes',
+    producerDefId: 'farm',
+    producerRecipeId: 'grow_grapes',
+    factoryRecipeId: 'ferment_wine',
+  },
 };
 
 /** Total build cost of a chain (producer + factory + retail). */

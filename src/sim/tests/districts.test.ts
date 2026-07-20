@@ -46,7 +46,7 @@ describe('Districts + dark cohorts (world-scale A2)', () => {
     const state = newSim(11).getState();
     const supply0 = totalMoneySupply(state);
     const id = cohortId('the_rows', 'worker');
-    state.cohorts[id] = emptyCohort('the_rows', 'worker');
+    state.cohorts[id] = emptyCohort('the_rows', 'worker', 'city');
     expect(totalMoneySupply(state)).toBe(supply0); // empty pool adds nothing
 
     recordTransaction(state, {

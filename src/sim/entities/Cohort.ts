@@ -15,7 +15,8 @@
 import type { CitizenTier } from './Citizen';
 import type { DistrictId } from './District';
 import type { ProductId } from '../core/Id';
-import { PRODUCTS, ALL_PRODUCT_IDS } from '../data/products';
+import { PRODUCTS, COHORT_DEMAND_PRODUCT_IDS } from '../data/products';
+import type { SizePreset } from '../core/SimulationConfig';
 
 export type CohortId = string; // `${districtId}:${tier}`
 
@@ -62,15 +63,21 @@ export interface Cohort {
 }
 
 /**
- * Seed every needSpec product's buckets at its migration urgency — the same
- * hand-pinned default a save-backfill uses for a fresh citizen need, so a
- * brand-new cohort starts at the town's baseline appetite rather than zero.
+ * Seed each base-catalog consumer product's buckets at its migration urgency —
+ * the same hand-pinned default a save-backfill uses for a fresh citizen need, so
+ * a brand-new cohort starts at the town's baseline appetite rather than zero.
+ * The crowd (cohorts) craves only the base catalog (COHORT_DEMAND_PRODUCT_IDS)
+ * at EVERY preset — the Arc C1 breadth is cast/player/founder territory. This
+ * keeps the pinned A3/A4 city tier calibration byte-stable and avoids the
+ * founder chicken-and-egg where a crowd craving an unserved product drags town
+ * satisfaction below the founder's entry gate. `preset` is accepted for a
+ * forward-compatible signature (a future arc may let the crowd craze breadth)
+ * but the base catalog is preset-independent today.
  */
-export function seedNeedBuckets(): Record<ProductId, number[]> {
+export function seedNeedBuckets(_preset: SizePreset): Record<ProductId, number[]> {
   const buckets: Record<ProductId, number[]> = {};
-  for (const pid of ALL_PRODUCT_IDS) {
-    const spec = PRODUCTS[pid]!.needSpec;
-    if (!spec) continue;
+  for (const pid of COHORT_DEMAND_PRODUCT_IDS) {
+    const spec = PRODUCTS[pid]!.needSpec!;
     buckets[pid] = Array.from({ length: NEED_BUCKETS }, () => spec.migration.urgency);
   }
   return buckets;
@@ -80,7 +87,7 @@ export function cohortId(districtId: DistrictId, tier: CitizenTier): CohortId {
   return `${districtId}:${tier}`;
 }
 
-export function emptyCohort(districtId: DistrictId, tier: CitizenTier): Cohort {
+export function emptyCohort(districtId: DistrictId, tier: CitizenTier, preset: SizePreset): Cohort {
   return {
     id: cohortId(districtId, tier),
     districtId,
@@ -92,7 +99,7 @@ export function emptyCohort(districtId: DistrictId, tier: CitizenTier): Cohort {
     avgSkill: 0.95,
     backlogByProduct: {},
     gateStreaks: { promote: 0, demote: 0 },
-    needBuckets: seedNeedBuckets(),
+    needBuckets: seedNeedBuckets(preset),
     dayEvents: { fulfilled: 0, unmet: 0, pricedOut: 0 },
   };
 }

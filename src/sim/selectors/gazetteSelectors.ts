@@ -6,7 +6,7 @@
 
 import type { GameState } from '../core/GameState';
 import type { GameEvent } from '../core/Events';
-import { CONSUMER_PRODUCT_IDS, ALL_PRODUCT_IDS, getProduct } from '../data/products';
+import { CONSUMER_PRODUCT_IDS_BY_PRESET, PRODUCT_IDS_BY_PRESET, getProduct } from '../data/products';
 import { ticksPerDay } from '../core/Tick';
 import { cityPrice, exportFreightFee } from '../core/Trade';
 import { TRADE_CITY_IDS, getTradeCity } from '../data/tradeCities';
@@ -82,7 +82,7 @@ export function gazetteEditions(state: GameState, days: number): GazetteEdition[
       .map((ev) => ({ severity: ev.severity, category: ev.category, text: ev.message }));
 
     const ticker: string[] = [];
-    for (const pid of CONSUMER_PRODUCT_IDS) {
+    for (const pid of CONSUMER_PRODUCT_IDS_BY_PRESET[state.config.sizePreset]) {
       const hist = state.marketStats[pid]?.history ?? [];
       const snap = hist.find((h) => h.day === day) ?? (day === today ? null : undefined);
       if (snap) {
@@ -124,7 +124,7 @@ export interface TradeDeskRow {
  */
 export function tradeDesk(state: GameState, limit = 4): TradeDeskRow[] {
   const rows: TradeDeskRow[] = [];
-  for (const pid of ALL_PRODUCT_IDS) {
+  for (const pid of PRODUCT_IDS_BY_PRESET[state.config.sizePreset]) {
     const nets = TRADE_CITY_IDS.map((cid) => ({
       cid,
       net: Math.round(cityPrice(state, cid, pid) * (1 - exportFreightFee(state, cid))),

@@ -13,8 +13,9 @@ import type { Facility } from './Facility';
 import { emptyFacilityDailyStats } from './Facility';
 import type { Citizen, CitizenNeed } from './Citizen';
 import type { Rng } from '../core/Random';
-import { getFacilityDef } from '../data/facilityDefinitions';
-import { CONSUMER_PRODUCT_IDS, PRODUCTS, ALL_PRODUCT_IDS } from '../data/products';
+import { getFacilityDef, facilityRecipesForPreset } from '../data/facilityDefinitions';
+import { PRODUCTS, PRODUCT_IDS_BY_PRESET, CONSUMER_PRODUCT_IDS_BY_PRESET } from '../data/products';
+import type { SizePreset } from '../core/SimulationConfig';
 import { FIRST_NAMES, LAST_NAMES } from '../data/names';
 
 export function createFacility(
@@ -37,7 +38,7 @@ export function createFacility(
     inputInventory: {},
     outputInventory: {},
     storageCapacity: def.storageCapacity,
-    recipes: [...def.allowedRecipes],
+    recipes: facilityRecipesForPreset(def, state.config.sizePreset),
     activeRecipeId: null,
     retailProductIds: [],
     positioning: 'standard',
@@ -72,9 +73,14 @@ export function createFacility(
  * draw sequence never shifts when products are added. A range draws from the
  * stream; a fixed number (luxury cravings start at 0) consumes no draw —
  * exactly the pattern of the old hand-authored table.
+ *
+ * `preset` gates the catalog: Village and City draw only the classic specs
+ * (order ≤ 6), so their seeded sequence is byte-identical to pre-C1; Metropolis
+ * appends the breadth specs AFTER them (order ≥ 7), never disturbing the earlier
+ * draws. (The C1 breadth is metropolis-only — see products.ts.)
  */
-export function makeCitizenNeeds(rng: Rng): CitizenNeed[] {
-  const specced = ALL_PRODUCT_IDS
+export function makeCitizenNeeds(rng: Rng, preset: SizePreset): CitizenNeed[] {
+  const specced = PRODUCT_IDS_BY_PRESET[preset]
     .map((id) => PRODUCTS[id]!)
     .filter((p) => p.needSpec)
     .sort((a, b) => a.needSpec!.order - b.needSpec!.order);
@@ -122,7 +128,7 @@ export function createCitizen(
   const first = rng.pick(FIRST_NAMES) ?? 'Sam';
   const last = rng.pick(LAST_NAMES) ?? 'Doe';
   const prefs: Record<string, number> = {};
-  for (const pid of CONSUMER_PRODUCT_IDS) prefs[pid] = rng.range(0.85, 1.15);
+  for (const pid of CONSUMER_PRODUCT_IDS_BY_PRESET[state.config.sizePreset]) prefs[pid] = rng.range(0.85, 1.15);
   const cit: Citizen = {
     id,
     name: `${first} ${last}`,
@@ -132,7 +138,7 @@ export function createCitizen(
     role: 'unemployed',
     wage: 0,
     cash: 0,
-    needs: makeCitizenNeeds(rng),
+    needs: makeCitizenNeeds(rng, state.config.sizePreset),
     preferences: prefs,
     currentLocation: { ...loc },
     targetLocation: { ...loc },

@@ -12,7 +12,7 @@
 import { SAVE_VERSION } from '../core/GameState';
 import type { GameState } from '../core/GameState';
 import type { AccountingPeriod } from '../entities/Accounting';
-import { CONSUMER_PRODUCT_IDS, ALL_PRODUCT_IDS } from '../data/products';
+import { PRODUCT_IDS_BY_PRESET, CONSUMER_PRODUCT_IDS_BY_PRESET } from '../data/products';
 import { emptyMarketStat } from '../entities/Market';
 import { defaultNeedFor } from '../entities/factories';
 import { emptyFacilityDailyStats } from '../entities/Facility';
@@ -103,7 +103,7 @@ function normalize(state: GameState): GameState {
   // seed them at the baseline default (no-op for Village saves — empty map).
   for (const cid in state.cohorts) {
     const co = state.cohorts[cid]!;
-    co.needBuckets = co.needBuckets ?? seedNeedBuckets();
+    co.needBuckets = co.needBuckets ?? seedNeedBuckets(state.config.sizePreset);
     co.dayEvents = co.dayEvents ?? { fulfilled: 0, unmet: 0, pricedOut: 0 };
   }
   state.lastLapsedFireSale = state.lastLapsedFireSale ?? null;
@@ -191,7 +191,9 @@ function normalize(state: GameState): GameState {
     c.storeReliability = c.storeReliability ?? {};
     c.skill = c.skill ?? 1.0;
     // Products added after the save was written: give citizens the need.
-    for (const pid of CONSUMER_PRODUCT_IDS) {
+    // Preset-gated (C1): a Village save never gains a City-only need, so
+    // loading it stays byte-identical; a City save backfills the breadth needs.
+    for (const pid of CONSUMER_PRODUCT_IDS_BY_PRESET[state.config.sizePreset]) {
       if (!c.needs.some((n) => n.productId === pid)) {
         const need = defaultNeedFor(pid);
         if (need) c.needs.push(need);
@@ -225,8 +227,9 @@ function normalize(state: GameState): GameState {
       delete (f as unknown as { retailProductId?: string | null }).retailProductId;
     }
   }
-  // ...and give the market a stat entry for them.
-  for (const pid of ALL_PRODUCT_IDS) {
+  // ...and give the market a stat entry for them (preset-gated so a Village
+  // save never grows a City-only product key — see startingScenario).
+  for (const pid of PRODUCT_IDS_BY_PRESET[state.config.sizePreset]) {
     state.marketStats[pid] = state.marketStats[pid] ?? emptyMarketStat(pid);
   }
   // Trade cities: single-city saves carried `tradeCity` (Port Rosa); move it
@@ -239,7 +242,7 @@ function normalize(state: GameState): GameState {
   delete (state as unknown as { tradeCity?: unknown }).tradeCity;
   for (const cid of TRADE_CITY_IDS) {
     state.tradeCities[cid] = state.tradeCities[cid] ?? { pricesByProduct: {} };
-    for (const pid of ALL_PRODUCT_IDS) {
+    for (const pid of PRODUCT_IDS_BY_PRESET[state.config.sizePreset]) {
       state.tradeCities[cid]!.pricesByProduct[pid] =
         state.tradeCities[cid]!.pricesByProduct[pid] ??
         Math.round(getProduct(pid).basePrice * cityBias(cid, pid));

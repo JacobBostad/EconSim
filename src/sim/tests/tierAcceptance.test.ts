@@ -204,7 +204,7 @@ describe('Tier-gate acceptance (A3 city calibration)', () => {
       .sort()
       .find((id) => state.districts[id]!.kind === 'residential')!;
 
-    const affluent = emptyCohort(did, 'affluent');
+    const affluent = emptyCohort(did, 'affluent', 'city');
     affluent.population = 40;
     affluent.employed = 40;
     affluent.avgSatisfaction = 70;

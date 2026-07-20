@@ -27,7 +27,7 @@ import { createFacility, createCitizen } from '../entities/factories';
 import { Rng } from './Random';
 import { getFacilityDef } from '../data/facilityDefinitions';
 import { getRecipe } from '../data/recipes';
-import { getProduct } from '../data/products';
+import { getProduct, productAvailableInPreset } from '../data/products';
 import { addStock, totalUnits } from '../entities/Inventory';
 import {
   IMPORT_MARKUP,
@@ -407,6 +407,9 @@ export class Simulation {
     const firm = s.firms[firmId];
     const bp = CHAIN_BLUEPRINTS[productId];
     if (!firm || !bp) return;
+    // C1: the wizard only builds chains whose product exists at this preset —
+    // the breadth chains (meals/shoes/furniture/appliances/wine) are city-only.
+    if (!productAvailableInPreset(productId, s.config.sizePreset)) return;
 
     // Wizard placements sit in mid-value rows; budget for a modest premium.
     const cost = Math.round(chainCost(bp) * 1.2);
@@ -695,6 +698,11 @@ export class Simulation {
     if (command.productId !== null && !def.allowedProductsForSale.includes(command.productId)) {
       return;
     }
+    // C1: a store can only stock products that exist at this preset (a Village
+    // store can never shelve a city-only breadth product).
+    if (command.productId !== null && !productAvailableInPreset(command.productId, this.state.config.sizePreset)) {
+      return;
+    }
     // Legacy single-product semantics: replace the whole assortment.
     fac.retailProductIds = command.productId ? [command.productId] : [];
     if (command.productId) this.seedDefaultPrice(fac.ownerFirmId, command.productId);
@@ -708,6 +716,7 @@ export class Simulation {
     if (!fac || fac.type !== 'retail') return;
     const def = getFacilityDef(fac.defId);
     if (!def.allowedProductsForSale.includes(command.productId)) return;
+    if (!productAvailableInPreset(command.productId, this.state.config.sizePreset)) return;
     const idx = fac.retailProductIds.indexOf(command.productId);
     if (idx >= 0) {
       fac.retailProductIds.splice(idx, 1);

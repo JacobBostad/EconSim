@@ -20,7 +20,7 @@ import type { SimContext, GameState } from '../core/GameState';
 import { emitEvent } from '../core/GameState';
 import { isDayBoundary } from '../core/Tick';
 import type { ProductId } from '../core/Id';
-import { ALL_PRODUCT_IDS, getProduct } from '../data/products';
+import { PRODUCT_IDS_BY_PRESET, getProduct } from '../data/products';
 import { getTradeCity, TRADE_CITY_IDS } from '../data/tradeCities';
 
 /** No shocks before the town has an economy worth trading against. */
@@ -73,7 +73,10 @@ export function runTradeAnnouncementSystem(ctx: SimContext): void {
   if (annRoll(state.seed, day, 0) >= ANNOUNCE_DAILY_CHANCE) return;
 
   const cityId = TRADE_CITY_IDS[Math.floor(annRoll(state.seed, day, 1) * TRADE_CITY_IDS.length)]!;
-  const productId = ALL_PRODUCT_IDS[Math.floor(annRoll(state.seed, day, 2) * ALL_PRODUCT_IDS.length)]!;
+  // Preset-gated (C1): announcements only name products that exist here, so the
+  // Village hash-pick indexes the classic catalog (same length) unchanged.
+  const productIds = PRODUCT_IDS_BY_PRESET[state.config.sizePreset];
+  const productId = productIds[Math.floor(annRoll(state.seed, day, 2) * productIds.length)]!;
   const surge = annRoll(state.seed, day, 3) < 0.6;
   const mult = surge
     ? 1.4 + annRoll(state.seed, day, 4) * 0.2 // 1.4–1.6

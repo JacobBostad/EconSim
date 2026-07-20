@@ -8,6 +8,12 @@
 
 export type Difficulty = 'relaxed' | 'standard' | 'brutal';
 
+/** World-scale size preset. Ranked village < city < metropolis; a product's
+ * `availableIn` floor (Product.availableIn) is compared against this rank so
+ * the broader Arc C1 catalog reaches Metropolis without ever touching the
+ * Village or City game (see data/products.ts productIdsForPreset). */
+export type SizePreset = 'village' | 'city' | 'metropolis';
+
 export interface SimulationConfig {
   /** Chosen difficulty preset (informational; the knobs below carry the effect). */
   difficulty: Difficulty;
@@ -86,7 +92,7 @@ export interface SimulationConfig {
    * cohorts stay empty. 'city'/'metropolis' (Arc A3+) add crowd population
    * as district × tier cohorts beyond the simulated cast.
    */
-  sizePreset: 'village' | 'city' | 'metropolis';
+  sizePreset: SizePreset;
 }
 
 /**

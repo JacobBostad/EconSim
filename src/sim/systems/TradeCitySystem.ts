@@ -20,7 +20,7 @@
 import type { SimContext } from '../core/GameState';
 import { emitEvent } from '../core/GameState';
 import { isDayBoundary } from '../core/Tick';
-import { ALL_PRODUCT_IDS, getProduct } from '../data/products';
+import { PRODUCT_IDS_BY_PRESET, getProduct } from '../data/products';
 import {
   TRADE_PRICE_MIN_MULT,
   TRADE_PRICE_MAX_MULT,
@@ -48,7 +48,10 @@ export function runTradeCitySystem(ctx: SimContext): void {
 function updatePrices(ctx: SimContext): void {
   const { state } = ctx;
 
-  for (const pid of ALL_PRODUCT_IDS) {
+  // Preset-gated (C1): the shared-rng price walk draws exactly one jitter per
+  // product PRESENT at this preset — Village walks only the classic catalog, so
+  // its draw count and order (hence rngState) are byte-identical to pre-C1.
+  for (const pid of PRODUCT_IDS_BY_PRESET[state.config.sizePreset]) {
     const base = getProduct(pid).basePrice;
     // One rng draw per product, shared by all cities (see header).
     const jitter = ctx.rng.jitter(TRADE_WALK_STEP);

@@ -75,15 +75,38 @@ export function founderCash(config: SimulationConfig): number {
   return SIZE_PRESETS[config.sizePreset].founderCash;
 }
 
-/** Staples a founder will move in on. Coffee and luxury stay with the
- * existing late-game AI entries — this system fills the basic gaps. */
+/** Staples a founder will move in on. Coffee and the classic luxuries
+ * (pastries/jewelry) stay with the existing late-game AI entries — this
+ * system fills the basic gaps. Village keeps exactly the three shipped
+ * staples (its founder tests and 300-day baseline pin this set). */
 export const FOUNDER_PRODUCTS = ['bread', 'tools', 'clothes'] as const;
+
+/** Metropolis broadens the founder's remit to the Arc C1 breadth chains
+ * (metropolis-only products — see products.ts availableIn). Ordered so the
+ * classic staples still lead the fixed-order vacancy scan; the breadth products
+ * follow. Every entry has a CHAIN_BLUEPRINT. City keeps exactly the shipped
+ * three (its A3/A4 tier calibration is pinned to that trajectory, so the C1
+ * breadth is metropolis-only). */
+const FOUNDER_PRODUCTS_METRO = [
+  'bread', 'tools', 'clothes', 'meals', 'shoes', 'furniture', 'appliances', 'wine',
+] as const;
+
+/** Founder-eligible staples at a given preset (Arc C1). Village and City stay
+ * the shipped three exactly; Metropolis adds the breadth chains. */
+export function founderProductsFor(config: SimulationConfig): readonly string[] {
+  return config.sizePreset === 'metropolis' ? FOUNDER_PRODUCTS_METRO : FOUNDER_PRODUCTS;
+}
 
 /** Firm-name pools per product, picked by hash — flavor, not mechanics. */
 const FOUNDER_NAMES: Record<string, string[]> = {
   bread: ['Prairie Oven Co', 'Hearthstone Baking', 'Miller & Crumb'],
   tools: ['Anvil Brothers', 'Keystone Toolworks', 'Ridgeline Forge Co'],
   clothes: ['Thimble & Cloth', 'Meridian Garment Co', 'Weaver House'],
+  meals: ['Corner Kitchen Co', 'Harvest Table', 'Daily Plate'],
+  shoes: ['Cobblestone & Sons', 'Sole Foundry', 'Wander Bootworks'],
+  furniture: ['Oakline Furnishings', 'Timberframe Co', 'Homestead Joinery'],
+  appliances: ['Ironclad Appliance Co', 'Copperworks Home', 'Beacon Whitegoods'],
+  wine: ['Hillside Vintners', 'Cellar & Vine', 'Amberfield Winery'],
 };
 
 /** Deterministic daily entry gate — same salt family as the other bolt-on
@@ -229,10 +252,14 @@ export function runAIFounderSystem(ctx: SimContext): void {
   if (!isDayBoundary(ctx.state.tick, ctx.config)) return;
   const { state } = ctx;
   const day = ctx.time.day;
+  // Preset-gated staple set (C1): Village is the shipped three exactly, so its
+  // marketGapDays keys and fixed-order scan are byte-identical to pre-C1;
+  // City/Metropolis add the breadth chains.
+  const founderProducts = founderProductsFor(state.config);
 
   // Track total-vacancy gaps every day (cheap, and the counters read well in
   // debug). This runs at every preset — it is the classic Village signal.
-  for (const pid of FOUNDER_PRODUCTS) {
+  for (const pid of founderProducts) {
     state.marketGapDays[pid] = soldSomewhere(state, pid)
       ? 0
       : (state.marketGapDays[pid] ?? 0) + 1;
@@ -247,7 +274,7 @@ export function runAIFounderSystem(ctx: SimContext): void {
   const cityScale = state.config.sizePreset !== 'village';
   if (cityScale) {
     const fillTrigger = founderUndersupplyFillRate(state.config);
-    for (const pid of FOUNDER_PRODUCTS) {
+    for (const pid of founderProducts) {
       state.marketUndersupplyDays[pid] =
         smoothedFillRate(state, pid) < fillTrigger
           ? (state.marketUndersupplyDays[pid] ?? 0) + 1
@@ -287,7 +314,7 @@ export function runAIFounderSystem(ctx: SimContext): void {
   // One entry per day; returns once a qualifying gap is found (whether or not
   // it can afford to build it).
   if (avgSat >= IMMIGRATION_MIN_SATISFACTION && founderRoll(state.seed, day)) {
-    for (const pid of FOUNDER_PRODUCTS) {
+    for (const pid of founderProducts) {
       if ((state.marketGapDays[pid] ?? 0) >= FOUNDER_GAP_DAYS && CHAIN_BLUEPRINTS[pid]) {
         if (affordable(pid)) foundFirm(ctx, pid, day, 'vacancy');
         return;
@@ -339,7 +366,7 @@ export function runAIFounderSystem(ctx: SimContext): void {
   // unaffected — the lone starved staple is trivially the most-starved.
   let pick: string | null = null;
   let pickStreak = FOUNDER_UNDERSUPPLY_DAYS - 1; // must reach the threshold to enter
-  for (const pid of FOUNDER_PRODUCTS) {
+  for (const pid of founderProducts) {
     const streak = state.marketUndersupplyDays[pid] ?? 0;
     if (streak > pickStreak && affordable(pid)) {
       pick = pid;

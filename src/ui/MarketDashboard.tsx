@@ -4,7 +4,7 @@ import { marketRows } from '../sim/selectors/marketSelectors';
 import { formatMoney } from '../utils/formatMoney';
 import { FormulaTooltip } from './FormulaTooltip';
 import { TrendCard } from './Sparkline';
-import { CONSUMER_PRODUCT_IDS, getProduct } from '../sim/data/products';
+import { CONSUMER_PRODUCT_IDS_BY_PRESET, getProduct } from '../sim/data/products';
 import { pickBestCity } from '../sim/core/Trade';
 import { getTradeCity } from '../sim/data/tradeCities';
 import { wholesaleBoard } from '../sim/selectors/wholesaleSelectors';
@@ -116,7 +116,7 @@ export function MarketDashboard(): React.ReactElement {
 
       <h3>Trends (last 60 days)</h3>
       <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
-        {CONSUMER_PRODUCT_IDS.map((pid) => {
+        {CONSUMER_PRODUCT_IDS_BY_PRESET[state.config.sizePreset].map((pid) => {
           const stat = state.marketStats[pid];
           const hist = (stat?.history ?? []).slice(-60);
           if (hist.length < 2) return null;
@@ -153,7 +153,7 @@ export function MarketDashboard(): React.ReactElement {
           );
         })}
       </div>
-      {CONSUMER_PRODUCT_IDS.every((pid) => (state.marketStats[pid]?.history ?? []).length < 2) && (
+      {CONSUMER_PRODUCT_IDS_BY_PRESET[state.config.sizePreset].every((pid) => (state.marketStats[pid]?.history ?? []).length < 2) && (
         <p className="muted small">Trend charts appear after a couple of in-game days.</p>
       )}
     </div>

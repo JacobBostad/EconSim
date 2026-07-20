@@ -7,6 +7,60 @@ thousands via statistical cohorts plus a fully-simulated cast, districts,
 25-30 firms, a broad product catalog, and specialist firm archetypes
 (real estate, investing, business services).
 
+- **C1 — product breadth**: the consumer catalog grows from the shipped 8
+  products to 18 with five complete new chains — produce→meals (a prepared-meal
+  food staple), leather→shoes (apparel), lumber→furniture and minerals→
+  appliances (comfortable+ durables), and grapes→wine (a comfortable+ luxury a
+  rung below jewelry). Each is authored in the house data style: full raw→
+  factory→retail chain, tier-targeted needSpec (staples worker-priced, durables/
+  wine comfortable-and-up, affluent luxury kept thin), a chain-wizard blueprint,
+  a founder name pool, retail shelf assignments, and a natural seasonal hook
+  where it fits. Every tuned constant carries its pinning measurement.
+
+  The gate is the whole game. `makeCitizenNeeds`/`defaultNeedFor` and the
+  trade-city price walk both iterate the catalog and DRAW from the shared rng per
+  product, and the A1 `order` field pins the seeded draw sequence — so a naive
+  add would drift every Village baseline. Products now carry an `availableIn`
+  preset floor (default 'village' = present everywhere); every Village-active
+  system that iterates a product list — the citizen need/preference draws, the
+  trade-city rng walk, market-stat seeding, the founder scan, save-migration
+  backfill, facility recipe copies, and the UI — reads a PRESET-FILTERED list
+  (`productIdsForPreset`) instead of the raw catalog. The C1 products carry
+  `availableIn: 'metropolis'` and needSpec orders above the Village max, so the
+  Village AND City slices are byte-identical to pre-C1: a 300-day Village run at
+  seed 4242 reproduces the exact rngState and full-state hash, and all pinned
+  City tests (determinism, tier-gate acceptance, golden save v7) pass unchanged.
+
+  Why metropolis-only and not city (the honest trap): the City preset carries a
+  knife-edge, seed-pinned A3/A4 tier-band calibration with near-zero headroom.
+  Feeding the breadth into the City crowd shifted the bands out of band (the
+  crowd shops through a diluting per-tier softmax, so more products thin every
+  product's service and drag satisfaction), and the extra rng draws from the
+  broader trade-city walk and citizen creation desynced the pinned trajectory
+  outright — measured, and every tuning lever traded one seed for another.
+  Metropolis has no pinned tier-band test (its robust founder-count/solvency/
+  conservation guards pin it), so it carries the breadth. The abstract crowd
+  (cohorts) stays on the base catalog at every preset (COHORT_DEMAND_PRODUCT_IDS)
+  — which keeps the calibration byte-stable AND avoids a founder deadlock where a
+  crowd craving an as-yet-unserved product drags town satisfaction below the
+  founder's entry gate; the C1 products' citizen demand comes from the named
+  cast, whose satisfaction carries the A1 basket renormalization (now applied to
+  cohorts too, provably inert for the City crowd's base basket and engaging only
+  for the Metropolis crowd's broader one). Founders gain the breadth chains in
+  Metropolis and the wizard/build-panel/assortment UI surface them there.
+
+  Measured (metropolis, seed 7, 300d): money conserved to the cent, 30 solvent
+  AI firms, ~0.32 ms/tick; the worker (median-tier) daily basket at spec
+  midpoints is $11.04 against a $24.00 median income (46% — well inside the 85%
+  C1 acceptance), and the per-tier renormalized basket weight is capped at the
+  3.2 baseline (worker 2.80 inert, comfortable/affluent 4.35→3.20), which bounds
+  any single product's introduction dip. Honest limit: in a pure UNATTENDED
+  metropolis the founder cap saturates on the base staples first (whose fill sits
+  below the metropolis 0.80 trigger), so the C1 chains stay a player/wizard build
+  off real cast demand rather than auto-populating — cracking that is a
+  founder-cadence recalibration, not a catalog change. Probe:
+  docs/design/probes/c1-breadth.ts; pinned tests: src/sim/tests/productBreadth.test.ts.
+
 - **A5 — the Metropolis fills up**: the 30-firm cap now actually happens. The
   founder-scale probe (docs/design/probes/founder-scale.ts — Metropolis + City,
   3 seeds, 300d, with an abort-reason table) diagnosed the binding constraint:

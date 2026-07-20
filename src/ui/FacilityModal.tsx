@@ -12,7 +12,7 @@ import { useGameStore } from '../store/useGameStore';
 import type { Facility } from '../sim/entities/Facility';
 import { getFacilityDef } from '../sim/data/facilityDefinitions';
 import { getRecipe } from '../sim/data/recipes';
-import { getProduct, ALL_PRODUCT_IDS } from '../sim/data/products';
+import { getProduct, productAvailableInPreset, PRODUCT_IDS_BY_PRESET } from '../sim/data/products';
 import { facilityEmployees } from '../sim/selectors/facilitySelectors';
 import { contractsByDestination } from '../sim/selectors/supplyChainSelectors';
 import { getQuantity } from '../sim/entities/Inventory';
@@ -158,7 +158,7 @@ export function FacilityActions({ fac }: { fac: Facility }): React.ReactElement 
             whichever port pays — the button routes each product to today's best
             net price.
           </p>
-          {ALL_PRODUCT_IDS.map((pid) => {
+          {PRODUCT_IDS_BY_PRESET[state.config.sizePreset].map((pid) => {
             const qty = getQuantity(fac.inputInventory, pid) + getQuantity(fac.outputInventory, pid);
             if (qty <= 0) return null;
             const base = getProduct(pid).basePrice;
@@ -197,7 +197,7 @@ export function FacilityActions({ fac }: { fac: Facility }): React.ReactElement 
               </div>
             );
           })}
-          {ALL_PRODUCT_IDS.every(
+          {PRODUCT_IDS_BY_PRESET[state.config.sizePreset].every(
             (pid) => getQuantity(fac.inputInventory, pid) + getQuantity(fac.outputInventory, pid) <= 0,
           ) && <div className="muted small">Nothing staged — wire a supply contract into this warehouse.</div>}
 
@@ -210,7 +210,7 @@ export function FacilityActions({ fac }: { fac: Facility }): React.ReactElement 
           <CommodityDesk fac={fac} />
 
           <div className="section-title">Standing orders (auto-export daily)</div>
-          {ALL_PRODUCT_IDS.filter(
+          {PRODUCT_IDS_BY_PRESET[state.config.sizePreset].filter(
             (pid) =>
               fac.exportOrders[pid] !== undefined ||
               getQuantity(fac.inputInventory, pid) + getQuantity(fac.outputInventory, pid) > 0,
@@ -276,7 +276,9 @@ export function FacilityActions({ fac }: { fac: Facility }): React.ReactElement 
           </div>
           {isPlayer ? (
             <div className="row" style={{ gap: 10, flexWrap: 'wrap', marginBottom: 4 }}>
-              {def.allowedProductsForSale.map((pid) => (
+              {def.allowedProductsForSale
+                .filter((pid) => productAvailableInPreset(pid, state.config.sizePreset))
+                .map((pid) => (
                 <label key={pid} className="row small" style={{ cursor: 'pointer', gap: 4 }}>
                   <input
                     type="checkbox"
@@ -572,7 +574,7 @@ export function FacilityActions({ fac }: { fac: Facility }): React.ReactElement 
               </select>
               <select value={ctrProduct} onChange={(e) => setCtrProduct(e.target.value)}>
                 <option value="">product…</option>
-                {ALL_PRODUCT_IDS.map((pid) => (
+                {PRODUCT_IDS_BY_PRESET[state.config.sizePreset].map((pid) => (
                   <option key={pid} value={pid}>{getProduct(pid).name}</option>
                 ))}
               </select>
@@ -706,7 +708,7 @@ function CommodityDesk({ fac }: { fac: Facility }): React.ReactElement {
   return (
     <div className="row small" style={{ gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
       <select value={buyPid} onChange={(e) => setBuyPid(e.target.value)}>
-        {ALL_PRODUCT_IDS.map((pid) => (
+        {PRODUCT_IDS_BY_PRESET[state.config.sizePreset].map((pid) => (
           <option key={pid} value={pid}>{getProduct(pid).name}</option>
         ))}
       </select>

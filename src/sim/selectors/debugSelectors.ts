@@ -6,7 +6,7 @@ import type { GameState } from '../core/GameState';
 import { totalMoneySupply } from '../core/GameState';
 import type { Transaction } from '../core/Transactions';
 import { computeTime } from '../core/Tick';
-import { ALL_PRODUCT_IDS, CONSUMER_PRODUCT_IDS, getProduct } from '../data/products';
+import { PRODUCT_IDS_BY_PRESET, CONSUMER_PRODUCT_IDS_BY_PRESET, getProduct } from '../data/products';
 import { getQuantity } from '../entities/Inventory';
 
 export interface DebugSnapshot {
@@ -29,11 +29,12 @@ export interface DebugSnapshot {
 
 export function debugSnapshot(state: GameState): DebugSnapshot {
   const time = computeTime(state.tick, state.config);
+  const productIds = PRODUCT_IDS_BY_PRESET[state.config.sizePreset];
   const productQuantities: Record<string, number> = {};
-  for (const pid of ALL_PRODUCT_IDS) productQuantities[pid] = 0;
+  for (const pid of productIds) productQuantities[pid] = 0;
   for (const fid in state.facilities) {
     const f = state.facilities[fid]!;
-    for (const pid of ALL_PRODUCT_IDS) {
+    for (const pid of productIds) {
       productQuantities[pid]! += getQuantity(f.inputInventory, pid) + getQuantity(f.outputInventory, pid);
     }
   }
@@ -81,7 +82,7 @@ export interface MacroIndicators {
 /** Live, transparent macro indicators derived from current state. */
 export function macroIndicators(state: GameState): MacroIndicators {
   let idxSum = 0, idxN = 0, spend = 0, sold = 0, unmet = 0, inv = 0;
-  for (const pid of CONSUMER_PRODUCT_IDS) {
+  for (const pid of CONSUMER_PRODUCT_IDS_BY_PRESET[state.config.sizePreset]) {
     const stat = state.marketStats[pid];
     if (!stat) continue;
     const base = getProduct(pid).basePrice;

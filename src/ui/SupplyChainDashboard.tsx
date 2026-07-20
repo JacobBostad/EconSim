@@ -1,6 +1,6 @@
 import React from 'react';
 import { useGameStore } from '../store/useGameStore';
-import { ALL_PRODUCT_IDS, getProduct } from '../sim/data/products';
+import { PRODUCT_IDS_BY_PRESET, getProduct } from '../sim/data/products';
 import {
   inventoryByFacility,
   activeShipments,
@@ -20,7 +20,7 @@ export function SupplyChainDashboard(): React.ReactElement {
   return (
     <div>
       <h3>Inventory by Product & Facility</h3>
-      {ALL_PRODUCT_IDS.map((pid) => {
+      {PRODUCT_IDS_BY_PRESET[state.config.sizePreset].map((pid) => {
         const rows = inventoryByFacility(state, pid);
         if (rows.length === 0) return null;
         return (

@@ -41,7 +41,7 @@ import type { CitizenTier } from '../entities/Citizen';
 import { clamp } from '../../utils/clamp';
 import { dollars } from '../data/constants';
 import { SIZE_PRESETS } from '../core/SimulationConfig';
-import { needWeight, soldSomewhere } from './SatisfactionSystem';
+import { needWeight, soldSomewhere, BASKET_WEIGHT_BASELINE } from './SatisfactionSystem';
 import {
   COMFORTABLE_WAGE_MULT,
   COMFORTABLE_WAGE_FLOOR_MULT,
@@ -58,6 +58,7 @@ import {
   PROMOTION_DAYS,
   AFFLUENT_PROMOTION_DAYS,
   DEMOTION_DAYS,
+  tierNeedGrowthMult,
 } from './TierSystem';
 import {
   IMMIGRATION_MIN_SATISFACTION,
@@ -238,13 +239,17 @@ function updateSatisfaction(ctx: SimContext, cohort: Cohort, soldCache: Record<s
 
   // Unmet-need pressure summed over the urgency buckets (convex in urgency, so
   // buckets read the persistent tail a mean would miss). Averaged over the
-  // NEED_BUCKETS, and left un-renormalized against today's basket (baseline 1).
+  // NEED_BUCKETS.
   let pressure = 0;
+  let basketW = 0;
   for (const pid of Object.keys(cohort.needBuckets).sort()) {
     const b = cohort.needBuckets[pid]!;
     if (soldCache[pid] === undefined) soldCache[pid] = soldSomewhere(state, pid);
     const sellerFactor = soldCache[pid] ? 1 : 0.5;
     const w = needWeight(pid);
+    // Basket weight this tier actually wants — the denominator of the same A1
+    // renormalization the cast applies (SatisfactionSystem.basketNormalization).
+    if (tierNeedGrowthMult(cohort.tier, pid) > 0) basketW += w;
     let sum = 0;
     for (let i = 0; i < NEED_BUCKETS; i++) {
       const over = b[i]! - config.needUrgentThreshold;
@@ -252,6 +257,16 @@ function updateSatisfaction(ctx: SimContext, cohort: Cohort, soldCache: Record<s
     }
     pressure += sum / NEED_BUCKETS;
   }
+  // Renormalize against the tier's basket exactly as the cast does (A1): a
+  // broader catalog REDISTRIBUTES the crowd's unmet-need exposure instead of
+  // stacking unbounded satisfaction drag as products are added. Provably inert
+  // for the CITY crowd — its basket is the base catalog (the C1 breadth is
+  // metropolis-only), and every base tier's wanted basket sums to <=
+  // BASKET_WEIGHT_BASELINE (3.2), so the factor is exactly 1 and the pinned city
+  // tier calibration is untouched. It engages only for the METROPOLIS crowd,
+  // whose basket carries the C1 breadth past the baseline. Village never runs
+  // this system.
+  if (basketW > BASKET_WEIGHT_BASELINE) pressure *= BASKET_WEIGHT_BASELINE / basketW;
 
   let target = 50 + 20 * empShare - 5 * (1 - empShare);
   target += clamp(15 - pressure * 12, -30, 15);
@@ -424,7 +439,7 @@ function moveMass(
   const destId = cohortId(source.districtId, targetTier);
   let dest = state.cohorts[destId];
   if (!dest) {
-    dest = emptyCohort(source.districtId, targetTier);
+    dest = emptyCohort(source.districtId, targetTier, state.config.sizePreset);
     // The moved crowd keeps its cravings — copy the source's buckets rather
     // than starting the new tier at the seed baseline.
     dest.needBuckets = {};

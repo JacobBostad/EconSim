@@ -2,7 +2,7 @@ import React from 'react';
 import { useGameStore } from '../store/useGameStore';
 import { BUILDABLE_DEFS } from '../sim/data/facilityDefinitions';
 import { CHAIN_BLUEPRINTS, chainCost } from '../sim/data/chains';
-import { getProduct } from '../sim/data/products';
+import { getProduct, productAvailableInPreset } from '../sim/data/products';
 import { formatMoney } from '../utils/formatMoney';
 import { getPlayerFirm } from '../sim/selectors/companySelectors';
 import { FESTIVAL_COST, FUND_HOME_COST } from '../sim/data/constants';
@@ -48,7 +48,9 @@ export function BuildPanel(): React.ReactElement {
         );
       })}
       <div className="section-title">Chain wizard (one click, fully wired)</div>
-      {Object.values(CHAIN_BLUEPRINTS).map((bp) => {
+      {Object.values(CHAIN_BLUEPRINTS)
+        .filter((bp) => productAvailableInPreset(bp.productId, state.config.sizePreset))
+        .map((bp) => {
         const cost = chainCost(bp);
         return (
           <button

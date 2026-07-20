@@ -103,7 +103,7 @@ describe('RetailDemandSystem', () => {
   it('crowd-town backlog catch-up: an urgent staple buys +2 extra baskets', () => {
     const { state, shop, stockBefore } = catchupSetup(21);
     // Live crowd present → catch-up active.
-    state.cohorts['residential:worker'] = { ...emptyCohort('residential', 'worker'), population: 100 };
+    state.cohorts['residential:worker'] = { ...emptyCohort('residential', 'worker', 'city'), population: 100 };
 
     runRetailDemandSystem(makeContext(state));
 
@@ -124,7 +124,7 @@ describe('RetailDemandSystem', () => {
 
   it('catch-up is worker-tier only: a comfortable shopper buys the base basket', () => {
     const { state, shop, stockBefore } = catchupSetup(21);
-    state.cohorts['residential:worker'] = { ...emptyCohort('residential', 'worker'), population: 100 };
+    state.cohorts['residential:worker'] = { ...emptyCohort('residential', 'worker', 'city'), population: 100 };
     // Same urgent need, but a comfortable citizen — the tier the crowd cohorts
     // already track, so no catch-up (extending it there flips their parity).
     Object.values(state.citizens)[0]!.tier = 'comfortable';

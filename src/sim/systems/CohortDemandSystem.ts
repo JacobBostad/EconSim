@@ -44,7 +44,7 @@ import type { Vec2 } from '../entities/Location';
 import { distance } from '../entities/Location';
 import { districtAt, shoppingDistrictIds } from '../entities/District';
 import { getQuantity, getQuality, removeStock } from '../entities/Inventory';
-import { PRODUCTS, ALL_PRODUCT_IDS, getProduct } from '../data/products';
+import { PRODUCTS, COHORT_DEMAND_PRODUCT_IDS, getProduct } from '../data/products';
 import { worldDemandMult, worldSpendingMult } from '../data/worldEvents';
 import { seasonDemandMult } from '../data/seasons';
 import { tierNeedGrowthMult, tierPriceCapMult, positioningAffinity, positioningPriceImage } from './TierSystem';
@@ -149,8 +149,11 @@ const VISIT_EPS = 0.0002;
 const ELIG_EPS = 0.001;
 const ATTEMPT_EPS = 0.0002;
 
-/** Products the crowd can crave (have a needSpec) — the only ones with buckets. */
-const NEEDSPEC_PRODUCT_IDS: string[] = ALL_PRODUCT_IDS.filter((pid) => PRODUCTS[pid]!.needSpec);
+// Products the crowd can crave = the base consumer catalog only
+// (COHORT_DEMAND_PRODUCT_IDS) at every preset. The Arc C1 breadth is
+// cast/player/founder territory, kept out of the crowd's need loop so the
+// pinned A3/A4 city tier calibration stays byte-stable and a crowd never craves
+// an unserved product into a founder-blocking satisfaction drag. See products.ts.
 
 function anyCrowd(state: GameState): boolean {
   for (const cid in state.cohorts) {
@@ -182,10 +185,11 @@ export function runCohortDemandSystem(ctx: SimContext): void {
  * decays toward 0 (exactly SatisfactionSystem's rule, applied per bucket). */
 function growBuckets(ctx: SimContext): void {
   const { state } = ctx;
+  const needspecIds = COHORT_DEMAND_PRODUCT_IDS;
   for (const cid of Object.keys(state.cohorts).sort()) {
     const cohort = state.cohorts[cid]!;
     if (cohort.population <= 0) continue;
-    for (const pid of NEEDSPEC_PRODUCT_IDS) {
+    for (const pid of needspecIds) {
       const spec = PRODUCTS[pid]!.needSpec!;
       const g = (spec.growthPerDay[0] + spec.growthPerDay[1]) / 2;
       const mult = tierNeedGrowthMult(cohort.tier, pid);
@@ -226,7 +230,7 @@ function runSlice(ctx: SimContext): void {
   // never target a trip (else capped urgency for a product nobody stocks
   // swallows the softmax and the crowd stops shopping for what it CAN buy).
   const sold: Record<string, boolean> = {};
-  for (const pid of NEEDSPEC_PRODUCT_IDS) sold[pid] = soldSomewhere(state, pid);
+  for (const pid of COHORT_DEMAND_PRODUCT_IDS) sold[pid] = soldSomewhere(state, pid);
 
   // Cast reservation share, computed ONCE per slice (not per store): the cast's
   // town population against the total demand (cast + crowd). A coarse but honest
@@ -338,7 +342,7 @@ function shopCohortSlice(
   // gate count toward the mean), spec-order biased, servable products only.
   const tripW: Record<string, number> = {};
   let tripWSum = 0;
-  for (const pid of NEEDSPEC_PRODUCT_IDS) {
+  for (const pid of COHORT_DEMAND_PRODUCT_IDS) {
     if (!sold[pid]) continue;
     const b = cohort.needBuckets[pid];
     if (!b) continue;

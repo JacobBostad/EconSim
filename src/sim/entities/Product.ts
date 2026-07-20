@@ -8,6 +8,7 @@
 
 import type { ProductId } from '../core/Id';
 import type { CitizenTier } from './Citizen';
+import type { SizePreset } from '../core/SimulationConfig';
 
 export type ProductCategory = 'food' | 'durable' | 'raw' | 'intermediate' | 'apparel' | 'luxury';
 
@@ -72,4 +73,16 @@ export interface Product {
   unitSize: number;
   /** Demand generation (consumer products only — see NeedSpec). */
   needSpec?: NeedSpec;
+  /**
+   * Size-preset floor at which this product exists at all (default 'village' =
+   * the classic catalog, present everywhere). The Arc C1 breadth products carry
+   * 'metropolis', so they never enter the Village OR City catalog: every
+   * product-list a preset-below-metropolis system iterates is filtered through
+   * this floor (data/products.ts productIdsForPreset), which keeps the Village
+   * draw sequence, trade-city rng walk, founder scan, and serialized state
+   * byte-identical to the pre-C1 game — and keeps the City preset's pinned
+   * tier calibration on its exact trajectory. Compared by rank (village < city
+   * < metropolis), so a 'metropolis' product is present only at Metropolis.
+   */
+  availableIn?: SizePreset;
 }
