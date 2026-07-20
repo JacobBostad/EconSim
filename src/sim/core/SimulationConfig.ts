@@ -91,9 +91,9 @@ export interface SimulationConfig {
 
 /** Per-preset scale knobs (consumed progressively through Arc A). */
 export const SIZE_PRESETS = {
-  village: { castTarget: 80, cohortCap: 0, founderMaxAiFirms: 6 },
-  city: { castTarget: 150, cohortCap: 2000, founderMaxAiFirms: 18 },
-  metropolis: { castTarget: 150, cohortCap: 10000, founderMaxAiFirms: 30 },
+  village: { castTarget: 80, cohortCap: 0, crowdStart: 0, founderMaxAiFirms: 6 },
+  city: { castTarget: 150, cohortCap: 2000, crowdStart: 300, founderMaxAiFirms: 18 },
+  metropolis: { castTarget: 150, cohortCap: 10000, crowdStart: 1500, founderMaxAiFirms: 30 },
 } as const;
 
 export const DEFAULT_CONFIG: SimulationConfig = {

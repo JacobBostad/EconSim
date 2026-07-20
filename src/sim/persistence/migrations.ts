@@ -195,6 +195,7 @@ function normalize(state: GameState): GameState {
     f.level = f.level ?? 1;
     f.workerCapacity = f.workerCapacity ?? getFacilityDef(f.defId).workerCapacity;
     f.exportOrders = f.exportOrders ?? {};
+    f.crowdByCohort = f.crowdByCohort ?? {};
     f.builtAtTick = f.builtAtTick ?? 0;
     f.dailyStats.bottleneck = f.dailyStats.bottleneck ?? null;
     f.dailyStats.pricedOut = f.dailyStats.pricedOut ?? 0;

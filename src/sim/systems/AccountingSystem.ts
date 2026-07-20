@@ -21,7 +21,7 @@ import {
   netProfit,
   type DailySnapshot,
 } from '../entities/Accounting';
-import { emptyFacilityDailyStats } from '../entities/Facility';
+import { emptyFacilityDailyStats, crowdCount } from '../entities/Facility';
 import { getProduct } from '../data/products';
 import { companyValuation } from '../selectors/companySelectors';
 
@@ -97,7 +97,9 @@ export function runAccountingSystem(ctx: SimContext): void {
     const owner = state.firms[fac.ownerFirmId];
     const y = fac.yesterdayStats;
     const revenue = y.revenue + y.transferOutValue;
-    const wages = owner ? fac.employees.length * owner.wagePolicy.baseWage : 0;
+    const wages = owner
+      ? (fac.employees.length + crowdCount(fac)) * owner.wagePolicy.baseWage
+      : 0;
     const cost = wages + fac.operatingCostPerDay + y.variableCost + y.transferInValue;
     fac.pnlEma.revenue += (revenue - fac.pnlEma.revenue) * EMA_ALPHA;
     fac.pnlEma.cost += (cost - fac.pnlEma.cost) * EMA_ALPHA;

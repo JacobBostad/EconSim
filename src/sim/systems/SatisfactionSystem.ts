@@ -13,6 +13,7 @@ import { getProduct } from '../data/products';
 import { clamp } from '../../utils/clamp';
 import { APARTMENT_SATISFACTION_BONUS } from '../data/constants';
 import { tierNeedGrowthMult } from './TierSystem';
+import { crowdCount } from '../entities/Facility';
 
 /** Needs never accumulate beyond this urgency. */
 const URGENCY_CAP = 3;
@@ -63,7 +64,11 @@ export function basketNormalization(
 export function soldSomewhere(state: import('../core/GameState').GameState, productId: string): boolean {
   for (const fid in state.facilities) {
     const f = state.facilities[fid]!;
-    if (f.retailProductIds.includes(productId) && f.status !== 'closed' && f.employees.length > 0) {
+    if (
+      f.retailProductIds.includes(productId) &&
+      f.status !== 'closed' &&
+      (f.employees.length > 0 || crowdCount(f) > 0)
+    ) {
       return true;
     }
   }

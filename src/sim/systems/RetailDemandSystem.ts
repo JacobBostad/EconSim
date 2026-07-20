@@ -20,6 +20,7 @@ import {
 } from '../core/Transactions';
 import type { Citizen } from '../entities/Citizen';
 import type { Facility } from '../entities/Facility';
+import { crowdCount } from '../entities/Facility';
 import type { ProductId } from '../core/Id';
 import { getQuantity, getQuality, removeStock } from '../entities/Inventory';
 import { distance } from '../entities/Location';
@@ -45,7 +46,7 @@ export interface StoreScore {
 /** Whether a store is currently open and able to serve customers. */
 export function storeIsOpen(ctx: SimContext, facility: Facility): boolean {
   if (facility.type !== 'retail' || facility.status === 'closed') return false;
-  if (facility.employees.length === 0) return false;
+  if (facility.employees.length === 0 && crowdCount(facility) === 0) return false;
   const h = ctx.time.hour;
   return h >= ctx.config.storeOpenHour && h < ctx.config.storeCloseHour;
 }
@@ -118,7 +119,8 @@ export function chooseBestStore(
   for (const id in ctx.state.facilities) {
     const fac = ctx.state.facilities[id]!;
     if (!fac.retailProductIds.includes(productId)) continue;
-    if (fac.status === 'closed' || fac.employees.length === 0) continue;
+    if (fac.status === 'closed') continue;
+    if (fac.employees.length === 0 && crowdCount(fac) === 0) continue;
     const scored = scoreStore(ctx, citizen, fac, productId);
     if (!scored) continue;
     const jittered = scored.score + ctx.rng.jitter(ctx.config.storeScoreJitter);

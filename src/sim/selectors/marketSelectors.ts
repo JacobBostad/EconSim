@@ -6,6 +6,7 @@ import type { GameState } from '../core/GameState';
 import type { MarketStat } from '../entities/Market';
 import type { ProductId } from '../core/Id';
 import { ALL_PRODUCT_IDS, CONSUMER_PRODUCT_IDS, getProduct } from '../data/products';
+import { crowdCount } from '../entities/Facility';
 
 export interface MarketRow {
   productId: ProductId;
@@ -109,7 +110,7 @@ export function pricingInsight(
   for (const fid in state.facilities) {
     const f = state.facilities[fid]!;
     if (f.retailProductIds.includes(productId) && f.ownerFirmId !== firmId &&
-        f.status !== 'closed' && f.employees.length > 0) {
+        f.status !== 'closed' && (f.employees.length > 0 || crowdCount(f) > 0)) {
       competitors++;
     }
   }

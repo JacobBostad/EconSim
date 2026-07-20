@@ -131,6 +131,13 @@ export interface Facility {
   presentSkill: number;
   /** Tick this facility was built (0 = founding-era). Drives store novelty. */
   builtAtTick: number;
+  /**
+   * Crowd headcount working here, by cohort id (Arc A3). Anonymous cohort
+   * workers fill slots the named cast leaves open — assigned daily by
+   * CohortLaborSystem, paid one payroll transaction per firm × cohort.
+   * Always empty in Village-preset towns.
+   */
+  crowdByCohort: Record<string, number>;
   /** Upgrade level (1..3): +40% storage, +15% efficiency, +1 worker cap each. */
   level: number;
   /**
@@ -154,6 +161,13 @@ export interface Facility {
    * customers; price above import parity and they walk.
    */
   wholesalePriceMult?: number;
+}
+
+/** Total crowd headcount staffing a facility (0 in Village towns). */
+export function crowdCount(fac: Pick<Facility, 'crowdByCohort'>): number {
+  let n = 0;
+  for (const cid in fac.crowdByCohort) n += fac.crowdByCohort[cid]!;
+  return n;
 }
 
 /** Static template for a buildable facility. */

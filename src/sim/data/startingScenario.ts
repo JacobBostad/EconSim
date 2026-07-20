@@ -11,7 +11,8 @@
 
 import type { GameState } from '../core/GameState';
 import type { SimulationConfig } from '../core/SimulationConfig';
-import { DEFAULT_CONFIG } from '../core/SimulationConfig';
+import { DEFAULT_CONFIG, SIZE_PRESETS } from '../core/SimulationConfig';
+import { cohortId, emptyCohort } from '../entities/Cohort';
 import { Rng, seedToState } from '../core/Random';
 import { nextId, type IdCounters } from '../core/Id';
 import type { Citizen } from '../entities/Citizen';
@@ -82,6 +83,7 @@ function newFacility(
     presentWorkers: 0,
     presentSkill: 0,
     builtAtTick: 0,
+    crowdByCohort: {},
     level: 1,
     workerCapacity: def.workerCapacity,
     exportOrders: {},
@@ -404,5 +406,37 @@ export function createInitialState(
     addContract(firm.id, factory.id, shop.id, spec.product, spec.fs.target, spec.fs.reorder, spec.fs.max);
   }
 
+  seedCrowd(state);
+
   return state;
+}
+
+/**
+ * Arc A3 bootstrap: non-Village presets start with a crowd — worker-tier
+ * cohorts in the residential districts holding real cash (direct assignment,
+ * like citizen starting cash: it is part of the initial money supply, and
+ * every later flow goes through recordTransaction). Village presets have
+ * crowdStart 0 and are untouched.
+ */
+const CROWD_START_CASH_PER_CAPITA = dollars(50);
+
+function seedCrowd(state: GameState): void {
+  const preset = SIZE_PRESETS[state.config.sizePreset];
+  if (preset.crowdStart <= 0) return;
+  const residential = Object.values(state.districts)
+    .filter((d) => d.kind === 'residential')
+    .sort((a, b) => (a.id < b.id ? -1 : 1));
+  if (residential.length === 0) return;
+  const per = Math.floor(preset.crowdStart / residential.length);
+  let remainder = preset.crowdStart - per * residential.length;
+  for (const d of residential) {
+    const population = per + (remainder > 0 ? 1 : 0);
+    if (remainder > 0) remainder -= 1;
+    if (population <= 0) continue;
+    const id = cohortId(d.id, 'worker');
+    const cohort = emptyCohort(d.id, 'worker');
+    cohort.population = population;
+    cohort.cashPool = population * CROWD_START_CASH_PER_CAPITA;
+    state.cohorts[id] = cohort;
+  }
 }
