@@ -138,6 +138,14 @@ export interface Facility {
    * Always empty in Village-preset towns.
    */
   crowdByCohort: Record<string, number>;
+  /**
+   * Crowd renters housed here (Arc A3 / HD4). For apartments only: the
+   * anonymous cohort members occupying the block's spare capacity above its
+   * cast residents, reassigned deterministically each day by CrowdRentSystem
+   * and paying rent to the owning firm. Always 0 for non-apartments and in
+   * Village-preset towns.
+   */
+  crowdTenants: number;
   /** Upgrade level (1..3): +40% storage, +15% efficiency, +1 worker cap each. */
   level: number;
   /**

@@ -82,6 +82,7 @@ import { runCohortSocialSystem } from '../systems/CohortSocialSystem';
 import { runAccountingSystem } from '../systems/AccountingSystem';
 import { runPayrollSystem } from '../systems/PayrollSystem';
 import { runRentSystem } from '../systems/RentSystem';
+import { runCrowdRentSystem } from '../systems/CrowdRentSystem';
 import { runTownStatsSystem } from '../systems/TownStatsSystem';
 import { runCitizenScheduleSystem } from '../systems/CitizenScheduleSystem';
 import { runMovementSystem } from '../systems/MovementSystem';
@@ -124,6 +125,7 @@ const SYSTEMS: SystemFn[] = [
   runCastCuratorSystem, // keep the cast a faithful sample of the crowd (A3; cast arrivals land first)
   runAIFounderSystem, // ...and its unserved markets attract new rivals
   runRentSystem, // apartment rent (before accounting snapshots the day)
+  runCrowdRentSystem, // crowd housing cost: the pool-drift sink + crowd-scale landlording (A3)
   runAccountingSystem, // maintenance + snapshot + reset daily accumulators
   runPayrollSystem,
   // --- per-tick simulation ---

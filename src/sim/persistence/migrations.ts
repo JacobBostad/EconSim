@@ -206,6 +206,7 @@ function normalize(state: GameState): GameState {
     f.workerCapacity = f.workerCapacity ?? getFacilityDef(f.defId).workerCapacity;
     f.exportOrders = f.exportOrders ?? {};
     f.crowdByCohort = f.crowdByCohort ?? {};
+    f.crowdTenants = f.crowdTenants ?? 0;
     f.builtAtTick = f.builtAtTick ?? 0;
     f.dailyStats.bottleneck = f.dailyStats.bottleneck ?? null;
     f.dailyStats.pricedOut = f.dailyStats.pricedOut ?? 0;

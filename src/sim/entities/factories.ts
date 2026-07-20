@@ -53,6 +53,7 @@ export function createFacility(
     presentSkill: 0,
     builtAtTick: state.tick,
     crowdByCohort: {},
+    crowdTenants: 0,
     level: 1,
     workerCapacity: def.workerCapacity,
     exportOrders: {},

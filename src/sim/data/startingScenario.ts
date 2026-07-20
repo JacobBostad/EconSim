@@ -84,6 +84,7 @@ function newFacility(
     presentSkill: 0,
     builtAtTick: 0,
     crowdByCohort: {},
+    crowdTenants: 0,
     level: 1,
     workerCapacity: def.workerCapacity,
     exportOrders: {},

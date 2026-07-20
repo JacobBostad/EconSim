@@ -125,6 +125,30 @@ export const APARTMENT_RENT_PER_DAY = dollars(2.5);
 export const APARTMENT_SATISFACTION_BONUS = 5;
 
 /**
+ * Total tenants an apartment BLOCK houses (Arc A3 / HD4 crowd housing). The
+ * named cast still pair up two-to-an-apartment as premium housing (the `< 2`
+ * home-pick checks elsewhere are untouched); the spare capacity above the cast
+ * residents houses anonymous crowd renters, so a landlord's income scales with
+ * the district's population rather than its two on-map tenants. See
+ * CrowdRentSystem.
+ */
+export const APARTMENT_CAPACITY = 50;
+
+/**
+ * Daily per-capita housing cost every cohort member pays (Arc A3 / HD4). The
+ * consumption sink that bounds the cohort pool drift the City soak measured at
+ * $3.7-4.4/capita/day upward (pools reaching $900-1,360/cap by day 300 and
+ * distorting the tier savings gates). Pinned just under that drift so the pool
+ * plateaus at a healthy $150-350/cap — enough to keep demand and the savings
+ * gates meaningful, not a runaway and not a collapse. Crowd renters in
+ * landlord-owned apartments pay it to the owning firm (booked exactly like cast
+ * rent); everyone else pays the world account (informal housing — the town's
+ * implicit landlord until real housing stock exists, symmetric with the
+ * subsistence stipend the world already pays idle crowd).
+ */
+export const CROWD_RENT_PER_DAY = dollars(3);
+
+/**
  * Measured (6 seeds, paired 100-day runs): the festival's direct revenue
  * lift for a typical single-chain player is tiny (~$50-200) — its value is
  * the town-wide moment, not the till. At $1,500 it was a trap dressed as a
