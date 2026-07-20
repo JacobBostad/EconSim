@@ -107,6 +107,24 @@ export const FACILITY_DEFS: Record<FacilityDefId, FacilityDefinition> = {
     footprint: 3,
     description: 'Sells consumer products to citizens. Needs staff to operate.',
   },
+  datacenter: {
+    id: 'datacenter',
+    name: 'Datacenter',
+    type: 'datacenter',
+    // Pricier than a factory: a datacenter is a capital play whose return is a
+    // recurring seat bill from other firms, not goods on a shelf.
+    buildCost: dollars(9000),
+    maintenanceCostPerDay: dollars(30),
+    // A small ops crew; not required to serve seats (capacity is 40 × level),
+    // but the slots let a provider run payroll like any other employer.
+    workerCapacity: 3,
+    storageCapacity: 0,
+    allowedRecipes: [],
+    allowedProductsForSale: [],
+    footprint: 4,
+    description:
+      'Sells compute seats to other firms (city-scale B2B). 40 seats per level; a firm with full seat coverage produces 6% faster company-wide.',
+  },
   importer: {
     id: 'importer',
     name: 'Importer / Exporter',
@@ -142,7 +160,9 @@ export function facilityRecipesForPreset(def: FacilityDefinition, preset: SizePr
   );
 }
 
-/** Definitions the player may build (excludes home/importer). */
+/** Definitions the player may build (excludes home/importer). The datacenter is
+ * NOT here: it is city-scale only and appended by buildableDefs() below so a
+ * Village build menu never shows it. */
 export const BUILDABLE_DEFS: FacilityDefinition[] = [
   FACILITY_DEFS.farm!,
   FACILITY_DEFS.apartment!,
@@ -151,3 +171,19 @@ export const BUILDABLE_DEFS: FacilityDefinition[] = [
   FACILITY_DEFS.warehouse!,
   FACILITY_DEFS.retail!,
 ];
+
+/**
+ * Buildable set for a given world scale. Village gets exactly BUILDABLE_DEFS
+ * (the classic menu, untouched). City-scale worlds with the B2B services
+ * channel enabled also offer the datacenter — the one facility gated on both
+ * the size preset AND the services flag, mirroring the engine's gates.
+ */
+export function buildableDefs(config: {
+  sizePreset: 'village' | 'city' | 'metropolis';
+  servicesEnabled: boolean;
+}): FacilityDefinition[] {
+  if (config.sizePreset !== 'village' && config.servicesEnabled) {
+    return [...BUILDABLE_DEFS, FACILITY_DEFS.datacenter!];
+  }
+  return BUILDABLE_DEFS;
+}

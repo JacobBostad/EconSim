@@ -80,6 +80,7 @@ export interface FirmPnL {
   maintenance: number;
   logisticsCost: number;
   variableProductionCost: number;
+  serviceExpense: number;
   marketing: number;
   rnd: number;
   interest: number;
@@ -92,7 +93,7 @@ function toPnL(p: import('../entities/Accounting').AccountingPeriod | null): Fir
   if (!p) {
     return {
       revenue: 0, costOfGoodsSold: 0, wages: 0, maintenance: 0, logisticsCost: 0,
-      variableProductionCost: 0, marketing: 0, rnd: 0, interest: 0,
+      variableProductionCost: 0, serviceExpense: 0, marketing: 0, rnd: 0, interest: 0,
       grossProfit: 0, operatingProfit: 0, netProfit: 0,
     };
   }
@@ -103,6 +104,7 @@ function toPnL(p: import('../entities/Accounting').AccountingPeriod | null): Fir
     maintenance: p.maintenance,
     logisticsCost: p.logisticsCost,
     variableProductionCost: p.variableProductionCost,
+    serviceExpense: p.serviceExpense ?? 0,
     marketing: p.marketing,
     rnd: p.rnd,
     interest: p.interest,

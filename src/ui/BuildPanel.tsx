@@ -1,6 +1,6 @@
 import React from 'react';
 import { useGameStore } from '../store/useGameStore';
-import { BUILDABLE_DEFS } from '../sim/data/facilityDefinitions';
+import { buildableDefs } from '../sim/data/facilityDefinitions';
 import { CHAIN_BLUEPRINTS, chainCost } from '../sim/data/chains';
 import { getProduct, productAvailableInPreset } from '../sim/data/products';
 import { formatMoney } from '../utils/formatMoney';
@@ -15,6 +15,7 @@ export function BuildPanel(): React.ReactElement {
   const player = getPlayerFirm(state);
   const cash = player?.cash ?? 0;
   const festivalRunning = state.worldEvents.some((ev) => ev.defId === 'festival');
+  const defs = buildableDefs(state.config);
 
   return (
     <div>
@@ -25,14 +26,14 @@ export function BuildPanel(): React.ReactElement {
       </div>
       {buildDefId && (
         <div className="card small">
-          Placing <strong>{BUILDABLE_DEFS.find((d) => d.id === buildDefId)?.name}</strong>. Click an
+          Placing <strong>{defs.find((d) => d.id === buildDefId)?.name}</strong>. Click an
           empty spot on the map.
           <div style={{ marginTop: 6 }}>
             <button onClick={() => setBuildDef(null)}>Cancel</button>
           </div>
         </div>
       )}
-      {BUILDABLE_DEFS.map((def) => {
+      {defs.map((def) => {
         const affordable = cash >= def.buildCost;
         return (
           <button

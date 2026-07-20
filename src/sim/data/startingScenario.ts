@@ -227,6 +227,7 @@ export function createInitialState(
     facilities: {},
     vehicles: {},
     contracts: {},
+    serviceContracts: {},
     marketStats: {},
     worldCash: dollars(1_000_000),
     playerFirmId: '',
@@ -432,8 +433,39 @@ export function createInitialState(
   }
 
   seedCrowd(state);
+  seedComputeProvider(b);
 
   return state;
+}
+
+/**
+ * B2B services bootstrap (HD3): when the services channel is enabled on a
+ * city-scale world, stand up one compute provider so the market exists on day
+ * one and subscribers have something to buy. It is a dedicated AI firm ("Cirrus
+ * Compute") owning a single datacenter — kept separate from the chain firms so
+ * it never trips the founder invariant that every *chain* firm carries a full
+ * producer→factory→store (this firm is a pure service play). Built last so it
+ * shifts none of the earlier deterministic ids or rng draws.
+ *
+ * Gated on servicesEnabled AND non-Village, so every existing baseline (Village
+ * bit-identity, and the plain city/metropolis founder/soak runs that leave the
+ * flag off) sees nothing here.
+ */
+const COMPUTE_PROVIDER_CASH = dollars(40000);
+
+function seedComputeProvider(b: Builder): void {
+  const { state } = b;
+  if (!state.config.servicesEnabled || state.config.sizePreset === 'village') return;
+  const firm = newFirm(b, 'Cirrus Compute', 'ai', COMPUTE_PROVIDER_CASH, emptyStrategy('none'), DEFAULT_AI_WAGE);
+  const personality = defaultPersonalityFor(1); // steady operator; no chain to run
+  firm.personalityId = personality;
+  firm.ceoName = defaultCeoFor(personality, 1);
+  // Place it in the commercial-ish middle of the map, clear of the homes band.
+  const loc: Vec2 = {
+    x: Math.round(state.config.mapWidth * 0.5),
+    y: Math.round(state.config.mapHeight * 0.35),
+  };
+  newFacility(b, 'datacenter', firm.id, loc, { name: 'Cirrus Datacenter' });
 }
 
 /**

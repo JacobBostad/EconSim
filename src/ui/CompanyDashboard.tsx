@@ -281,6 +281,9 @@ export function CompanyDashboard(): React.ReactElement {
         <Card label="Inventory value" value={formatMoney(firmInventoryValue(state, firm.id))} />
         <Card label="Net profit (today)" value={formatMoney(today.netProfit)} color={today.netProfit < 0 ? 'var(--red)' : 'var(--green)'} />
         <Card label="Operating profit (life)" value={formatMoney(life.operatingProfit)} color={life.operatingProfit < 0 ? 'var(--red)' : 'var(--green)'} />
+        {(life.serviceExpense ?? 0) > 0 && (
+          <Card label="Compute fees (life)" value={formatMoney(life.serviceExpense ?? 0)} color="var(--amber)" />
+        )}
         <Card label="Facilities" value={String(facilities.length)} />
         <Card label="Employees" value={String(firmEmployees(state, firm.id).length)} />
       </div>
@@ -336,7 +339,7 @@ export function CompanyDashboard(): React.ReactElement {
       <h3>Daily History (last {history.length} days)</h3>
       <div className="scroll">
       <table>
-        <thead><tr><th>Day</th><th>Revenue</th><th>COGS</th><th>Wages</th><th>Maint</th><th>Log</th><th>Var</th><th>Mktg</th><th>R&amp;D</th><th>Int</th><th>Operating</th><th>Net</th><th>Cash</th><th>Debt</th></tr></thead>
+        <thead><tr><th>Day</th><th>Revenue</th><th>COGS</th><th>Wages</th><th>Maint</th><th>Log</th><th>Var</th><th title="Firm-to-firm service fees (compute)">Svc</th><th>Mktg</th><th>R&amp;D</th><th>Int</th><th>Operating</th><th>Net</th><th>Cash</th><th>Debt</th></tr></thead>
         <tbody>
           {history.map((d) => (
             <tr key={d.day}>
@@ -347,6 +350,7 @@ export function CompanyDashboard(): React.ReactElement {
               <td className="mono">{formatMoney(d.maintenance)}</td>
               <td className="mono">{formatMoney(d.logisticsCost)}</td>
               <td className="mono">{formatMoney(d.variableProductionCost)}</td>
+              <td className="mono">{formatMoney(d.serviceExpense ?? 0)}</td>
               <td className="mono">{formatMoney(d.marketing)}</td>
               <td className="mono">{formatMoney(d.rnd)}</td>
               <td className="mono">{formatMoney(d.interest)}</td>
@@ -356,7 +360,7 @@ export function CompanyDashboard(): React.ReactElement {
               <td className="mono">{formatMoney(d.debt)}</td>
             </tr>
           ))}
-          {history.length === 0 && <tr><td colSpan={14} className="muted">History appears after the first full day.</td></tr>}
+          {history.length === 0 && <tr><td colSpan={15} className="muted">History appears after the first full day.</td></tr>}
         </tbody>
       </table>
       </div>

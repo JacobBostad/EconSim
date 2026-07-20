@@ -60,6 +60,26 @@ thousands via statistical cohorts plus a fully-simulated cast, districts,
   off real cast demand rather than auto-populating — cracking that is a
   founder-cadence recalibration, not a catalog change. Probe:
   docs/design/probes/c1-breadth.ts; pinned tests: src/sim/tests/productBreadth.test.ts.
+- **C2 — the B2B services channel** (design HD3; see docs/design/b2b-services.md):
+  firms now have a recurring firm-to-firm expense that CIRCULATES instead of
+  leaking to the world account. One service ships — datacenter compute — but the
+  shape (a service catalog + a provider facility + a coverage boost) generalizes.
+  A new `datacenter` facility (city-scale only, buildable by player + AI, kept
+  out of Village menus/founder paths) sells 40 compute seats × level; a firm
+  whose reserved seats meet its demand (`ceil(employees/4) + facilities`)
+  produces 6% faster company-wide. ServiceBillingSystem (daily, between Rent and
+  Accounting) walks each provider's price by utilization, lets AI subscribers
+  join (7d boost value > seat bill × 1.3) and drop (5 failing ROI days — the
+  hysteresis band stops flapping), and bills one `recordTransaction` per contract
+  under a new `serviceExpense` ledger category whose counterparty is the
+  provider's revenue. Preset-gated behind a `servicesEnabled` flag (a City world
+  turns it on): every pinned baseline — Village bit-identity AND the plain
+  city/metropolis founder/soak trajectories — runs the channel inert, untouched.
+  Probe (docs/design/probes/b2b-services.ts, 300d City, seeds 11/4/7): provider
+  solvent every seed ($35-71k lifetime revenue, 0 insolvent), subscribers
+  out-produce non-subscribers by 8.7-30.4% per producing facility, adoption
+  25-38% of eligible AI firms at boost 1.06, subscribe/cancel churn ≤0.083/day
+  (no flapping), money conserved to the cent, ~0.29-0.43 ms/tick at day 300.
 
 - **A5 — the Metropolis fills up**: the 30-firm cap now actually happens. The
   founder-scale probe (docs/design/probes/founder-scale.ts — Metropolis + City,

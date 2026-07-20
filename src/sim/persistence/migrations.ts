@@ -56,6 +56,7 @@ function normPeriod(p: Partial<AccountingPeriod> | undefined): AccountingPeriod 
     maintenance: p?.maintenance ?? 0,
     logisticsCost: p?.logisticsCost ?? 0,
     variableProductionCost: p?.variableProductionCost ?? 0,
+    serviceExpense: p?.serviceExpense ?? 0,
     marketing: p?.marketing ?? 0,
     rnd: p?.rnd ?? 0,
     interest: p?.interest ?? 0,
@@ -97,6 +98,10 @@ function normalize(state: GameState): GameState {
   state.lastUndersupplyEntryDay = state.lastUndersupplyEntryDay ?? 0;
   state.sharePriceShift = state.sharePriceShift ?? {};
   state.config.sizePreset = state.config.sizePreset ?? 'village';
+  // B2B services channel (HD3): saves predating it load with the channel off and
+  // no contracts — inert until a new City game turns it on.
+  state.config.servicesEnabled = state.config.servicesEnabled ?? false;
+  state.serviceContracts = state.serviceContracts ?? {};
   state.districts = state.districts ?? defaultDistrictPartition(state.config);
   state.cohorts = state.cohorts ?? {};
   // Cohorts saved before the demand engine landed carry no urgency buckets;
@@ -158,6 +163,7 @@ function normalize(state: GameState): GameState {
     f.accounting.today = normPeriod(f.accounting.today);
     f.accounting.dailyHistory = (f.accounting.dailyHistory ?? []).map((d) => ({
       ...d,
+      serviceExpense: d.serviceExpense ?? 0,
       marketing: d.marketing ?? 0,
       rnd: d.rnd ?? 0,
       interest: d.interest ?? 0,
@@ -168,6 +174,7 @@ function normalize(state: GameState): GameState {
     }));
     f.accounting.weeklyHistory = (f.accounting.weeklyHistory ?? []).map((d) => ({
       ...d,
+      serviceExpense: d.serviceExpense ?? 0,
       marketing: d.marketing ?? 0,
       rnd: d.rnd ?? 0,
       interest: d.interest ?? 0,

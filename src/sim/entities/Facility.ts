@@ -25,7 +25,10 @@ export type FacilityType =
   | 'factory'
   | 'warehouse'
   | 'retail'
-  | 'importer';
+  | 'importer'
+  /** Sells compute seats to other firms (B2B services, HD3). No physical
+   * inventory; capacity = DATACENTER_SEATS_PER_LEVEL × level. City-scale only. */
+  | 'datacenter';
 
 /** Retail market positioning — who the store courts (Phase 3 of the
  * classes-and-ascension design). */

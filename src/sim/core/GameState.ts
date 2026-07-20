@@ -147,6 +147,10 @@ export interface GameState {
   facilities: Record<FacilityId, Facility>;
   vehicles: Record<VehicleId, Vehicle>;
   contracts: Record<ContractId, Contract>;
+  /** Standing firm-to-firm service subscriptions (B2B services channel, HD3).
+   * Additive field — old/Village saves load with {}, and the channel is inert
+   * whenever this is empty. Sorted-key iteration everywhere it is read. */
+  serviceContracts: Record<string, import('../entities/ServiceContract').ServiceContract>;
   marketStats: Record<ProductId, MarketStat>;
 
   /** External-world cash account (utilities, government, outside economy). */
@@ -441,6 +445,9 @@ function applyToLedger(
       break;
     case 'variableCost':
       period.variableProductionCost += amount;
+      break;
+    case 'serviceExpense':
+      period.serviceExpense += amount;
       break;
     case 'marketing':
       period.marketing += amount;

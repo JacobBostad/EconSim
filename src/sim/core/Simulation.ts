@@ -53,6 +53,12 @@ import { landCostMultiplier, landValueAt } from './LandValue';
 import { placementBlocker } from './Placement';
 import { WHOLESALE_MULT_MIN, WHOLESALE_MULT_MAX } from './Wholesale';
 import type { Contract } from '../entities/Contract';
+import { COMPUTE_SERVICE_ID } from '../data/services';
+import {
+  computeCapacity,
+  computeSeatDemand,
+  listedComputePrice,
+} from '../systems/ServiceBillingSystem';
 
 import { runTimeSystem } from '../systems/TimeSystem';
 import { runWorldEventSystem } from '../systems/WorldEventSystem';
@@ -83,6 +89,7 @@ import { runAccountingSystem } from '../systems/AccountingSystem';
 import { runPayrollSystem } from '../systems/PayrollSystem';
 import { runRentSystem } from '../systems/RentSystem';
 import { runCrowdRentSystem } from '../systems/CrowdRentSystem';
+import { runServiceBillingSystem } from '../systems/ServiceBillingSystem';
 import { runTownStatsSystem } from '../systems/TownStatsSystem';
 import { runCitizenScheduleSystem } from '../systems/CitizenScheduleSystem';
 import { runMovementSystem } from '../systems/MovementSystem';
@@ -126,6 +133,7 @@ const SYSTEMS: SystemFn[] = [
   runAIFounderSystem, // ...and its unserved markets attract new rivals
   runRentSystem, // apartment rent (before accounting snapshots the day)
   runCrowdRentSystem, // crowd housing cost: the pool-drift sink + crowd-scale landlording (A3)
+  runServiceBillingSystem, // B2B compute: firm-to-firm seat bills + coverage boost (HD3; city+ & flag)
   runAccountingSystem, // maintenance + snapshot + reset daily accumulators
   runPayrollSystem,
   // --- per-tick simulation ---
@@ -393,7 +401,59 @@ export class Simulation {
       case 'SELL_SHARES':
         tradeShares(s, command.firmId, command.targetFirmId, -command.percent);
         return;
+      case 'SUBSCRIBE_SERVICE':
+        this.subscribeService(command.firmId, command.providerFirmId);
+        return;
+      case 'CANCEL_SERVICE': {
+        for (const cid of Object.keys(s.serviceContracts)) {
+          if (s.serviceContracts[cid]!.subscriberFirmId === command.firmId) {
+            delete s.serviceContracts[cid];
+          }
+        }
+        return;
+      }
     }
+  }
+
+  /**
+   * Player-side compute subscription. Reserves the firm's seat demand (capped by
+   * the provider's free capacity) at the provider's current listed price. The
+   * daily ServiceBillingSystem then bills, reprices, and grants coverage boost
+   * exactly as it does for AI subscribers. No-op unless the services channel is
+   * live and the named provider actually runs a datacenter with room.
+   */
+  private subscribeService(firmId: FirmId, providerFirmId: FirmId): void {
+    const s = this.state;
+    if (!s.config.servicesEnabled || s.config.sizePreset === 'village') return;
+    const firm = s.firms[firmId];
+    const provider = s.firms[providerFirmId];
+    if (!firm || !provider || firmId === providerFirmId) return;
+    const capacity = computeCapacity(s, provider);
+    if (capacity <= 0) return;
+    let sold = 0;
+    for (const cid in s.serviceContracts) {
+      const c = s.serviceContracts[cid]!;
+      if (c.subscriberFirmId === firmId) return; // already subscribed
+      if (c.providerFirmId === providerFirmId) sold += c.seats;
+    }
+    const desired = computeSeatDemand(firm);
+    const seats = Math.min(desired, capacity - sold);
+    if (seats <= 0) {
+      emitEvent(s, 'warning', 'player', `${provider.name} has no free compute seats right now.`, firmId);
+      return;
+    }
+    const price = listedComputePrice(provider);
+    const id = nextId(s.idCounters, 'svc');
+    s.serviceContracts[id] = {
+      id,
+      providerFirmId,
+      subscriberFirmId: firmId,
+      serviceId: COMPUTE_SERVICE_ID,
+      seats,
+      pricePerSeatDay: price,
+    };
+    emitEvent(s, 'success', 'player',
+      `Subscribed to ${provider.name} compute — ${seats} seats at ${formatMoney(price)}/seat/day.`, firmId);
   }
 
   /**
@@ -644,6 +704,12 @@ export class Simulation {
     const firm = s.firms[command.firmId];
     if (!firm) return;
     const def = getFacilityDef(command.defId);
+    // The datacenter is city-scale only and gated on the services flag — never
+    // buildable in a Village (it isn't in the Village build menu either).
+    if (def.type === 'datacenter' && (!s.config.servicesEnabled || s.config.sizePreset === 'village')) {
+      emitEvent(s, 'warning', 'player', 'Datacenters need the city-scale services channel.', firm.id);
+      return;
+    }
     const blocker = placementBlocker(s, command.location);
     if (blocker) {
       emitEvent(s, 'warning', 'player', `Too close to ${blocker.name} — pick clearer ground.`, firm.id);

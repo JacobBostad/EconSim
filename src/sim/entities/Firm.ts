@@ -97,6 +97,21 @@ export interface Firm {
   forwards: ForwardContract[];
   /** Lifetime forward deliveries locked at ≥1.3× base (achievement). */
   forwardWins: number;
+
+  // --- B2B services (HD3; city-scale only, all optional/undefined in Village) --
+  /**
+   * This firm's listed price per service id (cents/seat/day) when it runs a
+   * datacenter — walked daily by utilization (ServiceBillingSystem). Undefined
+   * until the firm becomes a provider; Village firms never set it. */
+  servicePriceByService?: Record<string, number>;
+  /**
+   * Firm-wide production multiplier from full service coverage this day
+   * (SERVICE_BOOST_MULT when covered, 1 otherwise). Set daily by
+   * ServiceBillingSystem; read by ProductionSystem. Undefined ⇒ no boost. */
+  serviceBoost?: number;
+  /** Consecutive days an AI subscriber's boost value has failed to cover its
+   * seat bill — the cancel hysteresis counter. Undefined ⇒ 0. */
+  serviceFailingDays?: number;
 }
 
 /** A promise to deliver goods to a trade city by a deadline at a price

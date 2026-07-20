@@ -154,9 +154,11 @@ export const useGameStore = create<GameStore>((set, get) => {
       if (old.tick > 0) saveGame(old, BACKUP_SLOT);
       const sizeOverrides =
         size === 'bustling' ? { maxHomes: 80, maxCitizens: 160, mapHeight: 124 } : {};
-      // World scale drives the cohort economy: 'city' turns the crowd on;
-      // 'village' (default) keeps the classic all-agent town bit-for-bit.
-      const worldOverride = world === 'city' ? { sizePreset: 'city' as const } : {};
+      // World scale drives the cohort economy: 'city' turns the crowd on AND
+      // opens the B2B services channel (datacenter compute, HD3); 'village'
+      // (default) keeps the classic all-agent town bit-for-bit.
+      const worldOverride =
+        world === 'city' ? { sizePreset: 'city' as const, servicesEnabled: true } : {};
       get().sim.setState(
         createInitialState(seed, { ...configForDifficulty(difficulty), challengeMode: challenge, ...sizeOverrides, ...worldOverride }, scenarioId),
       );

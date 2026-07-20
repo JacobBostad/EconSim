@@ -41,6 +41,7 @@ import { getPersonality, ceoQuote } from '../data/personalities';
 import { PREMIUM_QUALITY_THRESHOLD } from './TierSystem';
 import { pickBestCity } from '../core/Trade';
 import { getTradeCity } from '../data/tradeCities';
+import { DATACENTER_SEATS_PER_LEVEL } from '../data/services';
 
 /**
  * Routine-event channels for the daily digest (Arc A5 / HD7). One price/wage/
@@ -144,6 +145,7 @@ export function runAIStrategySystem(ctx: SimContext): void {
       maybeExportSurplus(ctx, firm.id);
       maybeUpgrade(ctx, firm.id);
       maybeBuildApartment(ctx, firm.id);
+      maybeBuildDatacenter(ctx, firm.id);
       maybeEnterCoffee(ctx, firm.id);
       maybeEnterLuxury(ctx, firm.id);
       if (maybeRescueAcquisition(ctx, firm.id)) continue; // firm map changed
@@ -803,6 +805,70 @@ function maybeBuildApartment(ctx: SimContext, firmId: string): void {
   });
   emitEvent(state, 'info', 'ai',
     `🏢 ${firm.name} built ${apt.name} — new housing for a growing town.${ceoQuote(rng, firm, 'expand')}`, apt.id);
+}
+
+/**
+ * AI compute provider (HD3): a very flush firm builds a datacenter to enter the
+ * B2B compute market when demand is tight — total seats sold across the town is
+ * running near capacity, so a new provider can win subscribers. Deterministic
+ * (no rng draws): the gates are cash/utilization conditions, so this never
+ * perturbs the shared stream, and it is doubly gated on the services flag +
+ * non-Village scale (both false in every pinned baseline). Capped so the town
+ * grows a compute market rather than exploding into datacenters.
+ */
+const DATACENTER_ENTRY_DAY = 40;
+const DATACENTER_ENTRY_CASH = 120000_00;
+const DATACENTER_KEEP_BUFFER = 60000_00;
+const DATACENTER_MAX_PROVIDERS = 4;
+const DATACENTER_TIGHT_UTIL = 0.9;
+
+function maybeBuildDatacenter(ctx: SimContext, firmId: string): void {
+  const { state } = ctx;
+  if (!ctx.config.servicesEnabled || ctx.config.sizePreset === 'village') return;
+  const firm = state.firms[firmId]!;
+  if (ctx.time.day < DATACENTER_ENTRY_DAY || firm.cash < DATACENTER_ENTRY_CASH) return;
+
+  // Already a provider, or the market already has enough providers? Also read
+  // town-wide compute utilization to decide whether a new entrant is warranted.
+  let providers = 0;
+  let capacity = 0;
+  for (const fid in state.firms) {
+    let firmCap = 0;
+    for (const facId of state.firms[fid]!.facilities) {
+      const fac = state.facilities[facId];
+      if (fac?.type === 'datacenter' && fac.status !== 'closed') firmCap += DATACENTER_SEATS_PER_LEVEL * fac.level;
+    }
+    if (firmCap > 0) {
+      providers += 1;
+      capacity += firmCap;
+      if (fid === firmId) return; // this firm is already a provider
+    }
+  }
+  if (providers >= DATACENTER_MAX_PROVIDERS) return;
+  let sold = 0;
+  for (const cid in state.serviceContracts) sold += state.serviceContracts[cid]!.seats;
+  const util = capacity > 0 ? sold / capacity : 1; // no capacity yet ⇒ treat as tight
+  if (util < DATACENTER_TIGHT_UTIL) return;
+
+  const def = getFacilityDef('datacenter');
+  const loc = {
+    x: clamp(48 + providers * 14, 8, state.config.mapWidth - 8),
+    y: clamp(38, 8, state.config.mapHeight - 8),
+  };
+  const cost = Math.round(def.buildCost * landCostMultiplier(landValueAt(state, loc)));
+  if (firm.cash - cost < DATACENTER_KEEP_BUFFER) return;
+
+  const dc = createFacility(state, 'datacenter', firmId, loc, {
+    name: `${firm.name.split(' ')[0]} Compute`,
+  });
+  dc.buildCost = cost;
+  dc.operatingCostPerDay = Math.round(def.maintenanceCostPerDay * landCostMultiplier(landValueAt(state, loc)));
+  recordTransaction(state, {
+    from: firmAccount(firmId), to: WORLD_ACCOUNT, amount: cost,
+    firmId, category: 'buildSpend', note: 'Built datacenter',
+  });
+  emitEvent(state, 'info', 'ai',
+    `🖥️ ${firm.name} opened ${dc.name} — a new compute provider for the city's firms.`, dc.id);
 }
 
 /** Flush AI firms level up a production facility now and then. */

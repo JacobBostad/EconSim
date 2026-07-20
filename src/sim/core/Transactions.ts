@@ -37,6 +37,7 @@ export type LedgerCategory =
   | 'maintenance'
   | 'logistics'
   | 'variableCost'
+  | 'serviceExpense'
   | 'marketing'
   | 'rnd'
   | 'interest'

@@ -93,6 +93,14 @@ export interface SimulationConfig {
    * as district × tier cohorts beyond the simulated cast.
    */
   sizePreset: SizePreset;
+  /**
+   * B2B services channel (datacenter compute, HD3). Off by default — including
+   * for the plain city/metropolis presets the founder/soak baselines are tuned
+   * against — so those pinned trajectories are untouched. The UI turns it on for
+   * a City world; probes and tests opt in explicitly. Village never runs it
+   * regardless (double-gated on sizePreset).
+   */
+  servicesEnabled: boolean;
 }
 
 /**
@@ -186,6 +194,7 @@ export const DEFAULT_CONFIG: SimulationConfig = {
   maxHomes: 40,
   maxCitizens: 80,
   sizePreset: 'village',
+  servicesEnabled: false,
 };
 
 /** Difficulty presets: starting capital, news volatility, AI aggressiveness. */

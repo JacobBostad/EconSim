@@ -137,6 +137,11 @@ export type Command =
   | { type: 'TRAIN_CREW'; firmId: FirmId; facilityId: FacilityId }
   | { type: 'BUY_SHARES'; firmId: FirmId; targetFirmId: FirmId; percent: number }
   | { type: 'SELL_SHARES'; firmId: FirmId; targetFirmId: FirmId; percent: number }
+  /** Subscribe a firm to a provider's compute (B2B services, HD3). Seats
+   * default to the firm's current seat demand. */
+  | { type: 'SUBSCRIBE_SERVICE'; firmId: FirmId; providerFirmId: FirmId }
+  /** Cancel a firm's compute subscription. */
+  | { type: 'CANCEL_SERVICE'; firmId: FirmId }
   | { type: 'SELECT_ENTITY'; entityId: EntityId | null };
 
 export type CommandType = Command['type'];
