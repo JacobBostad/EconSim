@@ -42,6 +42,7 @@ import { NEED_BUCKETS } from '../entities/Cohort';
 import type { Facility } from '../entities/Facility';
 import type { Vec2 } from '../entities/Location';
 import { distance } from '../entities/Location';
+import { districtAt, shoppingDistrictIds } from '../entities/District';
 import { getQuantity, getQuality, removeStock } from '../entities/Inventory';
 import { PRODUCTS, ALL_PRODUCT_IDS, getProduct } from '../data/products';
 import { worldDemandMult, worldSpendingMult } from '../data/worldEvents';
@@ -188,13 +189,19 @@ function growBuckets(ctx: SimContext): void {
 function runSlice(ctx: SimContext): void {
   const { state } = ctx;
 
-  // Open, staffed storefronts this slice — the shelves the crowd can reach.
-  const openStores: Facility[] = [];
+  // Open, staffed storefronts this slice — the shelves the crowd can reach. Tag
+  // each with the district it stands in so a cohort's shopping stays district-
+  // local (its home district + adjacent, A4 — the same walking-reach fix the
+  // cast's chooseBestStore applies). Cohorts already live in a City/Metropolis
+  // town here (Village exits before runSlice via anyCrowd), so every crowd town
+  // is district-local by construction.
+  const openStores: OpenStore[] = [];
   for (const fid of Object.keys(state.facilities).sort()) {
     const fac = state.facilities[fid]!;
     if (fac.retailProductIds.length === 0) continue;
     if (!storeIsOpen(ctx, fac)) continue;
-    openStores.push(fac);
+    const d = districtAt(state.districts, fac.location.x, fac.location.y);
+    openStores.push({ facility: fac, districtId: d ? d.id : '' });
   }
   if (openStores.length === 0) return;
 
@@ -220,6 +227,13 @@ function runSlice(ctx: SimContext): void {
     if (cohort.population <= 0) continue;
     shopCohortSlice(ctx, cohort, openStores, sold, castShare);
   }
+}
+
+/** An open storefront tagged with the district it stands in (A4 district-local
+ * shopping). */
+interface OpenStore {
+  facility: Facility;
+  districtId: string;
 }
 
 /** Center of a cohort's home district — its representative shopper's origin. */
@@ -286,7 +300,7 @@ function cohortStoreScore(
 function shopCohortSlice(
   ctx: SimContext,
   cohort: Cohort,
-  openStores: Facility[],
+  openStores: OpenStore[],
   sold: Record<string, boolean>,
   castShare: number,
 ): void {
@@ -296,6 +310,12 @@ function shopCohortSlice(
   // Per-slice trip budget: the daily per-capita rate split across the 5 slices.
   const totalVisits = (pop * (T_EMP * empShare + T_UNEMP * (1 - empShare))) / SLICES;
   const home = districtCenter(state, cohort.districtId);
+  // District-local shopping (A4): the cohort only reaches stores in its home
+  // district plus adjacent quarters — the crowd analogue of the cast's
+  // chooseBestStore restriction. Stores outside are dropped from its store split.
+  const allowed = shoppingDistrictIds(state.districts, cohort.districtId);
+  const reachable = openStores.filter((s) => allowed.has(s.districtId));
+  if (reachable.length === 0) return;
 
   // Softmax targeting over bucket-mean urgency (only buckets above the trip
   // gate count toward the mean), spec-order biased, servable products only.
@@ -337,12 +357,12 @@ function shopCohortSlice(
     if (visits <= 0) return;
     const scored: { id: string; w: number }[] = [];
     let wsum = 0;
-    for (const st of openStores) {
-      const s = cohortStoreScore(ctx, cohort, st, pid, home);
+    for (const st of reachable) {
+      const s = cohortStoreScore(ctx, cohort, st.facility, pid, home);
       if (s === null) continue;
       const sc = Math.max(0, s);
       const w = sc * sc;
-      scored.push({ id: st.id, w });
+      scored.push({ id: st.facility.id, w });
       wsum += w;
     }
     if (wsum <= 0) return; // nobody sells it: the trip never starts

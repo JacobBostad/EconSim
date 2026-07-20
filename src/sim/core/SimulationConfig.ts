@@ -89,11 +89,18 @@ export interface SimulationConfig {
   sizePreset: 'village' | 'city' | 'metropolis';
 }
 
-/** Per-preset scale knobs (consumed progressively through Arc A). */
+/**
+ * Per-preset scale knobs (consumed progressively through Arc A). `mapWidth`/
+ * `mapHeight` are the A4 physical-district map presets: Village keeps today's
+ * 130×92 exactly (bit-identity), City and Metropolis get the bigger authored
+ * maps createInitialState wires into config (the castTarget pattern). The
+ * authored district layouts per preset live in data/districts.ts and are sized
+ * to tile these dimensions exactly.
+ */
 export const SIZE_PRESETS = {
-  village: { castTarget: 80, cohortCap: 0, crowdStart: 0, founderMaxAiFirms: 6 },
-  city: { castTarget: 150, cohortCap: 2000, crowdStart: 300, founderMaxAiFirms: 18 },
-  metropolis: { castTarget: 150, cohortCap: 10000, crowdStart: 1500, founderMaxAiFirms: 30 },
+  village: { castTarget: 80, cohortCap: 0, crowdStart: 0, founderMaxAiFirms: 6, mapWidth: 130, mapHeight: 92 },
+  city: { castTarget: 150, cohortCap: 2000, crowdStart: 300, founderMaxAiFirms: 18, mapWidth: 260, mapHeight: 184 },
+  metropolis: { castTarget: 150, cohortCap: 10000, crowdStart: 1500, founderMaxAiFirms: 30, mapWidth: 390, mapHeight: 276 },
 } as const;
 
 export const DEFAULT_CONFIG: SimulationConfig = {

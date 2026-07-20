@@ -250,7 +250,9 @@ export function createInitialState(
     marketUndersupplyDays: {},
     lastUndersupplyEntryDay: 0,
     sharePriceShift: {},
-    districts: defaultDistrictPartition(config),
+    // Districts are built AFTER the size-preset block below (which may raise
+    // the map dimensions), so the partition tiles the preset's real map.
+    districts: {},
     cohorts: {},
     lastLapsedFireSale: null,
     townHistory: [],
@@ -262,15 +264,20 @@ export function createInitialState(
 
   // World-scale cast ceiling: a non-Village preset lifts the immigration caps
   // to the preset's castTarget (homes hold 2 residents, so ceil(target/2) homes
-  // plus a few spares for odd/partial fills). This only raises the GROWTH
-  // CEILING — physical home PLACEMENT is still the A4 problem (homeSlotFor's
-  // column march saturates the map), so cast growth beyond ~200 stays gated by
-  // the map until district-aware placement lands. Village keeps its 80/40 caps.
+  // plus a few spares for odd/partial fills) AND the physical map to the preset's
+  // authored dimensions (A4). Home/facility PLACEMENT is now district-aware
+  // (see DistrictSlots + the placement rewrite), so the bigger map is filled by
+  // slot enumeration inside districts, not the old column march. Village keeps
+  // its 80/40 caps and 130×92 map untouched (bit-identity).
   if (state.config.sizePreset !== 'village') {
-    const target = SIZE_PRESETS[state.config.sizePreset].castTarget;
-    state.config.maxCitizens = Math.max(state.config.maxCitizens, target);
-    state.config.maxHomes = Math.max(state.config.maxHomes, Math.ceil(target / 2) + 4);
+    const preset = SIZE_PRESETS[state.config.sizePreset];
+    state.config.maxCitizens = Math.max(state.config.maxCitizens, preset.castTarget);
+    state.config.maxHomes = Math.max(state.config.maxHomes, Math.ceil(preset.castTarget / 2) + 4);
+    state.config.mapWidth = Math.max(state.config.mapWidth, preset.mapWidth);
+    state.config.mapHeight = Math.max(state.config.mapHeight, preset.mapHeight);
   }
+  // Now that map dimensions are final, tile the authored district partition.
+  state.districts = defaultDistrictPartition(state.config);
 
   for (const cid of TRADE_CITY_IDS) state.tradeCities[cid] = { pricesByProduct: {} };
   for (const pid of ALL_PRODUCT_IDS) {
@@ -442,16 +449,16 @@ function seedCrowd(state: GameState): void {
     .filter((d) => d.kind === 'residential')
     .sort((a, b) => (a.id < b.id ? -1 : 1));
   if (residential.length === 0) return;
-  const per = Math.floor(preset.crowdStart / residential.length);
-  let remainder = preset.crowdStart - per * residential.length;
-  for (const d of residential) {
-    const population = per + (remainder > 0 ? 1 : 0);
-    if (remainder > 0) remainder -= 1;
-    if (population <= 0) continue;
-    const id = cohortId(d.id, 'worker');
-    const cohort = emptyCohort(d.id, 'worker');
-    cohort.population = population;
-    cohort.cashPool = population * CROWD_START_CASH_PER_CAPITA;
-    state.cohorts[id] = cohort;
-  }
+  // The whole crowd bootstraps as ONE worker-tier cohort in the primary
+  // (first-sorted, store-rich inner) residential district — the As-built A3
+  // bootstrap (`the_rows:worker` holds all crowdStart). The other residential
+  // districts are the expansion room migration and home growth spread into;
+  // seeding them here instead would strand crowd in districts the starting
+  // shops (concentrated in the inner district) can't yet reach.
+  const primary = residential[0]!;
+  const id = cohortId(primary.id, 'worker');
+  const cohort = emptyCohort(primary.id, 'worker');
+  cohort.population = preset.crowdStart;
+  cohort.cashPool = preset.crowdStart * CROWD_START_CASH_PER_CAPITA;
+  state.cohorts[id] = cohort;
 }

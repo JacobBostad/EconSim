@@ -38,7 +38,8 @@ import type { DistrictId } from '../entities/District';
 import { emptyCohort } from '../entities/Cohort';
 import { createFacility, createCitizen } from '../entities/factories';
 import { removeCitizen } from './LaborSystem';
-import { homeSlotFor } from './ImmigrationSystem';
+import { homeSlotFor, HOME_SLOT_SPEC } from './ImmigrationSystem';
+import { firstFreeDistrictSlot } from '../core/DistrictSlots';
 
 /** Hysteresis band: a stratum must be off by at least this many seats before a
  * swap disturbs it (one-seat drift is noise, not a signal). */
@@ -235,7 +236,15 @@ function resolvePromoteHome(ctx: SimContext, districtId: DistrictId, gone: Citiz
   if (existing !== null) return existing;
 
   if (homes < ctx.config.maxHomes) {
-    const slot = homeSlotFor(Math.max(0, homes - 20), ctx.config.mapHeight);
+    // Village keeps the legacy column-march coordinates (bit-identity); big
+    // maps enumerate a free slot INSIDE the target district — homeSlotFor
+    // only ever yields the map's west half, so on 260/390-wide maps it can
+    // never satisfy an east-district promotion and the swap would silently
+    // die (A4 review finding).
+    const slot =
+      ctx.config.sizePreset === 'village'
+        ? homeSlotFor(Math.max(0, homes - 20), ctx.config.mapHeight)
+        : firstFreeDistrictSlot(ctx.state, 'residential', HOME_SLOT_SPEC, [], districtId);
     if (slot && inDistrict(slot)) {
       const home = createFacility(state, 'home', state.worldFirmId, slot, { name: `Home ${homes + 1}` });
       return home.id;

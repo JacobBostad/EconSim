@@ -21,6 +21,7 @@ import {
 import type { Citizen } from '../entities/Citizen';
 import type { Facility } from '../entities/Facility';
 import { crowdCount } from '../entities/Facility';
+import { districtAt, shoppingDistrictIds } from '../entities/District';
 import type { ProductId } from '../core/Id';
 import { getQuantity, getQuality, removeStock } from '../entities/Inventory';
 import { distance } from '../entities/Location';
@@ -126,12 +127,29 @@ export function scoreStore(
   return { facility, score, price };
 }
 
-/** Choose the highest-scoring open store selling `productId`, with jitter. */
+/** Choose the highest-scoring open store selling `productId`, with jitter.
+ *
+ * On City/Metropolis the scan is DISTRICT-LOCAL: only stores in the shopper's
+ * home district plus its adjacent quarters are considered (A4). A big map is far
+ * too wide to cross in a shop-window trip at walking speed, so a town-wide scan
+ * would route shoppers to stores they physically cannot reach — and it is an
+ * O(all stores) scan per shopper per trip. Village keeps the town-wide scan: its
+ * 130×92 map fits inside maxShoppingDistance, and the bit-identity contract pins
+ * the exact store the jitter picks. */
 export function chooseBestStore(
   ctx: SimContext,
   citizen: Citizen,
   productId: ProductId,
 ): Facility | null {
+  const districtLocal = ctx.config.sizePreset !== 'village';
+  let allowed: Set<string> | null = null;
+  if (districtLocal) {
+    const home = ctx.state.facilities[citizen.homeFacilityId];
+    const originDistrict = home
+      ? districtAt(ctx.state.districts, home.location.x, home.location.y)
+      : null;
+    if (originDistrict) allowed = shoppingDistrictIds(ctx.state.districts, originDistrict.id);
+  }
   let best: Facility | null = null;
   let bestScore = -Infinity;
   for (const id in ctx.state.facilities) {
@@ -139,6 +157,10 @@ export function chooseBestStore(
     if (!fac.retailProductIds.includes(productId)) continue;
     if (fac.status === 'closed') continue;
     if (fac.employees.length === 0 && crowdCount(fac) === 0) continue;
+    if (allowed) {
+      const d = districtAt(ctx.state.districts, fac.location.x, fac.location.y);
+      if (!d || !allowed.has(d.id)) continue;
+    }
     const scored = scoreStore(ctx, citizen, fac, productId);
     if (!scored) continue;
     const jittered = scored.score + ctx.rng.jitter(ctx.config.storeScoreJitter);

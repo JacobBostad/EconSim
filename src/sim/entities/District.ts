@@ -29,6 +29,23 @@ export interface District {
   adjacent: DistrictId[];
 }
 
+/**
+ * The districts a shopper rooted in `originId` may reach: its own plus every
+ * `adjacent` id (A4 district-local shopping — a home district and the quarters
+ * beside it, no farther, because a shop-window trip at walking speed cannot
+ * cross a City/Metropolis map). Unknown ids yield just themselves. Village never
+ * calls this (it keeps the town-wide scan — its map fits in reach).
+ */
+export function shoppingDistrictIds(
+  districts: Record<DistrictId, District>,
+  originId: DistrictId,
+): Set<DistrictId> {
+  const allowed = new Set<DistrictId>([originId]);
+  const origin = districts[originId];
+  if (origin) for (const adj of origin.adjacent) allowed.add(adj);
+  return allowed;
+}
+
 /** The district containing a world point (bounds partition the map). */
 export function districtAt(
   districts: Record<DistrictId, District>,
