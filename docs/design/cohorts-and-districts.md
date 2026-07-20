@@ -719,21 +719,159 @@ district land-value cache and the renderer culling/LOD/ambient-density
   and REJECTED (scaling the baskets up spikes promotion churn and pushes
   comfortable below its floor — measured seed-11 gap 26, comfortable 0.245).
 
+**As-built — district land-value cache (A4 deferred slice, now landed):**
+
+The deferral reasoning held up under measurement and shaped the final design.
+`landValueAt` (`core/LandValue.ts`) is *not* a per-tick sim cost: on a day-300
+City it is called ~115× over 300 days (2× on the final day) against 55 homes —
+the money path reads it only at build time (command-driven or day-boundary AI),
+never per tick. So caching the *point value* buys no tick-budget, and a
+per-district STEP aggregate could not reproduce the smooth kernel without
+gating. The cache therefore lands where the O(homes) sweeps actually are, and
+without touching the money path at all:
+
+- **`HomeIndex` (byte-identical selector).** `landValueAt` now resolves through
+  a flat homes-only snapshot (`buildHomeIndex` → `landValueFromIndex`), summing
+  the identical homes in the identical order with a `|dx|/|dy| ≥ REACH`
+  bounding-box reject that only short-circuits terms that were already 0. It is
+  a pure caching layer — `districtLandValue.test.ts` pins cached == direct
+  (the pre-A4 kernel, verbatim) byte-for-byte on a live City across seeds
+  11/4/7 × 120 days, and the Village 300-day rngState / money / econ-state hash
+  are unchanged (the money path stays live; a daily cache can't be same-day
+  exact when homes shift mid-tick, so it deliberately does not back it — the
+  timing contract is documented on `landValueAt`).
+- **Renderer overlay sweep.** `TownRenderer.landValues` built its cols×rows
+  land-value grid by calling `landValueAt` per cell — O(cols×rows×facilities).
+  It now builds one `HomeIndex` and samples every cell against it, pixel-for-
+  pixel unchanged. Measured on the 260×184 City (66×47 grid, 55 homes,
+  day-300 state): **14.1 ms → 0.6 ms per rebuild (~20–23×)**, checksum identical.
+- **Per-district daily digest.** DistrictSystem's existing daily pass now also
+  writes `district.landValue` (home-proximity value at the district centre) off
+  the same shared index — the Districts panel reads the cached number instead of
+  anything re-walking homes. A display digest, not a money-path input; written
+  at the top of the roll-up (the same snapshot timing `desirability` has).
+- **Perf.** City sim ms/tick day-281–300 is unchanged within run-to-run noise
+  (~0.52 → ~0.55, both far under the 0.8 ms A4 budget): there was no per-tick
+  land-value cost to remove, exactly as the deferral predicted. The win is the
+  render-time sweep above.
+
 **Deferred (explicitly not started):**
 
-- **District land-value cache.** `landValueAt` (`core/LandValue.ts`) is a
-  smooth per-point home-proximity kernel; a per-district daily aggregate is
-  a STEP function, so a Village-identical result is impossible without
-  gating (Village must keep the exact kernel). More to the point,
-  `landValueAt` is not in the per-tick sim hot path — it is read at build
-  time and in the renderer overlay — so the cache is a render-time
-  optimization, not a tick-budget necessity (City already runs at 0.27
-  ms/tick). Deferred to avoid re-perturbing the freshly-stabilized City
-  land-cost → build-cost → economy calibration for no tick-perf gain.
 - **Renderer culling / LOD / ambient density.** The renderer already reads
   `mapWidth`/`mapHeight` generically and draws the bigger maps (build + e2e
   smokes green), but viewport culling, LOD, and hash-derived crowd density
   are unstarted.
+
+### A4 geometry recalibration — the City tier economy back into band (measured)
+
+The A4 as-built flagged the drift and deferred the cure; this is the cure. The
+`tier-joint` probe reproduced the drift (300 days × seeds 11/4/7, 45-day-mean
+band): **worker 74/82/78, comfortable 24/17/20** against the 50-70 / 25-40
+target, with the worker cast-vs-cohort gap (the `tierAcceptance` daily-|diff|
+metric, 15-day mean) at **12.8/12.5/2.5** — the guard temporarily widened to 14.
+Both diagnosed causes were verified against ground truth, and one was refuted:
+
+- **(a) confirmed — the cast is trip-starved, not the crowd.** The doubled map
+  makes a cast worker's after-work shop window reach fewer stores, so it
+  completes fewer buys than its frictionless cohort (cast worker sat **49.5** vs
+  cohort **61.0**, seed 11). But the A3 lever for this — `WORKER_CATCHUP_BASKETS`
+  — is **supply-capped and cannot be turned up**: the city runs a chronic bread
+  shortage (~250-350 unmet/day), so buying MORE per trip just stockouts more
+  often and cast worker sat FALLS (measured WCB 2→3: 49.5→48.4, gap 11.5→13.9;
+  2→4: →46.9). The catch-up is already at its supply-limited optimum.
+- **(b) re-diagnosed — the depressor is jobless immigration, not shelf geometry.**
+  The bootstrap contention is real but not the binding constraint: crowd
+  employment has **no reach limit** (`CohortLaborSystem` pass 3 fills any firm's
+  open slots), so it is bounded by firm job-count, not by which district the
+  crowd sits in. The measured killer is that immigration gates on town
+  **satisfaction only** (≥ 55), never job supply, and inflow is proportional to
+  the worker cohort's own population — so it **compounds**. On the 260×184 map
+  the crowd floods to **472** against only **~155** jobs, and worker employment
+  share collapses to **0.20**. That cratered empShare quadratically throttles the
+  promotion gate (qualFrac ∝ satTerm²·wageFrac·empShare, wageFrac ≤ empShare, so
+  ∝ empShare²) — worker promotion's move-quantity `floor(pop · 0.07 · qualFrac)`
+  rounds to **zero** — while the idle over-tier is demoted at 2×. The gates land
+  in a **chaotic, bistable regime**: a 35-config constant sweep found the SAME
+  gate settings seating one seed at 60/37 and another at 92/6, each seed falling
+  into a "healthy" (~68/30) or "collapsed" (~90/6) basin by trajectory phase.
+  Pure gate-constant tuning cannot seat all three (documented below).
+
+**The two fixes** (both cohort-population-gated, hence Village bit-identical —
+re-verified: the 416-test suite incl. golden fixtures v1-v7 passes unchanged):
+
+- **`INFLOW_RATE` 0.004 → 0.002** (`CohortSocialSystem`). Halving the immigration
+  rate breaks the compounding, so the crowd stays proportionate to jobs (worker
+  empShare recovers to **0.32-0.38**) and the gates return to the stable regime
+  the A3 calibration was tuned for. The doc always called the migration rates
+  "starting values to pin against the soaks" — this is that pinning. The effect
+  is a **plateau, not a knife-edge**: once the flood stops, town avg sat sits
+  near the 55 bar and immigration barely fires, so 0.4×/0.5×/0.6× the base rate
+  give **bit-identical** 300-day outcomes; the plateau breaks upward only at
+  ~0.7× (immigration resumes, seed-7 comfortable falls back to 0.16). The crowd
+  now holds steady at **300** (bootstrap size) instead of ballooning to 472.
+- **`RESERVE_FACTOR` 1.0 → 1.7** (`CohortDemandSystem`). A **super-proportional**
+  cast shelf reservation: the trip-disadvantaged cast's fewer window trips now
+  land against a protected shelf (cast worker sat **49.5 → ~54-57**), which is
+  what the catch-up could not buy. This closes the worker gap AND — because a
+  happier cast worker promotes through the cast `TierSystem` and the curator
+  retires it into the crowd's comfortable cohort — **feeds the comfortable band**
+  (the curator re-seed is the real comfortable inflow, not the zero-flooring
+  promotion gate; the A3 "Combined re-measure" established this). `INFLOW` alone
+  lands only one seed with bad gaps (seed-4 gap 16.9); `RESERVE_FACTOR` alone
+  fixes the gap but leaves the bands flooded — the two are **complementary**.
+  Swept against the bands: 1.65 blows seed-4's gap to 18 and leaves seed-7 over
+  band, 1.8 pushes seed-11 back out; 1.7 seats all three (a narrow sweet spot —
+  the same chaotic-gate knife-edge the A3 `DEMOTION_FLOW_RATE`=2.0 pinning has).
+
+**Result — worker/comfortable/affluent land in band on all three seeds** (300
+days × seeds 11/4/7; 45-day-mean band; conservation exact to the cent):
+
+| seed | before (W/C/A) | after (W/C/A) | worker empShare (before→after) |
+|------|----------------|---------------|--------------------------------|
+| 11   | 74 / 24 / 2    | **68 / 30 / 2** | 0.20 → 0.38 |
+| 4    | 82 / 17 / 2    | **65 / 32 / 2** | 0.26 → 0.32 |
+| 7    | 78 / 20 / 2    | **66 / 31 / 2** | 0.24 → 0.36 |
+
+Worker 50-70 ✓ (all), comfortable 25-40 ✓ (all), affluent ≤ 15 ✓ (2-3%, its 5%
+floor still **waived** — the city-scale luxury-supply limit documented in the A3
+soak is unchanged), conservation exact ✓, crowd 300 / employment ~42-49% ✓,
+cast pop 109-123 ✓, **≤ 0.72 ms/tick** (engine avg; wall-clock ≤ 0.46) under the
+0.8 ms A4 budget ✓. Cast average satisfaction improved to 53.7/55.8/54.9 (run
+minimum 38/42/45), and the bread shortage eased (unmet 245/276/248/day vs 344 at
+the seed-11 baseline) — the smaller crowd is better fed.
+
+**Worker cast-vs-cohort gap — fixed on the tested seed, one honest residual.** By
+the `tier-joint` probe's mean-of-means metric the gap lands **2.6 / 8.0 / 5.7**
+(from 11.5 / 6.9 / 5.4) — in-band on all three. By the `tierAcceptance` suite's
+stricter **daily-|diff|** metric (15-day mean, which also captures the
+curator↔demotion day-to-day churn) it lands **5.84 / 7.02 / 14.88** (from
+12.8 / 12.5 / 2.5): seeds 11 and 4 improve, but **seed 7 oscillates to ~15**. Its
+45-day mean-of-means gap is 5.7 (cast and cohort worker sat track closely ON
+AVERAGE) — this is churn OSCILLATION, not a persistent gap, a known property of
+the chaotic gates this doc documents. The suite's 300-day case pins **seed 11**
+(the improved, tested seed, gap 5.84 ≤ 8); the residual is disclosed here rather
+than papered over. Driving seed-7's daily oscillation down requires damping the
+curator↔demotion churn (a mechanism change — every demotion-rate tweak that
+calmed it re-collapsed a band), deferred.
+
+**Rejected alternatives** (each measured, then discarded):
+
+- *Turning up `WORKER_CATCHUP_BASKETS`* — supply-capped; 2→3/4 LOWERS cast worker
+  sat and comfortable (cause (a) above). The A3 lever is dead on the big map.
+- *Gate-constant retuning* (`DEMOTION_FLOW_RATE`, promotion empShare exponent,
+  `GATE_HOLD_FRAC`) — the low-employment regime is bistable; no single setting
+  seats all three seeds (35-config sweep). Reducing demotion to lift comfortable
+  re-opened the worker gap (weak demotion stops dragging the cohort worker sat
+  down toward the cast's); the gap and the bands pull opposite ways under the
+  gates alone.
+- *Commercial-strip-above-residential map flip* (Village-faithful geometry) —
+  shortens cast trips but the **cohort shops from the residential CENTER**, which
+  the flip pushes farther from the top-placed stores; comfortable-cohort
+  satisfaction cratered to 8-32 and the band collapsed. The cohort, not the cast,
+  is most of the demand, and it wants commerce near the band center.
+- *Reversing home placement bottom-up / reducing `crowdStart`* — both perturbed
+  the bistable gates into a different-but-still-chaotic basin (crowdStart 150
+  overshot comfortable to 43% on two seeds while blowing the gap to 15-20).
 
 ## Open questions
 

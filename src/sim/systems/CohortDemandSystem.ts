@@ -110,10 +110,27 @@ const COHORT_RELIABILITY = 0.4;
  * stockout would.
  *
  * RESERVE_FACTOR scales the reserved share; 1.0 is full proportional
- * reservation (a starting value — the soak measures whether the cast recovers
- * without over-starving the crowd, and this dials the trade-off).
+ * reservation. Re-pinned to 1.7 in the A4 geometry recalibration (docs/design/
+ * cohorts-and-districts.md, "A4 geometry recalibration"): the 260×184 map's
+ * doubled trip lengths mean a cast worker — jobbed ~95-100% and shopping only
+ * the narrow after-work window — completes far fewer buys than its frictionless
+ * cohort (cast worker sat 49.5 vs cohort 61 at seed 11, gap 11.5). The catch-up
+ * lever the A3 small-City tuned (WORKER_CATCHUP_BASKETS) can't close it on the
+ * big map — MORE baskets deepen the chronic bread shortage and cast sat FALLS
+ * (measured WCB 2→3: cast worker sat 49.5→48.4, gap 11.5→13.9). A super-
+ * proportional reservation instead lets the cast's fewer trips land against a
+ * protected shelf: 1.7 lifts cast worker sat to ~54-57 and drops the worker
+ * cast-vs-cohort gap to 2.6/8.0/5.7 (seeds 11/4/7, from 11.5/6.9/5.4) — and
+ * the higher cast sat feeds the curator→comfortable path (a happier cast worker
+ * promotes through the cast TierSystem and the curator retires it into the
+ * crowd's comfortable cohort), which is what lands the tier bands (see the
+ * INFLOW_RATE note in CohortSocialSystem). Swept against the 300-day × 3-seed
+ * bands: 1.65 blows seed-4's gap to 18 and leaves seed-7 worker over 70; 1.8
+ * pushes seed-11 back over 70/under 25; 1.7 seats all three (worker 68/65/66,
+ * comfortable 30/32/31). Cohort-population-gated (crowdPurchasableStock only
+ * runs when a cohort shops), so Village is untouched.
  */
-const RESERVE_FACTOR = 1.0;
+const RESERVE_FACTOR = 1.7;
 
 /**
  * The crowd's purchasable share of a shelf after the cast reservation: the

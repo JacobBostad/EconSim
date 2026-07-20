@@ -145,8 +145,36 @@ const SAVINGS_ROUTE_CAP = 0.5;
  */
 const FLOAT_RESERVE_CENTS = 140_00;
 
-/** Migration rates at cohort scale (starting values, to pin against soaks). */
-const INFLOW_RATE = 0.004;
+/**
+ * Migration rates at cohort scale. OUTFLOW is the A3 starting value. INFLOW was
+ * RE-PINNED from 0.004 to 0.002 in the A4 geometry recalibration (docs/design/
+ * cohorts-and-districts.md, "A4 geometry recalibration").
+ *
+ * The immigration gate reads only town SATISFACTION (≥ 55), never job supply, so
+ * a satisfied-but-jobless town keeps attracting worker households — and inflow is
+ * proportional to the worker cohort's own population, so it COMPOUNDS. On the
+ * 130×92 A3 City the crowd stayed roughly proportionate to the jobs the firms
+ * could staff; on the 260×184 A4 map the same 0.004 floods the worker tier faster
+ * than founders add jobs (crowd 472 vs ~155 jobs at day 300), so worker
+ * employment share collapses to ~0.20. That cratered empShare quadratically
+ * throttles the promotion gate (qualFrac ∝ satTerm²·wageFrac·empShare, and
+ * wageFrac ≤ empShare, so ∝ empShare²) AND drives the demotion holdFactor down
+ * (an idle over-tier is demoted at 2×), pushing the whole gate system into a
+ * chaotic, bistable regime — measured worker 74-82 / comfortable 16-25 against
+ * the 50-70 / 25-40 bands, with the same constants landing one seed at 60/37 and
+ * another at 92/6.
+ *
+ * Halving the rate breaks the compounding so the crowd stays proportionate to
+ * jobs (worker empShare ~0.27-0.40): the gates return to the stable regime the A3
+ * calibration was tuned for, and worker/comfortable seat in-band on all three
+ * seeds. The effect is a PLATEAU, not a knife-edge — immigration barely fires
+ * once the flood stops (town avg sat sits near the 55 bar), so 0.4×, 0.5×, and
+ * 0.6× the base rate give BIT-IDENTICAL 300-day outcomes; the plateau breaks
+ * upward at ~0.7× (immigration resumes, seed-7 comfortable falls back to 16).
+ * 0.002 sits mid-plateau. Cohort-gated (runMigration is behind the anyCrowd
+ * guard), so Village is untouched.
+ */
+const INFLOW_RATE = 0.002;
 const OUTFLOW_RATE = 0.003;
 /** Each arrival brings this much cash from the world account — the same
  * per-capita the seedCrowd bootstrap and cast immigration use. */
