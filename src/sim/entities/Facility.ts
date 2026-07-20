@@ -113,6 +113,17 @@ export interface Facility {
   positioning: StorePositioning;
   operatingCostPerDay: number; // maintenance, cents
   buildCost: number; // cents
+  /**
+   * Upgrade capital sunk into this facility beyond its base build cost, cents
+   * (Phase 5 / Arc B3). Kept SEPARATE from buildCost on purpose: buildCost is
+   * the AI-pricing tier's base (operatingValuationOf → marketCap → stake
+   * decisions), pinned to the city rng trajectory; the enriched book value
+   * (buildCost + upgradeCapex) feeds only the scoreboard valuation, the sell
+   * refund, and fire-sale asks. City-scale only — never set in a Village, so
+   * it is absent from Village saves and the 300-day bit-identity baseline.
+   * Absent (undefined) reads as 0.
+   */
+  upgradeCapex?: number; // cents
   productionProgress: number;
   status: FacilityStatus;
   bottleneckReason: string | null;

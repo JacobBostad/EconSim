@@ -26,7 +26,7 @@ import { pricingInsight } from '../sim/selectors/marketSelectors';
 import { pickBestCity, cityPrice, exportFreightFee } from '../sim/core/Trade';
 import { TRADE_CITY_IDS, getTradeCity } from '../sim/data/tradeCities';
 import { managerCandidates, managerDuties } from '../sim/systems/ManagerSystem';
-import { FORWARD_MAX_OPEN } from '../sim/systems/ForwardSystem';
+import { FORWARD_MAX_OPEN, FORWARD_CLOSE_FEE, forwardMark } from '../sim/systems/ForwardSystem';
 import { computeTime } from '../sim/core/Tick';
 import {
   computeCapacity,
@@ -863,16 +863,28 @@ function CommodityDesk({ fac }: { fac: Facility }): React.ReactElement {
                 </button>
               );
             })}
-            {firm.forwards.map((f) => (
-              <span
-                key={f.id}
-                className="badge small"
-                title={`Deliver ${f.quantity} ${getProduct(f.productId).name} to ${getTradeCity(f.cityId).name} by day ${f.deliveryDay} at the locked ${formatMoney(f.lockedPrice)}/unit (minus that day's freight). Short units cost a 15% penalty.`}
-                style={{ color: f.deliveryDay - day <= 2 ? 'var(--amber)' : undefined }}
-              >
-                📜 {f.quantity} {getProduct(f.productId).name} → {getTradeCity(f.cityId).emoji} day {f.deliveryDay} @ {formatMoney(f.lockedPrice)}
-              </span>
-            ))}
+            {firm.forwards.map((f) => {
+              const mark = forwardMark(state, f);
+              const closeFee = Math.round(f.lockedPrice * f.quantity * FORWARD_CLOSE_FEE);
+              return (
+                <span key={f.id} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                  <span
+                    className="badge small"
+                    title={`Deliver ${f.quantity} ${getProduct(f.productId).name} to ${getTradeCity(f.cityId).name} by day ${f.deliveryDay} at the locked ${formatMoney(f.lockedPrice)}/unit (minus that day's freight). Short units cost a 15% penalty.`}
+                    style={{ color: f.deliveryDay - day <= 2 ? 'var(--amber)' : undefined }}
+                  >
+                    📜 {f.quantity} {getProduct(f.productId).name} → {getTradeCity(f.cityId).emoji} day {f.deliveryDay} @ {formatMoney(f.lockedPrice)}
+                  </span>
+                  <button
+                    title={`Close now at the mark: ${formatMoney(mark)} P&L against today's ${getTradeCity(f.cityId).name} quote, less a ${formatMoney(closeFee)} fee. Cheaper than delivering short.`}
+                    style={{ color: mark >= 0 ? 'var(--green)' : 'var(--amber)' }}
+                    onClick={() => dispatch({ type: 'CLOSE_FORWARD', firmId: fac.ownerFirmId, forwardId: f.id })}
+                  >
+                    Close @ {formatMoney(mark)}
+                  </button>
+                </span>
+              );
+            })}
           </>
         );
       })()}

@@ -76,6 +76,12 @@ export type Command =
       deliveryDay: number;
     }
   | {
+      type: 'CLOSE_FORWARD';
+      firmId: FirmId;
+      /** The open forward to cash-settle at its current mark. */
+      forwardId: string;
+    }
+  | {
       type: 'EXPORT_GOODS';
       firmId: FirmId;
       facilityId: FacilityId;

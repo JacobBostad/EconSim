@@ -236,6 +236,11 @@ export function operatingValuationOf(state: GameState, firmId: FirmId): number {
   if (!firm) return 0;
   const inventoryValue = firmInventoryValue(state, firmId);
   let assetValue = 0;
+  // The AI-pricing tier stays deliberately at BASE build cost — no apartments,
+  // no upgrade capex (Phase 5 enriches only the scoreboard companyValuation).
+  // This number flows into marketCap → the city AI's stake-yield decisions,
+  // whose rng trajectory the A3 crowd/tier bands are pinned to; and it is the
+  // Village bit-identity anchor. Both stay untouched by construction.
   for (const fac of firmFacilities(state, firmId)) {
     if (fac.type === 'home' || fac.status === 'closed') continue;
     assetValue += fac.buildCost;
@@ -284,9 +289,20 @@ export function companyValuation(state: GameState, firmId: FirmId): Valuation {
   }
   const inventoryValue = firmInventoryValue(state, firmId);
   let assetValue = 0;
+  // Scoreboard book value (Phase 5 / Arc B3, city scale): apartments carry
+  // their book value like any facility (building one no longer permanently
+  // destroys its cost from the score, and it sells back — Demolition drops
+  // 'home' from UNSELLABLE_TYPES), and upgrade capex (fac.upgradeCapex) is
+  // added on top of base build cost. Both are gated off Village: this
+  // valuation is written into the serialized DailySnapshot (AccountingSystem),
+  // so enriching it in a Village would break the 300-day bit-identity baseline.
+  // The AI-pricing tier (operatingValuationOf/marketCap) deliberately does NOT
+  // see either enrichment, so the city AI's stake decisions — and the rng
+  // trajectory the A3 crowd/tier bands are pinned to — are untouched.
+  const enrich = state.config.sizePreset !== 'village';
   for (const fac of firmFacilities(state, firmId)) {
-    if (fac.type === 'home' || fac.status === 'closed') continue;
-    assetValue += fac.buildCost;
+    if ((fac.type === 'home' && !enrich) || fac.status === 'closed') continue;
+    assetValue += fac.buildCost + (enrich ? (fac.upgradeCapex ?? 0) : 0);
   }
   let holdingsValue = 0;
   for (const tid of Object.keys(firm.sharesHeld).sort()) {

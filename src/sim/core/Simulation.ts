@@ -72,7 +72,7 @@ import { runMissionSystem } from '../systems/MissionSystem';
 import { runMarketStatsSystem } from '../systems/MarketStatsSystem';
 import { runAIStrategySystem } from '../systems/AIStrategySystem';
 import { runManagerSystem, managerCandidates } from '../systems/ManagerSystem';
-import { runForwardSystem, sellForward } from '../systems/ForwardSystem';
+import { runForwardSystem, sellForward, closeForward } from '../systems/ForwardSystem';
 import { runTradeAnnouncementSystem } from '../systems/TradeAnnouncementSystem';
 import { runEventLogSystem } from '../systems/EventLogSystem';
 import { runBankruptcySystem } from '../systems/BankruptcySystem';
@@ -319,6 +319,9 @@ export class Simulation {
           s, command.firmId, command.productId, command.quantity,
           command.cityId, command.deliveryDay, computeTime(s.tick, s.config).day,
         );
+        return;
+      case 'CLOSE_FORWARD':
+        closeForward(s, command.firmId, command.forwardId);
         return;
       case 'BUY_FROM_CITY':
         performCityPurchase(

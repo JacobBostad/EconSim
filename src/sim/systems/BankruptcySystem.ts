@@ -14,6 +14,7 @@ import { emitEvent } from '../core/GameState';
 import { isDayBoundary } from '../core/Tick';
 import { getProduct } from '../data/products';
 import { tradeShares } from '../core/Shares';
+import { sellFacility } from '../core/Demolition';
 import { fireCitizen } from './LaborSystem';
 
 export function runBankruptcySystem(ctx: SimContext): void {
@@ -55,10 +56,14 @@ export function runBankruptcySystem(ctx: SimContext): void {
 
     if (firm.daysInsolvent >= config.insolvencyCloseDays) {
       firm.bankruptcyStatus = 'insolvent';
-      // Sell the portfolio first; only shutter a facility if that still leaves
-      // the firm underwater. Selling can lift cash back to solvent — a genuine
-      // reprieve, exactly what liquidating a rival stake buys a real operator.
+      // Distress ladder, liquid-first: sell the portfolio, then sell the
+      // least-productive facility at market (recovering 50% of its book, plus
+      // salvaged stock), and only CLOSE a facility — which recovers nothing —
+      // if the firm is still underwater. Each rung can lift cash back to solvent
+      // and stop the ladder, the reprieve a real operator earns by shedding
+      // assets instead of shuttering them. City-scale AI only (see the gate).
       if (sellPortfolio) liquidatePortfolio(ctx, firm.id);
+      if (sellPortfolio && firm.cash < 0) sellLeastProductiveFacility(ctx, firm.id);
       if (firm.cash < 0) closeCostliestFacility(ctx, firm.id);
     } else if (firm.daysInsolvent >= config.distressGraceDays) {
       if (firm.bankruptcyStatus !== 'distressed') {
@@ -101,6 +106,38 @@ function liquidatePortfolio(ctx: SimContext, firmId: string): boolean {
     if (tradeShares(state, firmId, tid, -pct)) sold = true;
   }
   return sold;
+}
+
+/**
+ * Sell the firm's single least-productive facility at market (the 50% refund
+ * plus salvaged stock), sorted-deterministic on a tie. "Least productive" is
+ * the worst 7-day EMA net — the money pit, not merely the priciest to run
+ * (that's the CLOSE heuristic). Selling recovers cash where closing recovers
+ * nothing, so a distressed AI reaches for it first. No buyer exists — the sale
+ * refunds from the world account, not another firm — so it can never feed a
+ * sell-then-buy loop with any AI expansion path. Player firms never reach here
+ * (the caller gates on ownerType === 'ai'). Returns true if a facility sold.
+ */
+function sellLeastProductiveFacility(ctx: SimContext, firmId: string): boolean {
+  const { state } = ctx;
+  const firm = state.firms[firmId]!;
+  let target: string | null = null;
+  let worst = Infinity;
+  for (const facId of [...firm.facilities].sort()) {
+    const fac = state.facilities[facId];
+    if (!fac || fac.status === 'closed') continue;
+    // Shed machinery, not housing: the importer is never an asset, and selling
+    // a home would displace its residents (a distress firm dumping tenants onto
+    // the street would ripple through satisfaction/immigration) — closing never
+    // touches homes either, so the fire-sale ladder stays symmetric with it.
+    if (fac.type === 'importer' || fac.type === 'home') continue;
+    if (fac.pnlEma.net < worst) {
+      worst = fac.pnlEma.net;
+      target = facId;
+    }
+  }
+  if (!target) return false;
+  return sellFacility(state, firmId, target);
 }
 
 function liquidate(ctx: SimContext, firmId: string): void {
