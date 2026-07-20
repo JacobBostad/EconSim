@@ -7,11 +7,42 @@
  */
 
 import type { ProductId } from '../core/Id';
+import type { CitizenTier } from './Citizen';
 
 export type ProductCategory = 'food' | 'durable' | 'raw' | 'intermediate' | 'apparel' | 'luxury';
 
 /** What kind of citizen need this product satisfies (raw goods satisfy none). */
 export type NeedType = 'food' | 'goods' | 'clothing' | 'luxury' | 'none';
+
+/**
+ * How citizens come to WANT this product — the demand side as data. A product
+ * with a needSpec generates a recurring citizen need at creation; one without
+ * (raw goods, intermediates, B2B services) generates none. Adding a consumer
+ * product is now genuinely "add it here and give it a recipe".
+ */
+export interface NeedSpec {
+  /**
+   * Rng draw order at citizen creation. Pinned explicitly — NOT catalog
+   * order — so adding products never shifts the seeded draw sequence that
+   * every probe baseline and golden save depends on.
+   */
+  order: number;
+  /** Initial urgency [min,max] drawn from the stream; a plain number is a
+   * fixed value that consumes NO draw (luxury cravings start at exactly 0). */
+  urgency0: [number, number] | number;
+  growthPerDay: [number, number];
+  preferredQuantity: number;
+  /** Walkaway price cap [min,max] × base price. */
+  maxPriceMult: [number, number];
+  /** Deterministic values used when backfilling saves that predate the
+   * product (no rng in migrations). Hand-pinned, not computed — the shipped
+   * products' values are byte-compatible with the old hand-authored table. */
+  migration: { urgency: number; growthPerDay: number; maxPriceMult: number };
+  /** Prosperity-ladder appetite scaling (default 1; 0 = tier never wants it). */
+  tierGrowthMult?: Partial<Record<CitizenTier, number>>;
+  /** Prosperity-ladder walkaway-cap scaling (default 1). */
+  tierPriceCapMult?: Partial<Record<CitizenTier, number>>;
+}
 
 export interface Product {
   id: ProductId;
@@ -39,4 +70,6 @@ export interface Product {
   defaultQuality: number;
   /** Logical size per unit (used for storage/transport accounting). */
   unitSize: number;
+  /** Demand generation (consumer products only — see NeedSpec). */
+  needSpec?: NeedSpec;
 }

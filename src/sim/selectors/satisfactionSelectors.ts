@@ -8,7 +8,7 @@
  */
 
 import type { GameState } from '../core/GameState';
-import { pressureOf } from '../systems/SatisfactionSystem';
+import { pressureOf, basketNormalization } from '../systems/SatisfactionSystem';
 import { getProduct } from '../data/products';
 import { clamp } from '../../utils/clamp';
 import { APARTMENT_SATISFACTION_BONUS } from '../data/constants';
@@ -50,8 +50,11 @@ export function satisfactionAnatomy(state: GameState): SatisfactionAnatomy {
     const house = state.facilities[cit.homeFacilityId]?.defId === 'apartment' ? APARTMENT_SATISFACTION_BONUS : 0;
     housing += house;
     let pressure = 0;
+    // Same basket normalization as the engine (SatisfactionSystem) so the
+    // anatomy's rows keep summing to the real provisioning term.
+    const norm = basketNormalization(cit);
     for (const need of cit.needs) {
-      const p = pressureOf(state, state.config, need);
+      const p = pressureOf(state, state.config, need) * norm;
       pressure += p;
       if (p > 0) dragByProduct[need.productId] = (dragByProduct[need.productId] ?? 0) + p * 12;
     }

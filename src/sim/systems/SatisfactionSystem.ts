@@ -33,6 +33,31 @@ export function needWeight(productId: string): number {
 /** Rate a lapsed luxury craving fades for citizens below the ladder. */
 const LUXURY_DECAY_PER_DAY = 0.1;
 
+/**
+ * The shipped six-product basket's total need weight (bread 1.4 + tools .55
+ * + coffee .3 + clothes .55 + pastries .2 + jewelry .2). Baskets at or below
+ * this weight are untouched; heavier baskets (new products) renormalize so
+ * satisfaction exposure REDISTRIBUTES across the catalog instead of every
+ * added product stacking unbounded drag on the town.
+ */
+export const BASKET_WEIGHT_BASELINE = 3.2;
+
+/**
+ * Normalization factor for a citizen's unmet-need pressure: min(1, W₀/Σw)
+ * over the needs the citizen's tier actually wants (growth mult > 0).
+ * Exactly 1 for the shipped catalog — provably inert until products are
+ * added. Shared with the satisfaction-anatomy selector for UI parity.
+ */
+export function basketNormalization(
+  cit: { tier: import('../entities/Citizen').CitizenTier; needs: { productId: string }[] },
+): number {
+  let sum = 0;
+  for (const need of cit.needs) {
+    if (tierNeedGrowthMult(cit.tier, need.productId) > 0) sum += needWeight(need.productId);
+  }
+  return sum > BASKET_WEIGHT_BASELINE ? BASKET_WEIGHT_BASELINE / sum : 1;
+}
+
 /** Whether any staffed store in town currently sells the product. Shared
  * with the AI founder system's market-gap tracking. */
 export function soldSomewhere(state: import('../core/GameState').GameState, productId: string): boolean {
@@ -84,6 +109,7 @@ export function runSatisfactionSystem(ctx: SimContext): void {
       }
       unmetPressure += pressureOf(state, config, need);
     }
+    unmetPressure *= basketNormalization(cit);
 
     // Satisfaction drifts toward an equilibrium set by circumstances instead
     // of saturating at 0/100: employed & fully provided ≈ 85, unemployed but

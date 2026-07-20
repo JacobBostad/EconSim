@@ -1,4 +1,27 @@
-# Changelog — `claude/business-sim-game-enhancement` branch
+# Changelog
+
+## World-scale roadmap (in progress — see docs/design/ for the plan)
+
+The current arc rebuilds the engine for real-world scale: population in the
+thousands via statistical cohorts plus a fully-simulated cast, districts,
+25-30 firms, a broad product catalog, and specialist firm archetypes
+(real estate, investing, business services).
+
+- **Demand is data now (A1)**: every consumer product declares a `needSpec`
+  (initial urgency, growth, quantity, walkaway price, per-tier appetite,
+  and deterministic migration defaults) and citizen needs are generated
+  from the catalog — the hand-authored need table, the TierSystem
+  growth/price tables, and the migration backfill table all collapsed into
+  one per-product declaration. The seeded draw order is pinned by an
+  explicit `order` field, and the refactor is verified BIT-IDENTICAL:
+  300-day runs on three seeds reproduce the exact pre-change rng state,
+  populations, and satisfaction. Satisfaction gains basket normalization
+  (min(1, W₀/Σw), W₀ = the shipped basket's 3.2): provably inert today,
+  it caps total unmet-need drag once the catalog grows, so each new
+  product redistributes satisfaction exposure instead of stacking
+  unbounded misery on the town.
+
+# Historical — `claude/business-sim-game-enhancement` branch
 
 One continuous development run turning EconSim from a solid simulation into a
 deep, self-explaining economy game. Everything below is tested (119 → 297
