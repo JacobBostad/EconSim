@@ -81,6 +81,15 @@ export const OBJECTIVE_LADDER: { valuation: number; title: string }[] = [
 export const DIVIDEND_PAYOUT_RATIO = 0.3;
 /** Max partial stake one firm may hold in another (full takeover is separate). */
 export const MAX_STAKE_PCT = 49;
+/** Control ladder (see docs/design/stock-market.md, Phase 3). A holder at or
+ * above this stake gains board visibility: the target's cash, 7-day net
+ * profit, and facility count (a selector, surfaced in the portfolio card). */
+export const BOARD_VISIBILITY_PCT = 25;
+/** A single outside firm at or above this stake blocks a hostile full
+ * acquisition of the target by anyone else — the blocker must consent, and AI
+ * never does, so 40% is takeover protection. Below MAX_STAKE_PCT so a stake
+ * short of the partial cap already buys a veto. */
+export const CONTROL_BLOCK_PCT = 40;
 /** Full takeover price multiple on valuation for a healthy target. */
 export const ACQUISITION_PREMIUM_HEALTHY = 1.3;
 /** Distressed/insolvent targets sell at a discount to valuation. */

@@ -13,6 +13,7 @@ import {
   objectiveProgress,
   facilityPnL,
   marketCap,
+  boardVisibility,
 } from '../sim/selectors/companySelectors';
 import { formatMoney } from '../utils/formatMoney';
 import { getProduct } from '../sim/data/products';
@@ -210,15 +211,27 @@ export function CompanyDashboard(): React.ReactElement {
                   : (recent.reduce((s, d) => s + Math.max(0, d.netProfit), 0) / recent.length) *
                     DIVIDEND_PAYOUT_RATIO;
               const dividend = (avgPool * pct) / 100;
+              // Control ladder: a 25%+ stake opens the target's board — its
+              // cash, smoothed profit, and facility count.
+              const board = boardVisibility(state, firm.id, tid);
               return (
-                <div className="kv small" key={tid}>
-                  <span className="k">{target?.name ?? tid} · {pct}%</span>
-                  <span>
-                    basis <span className="mono">{formatMoney(basis)}</span>
-                    {' '}· mark <span className="mono">{formatMoney(mark)}</span>
-                    {' '}· <span className="mono" style={{ color: gain < 0 ? 'var(--red)' : 'var(--green)' }}>{formatMoney(gain)}</span>
-                    {' '}· ~<span className="mono">{formatMoney(dividend)}</span>/day
-                  </span>
+                <div className="kv small" key={tid} style={{ display: 'block' }}>
+                  <div className="kv small" style={{ margin: 0 }}>
+                    <span className="k">{target?.name ?? tid} · {pct}%</span>
+                    <span>
+                      basis <span className="mono">{formatMoney(basis)}</span>
+                      {' '}· mark <span className="mono">{formatMoney(mark)}</span>
+                      {' '}· <span className="mono" style={{ color: gain < 0 ? 'var(--red)' : 'var(--green)' }}>{formatMoney(gain)}</span>
+                      {' '}· ~<span className="mono">{formatMoney(dividend)}</span>/day
+                    </span>
+                  </div>
+                  {board && (
+                    <div className="muted small" title="Board visibility unlocked at a 25% stake.">
+                      🪑 board: cash <span className="mono">{formatMoney(board.cash)}</span>
+                      {' '}· net/day <span className="mono" style={{ color: board.netProfit7d < 0 ? 'var(--red)' : 'var(--green)' }}>{formatMoney(board.netProfit7d)}</span>
+                      {' '}· {board.facilities} {board.facilities === 1 ? 'facility' : 'facilities'}
+                    </div>
+                  )}
                 </div>
               );
             })}

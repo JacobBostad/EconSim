@@ -39,6 +39,15 @@ import { nextId } from './Id';
 
 export const SAVE_VERSION = 1;
 
+/**
+ * Dev/test builds fail loud on invariant violations (a settlement against a
+ * dead account); production keeps running. Vite defines import.meta.env.DEV
+ * (true under Vitest and `vite dev`, false in a production build); default to
+ * strict when the flag is absent so a bare runtime still catches the bug.
+ */
+const IS_DEV: boolean =
+  (import.meta as unknown as { env?: { DEV?: boolean } }).env?.DEV ?? true;
+
 export interface PerfMetrics {
   lastTickMs: number;
   avgTickMs: number;
@@ -225,6 +234,24 @@ function getAccountCash(state: GameState, ref: AccountRef): number {
   return state.citizens[ref.id!]?.cash ?? 0;
 }
 
+/**
+ * Whether an account reference resolves to a live holder. The world account
+ * always exists; a firm/cohort/citizen ref is valid only while that entity is
+ * still in state. A settlement against a vanished counterparty (a firm deleted
+ * mid-day by an acquisition, a citizen who emigrated) must not move money on
+ * only one side — see the guard in recordTransaction.
+ */
+function accountExists(state: GameState, ref: AccountRef): boolean {
+  if (ref.kind === 'world') return true;
+  if (ref.kind === 'firm') return !!state.firms[ref.id!];
+  if (ref.kind === 'cohort') return !!state.cohorts[ref.id!];
+  return !!state.citizens[ref.id!];
+}
+
+function describeAccount(ref: AccountRef): string {
+  return ref.kind === 'world' ? 'world' : `${ref.kind}:${ref.id ?? 'null'}`;
+}
+
 function addAccountCash(state: GameState, ref: AccountRef, delta: number): void {
   if (ref.kind === 'world') {
     state.worldCash += delta;
@@ -275,6 +302,36 @@ export function recordTransaction(
   input: TransactionInput,
 ): Transaction {
   const amount = Math.round(input.amount);
+
+  // Both accounts must resolve, or money would move on only one side (a mint
+  // or burn). This fires when a counterparty died mid-settlement — a firm
+  // deleted by an acquisition, a citizen who emigrated. Fail loud in dev so
+  // the offending caller is fixed; in production skip the transfer atomically
+  // (both sides or neither) and keep the game running rather than corrupting
+  // the money supply.
+  const fromOk = accountExists(state, input.from);
+  const toOk = accountExists(state, input.to);
+  if (!fromOk || !toOk) {
+    const detail =
+      `recordTransaction: unresolved ${!fromOk ? 'from' : 'to'} account ` +
+      `(${describeAccount(input.from)} -> ${describeAccount(input.to)}), ` +
+      `category '${input.category}', amount ${amount}`;
+    if (IS_DEV) throw new Error(detail);
+    console.error(detail);
+    return {
+      id: nextId(state.idCounters, 'txn'),
+      tick: state.tick,
+      from: input.from,
+      to: input.to,
+      amount: 0,
+      firmId: input.firmId,
+      category: input.category,
+      productId: input.productId ?? null,
+      quantity: input.quantity ?? 0,
+      note: input.note ?? '',
+    };
+  }
+
   addAccountCash(state, input.from, -amount);
   addAccountCash(state, input.to, amount);
 
