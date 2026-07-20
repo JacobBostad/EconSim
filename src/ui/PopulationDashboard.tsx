@@ -14,6 +14,15 @@ import { FormulaTooltip } from './FormulaTooltip';
 import { TrendCard } from './Sparkline';
 import { cyclePhase } from '../sim/systems/TownStatsSystem';
 import { satisfactionAnatomy } from '../sim/selectors/satisfactionSelectors';
+import { districtAt, type DistrictKind } from '../sim/entities/District';
+
+const DISTRICT_KIND_ICONS: Record<DistrictKind, string> = {
+  industrial: '🏭',
+  commercial: '🛍️',
+  residential: '🏘️',
+  civic: '🏛️',
+  mixed: '🌆',
+};
 
 export function PopulationDashboard(): React.ReactElement {
   const sim = useGameStore((s) => s.sim);
@@ -29,6 +38,18 @@ export function PopulationDashboard(): React.ReactElement {
   const phase = cyclePhase(history);
   const anatomy = satisfactionAnatomy(state);
   const maxBucket = Math.max(1, ...labor.skillBuckets.map((b) => b.count));
+  const districts = Object.values(state.districts).sort((a, b) => a.id.localeCompare(b.id));
+  const crowdByDistrict: Record<string, number> = {};
+  for (const id in state.cohorts) {
+    const co = state.cohorts[id]!;
+    crowdByDistrict[co.districtId] = (crowdByDistrict[co.districtId] ?? 0) + co.population;
+  }
+  const buildingsByDistrict: Record<string, number> = {};
+  for (const id in state.facilities) {
+    const loc = state.facilities[id]!.location;
+    const d = districtAt(state.districts, loc.x, loc.y);
+    if (d) buildingsByDistrict[d.id] = (buildingsByDistrict[d.id] ?? 0) + 1;
+  }
 
   return (
     <div>
@@ -93,6 +114,36 @@ export function PopulationDashboard(): React.ReactElement {
           🧳 {state.emigrationDepartures} {state.emigrationDepartures === 1 ? 'family has' : 'families have'} left
           town for good — misery past day 10 starts the wagons rolling; one good day stops them.
         </p>
+      )}
+
+      <h3>Districts</h3>
+      {districts.length === 0 ? (
+        <p className="muted small">No districts yet.</p>
+      ) : (
+        <div className="card" style={{ minWidth: 280, marginBottom: 0 }}>
+          {districts.map((d) => {
+            const crowd = crowdByDistrict[d.id] ?? 0;
+            const buildings = buildingsByDistrict[d.id] ?? 0;
+            return (
+              <div className="row small" key={d.id} style={{ gap: 6 }}>
+                <span style={{ width: 130 }}>{DISTRICT_KIND_ICONS[d.kind]} {d.name}</span>
+                <span className="muted" style={{ width: 78 }}>{d.kind}</span>
+                <span className="bar" style={{ flex: 1 }}>
+                  <span style={{ width: `${Math.round(d.desirability * 100)}%` }} />
+                </span>
+                <span className="mono" style={{ width: 36, textAlign: 'right' }}>
+                  {Math.round(d.desirability * 100)}%
+                </span>
+                <span className="mono" style={{ width: 56, textAlign: 'right' }} title="Crowd population (cohorts)">
+                  {crowd > 0 ? crowd : '—'}
+                </span>
+                <span className="muted" style={{ width: 80, textAlign: 'right' }}>
+                  {buildings} building{buildings === 1 ? '' : 's'}
+                </span>
+              </div>
+            );
+          })}
+        </div>
       )}
 
       <h3>Satisfaction Anatomy</h3>

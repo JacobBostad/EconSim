@@ -75,6 +75,7 @@ import { runFinanceSystem } from '../systems/FinanceSystem';
 import { runDividendSystem } from '../systems/DividendSystem';
 import { runImmigrationSystem } from '../systems/ImmigrationSystem';
 import { runAIFounderSystem } from '../systems/AIFounderSystem';
+import { runDistrictSystem } from '../systems/DistrictSystem';
 import { runSatisfactionSystem } from '../systems/SatisfactionSystem';
 import { runAccountingSystem } from '../systems/AccountingSystem';
 import { runPayrollSystem } from '../systems/PayrollSystem';
@@ -103,6 +104,7 @@ const SYSTEMS: SystemFn[] = [
   runRushOrderSystem, // rush offers/expiry after prices land (own rng stream)
   runFireSaleSystem, // rival fire-sale offers/expiry (own rng stream)
   runMarketStatsSystem, // finalize previous day's stats; hourly inventory totals
+  runDistrictSystem, // daily district desirability cache (dark until A3 reads it)
   runAIStrategySystem, // AI reacts using the finalized day (sets ad/R&D/loans)
   runManagerSystem, // hired managers run their stores (after AI, same signals)
   runEventLogSystem, // player-facing alerts (before daily stats are reset)

@@ -22,6 +22,7 @@ import { getFacilityDef } from '../data/facilityDefinitions';
 import { defaultPersonalityFor, defaultCeoFor, type PersonalityId } from '../data/personalities';
 import { TRADE_CITY_IDS, cityBias } from '../data/tradeCities';
 import { marketCap } from '../selectors/companySelectors';
+import { defaultDistrictPartition } from '../data/districts';
 
 type Raw = Record<string, unknown>;
 
@@ -92,6 +93,9 @@ function normalize(state: GameState): GameState {
   state.emigrationDepartures = state.emigrationDepartures ?? 0;
   state.marketGapDays = state.marketGapDays ?? {};
   state.sharePriceShift = state.sharePriceShift ?? {};
+  state.config.sizePreset = state.config.sizePreset ?? 'village';
+  state.districts = state.districts ?? defaultDistrictPartition(state.config);
+  state.cohorts = state.cohorts ?? {};
   state.lastLapsedFireSale = state.lastLapsedFireSale ?? null;
   // Prosperity tiers: pre-tier saves get a one-shot snapshot guess (no
   // streak history), then TierSystem takes over with hysteresis.

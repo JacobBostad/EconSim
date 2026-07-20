@@ -180,6 +180,11 @@ export interface GameState {
    * valuation marks always use the undisplaced marketCap.
    */
   sharePriceShift: Record<FirmId, number>;
+  /** City districts — metadata partition of the map (world-scale, HD6). */
+  districts: Record<string, import('../entities/District').District>;
+  /** Crowd demographics beyond the simulated cast (world-scale, HD1).
+   * Empty at Village size — every Village town behaves exactly as before. */
+  cohorts: Record<string, import('../entities/Cohort').Cohort>;
   /** Last lapsed fire sale — that facility cools down before re-listing. */
   lastLapsedFireSale: { facilityId: FacilityId; day: number } | null;
 
@@ -216,6 +221,7 @@ export function makeContext(state: GameState): SimContext {
 function getAccountCash(state: GameState, ref: AccountRef): number {
   if (ref.kind === 'world') return state.worldCash;
   if (ref.kind === 'firm') return state.firms[ref.id!]?.cash ?? 0;
+  if (ref.kind === 'cohort') return state.cohorts[ref.id!]?.cashPool ?? 0;
   return state.citizens[ref.id!]?.cash ?? 0;
 }
 
@@ -227,6 +233,11 @@ function addAccountCash(state: GameState, ref: AccountRef, delta: number): void 
   if (ref.kind === 'firm') {
     const f = state.firms[ref.id!];
     if (f) f.cash += delta;
+    return;
+  }
+  if (ref.kind === 'cohort') {
+    const co = state.cohorts[ref.id!];
+    if (co) co.cashPool += delta;
     return;
   }
   const c = state.citizens[ref.id!];
@@ -399,10 +410,11 @@ export function emitEvent(
   }
 }
 
-/** Total money across citizens + firms + world (should be constant). */
+/** Total money across citizens + firms + cohorts + world (constant). */
 export function totalMoneySupply(state: GameState): number {
   let sum = state.worldCash;
   for (const id in state.firms) sum += state.firms[id]!.cash;
   for (const id in state.citizens) sum += state.citizens[id]!.cash;
+  for (const id in state.cohorts) sum += state.cohorts[id]!.cashPool;
   return sum;
 }

@@ -32,6 +32,7 @@ import { FIRST_NAMES, LAST_NAMES } from './names';
 import { dollars } from './constants';
 import { defaultPersonalityFor, defaultCeoFor } from './personalities';
 import { getScenario, DEFAULT_SCENARIO_ID } from './scenarios';
+import { defaultDistrictPartition } from './districts';
 import { SAVE_VERSION } from '../core/GameState';
 
 const NUM_HOMES = 20;
@@ -244,6 +245,8 @@ export function createInitialState(
     emigrationDepartures: 0,
     marketGapDays: {},
     sharePriceShift: {},
+    districts: defaultDistrictPartition(config),
+    cohorts: {},
     lastLapsedFireSale: null,
     townHistory: [],
     idCounters: counters,

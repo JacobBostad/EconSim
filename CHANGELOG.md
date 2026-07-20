@@ -7,6 +7,15 @@ thousands via statistical cohorts plus a fully-simulated cast, districts,
 25-30 firms, a broad product catalog, and specialist firm archetypes
 (real estate, investing, business services).
 
+- **Districts + dark cohorts (A2)**: the city gains structure without
+  changing a single behavior. Three districts partition the classic map
+  (Iron Row / Midmarket / The Rows) with a daily desirability cache; the
+  crowd's future home — `district × tier` cohorts with REAL cash-pool
+  accounts (a fourth account kind wired through the conservation
+  invariant) — lands empty and dark behind the new `sizePreset` config
+  ('village' = today's game, bit-identical, re-verified against the A1
+  baselines). A Districts panel shows the new geography. Old saves
+  backfill the partition on load; golden saves v1-v6 untouched.
 - **Demand is data now (A1)**: every consumer product declares a `needSpec`
   (initial urgency, growth, quantity, walkaway price, per-tier appetite,
   and deterministic migration defaults) and citizen needs are generated

@@ -80,7 +80,21 @@ export interface SimulationConfig {
   /** Hard caps on town growth (town-size presets scale these). */
   maxHomes: number;
   maxCitizens: number;
+  /**
+   * World-scale size preset (see docs/design/cohorts-and-districts.md).
+   * 'village' = the classic game: every citizen is a simulated agent and
+   * cohorts stay empty. 'city'/'metropolis' (Arc A3+) add crowd population
+   * as district × tier cohorts beyond the simulated cast.
+   */
+  sizePreset: 'village' | 'city' | 'metropolis';
 }
+
+/** Per-preset scale knobs (consumed progressively through Arc A). */
+export const SIZE_PRESETS = {
+  village: { castTarget: 80, cohortCap: 0, founderMaxAiFirms: 6 },
+  city: { castTarget: 150, cohortCap: 2000, founderMaxAiFirms: 18 },
+  metropolis: { castTarget: 150, cohortCap: 10000, founderMaxAiFirms: 30 },
+} as const;
 
 export const DEFAULT_CONFIG: SimulationConfig = {
   difficulty: 'standard',
@@ -125,6 +139,7 @@ export const DEFAULT_CONFIG: SimulationConfig = {
   mapHeight: 92,
   maxHomes: 40,
   maxCitizens: 80,
+  sizePreset: 'village',
 };
 
 /** Difficulty presets: starting capital, news volatility, AI aggressiveness. */
