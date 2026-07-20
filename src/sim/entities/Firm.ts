@@ -71,6 +71,9 @@ export interface Firm {
   interestRatePerDay: number;
   /** Equity stakes in other firms: targetFirmId -> percent (0..49). */
   sharesHeld: Record<FirmId, number>;
+  /** Cumulative cash paid for each stake (cents), released pro-rata on
+   * sales — sells report realized gain/loss against this. */
+  shareCostBasis: Record<FirmId, number>;
   /** Names of firms this firm has fully acquired (M&A history). */
   acquiredNames: string[];
   /** Products whose retail price the daily auto-pricer manages (player QoL). */

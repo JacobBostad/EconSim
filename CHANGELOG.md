@@ -7,6 +7,29 @@ latest arc — four pillars from a market-research pass against Capitalism
 Lab, Big Ambitions, and Offworld Trading Company — added citizen classes,
 hireable managers, a real commodity market, and shared daily play.
 
+## Investing & the stock market
+
+- **Stakes on the balance sheet** (investing overhaul, Phase 1 — see
+  docs/design/stock-market.md): a holding company finally makes sense.
+  Company valuation now marks held stakes to market — three deterministic
+  tiers (operating valuation excludes holdings; marketCap adds them at the
+  counterparties' operating value and is what shares trade at; the
+  scoreboard valuation marks your stakes at their sale price) — so buying
+  at market moves your valuation by exactly $0 instead of cratering it by
+  the purchase price. Dividends are real income now: booked dividendIn on
+  the holder (part of net profit, so the earnings multiple capitalizes a
+  portfolio's income stream) and dividendOut on the payer (a distribution,
+  never an expense), from a 7-day smoothed profit base with pools
+  snapshotted pre-payout and firms settled in sorted order. Every share
+  trade books shareBuy/shareSell with a tracked cost basis, and sells
+  report realized gain or loss against what you actually paid. All trades
+  — player and AI — go through one shared path (core/Shares.ts), loan
+  collateral uses operating net worth only, and old saves migrate with
+  stakes marked at today's price. Probed: a pure holding company that buys
+  25% of every rival now GROWS from $15k to ~$17k over 150 days on marks
+  plus ~$1k of dividend income, fully conserved (previously the same play
+  looked like destroying $11k on day one).
+
 ## Economy & AI depth
 
 - **AI rival personalities**: every AI firm has a named CEO with an archetype

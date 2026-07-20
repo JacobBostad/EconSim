@@ -35,14 +35,13 @@ import {
   RND_QUALITY_GAIN_PER_1000,
   LOAN_CREDIT_LIMIT_MULTIPLE,
   LOAN_MIN_CREDIT,
-  MAX_STAKE_PCT,
   FESTIVAL_COST,
   MAX_RETAIL_PRODUCTS,
   FUND_HOME_COST,
   IMMIGRANT_START_CASH,
   WIZARD_AD_BUDGET,
 } from '../data/constants';
-import { companyValuation } from '../selectors/companySelectors';
+import { tradeShares } from './Shares';
 import { worldImportMult } from '../data/worldEvents';
 import { CHAIN_BLUEPRINTS, chainCost } from '../data/chains';
 import { buildStarterChain } from './ChainBuilder';
@@ -377,66 +376,11 @@ export class Simulation {
         performAcquisition(s, command.firmId, command.targetFirmId);
         return;
       case 'BUY_SHARES':
-        this.tradeShares(command.firmId, command.targetFirmId, command.percent);
+        tradeShares(s, command.firmId, command.targetFirmId, command.percent);
         return;
       case 'SELL_SHARES':
-        this.tradeShares(command.firmId, command.targetFirmId, -command.percent);
+        tradeShares(s, command.firmId, command.targetFirmId, -command.percent);
         return;
-    }
-  }
-
-  /**
-   * Buy (positive pct) or sell (negative pct) a stake in another firm at the
-   * current valuation. Shares trade against the public float, so cash moves
-   * to/from the world account and total money stays conserved.
-   */
-  private tradeShares(firmId: FirmId, targetFirmId: FirmId, pct: number): void {
-    const s = this.state;
-    const firm = s.firms[firmId];
-    const target = s.firms[targetFirmId];
-    if (!firm || !target || firmId === targetFirmId || pct === 0) return;
-    if (target.ownerType !== 'player' && target.ownerType !== 'ai') return;
-
-    const held = firm.sharesHeld[targetFirmId] ?? 0;
-    const wanted = Math.round(pct);
-    const applied =
-      wanted > 0
-        ? Math.min(wanted, MAX_STAKE_PCT - held)
-        : Math.max(wanted, -held);
-    if (applied === 0) {
-      emitEvent(s, 'warning', 'finance',
-        wanted > 0
-          ? `Cannot exceed a ${MAX_STAKE_PCT}% stake in ${target.name}.`
-          : `No ${target.name} shares to sell.`,
-        firmId);
-      return;
-    }
-
-    const pricePerPct = Math.max(1, Math.round(companyValuation(s, targetFirmId).valuation / 100));
-    const cost = Math.abs(applied) * pricePerPct;
-
-    if (applied > 0) {
-      if (!canAfford(s, firmAccount(firmId), cost)) {
-        emitEvent(s, 'danger', 'finance', `Not enough cash to buy ${applied}% of ${target.name} (${formatMoney(cost)}).`, firmId);
-        return;
-      }
-      recordTransaction(s, {
-        from: firmAccount(firmId), to: WORLD_ACCOUNT, amount: cost,
-        firmId: null, category: 'none',
-        note: `Bought ${applied}% of ${target.name}`,
-      });
-      firm.sharesHeld[targetFirmId] = held + applied;
-      emitEvent(s, 'success', 'finance', `${firm.name} bought ${applied}% of ${target.name} for ${formatMoney(cost)}.`, targetFirmId);
-    } else {
-      recordTransaction(s, {
-        from: WORLD_ACCOUNT, to: firmAccount(firmId), amount: cost,
-        firmId: null, category: 'none',
-        note: `Sold ${-applied}% of ${target.name}`,
-      });
-      const remaining = held + applied;
-      if (remaining <= 0) delete firm.sharesHeld[targetFirmId];
-      else firm.sharesHeld[targetFirmId] = remaining;
-      emitEvent(s, 'info', 'finance', `${firm.name} sold ${-applied}% of ${target.name} for ${formatMoney(cost)}.`, targetFirmId);
     }
   }
 

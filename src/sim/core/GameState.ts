@@ -338,6 +338,18 @@ function applyToLedger(
     case 'buildSpend':
       period.buildSpend += amount;
       break;
+    case 'dividendIn':
+      period.dividendIn += amount;
+      break;
+    case 'dividendOut':
+      period.dividendOut += amount;
+      break;
+    case 'shareBuy':
+      period.shareBuy += amount;
+      break;
+    case 'shareSell':
+      period.shareSell += amount;
+      break;
     case 'loanDraw':
     case 'loanRepay':
     case 'none':

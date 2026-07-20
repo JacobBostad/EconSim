@@ -17,6 +17,17 @@ export interface AccountingPeriod {
   rnd: number;
   interest: number;
   buildSpend: number;
+  /** Dividends received from held stakes — investment income, part of net
+   * profit (the earnings multiple capitalizes it like any other income). */
+  dividendIn: number;
+  /** Dividends paid to shareholders — a distribution of profit, NOT an
+   * expense: it never reduces net profit (else payouts would shrink the
+   * very profit they are computed from). */
+  dividendOut: number;
+  /** Cash spent buying stakes / received selling them — balance-sheet
+   * moves (the stake itself is valued in companyValuation), P&L-neutral. */
+  shareBuy: number;
+  shareSell: number;
 }
 
 export function emptyPeriod(): AccountingPeriod {
@@ -31,6 +42,10 @@ export function emptyPeriod(): AccountingPeriod {
     rnd: 0,
     interest: 0,
     buildSpend: 0,
+    dividendIn: 0,
+    dividendOut: 0,
+    shareBuy: 0,
+    shareSell: 0,
   };
 }
 
@@ -94,7 +109,9 @@ export function operatingProfit(p: AccountingPeriod): number {
   );
 }
 
-/** Net profit = operating profit minus interest expense (finance cost). */
+/** Net profit = operating profit minus interest, plus investment income
+ * (dividends from held stakes). Dividends PAID are a distribution, not an
+ * expense, so they do not appear here. */
 export function netProfit(p: AccountingPeriod): number {
-  return operatingProfit(p) - p.interest;
+  return operatingProfit(p) - p.interest + (p.dividendIn ?? 0);
 }

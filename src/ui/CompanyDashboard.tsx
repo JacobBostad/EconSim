@@ -68,7 +68,11 @@ export function CompanyDashboard(): React.ReactElement {
         </div>
         <div className="row" style={{ gap: 16, flexWrap: 'wrap' }}>
           <span className="small">Net worth <span className="mono">{formatMoney(val.netWorth)}</span></span>
-          <span className="small muted">cash {formatMoney(val.cash)} · inventory {formatMoney(val.inventoryValue)} · assets {formatMoney(val.assetValue)} · debt {formatMoney(val.debt)}</span>
+          <span className="small muted">
+            cash {formatMoney(val.cash)} · inventory {formatMoney(val.inventoryValue)} · assets {formatMoney(val.assetValue)}
+            {val.holdingsValue > 0 && <> · 📈 holdings {formatMoney(val.holdingsValue)}</>}
+            {' '}· debt {formatMoney(val.debt)}
+          </span>
         </div>
       </div>
 

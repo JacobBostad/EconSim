@@ -21,6 +21,7 @@ import { getProduct } from '../data/products';
 import { getFacilityDef } from '../data/facilityDefinitions';
 import { defaultPersonalityFor, defaultCeoFor, type PersonalityId } from '../data/personalities';
 import { TRADE_CITY_IDS, cityBias } from '../data/tradeCities';
+import { marketCap } from '../selectors/companySelectors';
 
 type Raw = Record<string, unknown>;
 
@@ -57,6 +58,10 @@ function normPeriod(p: Partial<AccountingPeriod> | undefined): AccountingPeriod 
     rnd: p?.rnd ?? 0,
     interest: p?.interest ?? 0,
     buildSpend: p?.buildSpend ?? 0,
+    dividendIn: p?.dividendIn ?? 0,
+    dividendOut: p?.dividendOut ?? 0,
+    shareBuy: p?.shareBuy ?? 0,
+    shareSell: p?.shareSell ?? 0,
   };
 }
 
@@ -112,6 +117,7 @@ function normalize(state: GameState): GameState {
     f.debt = f.debt ?? 0;
     f.interestRatePerDay = f.interestRatePerDay ?? 0.0009;
     f.sharesHeld = f.sharesHeld ?? {};
+    f.shareCostBasis = f.shareCostBasis ?? {};
     f.acquiredNames = f.acquiredNames ?? [];
     f.autoPriceByProduct = f.autoPriceByProduct ?? {};
     f.exportRevenue = f.exportRevenue ?? 0;
@@ -220,6 +226,20 @@ function normalize(state: GameState): GameState {
       state.tradeCities[cid]!.pricesByProduct[pid] =
         state.tradeCities[cid]!.pricesByProduct[pid] ??
         Math.round(getProduct(pid).basePrice * cityBias(cid, pid));
+    }
+  }
+
+  // Stakes bought before cost-basis tracking existed: mark their basis at
+  // today's price (all firms are migrated by now, so marketCap is valid).
+  // Realized gains on these start counting from the load, not from zero.
+  for (const fid of Object.keys(state.firms).sort()) {
+    const firm = state.firms[fid]!;
+    for (const tid in firm.sharesHeld) {
+      if (firm.shareCostBasis[tid] === undefined) {
+        firm.shareCostBasis[tid] = Math.round(
+          ((firm.sharesHeld[tid] ?? 0) * marketCap(state, tid)) / 100,
+        );
+      }
     }
   }
   return state;

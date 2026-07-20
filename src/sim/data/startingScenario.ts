@@ -124,6 +124,7 @@ function newFirm(
     debt: 0,
     interestRatePerDay: 0.0009,
     sharesHeld: {},
+    shareCostBasis: {},
     acquiredNames: [],
     autoPriceByProduct: {},
     exportRevenue: 0,

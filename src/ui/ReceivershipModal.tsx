@@ -50,7 +50,7 @@ export function ReceivershipModal(): React.ReactElement | null {
   // same credit limit TAKE_LOAN enforces.
   const creditLimit = Math.max(
     LOAN_MIN_CREDIT,
-    Math.round(companyValuation(state, player.id).netWorth * LOAN_CREDIT_LIMIT_MULTIPLE),
+    Math.round(companyValuation(state, player.id).operatingNetWorth * LOAN_CREDIT_LIMIT_MULTIPLE),
   );
   const headroom = Math.max(0, creditLimit - player.debt);
   const emergencyLoan = Math.min(headroom, Math.max(0, -player.cash) + 2000_00);

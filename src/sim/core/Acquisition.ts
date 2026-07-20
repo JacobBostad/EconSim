@@ -112,14 +112,19 @@ export function performAcquisition(
   }
 
   // Share bookkeeping: stakes IN the target vanish (bought out); the target's
-  // own stakes transfer to the buyer.
-  for (const hid in s.firms) delete s.firms[hid]!.sharesHeld[targetId];
+  // own stakes transfer to the buyer along with their cost basis.
+  for (const hid in s.firms) {
+    delete s.firms[hid]!.sharesHeld[targetId];
+    delete s.firms[hid]!.shareCostBasis[targetId];
+  }
   for (const tid in target.sharesHeld) {
     if (tid === buyer.id) continue;
     buyer.sharesHeld[tid] = Math.min(
       MAX_STAKE_PCT,
       (buyer.sharesHeld[tid] ?? 0) + target.sharesHeld[tid]!,
     );
+    buyer.shareCostBasis[tid] =
+      (buyer.shareCostBasis[tid] ?? 0) + (target.shareCostBasis[tid] ?? 0);
   }
 
   buyer.acquiredNames.push(target.name);
