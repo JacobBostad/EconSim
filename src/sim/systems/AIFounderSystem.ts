@@ -20,7 +20,7 @@
  */
 
 import type { SimContext, GameState } from '../core/GameState';
-import { recordTransaction, emitEvent } from '../core/GameState';
+import { recordTransaction, emitEvent, reindexContracts } from '../core/GameState';
 import type { SimulationConfig } from '../core/SimulationConfig';
 import { SIZE_PRESETS } from '../core/SimulationConfig';
 import { firmAccount, WORLD_ACCOUNT } from '../core/Transactions';
@@ -40,11 +40,8 @@ import {
   FOUNDER_GAP_DAYS,
   FOUNDER_DAILY_CHANCE,
   FOUNDER_MIN_POPULATION,
-  FOUNDER_CASH,
-  FOUNDER_UNDERSUPPLY_FILL_RATE,
   FOUNDER_UNDERSUPPLY_WINDOW,
   FOUNDER_UNDERSUPPLY_DAYS,
-  FOUNDER_UNDERSUPPLY_COOLDOWN,
   dollars,
 } from '../data/constants';
 
@@ -54,6 +51,28 @@ import {
  * more competitors. */
 export function founderMaxAiFirms(config: SimulationConfig): number {
   return SIZE_PRESETS[config.sizePreset].founderMaxAiFirms;
+}
+
+/** Town-wide days between under-supply entries, per preset (A5). Village/City
+ * resolve to the FOUNDER_UNDERSUPPLY_COOLDOWN baseline (20); Metropolis paces
+ * faster (7) so a 30-cap map actually fills — see SIZE_PRESETS. */
+export function founderUndersupplyCooldown(config: SimulationConfig): number {
+  return SIZE_PRESETS[config.sizePreset].founderUndersupplyCooldown;
+}
+
+/** Smoothed fill-rate below which a staple counts as under-supplied, per preset
+ * (A5). Village/City keep the FOUNDER_UNDERSUPPLY_FILL_RATE baseline (0.65);
+ * Metropolis lifts it (0.80) so the signal keeps firing until the big crowd is
+ * genuinely served — see SIZE_PRESETS. */
+export function founderUndersupplyFillRate(config: SimulationConfig): number {
+  return SIZE_PRESETS[config.sizePreset].founderUndersupplyFillRate;
+}
+
+/** Founding capital a new firm receives from the world account, per preset (A5).
+ * Village/City keep the FOUNDER_CASH baseline ($22k); Metropolis raises it ($28k)
+ * for ramp runway on the bigger, pricier map — see SIZE_PRESETS. */
+export function founderCash(config: SimulationConfig): number {
+  return SIZE_PRESETS[config.sizePreset].founderCash;
 }
 
 /** Staples a founder will move in on. Coffee and luxury stay with the
@@ -83,11 +102,12 @@ function hashPick(seed: number, day: number, n: number): number {
 }
 
 function foundFirm(
-  state: GameState,
+  ctx: SimContext,
   productId: string,
   day: number,
   entry: 'vacancy' | 'undersupply' = 'vacancy',
 ): void {
+  const { state } = ctx;
   const aiCount = Object.values(state.firms).filter((f) => f.ownerType === 'ai').length;
   const pool = FOUNDER_NAMES[productId] ?? [`New ${getProduct(productId).name} Co`];
   const name = pool[hashPick(state.seed, day, pool.length)]!;
@@ -104,7 +124,7 @@ function foundFirm(
     pricesByProduct: { [productId]: getProduct(productId).basePrice },
     wagePolicy: { baseWage: dollars(16) },
     accounting: emptyAccounting(),
-    strategy: emptyStrategy(productId as Firm['strategy']['kind']),
+    strategy: emptyStrategy(productId),
     bankruptcyStatus: 'healthy',
     daysInsolvent: 0,
     marketShareByProduct: {},
@@ -130,9 +150,10 @@ function foundFirm(
   };
   state.firms[id] = firm;
 
-  // Founding capital arrives from outside the town — conserved.
+  // Founding capital arrives from outside the town — conserved. Per-preset (A5):
+  // Metropolis founders get a longer ramp runway than the Village/City baseline.
   recordTransaction(state, {
-    from: WORLD_ACCOUNT, to: firmAccount(id), amount: FOUNDER_CASH,
+    from: WORLD_ACCOUNT, to: firmAccount(id), amount: founderCash(state.config),
     firmId: id, category: 'none', note: 'Founding capital',
   });
 
@@ -146,6 +167,10 @@ function foundFirm(
     delete state.firms[id];
     return;
   }
+
+  // A whole starter chain (producer→factory→shop contracts) just entered the
+  // world; rebuild the index so logistics later this tick sees the new lines.
+  reindexContracts(ctx);
 
   state.marketGapDays[productId] = 0;
   // A fresh seller relieves both shortage signals for this staple.
@@ -221,9 +246,10 @@ export function runAIFounderSystem(ctx: SimContext): void {
   // streak counter is never even touched there, so Village stays bit-identical.
   const cityScale = state.config.sizePreset !== 'village';
   if (cityScale) {
+    const fillTrigger = founderUndersupplyFillRate(state.config);
     for (const pid of FOUNDER_PRODUCTS) {
       state.marketUndersupplyDays[pid] =
-        smoothedFillRate(state, pid) < FOUNDER_UNDERSUPPLY_FILL_RATE
+        smoothedFillRate(state, pid) < fillTrigger
           ? (state.marketUndersupplyDays[pid] ?? 0) + 1
           : 0;
     }
@@ -237,10 +263,22 @@ export function runAIFounderSystem(ctx: SimContext): void {
   if (pop < FOUNDER_MIN_POPULATION) return;
   const aiCount = Object.values(state.firms).filter((f) => f.ownerType === 'ai').length;
   if (aiCount >= founderMaxAiFirms(state.config)) return;
-  if (state.worldCash < FOUNDER_CASH) return;
+  // World-cash gate — VILLAGE ONLY (A5). The world account is the town's
+  // source/sink; at crowd scale it legitimately runs a structural deficit
+  // (subsistence to a large idle crowd), so the founder-scale probe found a
+  // Metropolis world balance sitting BELOW the $22k founding cash for ~200 of
+  // 300 days — the gate was choking the very foundings that would employ the
+  // crowd and relieve the drain, while a screaming shortage went unanswered
+  // (fill-rate 0.2-0.5). Founding is money-conserved (the firm pays land costs
+  // straight back the same tick, and export revenue keeps flowing out to the
+  // world), so a negative world balance is not insolvency — the probe confirms
+  // conservation holds to the cent throughout. Village keeps the guard exactly:
+  // its world account stays flush and its founder tests pin this path.
+  const cash = founderCash(state.config);
+  if (!cityScale && state.worldCash < cash) return;
 
   const affordable = (pid: string): boolean =>
-    !!CHAIN_BLUEPRINTS[pid] && FOUNDER_CASH >= Math.round(chainCost(CHAIN_BLUEPRINTS[pid]!) * 1.2);
+    !!CHAIN_BLUEPRINTS[pid] && cash >= Math.round(chainCost(CHAIN_BLUEPRINTS[pid]!) * 1.2);
 
   // (1) Total-vacancy entry (unchanged): hash-gated daily, the first persistent
   // gap in fixed product order. Keeps the classic "don't chase a struggling
@@ -251,7 +289,7 @@ export function runAIFounderSystem(ctx: SimContext): void {
   if (avgSat >= IMMIGRATION_MIN_SATISFACTION && founderRoll(state.seed, day)) {
     for (const pid of FOUNDER_PRODUCTS) {
       if ((state.marketGapDays[pid] ?? 0) >= FOUNDER_GAP_DAYS && CHAIN_BLUEPRINTS[pid]) {
-        if (affordable(pid)) foundFirm(state, pid, day, 'vacancy');
+        if (affordable(pid)) foundFirm(ctx, pid, day, 'vacancy');
         return;
       }
     }
@@ -267,12 +305,49 @@ export function runAIFounderSystem(ctx: SimContext): void {
   // and a truly empty town fails the population gate above. The 15-day streak
   // paces entry against noise; the cooldown paces it town-wide.
   if (!cityScale) return;
-  if (day - state.lastUndersupplyEntryDay < FOUNDER_UNDERSUPPLY_COOLDOWN) return;
+  if (day - state.lastUndersupplyEntryDay < founderUndersupplyCooldown(state.config)) return;
+  // Solvency brake (A5): capital stops chasing a market whose incumbents are
+  // already struggling. The under-supply signal is a SERVICE-LEVEL read (town
+  // fill-rate), not a PROFITABILITY one — so on the biggest maps it keeps firing
+  // while ANY demand is unmet, and the founder-scale probe caught it overshooting
+  // the durable ceiling: a Metropolis packed to its 30-firm cap on the raw signal
+  // slid into a 10-16 firm insolvency cascade by day 400, because each extra
+  // entrant split the same demand until nobody cleared their wage bill. When a
+  // meaningful share of AI firms is already distressed/insolvent, a fresh
+  // competitor makes it worse, not better — the shortage is then a supply-chain
+  // problem for the incumbents to grow into, not a missing-firm problem. Holding
+  // off lets the market digest what it has (and the rescue/de-risking paths work
+  // the distressed back to health) before another chain lands, which converts the
+  // overshoot-and-crash into a stable equilibrium at the sustainable count. The
+  // 12% bar rides just above ordinary churn (a firm or two transiently in the red)
+  // and trips as soon as a wave of thin new entrants starts bleeding. City never
+  // reaches a firm density where this binds; Village never enters this path.
+  const unhealthy = Object.values(state.firms).filter(
+    (f) => f.ownerType === 'ai' && f.bankruptcyStatus !== 'healthy',
+  ).length;
+  if (aiCount > 0 && unhealthy / aiCount > 0.12) return;
+  // Enter the MOST-STARVED qualifying staple, not merely the first in product
+  // order (A5). The old fixed-order scan always founded on bread whenever bread
+  // qualified, so bread stacked competitors while later staples starved unseen —
+  // the founder-scale probe caught clothes running a 100-140 day under-supply
+  // streak on Metropolis with no founder ever answering it, because bread kept
+  // winning the one-entry-per-cooldown budget. Picking the longest streak spreads
+  // founders across the products that actually need them: each staple's own
+  // demand supports its new firm, so the extra entries stay solvent instead of
+  // over-crowding one market. Deterministic: streak length, tie-broken by the
+  // fixed FOUNDER_PRODUCTS order (no rng). Single-product shortage tests are
+  // unaffected — the lone starved staple is trivially the most-starved.
+  let pick: string | null = null;
+  let pickStreak = FOUNDER_UNDERSUPPLY_DAYS - 1; // must reach the threshold to enter
   for (const pid of FOUNDER_PRODUCTS) {
-    if ((state.marketUndersupplyDays[pid] ?? 0) >= FOUNDER_UNDERSUPPLY_DAYS && affordable(pid)) {
-      foundFirm(state, pid, day, 'undersupply');
-      state.lastUndersupplyEntryDay = day;
-      return;
+    const streak = state.marketUndersupplyDays[pid] ?? 0;
+    if (streak > pickStreak && affordable(pid)) {
+      pick = pid;
+      pickStreak = streak;
     }
+  }
+  if (pick) {
+    foundFirm(ctx, pick, day, 'undersupply');
+    state.lastUndersupplyEntryDay = day;
   }
 }

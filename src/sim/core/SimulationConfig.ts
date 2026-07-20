@@ -97,10 +97,43 @@ export interface SimulationConfig {
  * authored district layouts per preset live in data/districts.ts and are sized
  * to tile these dimensions exactly.
  */
+/**
+ * Per-preset founder pacing (A5 — read via the AIFounderSystem helpers):
+ *
+ *  - `founderUndersupplyCooldown`: town-wide minimum days between under-supply
+ *    entries. Village/City keep the baseline 20 (FOUNDER_UNDERSUPPLY_COOLDOWN;
+ *    the founders rate-limit test pins City at it). Metropolis slashes it to 7:
+ *    the founder-scale probe measured a 30-cap town stuck at 5-6 firms with the
+ *    under-supply streak running to 291 days and fill-rate pinned at 0.2-0.5 —
+ *    genuine sustained starvation, not the transient shock the cooldown guards
+ *    against, so one entry per 20 days (~12 over the 55→300 window) can never
+ *    fill a map that hungry. At 7 days the same window admits enough entries to
+ *    reach ~24-30 firms by day 300, and the demand so vastly exceeds supply that
+ *    the field stays solvent there (probe: 0 insolvent at day 300; a shorter 6
+ *    over-founds and slides into a post-300 insolvency cascade).
+ *
+ *  - `founderUndersupplyFillRate`: the smoothed town fill-rate below which a
+ *    staple is "under-supplied". Village/City keep the baseline 0.65
+ *    (FOUNDER_UNDERSUPPLY_FILL_RATE — City's crowd tier economy is calibrated for
+ *    the ~8-9 firm equilibrium this yields; the A3 pool-drift and worker/cohort
+ *    guards trip if it is pushed higher). Metropolis lifts it to 0.80 so the
+ *    signal keeps firing until the huge crowd is genuinely served, rather than
+ *    switching off at the City value while a third of demand still goes unmet.
+ *
+ *  - `founderCash`: founding capital (from the world account, conserved).
+ *    Village/City keep the FOUNDER_CASH baseline ($22k). Metropolis raises it to
+ *    $28k: the founder-scale probe measured ramp casualties (up to 9 firms
+ *    insolvent at day 300 when the cooldown packed entrants in fast) — the
+ *    demand supports 30 firms (fill-rate stays below the 0.80 trigger even at
+ *    the cap), but on the bigger, pricier map a fresh chain spends more to build
+ *    and needs a longer runway to capture its share while many rivals ramp at
+ *    once. The extra $6k is that runway; it converts the last handful of firms
+ *    from ramp-casualties into solvent competitors.
+ */
 export const SIZE_PRESETS = {
-  village: { castTarget: 80, cohortCap: 0, crowdStart: 0, founderMaxAiFirms: 6, mapWidth: 130, mapHeight: 92 },
-  city: { castTarget: 150, cohortCap: 2000, crowdStart: 300, founderMaxAiFirms: 18, mapWidth: 260, mapHeight: 184 },
-  metropolis: { castTarget: 150, cohortCap: 10000, crowdStart: 1500, founderMaxAiFirms: 30, mapWidth: 390, mapHeight: 276 },
+  village: { castTarget: 80, cohortCap: 0, crowdStart: 0, founderMaxAiFirms: 6, founderUndersupplyCooldown: 20, founderUndersupplyFillRate: 0.65, founderCash: 22000_00, mapWidth: 130, mapHeight: 92 },
+  city: { castTarget: 150, cohortCap: 2000, crowdStart: 300, founderMaxAiFirms: 18, founderUndersupplyCooldown: 20, founderUndersupplyFillRate: 0.65, founderCash: 22000_00, mapWidth: 260, mapHeight: 184 },
+  metropolis: { castTarget: 150, cohortCap: 10000, crowdStart: 1500, founderMaxAiFirms: 30, founderUndersupplyCooldown: 7, founderUndersupplyFillRate: 0.80, founderCash: 28000_00, mapWidth: 390, mapHeight: 276 },
 } as const;
 
 export const DEFAULT_CONFIG: SimulationConfig = {

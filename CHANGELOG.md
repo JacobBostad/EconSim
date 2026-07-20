@@ -7,6 +7,37 @@ thousands via statistical cohorts plus a fully-simulated cast, districts,
 25-30 firms, a broad product catalog, and specialist firm archetypes
 (real estate, investing, business services).
 
+- **A5 — the Metropolis fills up**: the 30-firm cap now actually happens. The
+  founder-scale probe (docs/design/probes/founder-scale.ts — Metropolis + City,
+  3 seeds, 300d, with an abort-reason table) diagnosed the binding constraint:
+  the Metropolis was stuck at 5-6 AI firms because its world account runs a
+  structural deficit at crowd scale (subsistence to a large idle crowd) and the
+  Village-era `worldCash >= $22k` founding gate blocked ~200 of 300 days while a
+  screaming shortage went unanswered (under-supply streaks to 291 days, fill-rate
+  0.2-0.5). Four fixes, all preset-gated (Village bit-identical, its founder path
+  and constants untouched): (1) the world-cash gate is now Village-only — founding
+  is money-conserved (the firm pays land costs straight back) and more firms
+  employ the crowd and relieve the drain, so a negative world balance is not
+  insolvency; (2) per-preset founder pacing in SIZE_PRESETS (Metropolis cooldown
+  7 vs the baseline 20, under-supply trigger 0.80, founding runway $28k vs $22k)
+  read via new AIFounderSystem helpers; (3) under-supply entry founds the
+  MOST-STARVED staple, not the first in fixed order — the probe caught bread
+  stacking competitors while clothes starved 100-140 days unanswered; (4) a
+  solvency brake: capital stops chasing a market whose incumbents are already
+  struggling (>12% of AI firms unhealthy), turning the fill-rate signal from a
+  pure service-level read into one that respects profitability. Result at day 300
+  (3 seeds): Metropolis 24/28/30 firms, 0 insolvent, 0 distressed, cash median
+  $8-11k, wholesale spread 0.55-0.72, money conserved to the cent, ~0.85-1.13
+  ms/tick. The raised runway converts the last handful of entrants from
+  ramp-casualties into solvent competitors (a shorter cooldown 6 packs to 30 but
+  slides into a post-300 cascade — measured and rejected). Honest limits: the
+  durable ceiling is ~25-27, so a 400-day horizon shows margin pressure at the
+  full cap (the crowd-hiring cash-gate spiral in CohortLaborSystem, a demand-side
+  A3 concern, not a founder defect); and CITY is left at its calibrated ~8-9 firm
+  equilibrium — pushing it into the teens tripped the pinned A3 pool-drift and
+  worker/cohort tier guards, so the "City in the teens" goal is an A3 crowd-tier
+  recalibration, not an A5 founder-pacing one. City keeps only the (inert-for-count)
+  most-starved distribution fix.
 - **Arc A3 complete — the City lives**: the crowd has a society
   (CohortSocialSystem: satisfaction with real purchase/stockout nudges,
   tier mobility on cohort-owned wealth signals, desirability-weighted
