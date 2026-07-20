@@ -1,11 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import { newSim } from './helpers';
-import { ticksPerDay, computeTime } from '../core/Tick';
-import { Rng } from '../core/Random';
+import { ticksPerDay } from '../core/Tick';
 import { Simulation } from '../core/Simulation';
 import { createInitialState } from '../data/startingScenario';
 import type { GameState } from '../core/GameState';
-import { totalMoneySupply } from '../core/GameState';
+import { makeContext, totalMoneySupply } from '../core/GameState';
 import { runImmigrationSystem, emigrationRoll } from '../systems/ImmigrationSystem';
 import { EMIGRATION_GRACE_DAYS } from '../data/constants';
 import { morningBriefing } from '../selectors/advisorSelectors';
@@ -23,10 +22,7 @@ function runMiserableDays(state: GameState, days: number, satisfaction = 30): vo
       c.tier = 'worker';
       c.satisfaction = satisfaction;
     }
-    runImmigrationSystem({
-      state, config: state.config, rng: new Rng(state),
-      time: computeTime(state.tick, state.config),
-    });
+    runImmigrationSystem(makeContext(state));
   }
 }
 

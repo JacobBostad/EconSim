@@ -21,7 +21,10 @@ export interface WagePolicy {
 
 /** Lightweight AI strategy memory used by AIStrategySystem. */
 export interface FirmStrategy {
-  kind: 'none' | 'bread' | 'tools' | 'clothes' | 'retail';
+  /** The chain's anchor product id, or 'none'/'retail' for the non-product
+   * roles. A `ProductId` (open string) so a new product needs no type edit —
+   * this classifier is set at founding and not branched on by product. */
+  kind: ProductId | 'none' | 'retail';
   /** Per-product count of consecutive days the firm sold out (drives price up). */
   selloutStreak: Record<ProductId, number>;
   /** Per-product count of consecutive days of excess inventory (drives price down). */

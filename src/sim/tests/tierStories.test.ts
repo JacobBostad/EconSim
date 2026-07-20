@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { newSim } from './helpers';
-import { ticksPerDay, computeTime } from '../core/Tick';
-import { Rng } from '../core/Random';
+import { ticksPerDay } from '../core/Tick';
 import type { GameState } from '../core/GameState';
+import { makeContext } from '../core/GameState';
 import type { CitizenTier } from '../entities/Citizen';
 import {
   runImmigrationSystem,
@@ -30,10 +30,7 @@ function forceArrivals(state: GameState, tier: CitizenTier, rounds: number): voi
       c.satisfaction = 70;
       c.employmentStatus = 'employed';
     }
-    runImmigrationSystem({
-      state, config: state.config, rng: new Rng(state),
-      time: computeTime(state.tick, state.config),
-    });
+    runImmigrationSystem(makeContext(state));
   }
 }
 

@@ -8,17 +8,19 @@
  */
 
 import type { Vec2 } from '../entities/Location';
+import type { ProductId } from '../core/Id';
 import { dollars } from './constants';
 import type { PersonalityId } from './personalities';
 
 export interface AiChainSpec {
   firmName: string;
-  /** Consumer product the chain ends in. */
-  product: 'bread' | 'tools' | 'clothes';
+  /** Consumer product the chain ends in. Any product id — adding a product is
+   * a data change (a new chain factory), not a type change here. */
+  product: ProductId;
   producerDef: 'farm' | 'mine';
   producerRecipe: string;
   factoryRecipe: string;
-  inputProduct: string;
+  inputProduct: ProductId;
   producerName: string;
   factoryName: string;
   retailName: string;

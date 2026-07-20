@@ -36,6 +36,11 @@ import {
 import { Rng } from './Random';
 import { computeTime, type GameTime } from './Tick';
 import { nextId } from './Id';
+import {
+  buildContractIndex,
+  indexAddContract,
+  type ContractIndex,
+} from './ContractIndex';
 
 export const SAVE_VERSION = 1;
 
@@ -219,6 +224,13 @@ export interface SimContext {
   config: SimulationConfig;
   rng: Rng;
   time: GameTime;
+  /**
+   * Per-tick contract lookup tables (see ContractIndex.ts). Built once here and
+   * kept current by the mid-tick mutation sites so the AI-strategy/logistics
+   * paths answer "which contracts source/feed this facility / belong to this
+   * firm?" in O(bucket) instead of scanning every contract.
+   */
+  contractIndex: ContractIndex;
 }
 
 export function makeContext(state: GameState): SimContext {
@@ -227,7 +239,30 @@ export function makeContext(state: GameState): SimContext {
     config: state.config,
     rng: new Rng(state),
     time: computeTime(state.tick, state.config),
+    contractIndex: buildContractIndex(state),
   };
+}
+
+/**
+ * Rebuild the context's contract index from the live contract set. Called by
+ * the mid-tick sites that change a contract's source/owner key (repointed
+ * sourcing, rival consolidation) or spawn a whole chain (founder entry) — a
+ * fresh rebuild is trivially identical to the `for..in` scan it stands in for.
+ * Rare enough (at most a handful per tick) that the O(contracts) rebuild never
+ * shows up against the O(bucket) reads it protects.
+ */
+export function reindexContracts(ctx: SimContext): void {
+  ctx.contractIndex = buildContractIndex(ctx.state);
+}
+
+/**
+ * Register a newly created contract in state AND the live index in one step, so
+ * mid-tick add sites can't forget to keep the index current. Appending is
+ * order-exact (a new contract sorts last everywhere), so no rebuild is needed.
+ */
+export function addContract(ctx: SimContext, contract: Contract): void {
+  ctx.state.contracts[contract.id] = contract;
+  indexAddContract(ctx.contractIndex, contract);
 }
 
 // ---------------------------------------------------------------------------

@@ -12,6 +12,7 @@
 
 import type { SimContext } from '../core/GameState';
 import { recordTransaction } from '../core/GameState';
+import { contractsBySource } from '../core/ContractIndex';
 import { firmAccount, WORLD_ACCOUNT } from '../core/Transactions';
 import { nextId } from '../core/Id';
 import { isHourBoundary } from '../core/Tick';
@@ -167,10 +168,13 @@ function processReorders(ctx: SimContext): void {
       const crossFirm = source.ownerFirmId !== dest.ownerFirmId;
       if (crossFirm && source.wholesaleEnabled === false) continue; // seller opted out
       if (crossFirm) {
+        // Stock the source's OWN chains have already spoken for is off-limits
+        // to a cross-firm buyer. Only contracts sourced from this facility can
+        // reserve it — so walk the source bucket, not every contract.
         let reserved = 0;
-        for (const cid2 in state.contracts) {
+        for (const cid2 of contractsBySource(ctx.contractIndex, source.id)) {
           const c2 = state.contracts[cid2]!;
-          if (!c2.active || c2.id === contract.id || c2.sourceFacilityId !== source.id) continue;
+          if (!c2.active || c2.id === contract.id) continue;
           if (c2.productId !== contract.productId) continue;
           if (state.facilities[c2.destinationFacilityId]?.ownerFirmId !== source.ownerFirmId) continue;
           reserved += c2.targetQuantity;

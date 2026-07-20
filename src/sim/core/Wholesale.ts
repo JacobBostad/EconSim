@@ -10,6 +10,8 @@
 
 import type { GameState } from './GameState';
 import type { Facility } from '../entities/Facility';
+import type { ContractIndex } from './ContractIndex';
+import { contractsBySource } from './ContractIndex';
 import { WHOLESALE_DISCOUNT } from '../data/constants';
 import { getProduct } from '../data/products';
 
@@ -30,13 +32,31 @@ export function wholesaleUnitPrice(state: GameState, source: Facility, productId
  * own firm's supply contracts have spoken for. Sellers are never raided
  * below what their own chains reserve.
  */
-export function localSurplus(state: GameState, fac: Facility, productId: string): number {
+export function localSurplus(
+  state: GameState,
+  fac: Facility,
+  productId: string,
+  index?: ContractIndex,
+): number {
   let reserved = 0;
-  for (const cid in state.contracts) {
-    const c = state.contracts[cid]!;
-    if (!c.active || c.sourceFacilityId !== fac.id || c.productId !== productId) continue;
-    if (state.facilities[c.destinationFacilityId]?.ownerFirmId !== fac.ownerFirmId) continue;
-    reserved += c.targetQuantity;
+  // Per-tick callers (the AI sourcing loop) pass the context's contract index
+  // so this reserve sum is O(source-bucket), not O(all contracts) — the same
+  // set of contracts, summed in the same order. Callers without an index (UI
+  // selectors) fall back to the full scan.
+  if (index) {
+    for (const cid of contractsBySource(index, fac.id)) {
+      const c = state.contracts[cid]!;
+      if (!c.active || c.productId !== productId) continue;
+      if (state.facilities[c.destinationFacilityId]?.ownerFirmId !== fac.ownerFirmId) continue;
+      reserved += c.targetQuantity;
+    }
+  } else {
+    for (const cid in state.contracts) {
+      const c = state.contracts[cid]!;
+      if (!c.active || c.sourceFacilityId !== fac.id || c.productId !== productId) continue;
+      if (state.facilities[c.destinationFacilityId]?.ownerFirmId !== fac.ownerFirmId) continue;
+      reserved += c.targetQuantity;
+    }
   }
   return Math.max(0, (fac.outputInventory[productId]?.quantity ?? 0) - reserved);
 }

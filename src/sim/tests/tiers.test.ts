@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { newSim, normalizedSerialize } from './helpers';
-import { ticksPerDay, computeTime } from '../core/Tick';
-import { Rng } from '../core/Random';
+import { ticksPerDay } from '../core/Tick';
 import type { GameState } from '../core/GameState';
+import { makeContext } from '../core/GameState';
 import { deserialize, serialize } from '../persistence/saveLoad';
 import {
   runTierSystem,
@@ -18,12 +18,7 @@ import {
 function tierDay(state: GameState): void {
   const tpd = ticksPerDay(state.config);
   state.tick += tpd - (state.tick % tpd || tpd) + tpd; // next boundary
-  runTierSystem({
-    state,
-    config: state.config,
-    rng: new Rng(state),
-    time: computeTime(state.tick, state.config),
-  });
+  runTierSystem(makeContext(state));
 }
 
 function firstCitizen(state: GameState) {
