@@ -138,8 +138,98 @@ If the shadow engine can't track the agent town inside that envelope,
 A3's formulas get fixed *here*, where divergence is measurable
 against ground truth, not in a live cohort city where nothing crashes
 and everything drifts. The envelope then becomes A3's standing
-regression test. Spike verdict and measurements will be appended
-below when the probe completes.
+regression test.
+
+### Shadow-parity probe — results and verdict (spike complete)
+
+Twenty model iterations against the live town (probe:
+`docs/design/probes/shadow-parity.ts`, runnable with `npx tsx`;
+zero state mutation verified the strongest way possible — the
+end-of-run `rngState` matches the recorded A1 baselines **exactly**
+on all three seeds). The probe ran in two modes: **Mode A** syncs
+tier populations to the live census daily and free-runs demand,
+urgency, and satisfaction — isolating the machinery A3 actually
+introduces; **Mode B** additionally free-runs the tier gates.
+
+**Verdict: conditional green — A3 proceeds, with design directives.**
+
+**Units (the core economic flow): PASS, all three seeds.** 300-day
+cumulative error per macro product: seed 11 — bread +2.1%, tools
++2.7%, clothes +3.0%, coffee +4.3%; seed 4 — +3.2 / +0.8 / +3.3 /
++4.5%; seed 7 — +1.1 / +1.8 / +1.4 / +4.1%. Micro-volume products
+(pastries, jewelry, < 3 units/day town-wide) pass an absolute
+criterion (worst |err| 0.07/day) — at that scale the named cast
+carries the trade in A3 and a relative bar is noise.
+
+**Satisfaction: formula transfers; distribution is the work.** The
+equilibrium-target formula reproduces the live town's target within
+~2 points whenever the shadow's urgency matches actuals, and the
+intraday nudge accounting (+1.5 purchase / −2 stockout / −1 priced
+out, plus chronic-shortage retry stings) matches the *implied* nudge
+solved from actual day-over-day sat. The residual (MAE ~15-17 vs the
+±5 envelope) is structural: cohort-mean state cannot hold per-product
+units AND the persistent high-urgency tail simultaneously without
+distributional state (see directives).
+
+**Tier gates: cannot be validated by this harness — and that is the
+finding.** Mode B drifts 40-45 points on worker/comfortable shares
+(affluent tracks within 2.4). Cause, measured: gate inputs observed
+from the live citizens don't respond to the shadow's own moves, and
+selection effects dominate — promotion removes exactly the
+high-sat/high-cash individuals, so a cohort-mean gate with a
+symmetric spread over-promotes without bound.
+
+**What the probe refuted** (each was implemented, measured, and
+replaced):
+
+- *Rate-based demand* (`population × needSpec rates`, the original
+  HD1 sketch): agents are **visit-limited, not urgency-limited** —
+  staple urgency saturates at 1.6-2.9 in the live town while
+  purchases run at trip frequency. Demand must settle as **trips**:
+  ~0.8/day employed (1.4 unemployed) + ~0.75/day urgent repeats,
+  targeted by a sharp softmax over need urgency (temperature ~0.25,
+  spec-order tie-break — ties at the urgency cap resolve to needs
+  array order, which is spec order, which is why bread dominates
+  trips), **skipping products no store sells**, split over stores by
+  score², basket-buying everything the store carries above the 0.3
+  gate.
+- *Mean-field urgency*: pressure is convex in urgency, so the mean
+  under-reads it; and the real distribution is a rotating sawtooth
+  (the same well-served citizens buy daily and stay low; the remote
+  tail pins at the cap). Ten quantile buckets with purchases filling
+  the **lowest** eligible buckets first reproduce both the units and
+  the tail.
+- *HD1's "~2%/day" tier flow*: the live gate moves **all qualifying
+  mass** once its 5/7-day streak matures — 45% of the town promotes
+  in the first ~7 days via the savings route. Continuous flow at
+  ~6-8%/day × qualifying fraction matches the transition pace;
+  promotion strictness at the tail behaves like qual² (an individual
+  must clear the bar every day of the streak, not on average); moves
+  must skim the top of the sat distribution (+σ) or the gate never
+  self-limits.
+- *Naive supply caps*: contract `targetQuantity` is a top-up level,
+  not a shipment size — treating it as daily inflow over-supplies the
+  shadow economy until urgency drains and satisfaction inflates. The
+  probe substitutes a lagged sales EMA; **A3 does not have this
+  problem** — cohort slices interleave with real production and
+  logistics ticks, which is ground truth by construction.
+
+**Design directives for A3** (binding, from measurement):
+
+1. `CohortDemandSystem` settles demand by trips (above), not rates.
+2. Cohort urgency state is **quantile buckets** (10 per
+   cohort × product), purchases filling lowest-first; satisfaction
+   pressure sums over buckets.
+3. Cohorts carry their **own wage/cash distributions** (fed by real
+   payroll), because tier gates evaluated on observed means diverge;
+   gate constants start at the probe's calibration (continuous
+   6-8%/day × qualFrac, qual² strictness, ±σ selection skim, streak
+   hysteresis unchanged).
+4. The A3 acceptance test is **cohort-vs-cast agreement in the live
+   soak** (cast average satisfaction within 5 points of its cohort's,
+   per the secondary probe below) — not shadow-vs-agent parity, which
+   this spike showed is bounded by harness observability, not by the
+   engine design.
 
 ## Phase A3 — the cohort economy live (PLANNED)
 
@@ -149,31 +239,42 @@ rest live in cohorts. The full HD1 mechanics:
 - **`CohortDemandSystem`** — demand settles in **5 slices across the
   shop window** (hours 16-21, `SimulationConfig.ts:98-99`), not one
   end-of-day lump, so shelf depletion interleaves with cast shopping
-  the way a real crowd's would. Per slice, each cohort's remaining
-  demand for each product is allocated across **district-local
-  stores** by re-normalized `scoreStore` weights with **share ∝ w²**
-  (squaring sharpens the split toward better stores — closer to a
-  crowd of individual best-choice shoppers than proportional w would
-  be), each allocation capped by shelf stock, pool cash, and the
-  walkaway price (`needSpec.maxPriceMult` × tier cap). One
-  `recordTransaction` per cohort × store per slice, booked as
-  `revenue`, updating `marketStats` and `dailyStats` exactly as agent
-  purchases do. Unmet demand accrues to `backlogByProduct`, capped at
-  **3 days'** demand — the cohort analogue of need-urgency saturation
-  (`URGENCY_CAP`).
+  and logistics restocks the way a real crowd's would. Per the
+  parity-probe directives: each slice spends a **trip budget**
+  (per-capita rates and softmax product-targeting as calibrated by
+  the probe, gated to products some store actually sells), splits
+  visits across **district-local stores** by re-normalized
+  `scoreStore` weights with **share ∝ w²**, and basket-buys every
+  carried product the cohort wants above the basket gate — capped by
+  shelf stock, pool cash, and the walkaway price
+  (`needSpec.maxPriceMult` × tier cap, applied as a logistic since
+  per-citizen caps are drawn from a range). One `recordTransaction`
+  per cohort × store per slice, booked as `revenue`, updating
+  `marketStats` and `dailyStats` exactly as agent purchases do.
+  Cohort appetite lives in **quantile-bucketed urgency** per product
+  (grown by `needSpec` rates, drained lowest-bucket-first by
+  purchases) — the bucket tail above the urgent bar is the cohort
+  analogue of need-urgency saturation and replaces the earlier
+  `backlogByProduct` sketch.
 - **`CohortSocialSystem`** — the existing satisfaction-equilibrium
   formula (`SatisfactionSystem.ts:114-131`: target from employment
-  share, housing, and backlog pressure; drift toward it at the same
-  0.12 rate) applied per cohort. Tier gates reuse the TierSystem
-  wage/satisfaction/savings bars (`TierSystem.ts:31-53`) evaluated on
-  cohort averages, with the same 5/7-day streak hysteresis via
-  `gateStreaks`; while a gate holds, **PROMOTE_RATE / DEMOTE_RATE =
-  0.02** of the block moves per day, carrying a pro-rata slice of the
-  cash pool with it. Migration reuses the immigration/emigration
-  gates at cohort scale: inflow **0.004 × district attractiveness**
-  per day when the town clears the immigration bar, outflow **0.003**
-  when a cohort sits below the emigration bar. All four constants are
-  starting values to measure-then-pin against the A3 soaks.
+  share, housing, and bucket-summed urgency pressure; drift toward it
+  at the same 0.12 rate, plus the probe-verified intraday purchase /
+  stockout / priced-out nudges) applied per cohort. Tier gates reuse
+  the TierSystem wage/satisfaction/savings bars (`TierSystem.ts:31-53`)
+  evaluated against the cohort's **own wage/cash distribution** (probe
+  directive 3 — observed-mean gates diverge without bound), with the
+  same 5/7-day streak hysteresis via `gateStreaks`; while a matured
+  gate holds, **6-8% × qualifying fraction** of the block moves per
+  day (probe-calibrated; HD1's original 2%/day was refuted — the live
+  town promotes 45% of its workers in the first week), the move
+  skimming the top of the satisfaction distribution and carrying a
+  pro-rata slice of the cash pool. Migration reuses the
+  immigration/emigration gates at cohort scale: inflow **0.004 ×
+  district attractiveness** per day when the town clears the
+  immigration bar, outflow **0.003** when a cohort sits below the
+  emigration bar. The migration constants are starting values to
+  measure-then-pin against the A3 soaks.
 - **`CohortLaborSystem`** — after the cast job market runs, cohort
   headcount fills remaining openings at the cohort's `avgSkill`;
   payroll pays **one transaction per firm × cohort** (firm→pool), so

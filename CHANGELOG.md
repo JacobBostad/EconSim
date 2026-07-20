@@ -7,6 +7,18 @@ thousands via statistical cohorts plus a fully-simulated cast, districts,
 25-30 firms, a broad product catalog, and specialist firm archetypes
 (real estate, investing, business services).
 
+- **Shadow-cohort parity probe (A2 spike — the gate for A3)**: a prototype
+  cohort demand engine ran beside the live agent town for 300 days × 3
+  seeds with zero state mutation (end-of-run rng state matches the A1
+  baselines exactly). Twenty model iterations later, per-product unit
+  flows track the real economy within ±5% on every macro product on all
+  seeds, the satisfaction formula transfers, and the probe refuted four
+  design assumptions before any A3 code exists — demand is trip-limited
+  (not urgency-rate-limited), cohort urgency needs quantile-bucket
+  distribution state, tier gates need cohort-owned wealth distributions,
+  and the original 2%/day tier flow was 3-4× too slow. Verdict, binding
+  design directives, and the runnable probe are recorded in
+  docs/design/cohorts-and-districts.md and docs/design/probes/.
 - **Districts + dark cohorts (A2)**: the city gains structure without
   changing a single behavior. Three districts partition the classic map
   (Iron Row / Midmarket / The Rows) with a daily desirability cache; the
