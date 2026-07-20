@@ -1,14 +1,23 @@
 /**
- * DividendSystem — distributes a share of daily profits to shareholders.
+ * DividendSystem — distributes a share of profits to shareholders.
  *
  * Runs at the day boundary BEFORE AccountingSystem resets the day's books.
- * Each firm with a positive net profit for the completed day pays out
- * DIVIDEND_PAYOUT_RATIO of it: holders of its shares receive their percentage,
- * and the remainder (the public float) goes to the world account. Dividends are
- * a profit distribution, not an operating expense, so they use the 'none'
- * ledger category (cash moves; P&L is untouched).
+ * Each firm pays DIVIDEND_PAYOUT_RATIO of its smoothed profit — the 7-day
+ * average of positive daily net profit (the same base the dashboard's yield
+ * estimate shows, and far less noisy than any single day). Holders of its
+ * shares receive their percentage; the remainder (the public float) leaves to
+ * the world account — an intentional sink that balances the world-account
+ * inflows from share sales.
  *
- * This is what makes owning rival shares a real income strategy.
+ * Bookkeeping is honest on both sides of every payment: the payer books
+ * dividendOut (a distribution, never an expense — it must not shrink the
+ * profit it is computed from), the receiving firm books dividendIn, which IS
+ * part of net profit — so the valuation's earnings multiple capitalizes
+ * investment income and a holding company is finally worth its portfolio.
+ *
+ * Determinism: pools are snapshotted for every payer BEFORE any payout
+ * settles, and firms are iterated in sorted-id order — the result cannot
+ * depend on object-key order or on dividends received earlier the same tick.
  */
 
 import type { SimContext } from '../core/GameState';
@@ -23,16 +32,29 @@ export function runDividendSystem(ctx: SimContext): void {
   if (!isDayBoundary(ctx.state.tick, ctx.config)) return;
   const { state } = ctx;
 
-  for (const fid in state.firms) {
+  const firmIds = Object.keys(state.firms).sort();
+
+  // Snapshot every pool first: smoothed profit base, capped by cash on hand.
+  const pools = new Map<string, number>();
+  for (const fid of firmIds) {
     const payer = state.firms[fid]!;
     if (payer.ownerType !== 'player' && payer.ownerType !== 'ai') continue;
-    const profit = netProfit(payer.accounting.today);
-    if (profit <= 0 || payer.cash <= 0) continue;
-    const pool = Math.min(Math.round(profit * DIVIDEND_PAYOUT_RATIO), payer.cash);
-    if (pool <= 0) continue;
+    if (payer.cash <= 0) continue;
+    const recent = payer.accounting.dailyHistory.slice(-7);
+    const base = recent.length
+      ? recent.reduce((s, d) => s + Math.max(0, d.netProfit), 0) / recent.length
+      : Math.max(0, netProfit(payer.accounting.today));
+    const pool = Math.min(Math.round(base * DIVIDEND_PAYOUT_RATIO), payer.cash);
+    if (pool > 0) pools.set(fid, pool);
+  }
+
+  for (const fid of firmIds) {
+    const pool = pools.get(fid);
+    if (!pool) continue;
+    const payer = state.firms[fid]!;
 
     let paidToHolders = 0;
-    for (const hid in state.firms) {
+    for (const hid of firmIds) {
       if (hid === fid) continue;
       const holder = state.firms[hid]!;
       const pct = holder.sharesHeld[fid] ?? 0;
@@ -44,8 +66,9 @@ export function runDividendSystem(ctx: SimContext): void {
         from: firmAccount(fid),
         to: firmAccount(hid),
         amount,
-        firmId: null,
-        category: 'none',
+        firmId: fid,
+        category: 'dividendOut',
+        counterparty: { firmId: hid, category: 'dividendIn' },
         note: `Dividend from ${payer.name} (${pct}%)`,
       });
       if (hid === state.playerFirmId) {
@@ -59,8 +82,8 @@ export function runDividendSystem(ctx: SimContext): void {
         from: firmAccount(fid),
         to: WORLD_ACCOUNT,
         amount: publicShare,
-        firmId: null,
-        category: 'none',
+        firmId: fid,
+        category: 'dividendOut',
         note: `Dividend to public shareholders of ${payer.name}`,
       });
     }

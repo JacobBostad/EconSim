@@ -8,6 +8,7 @@ import { totalMoneySupply } from '../core/GameState';
 import { runAIFounderSystem, founderRoll } from '../systems/AIFounderSystem';
 import { FOUNDER_EARLIEST_DAY, FOUNDER_GAP_DAYS } from '../data/constants';
 import { serialize, deserialize } from '../persistence/saveLoad';
+import { morningBriefing } from '../selectors/advisorSelectors';
 
 /** Drive the founder system directly at day boundaries with citizens pinned
  * prosperous — no other systems run, so the gates are exactly what we set. */
@@ -86,5 +87,21 @@ describe('AI founders', () => {
     const raw = JSON.parse(serialize(state)) as Record<string, unknown>;
     delete raw.marketGapDays;
     expect(deserialize(JSON.stringify(raw)).marketGapDays).toEqual({});
+  });
+
+  it('the advisor warns about an open staple market, and claiming it clears the warning', () => {
+    const state = createInitialState(11, undefined, 'dust_hollow');
+    state.marketGapDays['bread'] = 12; // past half the founder clock
+    for (const c of Object.values(state.citizens)) c.satisfaction = 70;
+    const warning = morningBriefing(state).find((a) => a.icon === '🏗️');
+    expect(warning).toBeDefined();
+    expect(warning!.text).toContain(`12/${FOUNDER_GAP_DAYS}`);
+
+    // A staffed player store selling bread claims the market — warning gone.
+    const player = state.firms[state.playerFirmId]!;
+    player.cash = 40000_00;
+    const sim = new Simulation(state);
+    sim.dispatch({ type: 'BUILD_CHAIN', firmId: player.id, productId: 'bread' });
+    expect(morningBriefing(state).some((a) => a.icon === '🏗️')).toBe(false);
   });
 });

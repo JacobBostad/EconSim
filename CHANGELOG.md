@@ -7,6 +7,41 @@ latest arc — four pillars from a market-research pass against Capitalism
 Lab, Big Ambitions, and Offworld Trading Company — added citizen classes,
 hireable managers, a real commodity market, and shared daily play.
 
+## Investing & the stock market
+
+- **Stakes on the balance sheet** (investing overhaul, Phase 1 — see
+  docs/design/stock-market.md): a holding company finally makes sense.
+  Company valuation now marks held stakes to market — three deterministic
+  tiers (operating valuation excludes holdings; marketCap adds them at the
+  counterparties' operating value and is what shares trade at; the
+  scoreboard valuation marks your stakes at their sale price) — so buying
+  at market moves your valuation by exactly $0 instead of cratering it by
+  the purchase price. Dividends are real income now: booked dividendIn on
+  the holder (part of net profit, so the earnings multiple capitalizes a
+  portfolio's income stream) and dividendOut on the payer (a distribution,
+  never an expense), from a 7-day smoothed profit base with pools
+  snapshotted pre-payout and firms settled in sorted order. Every share
+  trade books shareBuy/shareSell with a tracked cost basis, and sells
+  report realized gain or loss against what you actually paid. All trades
+  — player and AI — go through one shared path (core/Shares.ts), loan
+  collateral uses operating net worth only, and old saves migrate with
+  stakes marked at today's price. Probed: a pure holding company that buys
+  25% of every rival now GROWS from $15k to ~$17k over 150 days on marks
+  plus ~$1k of dividend income, fully conserved (previously the same play
+  looked like destroying $11k on day one).
+
+- **Market friction** (investing overhaul, Phase 2): the stock market
+  earns the same respect as the commodity desk. Every share trade pays a
+  3% fee and fills along half its own price impact (0.4%/percent), with
+  the displaced quote mean-reverting 20%/day toward fair value — the free
+  round-trip timing play now loses ≥4% of notional. Sustained losses
+  discount a firm below book value (bounded at half its net worth), and
+  buyouts price off the same marketCap a 1% stake trades at, so creeping
+  acquisition and clean takeover agree. The Company dashboard gains a
+  Your-portfolio card (per-stake cost basis, mark, unrealized P&L,
+  dividend estimate), and the advisor now warns (🏗️) when an unserved
+  staple market is drawing an AI founder — claim it or compete with it.
+
 ## Economy & AI depth
 
 - **AI rival personalities**: every AI firm has a named CEO with an archetype

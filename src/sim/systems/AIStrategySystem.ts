@@ -30,7 +30,8 @@ import { clamp } from '../../utils/clamp';
 import { CENTS, RND_QUALITY_GAIN_PER_1000, MAX_RETAIL_PRODUCTS, IMPORT_MARKUP, WHOLESALE_DISCOUNT } from '../data/constants';
 import { wholesaleUnitPrice, localSurplus } from '../core/Wholesale';
 import { worldImportMult } from '../data/worldEvents';
-import { companyValuation } from '../selectors/companySelectors';
+import { marketCap } from '../selectors/companySelectors';
+import { tradeShares, sharePricePerPct } from '../core/Shares';
 import { acquisitionCost, performAcquisition } from '../core/Acquisition';
 import { landCostMultiplier, landValueAt } from '../core/LandValue';
 import { MAX_FACILITY_LEVEL, upgradeCost, upgradeFacility } from '../core/Upgrades';
@@ -324,7 +325,7 @@ function maybeBuyShares(ctx: SimContext, firmId: string): void {
     const other = state.firms[fid]!;
     if (other.ownerType !== 'player' && other.ownerType !== 'ai') continue;
     if ((firm.sharesHeld[fid] ?? 0) >= AI_MAX_STAKE) continue;
-    const val = companyValuation(state, fid).valuation;
+    const val = marketCap(state, fid);
     if (val > targetVal) {
       targetVal = val;
       target = fid;
@@ -332,20 +333,16 @@ function maybeBuyShares(ctx: SimContext, firmId: string): void {
   }
   if (!target) return;
 
-  const pricePerPct = Math.max(1, Math.round(targetVal / 100));
-  const cost = 5 * pricePerPct;
+  // Fees and fill impact land on top of the quote — budget with headroom.
+  const cost = Math.round(5 * sharePricePerPct(state, target) * 1.05);
   if (firm.cash - cost < AI_SHARE_CASH_FLOOR) return;
 
-  recordTransaction(state, {
-    from: firmAccount(firmId), to: WORLD_ACCOUNT, amount: cost,
-    firmId: null, category: 'none',
-    note: `Bought 5% of ${state.firms[target]!.name}`,
-  });
-  firm.sharesHeld[target] = (firm.sharesHeld[target] ?? 0) + 5;
-  const targetName = state.firms[target]!.name;
-  emitEvent(state, 'info', 'ai',
-    `${firm.name} bought a 5% stake in ${targetName} (now ${firm.sharesHeld[target]}%).${ceoQuote(rng, firm, 'shares')}`,
-    target);
+  // Same path as the player's BUY_SHARES — any market rule applies to AI too.
+  if (tradeShares(state, firmId, target, 5)) {
+    emitEvent(state, 'info', 'ai',
+      `${firm.name} now holds ${firm.sharesHeld[target]}% of ${state.firms[target]!.name}.${ceoQuote(rng, firm, 'shares')}`,
+      target);
+  }
 }
 
 /**

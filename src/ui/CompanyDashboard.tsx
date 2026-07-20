@@ -12,6 +12,7 @@ import {
   rankings,
   objectiveProgress,
   facilityPnL,
+  marketCap,
 } from '../sim/selectors/companySelectors';
 import { formatMoney } from '../utils/formatMoney';
 import { getProduct } from '../sim/data/products';
@@ -68,7 +69,11 @@ export function CompanyDashboard(): React.ReactElement {
         </div>
         <div className="row" style={{ gap: 16, flexWrap: 'wrap' }}>
           <span className="small">Net worth <span className="mono">{formatMoney(val.netWorth)}</span></span>
-          <span className="small muted">cash {formatMoney(val.cash)} · inventory {formatMoney(val.inventoryValue)} · assets {formatMoney(val.assetValue)} · debt {formatMoney(val.debt)}</span>
+          <span className="small muted">
+            cash {formatMoney(val.cash)} · inventory {formatMoney(val.inventoryValue)} · assets {formatMoney(val.assetValue)}
+            {val.holdingsValue > 0 && <> · 📈 holdings {formatMoney(val.holdingsValue)}</>}
+            {' '}· debt {formatMoney(val.debt)}
+          </span>
         </div>
       </div>
 
@@ -182,6 +187,44 @@ export function CompanyDashboard(): React.ReactElement {
           })}
         </tbody>
       </table>
+      {(() => {
+        const stakes = Object.keys(firm.sharesHeld)
+          .sort()
+          .filter((tid) => (firm.sharesHeld[tid] ?? 0) > 0);
+        if (stakes.length === 0) return null;
+        return (
+          <div className="card" style={{ marginTop: 8 }}>
+            <div className="muted small" style={{ marginBottom: 4 }}>Your portfolio</div>
+            {stakes.map((tid) => {
+              const pct = firm.sharesHeld[tid] ?? 0;
+              const basis = firm.shareCostBasis[tid] ?? 0;
+              const mark = Math.round((pct * marketCap(state, tid)) / 100);
+              const gain = mark - basis;
+              const target = state.firms[tid];
+              // Same estimate as the standings rows: 7-day average of the
+              // target's positive net profit at the 30% payout ratio, pro-rata.
+              const recent = (target?.accounting.dailyHistory ?? []).slice(-7);
+              const avgPool =
+                recent.length === 0
+                  ? 0
+                  : (recent.reduce((s, d) => s + Math.max(0, d.netProfit), 0) / recent.length) *
+                    DIVIDEND_PAYOUT_RATIO;
+              const dividend = (avgPool * pct) / 100;
+              return (
+                <div className="kv small" key={tid}>
+                  <span className="k">{target?.name ?? tid} · {pct}%</span>
+                  <span>
+                    basis <span className="mono">{formatMoney(basis)}</span>
+                    {' '}· mark <span className="mono">{formatMoney(mark)}</span>
+                    {' '}· <span className="mono" style={{ color: gain < 0 ? 'var(--red)' : 'var(--green)' }}>{formatMoney(gain)}</span>
+                    {' '}· ~<span className="mono">{formatMoney(dividend)}</span>/day
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        );
+      })()}
       <p className="muted small" style={{ marginTop: 4 }}>
         Owning a rival's shares pays you their percentage of a 30% daily profit
         distribution (partial stakes cap at 49%). A full buyout costs 1.3× valuation

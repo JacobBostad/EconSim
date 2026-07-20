@@ -58,6 +58,8 @@ export function SoundDirector(): React.ReactElement | null {
       else if (playerName && fresh.some((m) =>
         m.includes(`locally from ${playerName}`) || m.includes(`order to ${playerName}`))) playNews('good');
       else if (playerName && fresh.some((m) => m.includes(`dropped ${playerName}`))) playNews('bad');
+      // A founder moving into a gap the player left open — same build sting.
+      else if (fresh.some((m) => m.includes('📰 New competition'))) playBuildChime();
       else if (fresh.some((m) => m.includes('opens a roastery') || m.includes('built') && m.includes('Residences'))) playBuildChime();
     }
 

@@ -19,14 +19,16 @@ import {
   ACQUISITION_PREMIUM_DISTRESSED,
   MAX_STAKE_PCT,
 } from '../data/constants';
-import { companyValuation } from '../selectors/companySelectors';
+import { marketCap } from '../selectors/companySelectors';
 
-/** Price to buy the target outright right now (net of shares already held). */
+/** Price to buy the target outright right now (net of shares already held).
+ * Priced off marketCap — the same number 1% trades at ×100 — so a creeping
+ * acquisition and a clean takeover value the firm identically. */
 export function acquisitionCost(state: GameState, buyerId: FirmId, targetId: FirmId): number {
   const target = state.firms[targetId];
   const buyer = state.firms[buyerId];
   if (!target || !buyer) return 0;
-  const val = companyValuation(state, targetId).valuation;
+  const val = marketCap(state, targetId);
   const premium =
     target.bankruptcyStatus === 'healthy'
       ? ACQUISITION_PREMIUM_HEALTHY
@@ -112,14 +114,19 @@ export function performAcquisition(
   }
 
   // Share bookkeeping: stakes IN the target vanish (bought out); the target's
-  // own stakes transfer to the buyer.
-  for (const hid in s.firms) delete s.firms[hid]!.sharesHeld[targetId];
+  // own stakes transfer to the buyer along with their cost basis.
+  for (const hid in s.firms) {
+    delete s.firms[hid]!.sharesHeld[targetId];
+    delete s.firms[hid]!.shareCostBasis[targetId];
+  }
   for (const tid in target.sharesHeld) {
     if (tid === buyer.id) continue;
     buyer.sharesHeld[tid] = Math.min(
       MAX_STAKE_PCT,
       (buyer.sharesHeld[tid] ?? 0) + target.sharesHeld[tid]!,
     );
+    buyer.shareCostBasis[tid] =
+      (buyer.shareCostBasis[tid] ?? 0) + (target.shareCostBasis[tid] ?? 0);
   }
 
   buyer.acquiredNames.push(target.name);

@@ -44,6 +44,10 @@ export type LedgerCategory =
   | 'loanRepay'
   | 'buildSpend'
   | 'importPurchase'
+  | 'dividendIn'
+  | 'dividendOut'
+  | 'shareBuy'
+  | 'shareSell'
   | 'none';
 
 export interface Transaction {

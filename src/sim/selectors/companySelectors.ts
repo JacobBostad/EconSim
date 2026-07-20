@@ -199,8 +199,13 @@ export interface Valuation {
   cash: number;
   inventoryValue: number;
   assetValue: number; // book value of built facilities
+  /** Stakes in other firms, marked to market (their marketCap × pct). */
+  holdingsValue: number;
   debt: number;
-  netWorth: number; // cash + inventory + assets − debt
+  netWorth: number; // cash + inventory + assets + holdings − debt
+  /** Net worth WITHOUT holdings — the collateral base for loans, so marked
+   * stakes can never collateralize a leverage spiral. */
+  operatingNetWorth: number;
   /** Enterprise value: net worth plus an earnings multiple on recent net profit. */
   valuation: number;
 }
@@ -208,15 +213,25 @@ export interface Valuation {
 const EARNINGS_MULTIPLE = 30;
 
 /**
- * Company valuation — net worth plus a P/E-style premium on recent daily net
- * profit. Profitable, well-capitalised firms are worth more, so growing
- * valuation (not just cash) is the scoreboard metric.
+ * P/E-style premium on the 7-day average daily net profit. Sustained losses
+ * now discount the price below book — a firm burning cash is cheaper than a
+ * break-even one — but never below half its positive net worth (the hard
+ * assets still exist and would be recovered in liquidation).
  */
-export function companyValuation(state: GameState, firmId: FirmId): Valuation {
+function earningsPremium(netWorth: number, avgNet: number): number {
+  if (avgNet >= 0) return avgNet * EARNINGS_MULTIPLE;
+  return Math.max(avgNet * EARNINGS_MULTIPLE, -Math.max(0, netWorth) / 2);
+}
+
+/**
+ * Operating valuation — a firm priced on its OWN business only: cash +
+ * inventory + facility book value − debt, plus the earnings premium. Held
+ * stakes are excluded; this is the term other firms' marks are built from,
+ * which keeps cross-holding valuation a closed form instead of a fixed point.
+ */
+function operatingValuationOf(state: GameState, firmId: FirmId): number {
   const firm = state.firms[firmId];
-  if (!firm) {
-    return { cash: 0, inventoryValue: 0, assetValue: 0, debt: 0, netWorth: 0, valuation: 0 };
-  }
+  if (!firm) return 0;
   const inventoryValue = firmInventoryValue(state, firmId);
   let assetValue = 0;
   for (const fac of firmFacilities(state, firmId)) {
@@ -228,8 +243,65 @@ export function companyValuation(state: GameState, firmId: FirmId): Valuation {
   const avgNet = recent.length
     ? recent.reduce((s, d) => s + d.netProfit, 0) / recent.length
     : 0;
-  const valuation = Math.round(netWorth + Math.max(0, avgNet) * EARNINGS_MULTIPLE);
-  return { cash: firm.cash, inventoryValue, assetValue, debt: firm.debt, netWorth, valuation };
+  return Math.round(netWorth + earningsPremium(netWorth, avgNet));
+}
+
+/**
+ * Market capitalization — what the whole firm trades at: its operating
+ * valuation plus its stakes marked at the COUNTERPARTIES' operating
+ * valuations (depth 1, deterministic). Share trades and buyouts price off
+ * this, so buying a holding company buys its portfolio.
+ */
+export function marketCap(state: GameState, firmId: FirmId): number {
+  const firm = state.firms[firmId];
+  if (!firm) return 0;
+  let holdings = 0;
+  for (const tid of Object.keys(firm.sharesHeld).sort()) {
+    const pct = firm.sharesHeld[tid] ?? 0;
+    if (pct > 0) holdings += Math.round((pct * operatingValuationOf(state, tid)) / 100);
+  }
+  return operatingValuationOf(state, firmId) + holdings;
+}
+
+/**
+ * Company valuation — net worth plus a P/E-style premium on recent daily net
+ * profit, with held stakes marked at their current sale price (the target's
+ * marketCap). Buying a stake at market therefore leaves the buyer's
+ * valuation unchanged: cash out, an equal mark in. Growing valuation (not
+ * just cash) is the scoreboard metric — and since dividends received now
+ * count as net profit, a holding company's income stream earns the same
+ * multiple as an operator's.
+ */
+export function companyValuation(state: GameState, firmId: FirmId): Valuation {
+  const firm = state.firms[firmId];
+  if (!firm) {
+    return {
+      cash: 0, inventoryValue: 0, assetValue: 0, holdingsValue: 0,
+      debt: 0, netWorth: 0, operatingNetWorth: 0, valuation: 0,
+    };
+  }
+  const inventoryValue = firmInventoryValue(state, firmId);
+  let assetValue = 0;
+  for (const fac of firmFacilities(state, firmId)) {
+    if (fac.type === 'home' || fac.status === 'closed') continue;
+    assetValue += fac.buildCost;
+  }
+  let holdingsValue = 0;
+  for (const tid of Object.keys(firm.sharesHeld).sort()) {
+    const pct = firm.sharesHeld[tid] ?? 0;
+    if (pct > 0) holdingsValue += Math.round((pct * marketCap(state, tid)) / 100);
+  }
+  const operatingNetWorth = firm.cash + inventoryValue + assetValue - firm.debt;
+  const netWorth = operatingNetWorth + holdingsValue;
+  const recent = firm.accounting.dailyHistory.slice(-7);
+  const avgNet = recent.length
+    ? recent.reduce((s, d) => s + d.netProfit, 0) / recent.length
+    : 0;
+  const valuation = Math.round(netWorth + earningsPremium(netWorth, avgNet));
+  return {
+    cash: firm.cash, inventoryValue, assetValue, holdingsValue,
+    debt: firm.debt, netWorth, operatingNetWorth, valuation,
+  };
 }
 
 export interface FacilityPnLRow {
