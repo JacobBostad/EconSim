@@ -19,14 +19,16 @@ import {
   ACQUISITION_PREMIUM_DISTRESSED,
   MAX_STAKE_PCT,
 } from '../data/constants';
-import { companyValuation } from '../selectors/companySelectors';
+import { marketCap } from '../selectors/companySelectors';
 
-/** Price to buy the target outright right now (net of shares already held). */
+/** Price to buy the target outright right now (net of shares already held).
+ * Priced off marketCap — the same number 1% trades at ×100 — so a creeping
+ * acquisition and a clean takeover value the firm identically. */
 export function acquisitionCost(state: GameState, buyerId: FirmId, targetId: FirmId): number {
   const target = state.firms[targetId];
   const buyer = state.firms[buyerId];
   if (!target || !buyer) return 0;
-  const val = companyValuation(state, targetId).valuation;
+  const val = marketCap(state, targetId);
   const premium =
     target.bankruptcyStatus === 'healthy'
       ? ACQUISITION_PREMIUM_HEALTHY

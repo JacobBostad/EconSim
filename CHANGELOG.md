@@ -30,6 +30,18 @@ hireable managers, a real commodity market, and shared daily play.
   plus ~$1k of dividend income, fully conserved (previously the same play
   looked like destroying $11k on day one).
 
+- **Market friction** (investing overhaul, Phase 2): the stock market
+  earns the same respect as the commodity desk. Every share trade pays a
+  3% fee and fills along half its own price impact (0.4%/percent), with
+  the displaced quote mean-reverting 20%/day toward fair value — the free
+  round-trip timing play now loses ≥4% of notional. Sustained losses
+  discount a firm below book value (bounded at half its net worth), and
+  buyouts price off the same marketCap a 1% stake trades at, so creeping
+  acquisition and clean takeover agree. The Company dashboard gains a
+  Your-portfolio card (per-stake cost basis, mark, unrealized P&L,
+  dividend estimate), and the advisor now warns (🏗️) when an unserved
+  staple market is drawing an AI founder — claim it or compete with it.
+
 ## Economy & AI depth
 
 - **AI rival personalities**: every AI firm has a named CEO with an archetype

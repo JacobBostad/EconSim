@@ -14,7 +14,7 @@ function firstAiId(state: ReturnType<ReturnType<typeof newSim>['getState']>): st
 }
 
 describe('Investing: stakes on the balance sheet', () => {
-  it('buying a stake at market leaves the buyer valuation unchanged', () => {
+  it('buying a stake at market costs only the trading friction, not the stake', () => {
     const sim = newSim(3);
     const state = sim.getState();
     const player = state.firms[state.playerFirmId]!;
@@ -23,16 +23,55 @@ describe('Investing: stakes on the balance sheet', () => {
 
     const before = companyValuation(state, player.id);
     expect(before.holdingsValue).toBe(0);
-    const price = sharePricePerPct(state, target);
+    const cash0 = player.cash;
     sim.dispatch({ type: 'BUY_SHARES', firmId: player.id, targetFirmId: target, percent: 10 });
 
     const after = companyValuation(state, player.id);
+    const paid = cash0 - player.cash;
     expect(player.sharesHeld[target]).toBe(10);
-    expect(player.shareCostBasis[target]).toBe(10 * price);
-    // Cash out, an equal mark in: the scoreboard no longer punishes investing.
+    expect(player.shareCostBasis[target]).toBe(paid); // all-in cost, fees included
+    // Cash out, a near-equal mark in: only the fee + half-impact (~5%) is
+    // consumed — nothing like the old full-purchase-price crater.
     expect(after.holdingsValue).toBe(Math.round((10 * marketCap(state, target)) / 100));
-    expect(after.holdingsValue).toBeGreaterThan(0);
-    expect(Math.abs(after.valuation - before.valuation)).toBeLessThanOrEqual(100); // rounding cents only
+    const drop = before.valuation - after.valuation;
+    expect(drop).toBeGreaterThan(0); // friction is real
+    expect(drop).toBeLessThanOrEqual(Math.round(paid * 0.08)); // and bounded
+    // The buy pushed the resting quote up (mean-reverts daily).
+    expect(state.sharePriceShift[target]).toBeCloseTo(0.04, 5);
+  });
+
+  it('the round-trip timing exploit is dead: buy + immediate sell loses the spread', () => {
+    const sim = newSim(3);
+    const state = sim.getState();
+    const player = state.firms[state.playerFirmId]!;
+    player.cash = 100000_00;
+    const target = firstAiId(state);
+    const cash0 = player.cash;
+    sim.dispatch({ type: 'BUY_SHARES', firmId: player.id, targetFirmId: target, percent: 10 });
+    sim.dispatch({ type: 'SELL_SHARES', firmId: player.id, targetFirmId: target, percent: 10 });
+    const loss = cash0 - player.cash;
+    // Two 3% fees plus walking the impact curve both ways: ~5%+ of notional.
+    const notional = Math.round((10 * marketCap(state, target)) / 100);
+    expect(loss).toBeGreaterThanOrEqual(Math.round(notional * 0.04));
+    expect(player.sharesHeld[target]).toBeUndefined();
+  });
+
+  it('price displacement decays back to fair value day by day', () => {
+    const sim = newSim(3);
+    const state = sim.getState();
+    const player = state.firms[state.playerFirmId]!;
+    player.cash = 100000_00;
+    const target = firstAiId(state);
+    sim.dispatch({ type: 'BUY_SHARES', firmId: player.id, targetFirmId: target, percent: 20 });
+    const shift0 = state.sharePriceShift[target]!;
+    expect(shift0).toBeGreaterThan(0);
+    sim.run(ticksPerDay(state.config));
+    const shift1 = state.sharePriceShift[target] ?? 0;
+    expect(shift1).toBeLessThan(shift0);
+    // Old saves default the displacement map to empty.
+    const raw = JSON.parse(serialize(state)) as Record<string, unknown>;
+    delete raw.sharePriceShift;
+    expect(deserialize(JSON.stringify(raw)).sharePriceShift).toEqual({});
   });
 
   it('a holding company tracks its portfolio: target grows, holder grows', () => {
@@ -124,7 +163,9 @@ describe('Investing: stakes on the balance sheet', () => {
     player.cash = 100000_00;
     const target = firstAiId(state);
     sim.dispatch({ type: 'BUY_SHARES', firmId: player.id, targetFirmId: target, percent: 10 });
-    // The player's own share price now includes the stake it holds.
+    // The player's own share price now includes the stake it holds (no one
+    // traded PLAYER shares, so its quote sits exactly at fair value).
+    expect(state.sharePriceShift[player.id]).toBeUndefined();
     expect(sharePricePerPct(state, player.id)).toBe(
       Math.max(1, Math.round(marketCap(state, player.id) / 100)),
     );

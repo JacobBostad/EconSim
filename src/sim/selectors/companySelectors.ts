@@ -213,6 +213,17 @@ export interface Valuation {
 const EARNINGS_MULTIPLE = 30;
 
 /**
+ * P/E-style premium on the 7-day average daily net profit. Sustained losses
+ * now discount the price below book — a firm burning cash is cheaper than a
+ * break-even one — but never below half its positive net worth (the hard
+ * assets still exist and would be recovered in liquidation).
+ */
+function earningsPremium(netWorth: number, avgNet: number): number {
+  if (avgNet >= 0) return avgNet * EARNINGS_MULTIPLE;
+  return Math.max(avgNet * EARNINGS_MULTIPLE, -Math.max(0, netWorth) / 2);
+}
+
+/**
  * Operating valuation — a firm priced on its OWN business only: cash +
  * inventory + facility book value − debt, plus the earnings premium. Held
  * stakes are excluded; this is the term other firms' marks are built from,
@@ -232,7 +243,7 @@ function operatingValuationOf(state: GameState, firmId: FirmId): number {
   const avgNet = recent.length
     ? recent.reduce((s, d) => s + d.netProfit, 0) / recent.length
     : 0;
-  return Math.round(netWorth + Math.max(0, avgNet) * EARNINGS_MULTIPLE);
+  return Math.round(netWorth + earningsPremium(netWorth, avgNet));
 }
 
 /**
@@ -286,7 +297,7 @@ export function companyValuation(state: GameState, firmId: FirmId): Valuation {
   const avgNet = recent.length
     ? recent.reduce((s, d) => s + d.netProfit, 0) / recent.length
     : 0;
-  const valuation = Math.round(netWorth + Math.max(0, avgNet) * EARNINGS_MULTIPLE);
+  const valuation = Math.round(netWorth + earningsPremium(netWorth, avgNet));
   return {
     cash: firm.cash, inventoryValue, assetValue, holdingsValue,
     debt: firm.debt, netWorth, operatingNetWorth, valuation,

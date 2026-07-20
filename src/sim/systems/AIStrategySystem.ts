@@ -333,7 +333,8 @@ function maybeBuyShares(ctx: SimContext, firmId: string): void {
   }
   if (!target) return;
 
-  const cost = 5 * sharePricePerPct(state, target);
+  // Fees and fill impact land on top of the quote — budget with headroom.
+  const cost = Math.round(5 * sharePricePerPct(state, target) * 1.05);
   if (firm.cash - cost < AI_SHARE_CASH_FLOOR) return;
 
   // Same path as the player's BUY_SHARES — any market rule applies to AI too.

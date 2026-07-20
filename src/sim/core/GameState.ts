@@ -174,6 +174,12 @@ export interface GameState {
   emigrationDepartures: number;
   /** Consecutive days each staple has had no staffed seller (AI founders). */
   marketGapDays: Record<string, number>;
+  /**
+   * Share-price displacement per firm: recent trades push the quote away
+   * from fair value (marketCap), decaying back daily. Liquidity noise only —
+   * valuation marks always use the undisplaced marketCap.
+   */
+  sharePriceShift: Record<FirmId, number>;
   /** Last lapsed fire sale — that facility cools down before re-listing. */
   lastLapsedFireSale: { facilityId: FacilityId; day: number } | null;
 

@@ -174,3 +174,17 @@ export const FOUNDER_MIN_POPULATION = 30;
 /** Founding capital, paid in from the world account (conserved): a starter
  * chain (~$8-10k at land prices) plus working-capital runway. */
 export const FOUNDER_CASH = dollars(22000);
+
+// --- Stock market friction (see docs/design/stock-market.md, Phase 2) -------
+/** Brokerage fee on every share trade, both directions, paid to the world —
+ * with the price impact below this makes round-trip timing plays lose. */
+export const SHARE_TRADE_FEE = 0.03;
+/** Resting-price displacement per percent traded: buys push the quote up,
+ * sells push it down (the fill itself walks the half-impact curve, exactly
+ * like the commodity desk). */
+export const SHARE_PRICE_IMPACT_PER_PCT = 0.004;
+/** Fraction of the displacement retained each day — it mean-reverts to the
+ * fair value (marketCap) as the market digests the trade. */
+export const SHARE_SHIFT_DECAY = 0.8;
+/** Displacement never exceeds ±25% of fair value. */
+export const SHARE_SHIFT_MAX = 0.25;

@@ -2,25 +2,28 @@ import { describe, it, expect } from 'vitest';
 import { newSim, findFirmByName } from './helpers';
 import { makeContext, totalMoneySupply } from '../core/GameState';
 import { runDividendSystem } from '../systems/DividendSystem';
-import { companyValuation } from '../selectors/companySelectors';
+import { marketCap } from '../selectors/companySelectors';
 import { MAX_STAKE_PCT } from '../data/constants';
 
 const TPD = 48;
 
 describe('Stock market', () => {
-  it('buying shares costs valuation-based cash and records the stake', () => {
+  it('buying shares costs market-priced cash plus friction, and records the stake', () => {
     const sim = newSim(201);
     const state = sim.getState();
     const player = state.firms[state.playerFirmId]!;
     const target = findFirmByName(state, 'Sunrise Foods');
-    const price = Math.max(1, Math.round(companyValuation(state, target.id).valuation / 100));
+    const fair = Math.max(1, Math.round(marketCap(state, target.id) / 100));
     const cashBefore = player.cash;
     const moneyBefore = totalMoneySupply(state);
 
     sim.dispatch({ type: 'BUY_SHARES', firmId: player.id, targetFirmId: target.id, percent: 10 });
 
     expect(player.sharesHeld[target.id]).toBe(10);
-    expect(player.cash).toBe(cashBefore - price * 10);
+    const paid = cashBefore - player.cash;
+    // Fair notional plus the 3% fee and half the order's own impact.
+    expect(paid).toBeGreaterThan(fair * 10);
+    expect(paid).toBeLessThanOrEqual(Math.round(fair * 10 * 1.06));
     expect(totalMoneySupply(state)).toBe(moneyBefore); // conserved
   });
 

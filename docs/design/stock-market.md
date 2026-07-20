@@ -137,30 +137,34 @@ Bookkeeping that lands with it:
 Money-conservation fixtures in `stocks.test.ts` and
 `aiCounterplay.test.ts` extend to cover every new flow.
 
-## Phase 2 — market friction
+## Phase 2 — market friction (SHIPPED)
 
-Shares are currently the money-printer the commodity desk was
-explicitly engineered not to be (free round trips at a manipulable
-anchor, P4). Same cure, same template:
+Shares were the money-printer the commodity desk was explicitly
+engineered not to be (free round trips at a manipulable anchor, P4).
+Same cure, same template — as shipped:
 
-- **Bid-ask spread / per-trade fee** on share trades, mirroring
-  `EXPORT_FREIGHT_FEE` (~8%, `constants.ts:91`) — a round trip costs
-  something.
-- **Price impact per percent traded**, mirroring
-  `PRICE_IMPACT_PER_UNIT` (`Trade.ts:32`): each trade displaces the
-  firm's quoted share price off its anchor; the displacement
-  mean-reverts toward `marketCap/100` daily, like the trade-city
-  center-pull. Deterministic via the seeded hash streams.
-- **Smoothed earnings term.** The 30× multiple moves to an EMA of
-  netProfit rather than a raw 7-day average, and sustained losses
-  discount valuation below book (dropping the `max(0, ·)` floor at
-  `companySelectors.ts:226-231`) — a firm burning cash no longer
-  prices like a break-even one, and one-week spikes stop moving buyout
-  prices 30× the anomaly.
+- **Per-trade fee**: `SHARE_TRADE_FEE` = 3% of notional, both
+  directions, paid to the world (`core/Shares.ts`). Booked inside the
+  shareBuy/shareSell ledger amounts; cost basis is all-in.
+- **Price impact**: `SHARE_PRICE_IMPACT_PER_PCT` = 0.004 per percent
+  traded. The order fills along half its own impact (exactly
+  `impactedFillPrice`'s scheme), then displaces the resting quote
+  (`state.sharePriceShift`, clamped ±25%), which decays 20%/day back
+  toward fair value in FinanceSystem — sorted iteration, no rng.
+  Valuation marks always use the UNDISPLACED marketCap: the shift is
+  a liquidity phenomenon, not a change in fair value.
+- **Loss discount**: `earningsPremium` replaces the `max(0, ·)` floor —
+  sustained losses now price a firm below book, bounded at −½ of
+  positive net worth. Buyouts price off `marketCap` (the same number
+  1% trades at ×100), so creeping and clean acquisitions agree.
 
-Selling stays always-available (the current behavior at
-`Simulation.ts:430-439` is right for this sim's scale) — instant exit
-at a knowable price, now the frictioned one.
+Measured: buy+immediate-sell of 10% loses ≥4% of notional (was a free
+round trip); a holding company buying 25% of all three rivals pays
+~7-8% friction on the blocks (large blocks SHOULD cost more) and still
+finishes day 150 at ~$18.5k vs $15k start with ~$1.2k dividend income
+— better than Phase 1 because the loss discount also cheapens its
+distressed buys. Selling stays always-available at the frictioned
+price — instant exit, honest spread.
 
 ## Phase 3 — fair takeovers + control ladder
 

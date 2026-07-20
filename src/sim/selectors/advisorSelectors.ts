@@ -16,6 +16,7 @@ import { getQuantity } from '../entities/Inventory';
 import { formatMoney } from '../../utils/formatMoney';
 import { pickBestCity } from '../core/Trade';
 import { getTradeCity } from '../data/tradeCities';
+import { FOUNDER_GAP_DAYS, FOUNDER_MAX_AI_FIRMS } from '../data/constants';
 
 export interface Advice {
   icon: string;
@@ -208,6 +209,33 @@ export function morningBriefing(state: GameState): Advice[] {
       severity: 'warning',
       text: `Families are close to leaving town — ${state.emigrationPressure} straight days of deep misery. Raise wages, fill shelves, or watch your customers move away.`,
     });
+  }
+
+  // Open market closing: a staple gap has run half the founder clock. Capital
+  // is watching the same counter the founder system reads — warn while the
+  // player can still claim the market instead of meeting a new rival in it.
+  const aiFirms = Object.values(state.firms).filter((f) => f.ownerType === 'ai').length;
+  if (aiFirms < FOUNDER_MAX_AI_FIRMS) {
+    for (const pid of ['bread', 'tools', 'clothes']) {
+      const gap = state.marketGapDays[pid] ?? 0;
+      if (gap < FOUNDER_GAP_DAYS / 2) continue;
+      const playerSells = player.facilities.some((fid) => {
+        const fac = state.facilities[fid];
+        return (
+          !!fac &&
+          fac.status !== 'closed' &&
+          fac.employees.length > 0 &&
+          fac.retailProductIds.includes(pid)
+        );
+      });
+      if (playerSells) continue;
+      items.push({
+        icon: '🏗️',
+        severity: 'warning',
+        text: `Nobody sells ${getProduct(pid).name} — a rival will move in if the gap persists (${gap}/${FOUNDER_GAP_DAYS} days). Claim the market first.`,
+      });
+      break; // one open-market warning per briefing
+    }
   }
 
   const order = { danger: 0, warning: 1, info: 2 };

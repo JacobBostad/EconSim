@@ -243,6 +243,7 @@ export function createInitialState(
     emigrationPressure: 0,
     emigrationDepartures: 0,
     marketGapDays: {},
+    sharePriceShift: {},
     lastLapsedFireSale: null,
     townHistory: [],
     idCounters: counters,
