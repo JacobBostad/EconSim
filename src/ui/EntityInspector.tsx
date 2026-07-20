@@ -8,6 +8,7 @@ import React from 'react';
 import { useGameStore } from '../store/useGameStore';
 import type { GameState } from '../sim/core/GameState';
 import type { Facility } from '../sim/entities/Facility';
+import { crowdCount } from '../sim/entities/Facility';
 import type { Citizen } from '../sim/entities/Citizen';
 import type { Firm } from '../sim/entities/Firm';
 import type { Vehicle } from '../sim/entities/Vehicle';
@@ -75,6 +76,14 @@ function FacilityView({ fac, state }: { fac: Facility; state: GameState }): Reac
         <div className="kv small">
           <span className="k">Rent income</span>
           <span className="mono">{formatMoney(fac.residentIds.length * APARTMENT_RENT_PER_DAY)}/day</span>
+        </div>
+      )}
+      {/* Crowd staffing is City-preset only; a Village facility has none, so
+          this line never appears and the panel stays bit-identical there. */}
+      {crowdCount(fac) > 0 && (
+        <div className="kv small">
+          <span className="k">Staff</span>
+          <span className="mono">{fac.employees.length} named + {crowdCount(fac)} crowd</span>
         </div>
       )}
       <Inv title="Input" inv={fac.inputInventory} />

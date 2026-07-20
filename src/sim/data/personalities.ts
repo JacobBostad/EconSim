@@ -36,6 +36,20 @@ export interface Personality {
   expandChanceMult: number;
   /** Daily chance of an unprompted R&D investment. */
   rndChance: number;
+  /**
+   * Appetite for parking cash in rival equity (Arc B2, city-scale only). Scales
+   * the yield-buy cadence, the target stake cap, and how little cash the firm
+   * keeps back — aggressive acquirers (expansionist, price_fighter, both of
+   * whom already have 'shares' quips) buy more; brand/export builders hoard for
+   * their own operations. Neutral 1.0 leaves the Village path (which never
+   * reads it) untouched. */
+  stakeAppetite: number;
+  /**
+   * Dividend payout stance (Arc B2, city-scale only): a multiplier on the base
+   * DIVIDEND_PAYOUT_RATIO. Growth personas retain (<1) to fund expansion;
+   * income / thin-margin personas distribute (>1). Neutral 1.0 keeps Village
+   * dividends bit-identical (DividendSystem only applies it at city scale). */
+  dividendMult: number;
   /** Multiplier on the stock an exporter keeps at home (lower = ships more). */
   exportKeepMult: number;
   /** Lowest wholesale asking price (fraction of market) this CEO will cut to
@@ -55,6 +69,8 @@ export const NEUTRAL: Personality = {
   penetrationTarget: 0.78,
   expandChanceMult: 1,
   rndChance: 0.15,
+  stakeAppetite: 1,
+  dividendMult: 1,
   exportKeepMult: 1,
   wholesaleFloor: 0.7,
   ceoNames: [],
@@ -72,6 +88,10 @@ export const PERSONALITIES: Record<PersonalityId, Personality> = {
     penetrationTarget: 0.7,
     expandChanceMult: 1,
     rndChance: 0.08,
+    // Aggressive: "if you can't beat them, own them." Buys stakes eagerly and,
+    // a small margin-thin income tilt.
+    stakeAppetite: 1.3,
+    dividendMult: 1.1,
     exportKeepMult: 1,
     wholesaleFloor: 0.55,
     ceoNames: ['Vera Stone', 'Otto Krieg', 'Sal Marchetti'],
@@ -92,6 +112,10 @@ export const PERSONALITIES: Record<PersonalityId, Personality> = {
     penetrationTarget: 0.85,
     expandChanceMult: 1,
     rndChance: 0.2,
+    // Conservative acquirer, growth-retaining: hoards cash for ads/quality and
+    // keeps a little more inside to build the brand.
+    stakeAppetite: 0.6,
+    dividendMult: 0.9,
     exportKeepMult: 1,
     wholesaleFloor: 0.68,
     ceoNames: ['Mara Voss', 'Julian Bright', 'Coco Delacroix'],
@@ -112,6 +136,10 @@ export const PERSONALITIES: Record<PersonalityId, Personality> = {
     penetrationTarget: 0.78,
     expandChanceMult: 2.5,
     rndChance: 0.12,
+    // Most aggressive acquirer: "today a stake, tomorrow the street." Retains
+    // to fund the next store.
+    stakeAppetite: 1.6,
+    dividendMult: 0.85,
     exportKeepMult: 1,
     wholesaleFloor: 0.62,
     ceoNames: ['Ada Sterling', 'Ray Calloway', 'Petra Lindqvist'],
@@ -132,6 +160,10 @@ export const PERSONALITIES: Record<PersonalityId, Personality> = {
     penetrationTarget: 0.78,
     expandChanceMult: 1,
     rndChance: 0.12,
+    // Conservative acquirer but cash-generative — ships goods, not capital, and
+    // distributes a little more of the trade income it throws off.
+    stakeAppetite: 0.7,
+    dividendMult: 1.15,
     exportKeepMult: 0.5,
     wholesaleFloor: 0.72,
     ceoNames: ['Ines Marlowe', 'Dmitri Volkov', 'June Okafor'],

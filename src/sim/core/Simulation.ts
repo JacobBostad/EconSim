@@ -74,15 +74,21 @@ import { runMarketingSystem } from '../systems/MarketingSystem';
 import { runFinanceSystem } from '../systems/FinanceSystem';
 import { runDividendSystem } from '../systems/DividendSystem';
 import { runImmigrationSystem } from '../systems/ImmigrationSystem';
+import { runCastCuratorSystem } from '../systems/CastCuratorSystem';
 import { runAIFounderSystem } from '../systems/AIFounderSystem';
+import { runDistrictSystem } from '../systems/DistrictSystem';
 import { runSatisfactionSystem } from '../systems/SatisfactionSystem';
+import { runCohortSocialSystem } from '../systems/CohortSocialSystem';
 import { runAccountingSystem } from '../systems/AccountingSystem';
 import { runPayrollSystem } from '../systems/PayrollSystem';
 import { runRentSystem } from '../systems/RentSystem';
+import { runCrowdRentSystem } from '../systems/CrowdRentSystem';
 import { runTownStatsSystem } from '../systems/TownStatsSystem';
 import { runCitizenScheduleSystem } from '../systems/CitizenScheduleSystem';
 import { runMovementSystem } from '../systems/MovementSystem';
 import { runLaborSystem, hireCitizen, fireCitizen, findUnemployed, trainCrew } from '../systems/LaborSystem';
+import { runCohortLaborSystem } from '../systems/CohortLaborSystem';
+import { runCohortDemandSystem } from '../systems/CohortDemandSystem';
 import { runProductionSystem } from '../systems/ProductionSystem';
 import { runLogisticsSystem } from '../systems/LogisticsSystem';
 import { runRetailDemandSystem } from '../systems/RetailDemandSystem';
@@ -103,6 +109,7 @@ const SYSTEMS: SystemFn[] = [
   runRushOrderSystem, // rush offers/expiry after prices land (own rng stream)
   runFireSaleSystem, // rival fire-sale offers/expiry (own rng stream)
   runMarketStatsSystem, // finalize previous day's stats; hourly inventory totals
+  runDistrictSystem, // daily district desirability cache (dark until A3 reads it)
   runAIStrategySystem, // AI reacts using the finalized day (sets ad/R&D/loans)
   runManagerSystem, // hired managers run their stores (after AI, same signals)
   runEventLogSystem, // player-facing alerts (before daily stats are reset)
@@ -112,16 +119,21 @@ const SYSTEMS: SystemFn[] = [
   runBankruptcySystem,
   runSatisfactionSystem,
   runTierSystem, // prosperity ladder: derives tiers after satisfaction lands
+  runCohortSocialSystem, // crowd satisfaction, tier mobility, migration (A3)
   runTownStatsSystem, // record daily town vitals after the satisfaction step
   runImmigrationSystem, // a prosperous town attracts new citizens
+  runCastCuratorSystem, // keep the cast a faithful sample of the crowd (A3; cast arrivals land first)
   runAIFounderSystem, // ...and its unserved markets attract new rivals
   runRentSystem, // apartment rent (before accounting snapshots the day)
+  runCrowdRentSystem, // crowd housing cost: the pool-drift sink + crowd-scale landlording (A3)
   runAccountingSystem, // maintenance + snapshot + reset daily accumulators
   runPayrollSystem,
   // --- per-tick simulation ---
   runCitizenScheduleSystem,
   runMovementSystem,
   runLaborSystem,
+  runCohortLaborSystem, // crowd fills remaining slots + counts as present (A3)
+  runCohortDemandSystem, // crowd shops the shelves in shop-window slices (A3)
   runProductionSystem,
   runLogisticsSystem,
   runRetailDemandSystem,

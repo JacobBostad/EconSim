@@ -14,7 +14,7 @@ import { emptyFacilityDailyStats } from './Facility';
 import type { Citizen, CitizenNeed } from './Citizen';
 import type { Rng } from '../core/Random';
 import { getFacilityDef } from '../data/facilityDefinitions';
-import { CONSUMER_PRODUCT_IDS } from '../data/products';
+import { CONSUMER_PRODUCT_IDS, PRODUCTS, ALL_PRODUCT_IDS } from '../data/products';
 import { FIRST_NAMES, LAST_NAMES } from '../data/names';
 
 export function createFacility(
@@ -52,6 +52,8 @@ export function createFacility(
     presentWorkers: 0,
     presentSkill: 0,
     builtAtTick: state.tick,
+    crowdByCohort: {},
+    crowdTenants: 0,
     level: 1,
     workerCapacity: def.workerCapacity,
     exportOrders: {},
@@ -64,115 +66,47 @@ export function createFacility(
   return fac;
 }
 
-/** Standard recurring needs for a citizen (same ranges the scenario uses). */
+/**
+ * Standard recurring needs for a citizen — generated from each product's
+ * needSpec (see entities/Product.ts), in explicit spec `order` so the seeded
+ * draw sequence never shifts when products are added. A range draws from the
+ * stream; a fixed number (luxury cravings start at 0) consumes no draw —
+ * exactly the pattern of the old hand-authored table.
+ */
 export function makeCitizenNeeds(rng: Rng): CitizenNeed[] {
-  return [
-    {
-      productId: 'bread',
-      urgency: rng.range(0.2, 0.9),
-      urgencyGrowthPerDay: rng.range(0.55, 0.75),
-      preferredQuantity: 2,
-      maxAffordablePriceMultiplier: rng.range(1.4, 1.8),
+  const specced = ALL_PRODUCT_IDS
+    .map((id) => PRODUCTS[id]!)
+    .filter((p) => p.needSpec)
+    .sort((a, b) => a.needSpec!.order - b.needSpec!.order);
+  return specced.map((p) => {
+    const s = p.needSpec!;
+    return {
+      productId: p.id,
+      urgency: typeof s.urgency0 === 'number' ? s.urgency0 : rng.range(s.urgency0[0], s.urgency0[1]),
+      urgencyGrowthPerDay: rng.range(s.growthPerDay[0], s.growthPerDay[1]),
+      preferredQuantity: s.preferredQuantity,
+      maxAffordablePriceMultiplier: rng.range(s.maxPriceMult[0], s.maxPriceMult[1]),
       lastSatisfiedTick: 0,
-    },
-    {
-      productId: 'tools',
-      urgency: rng.range(0, 0.4),
-      // Durables are wanted every ~4 days; keep demand near what the
-      // town's production capacity can actually satisfy (see balance notes).
-      urgencyGrowthPerDay: rng.range(0.22, 0.32),
-      preferredQuantity: 1,
-      maxAffordablePriceMultiplier: rng.range(1.3, 1.6),
-      lastSatisfiedTick: 0,
-    },
-    {
-      // A cheap daily ritual: small ticket, high frequency — the demand sink
-      // that soaks up idle citizen cash. Nobody sells it at start; first
-      // mover owns the morning rush.
-      productId: 'coffee',
-      urgency: rng.range(0.1, 0.6),
-      // One cup a day (~20% of a base wage): a habit, not a wallet drain —
-      // at 2 cups/day coffee ate ~44% of income and starved staple demand.
-      urgencyGrowthPerDay: rng.range(0.35, 0.5),
-      preferredQuantity: 1,
-      maxAffordablePriceMultiplier: rng.range(1.5, 1.9),
-      lastSatisfiedTick: 0,
-    },
-    {
-      productId: 'clothes',
-      urgency: rng.range(0, 0.5),
-      urgencyGrowthPerDay: rng.range(0.2, 0.3),
-      preferredQuantity: 1,
-      maxAffordablePriceMultiplier: rng.range(1.35, 1.65),
-      lastSatisfiedTick: 0,
-    },
-    // Luxury cravings only grow for satisfied, well-off citizens
-    // (gated in SatisfactionSystem).
-    {
-      productId: 'pastries',
-      urgency: 0,
-      urgencyGrowthPerDay: rng.range(0.1, 0.18),
-      preferredQuantity: 1,
-      maxAffordablePriceMultiplier: rng.range(1.2, 1.6),
-      lastSatisfiedTick: 0,
-    },
-    {
-      productId: 'jewelry',
-      urgency: 0,
-      urgencyGrowthPerDay: rng.range(0.03, 0.07),
-      preferredQuantity: 1,
-      maxAffordablePriceMultiplier: rng.range(1.1, 1.4),
-      lastSatisfiedTick: 0,
-    },
-  ];
+    };
+  });
 }
 
 /**
- * Default need used when normalizing old saves that predate a product
- * (mid-range values, no rng so migration stays deterministic).
+ * Default need used when normalizing old saves that predate a product —
+ * the spec's hand-pinned migration values (no rng, so migration stays
+ * deterministic and byte-compatible with the historical table).
  */
 export function defaultNeedFor(productId: string): CitizenNeed | null {
-  if (productId === 'clothes') {
-    return {
-      productId: 'clothes',
-      urgency: 0.25,
-      urgencyGrowthPerDay: 0.21,
-      preferredQuantity: 1,
-      maxAffordablePriceMultiplier: 1.5,
-      lastSatisfiedTick: 0,
-    };
-  }
-  if (productId === 'coffee') {
-    return {
-      productId: 'coffee',
-      urgency: 0.3,
-      urgencyGrowthPerDay: 0.42,
-      preferredQuantity: 1,
-      maxAffordablePriceMultiplier: 1.7,
-      lastSatisfiedTick: 0,
-    };
-  }
-  if (productId === 'pastries') {
-    return {
-      productId: 'pastries',
-      urgency: 0,
-      urgencyGrowthPerDay: 0.14,
-      preferredQuantity: 1,
-      maxAffordablePriceMultiplier: 1.4,
-      lastSatisfiedTick: 0,
-    };
-  }
-  if (productId === 'jewelry') {
-    return {
-      productId: 'jewelry',
-      urgency: 0,
-      urgencyGrowthPerDay: 0.05,
-      preferredQuantity: 1,
-      maxAffordablePriceMultiplier: 1.25,
-      lastSatisfiedTick: 0,
-    };
-  }
-  return null;
+  const spec = PRODUCTS[productId]?.needSpec;
+  if (!spec) return null;
+  return {
+    productId,
+    urgency: spec.migration.urgency,
+    urgencyGrowthPerDay: spec.migration.growthPerDay,
+    preferredQuantity: spec.preferredQuantity,
+    maxAffordablePriceMultiplier: spec.migration.maxPriceMult,
+    lastSatisfiedTick: 0,
+  };
 }
 
 /** Create a citizen at runtime (used by immigration). Cash starts at 0 —

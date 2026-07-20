@@ -5,8 +5,14 @@ import { Simulation } from '../core/Simulation';
 import { createInitialState } from '../data/startingScenario';
 import type { GameState } from '../core/GameState';
 import { totalMoneySupply } from '../core/GameState';
-import { runAIFounderSystem, founderRoll } from '../systems/AIFounderSystem';
-import { FOUNDER_EARLIEST_DAY, FOUNDER_GAP_DAYS } from '../data/constants';
+import { runAIFounderSystem, founderRoll, founderMaxAiFirms } from '../systems/AIFounderSystem';
+import {
+  FOUNDER_EARLIEST_DAY,
+  FOUNDER_GAP_DAYS,
+  FOUNDER_UNDERSUPPLY_COOLDOWN,
+} from '../data/constants';
+import { DEFAULT_CONFIG, SIZE_PRESETS } from '../core/SimulationConfig';
+import type { MarketDaySnapshot } from '../entities/Market';
 import { serialize, deserialize } from '../persistence/saveLoad';
 import { morningBriefing } from '../selectors/advisorSelectors';
 
@@ -103,5 +109,170 @@ describe('AI founders', () => {
     const sim = new Simulation(state);
     sim.dispatch({ type: 'BUILD_CHAIN', firmId: player.id, productId: 'bread' });
     expect(morningBriefing(state).some((a) => a.icon === '🏗️')).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Preset caps — the SIZE_PRESETS fields are now read, not dead.
+// ---------------------------------------------------------------------------
+describe('AI founder — preset scale wiring', () => {
+  it('the founder AI-firm cap resolves per preset (village stays exactly 6)', () => {
+    expect(founderMaxAiFirms({ ...DEFAULT_CONFIG, sizePreset: 'village' })).toBe(6);
+    expect(founderMaxAiFirms({ ...DEFAULT_CONFIG, sizePreset: 'city' })).toBe(
+      SIZE_PRESETS.city.founderMaxAiFirms,
+    );
+    expect(founderMaxAiFirms({ ...DEFAULT_CONFIG, sizePreset: 'metropolis' })).toBe(
+      SIZE_PRESETS.metropolis.founderMaxAiFirms,
+    );
+    expect(SIZE_PRESETS.city.founderMaxAiFirms).toBe(18);
+    expect(SIZE_PRESETS.metropolis.founderMaxAiFirms).toBe(30);
+  });
+
+  it('createInitialState raises the cast/home ceilings for non-Village presets only', () => {
+    const village = createInitialState(11, { ...DEFAULT_CONFIG, sizePreset: 'village' });
+    expect(village.config.maxCitizens).toBe(DEFAULT_CONFIG.maxCitizens); // untouched (80)
+    expect(village.config.maxHomes).toBe(DEFAULT_CONFIG.maxHomes); // untouched (40)
+
+    const city = createInitialState(11, { ...DEFAULT_CONFIG, sizePreset: 'city' });
+    expect(city.config.maxCitizens).toBe(SIZE_PRESETS.city.castTarget); // 150
+    // Homes hold 2, plus a few spares for odd/partial fills.
+    expect(city.config.maxHomes).toBe(Math.ceil(SIZE_PRESETS.city.castTarget / 2) + 4);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// City under-supply signal — capital answers a persistent paying shortage in
+// an OCCUPIED market. Village must be structurally immune (referee: the whole
+// suite above, which runs at Village size, must stay green).
+// ---------------------------------------------------------------------------
+
+/** Overwrite a product's finalized history with `days` of a fixed fill-rate so
+ * the founder loop reads a persistent shortage — nothing else touches history
+ * in these driver-only harnesses. */
+function pinShortage(state: GameState, pid: string, sold: number, unmet: number, days = 20): void {
+  const stat = state.marketStats[pid]!;
+  const snaps: MarketDaySnapshot[] = [];
+  for (let d = 0; d < days; d++) {
+    snaps.push({
+      day: d,
+      averagePrice: 100,
+      unitsSold: sold,
+      unmetDemand: unmet,
+      totalInventory: 0,
+      sharesByFirm: {},
+      tradePrice: 0,
+    });
+  }
+  stat.history = snaps;
+}
+
+/** Drive only the founder system at day boundaries, holding the whole town's
+ * satisfaction below the immigration ceiling so the total-VACANCY path (which
+ * keeps that gate) never fires — isolating the under-supply path. */
+function runFounderDaysMiserable(state: GameState, days: number): void {
+  const tpd = ticksPerDay(state.config);
+  for (let i = 0; i < days; i++) {
+    state.tick += tpd - (state.tick % tpd || tpd) + tpd;
+    for (const c of Object.values(state.citizens)) c.satisfaction = 30;
+    for (const cid in state.cohorts) state.cohorts[cid]!.avgSatisfaction = 30;
+    runAIFounderSystem({
+      state, config: state.config, rng: new Rng(state),
+      time: computeTime(state.tick, state.config),
+    });
+  }
+}
+
+describe('AI founder — city under-supply entry', () => {
+  it('a persistent bread shortage draws a founder into the occupied market — conserved', () => {
+    const state = createInitialState(11, { ...DEFAULT_CONFIG, sizePreset: 'city' });
+    const supply0 = totalMoneySupply(state);
+    const startAi = aiCount(state);
+    expect(startAi).toBeGreaterThan(0); // City opens with incumbent bakeries
+    // Bread is SOLD (occupied) but chronically starved: ~45% fill.
+    pinShortage(state, 'bread', 300, 400);
+
+    // Nobody enters before the first-mover window closes, even mid-shortage.
+    runFounderDaysMiserable(state, FOUNDER_EARLIEST_DAY - 5);
+    expect(aiCount(state)).toBe(startAi);
+
+    // ...then within the ~60-120 day window a competitor moves in on bread.
+    runFounderDaysMiserable(state, 70);
+    expect(aiCount(state)).toBeGreaterThan(startAi);
+    expect(totalMoneySupply(state)).toBe(supply0); // founding capital is conserved
+    // The newest AI firm sells bread and was announced as an under-supply entry.
+    const bakerySellers = Object.values(state.firms).filter(
+      (f) => f.ownerType === 'ai' && f.facilities.some((fid) => {
+        const fac = state.facilities[fid];
+        return !!fac && fac.retailProductIds.includes('bread');
+      }),
+    );
+    expect(bakerySellers.length).toBeGreaterThan(1); // more bread sellers than before
+    expect(
+      state.events.some((e) => e.message.includes("shelves can't keep up")),
+    ).toBe(true);
+  });
+
+  it('under-supply entries are rate-limited town-wide (one per cooldown)', () => {
+    const state = createInitialState(11, { ...DEFAULT_CONFIG, sizePreset: 'city' });
+    pinShortage(state, 'bread', 300, 400);
+    // Get past the first-mover window and let the first entry land.
+    runFounderDaysMiserable(state, FOUNDER_EARLIEST_DAY + 20);
+    const afterFirst = aiCount(state);
+    const dayAfterFirst = state.lastUndersupplyEntryDay;
+    expect(dayAfterFirst).toBeGreaterThan(0);
+
+    // Within the cooldown, the still-present shortage must NOT spawn a second.
+    runFounderDaysMiserable(state, FOUNDER_UNDERSUPPLY_COOLDOWN - 2);
+    expect(aiCount(state)).toBe(afterFirst);
+    expect(state.lastUndersupplyEntryDay).toBe(dayAfterFirst);
+
+    // Past the cooldown (shortage persists), one more may enter.
+    runFounderDaysMiserable(state, 6);
+    expect(aiCount(state)).toBeGreaterThanOrEqual(afterFirst);
+    expect(state.lastUndersupplyEntryDay).toBeGreaterThan(dayAfterFirst);
+  });
+
+  it('Village never accumulates the under-supply streak, even under a shortage', () => {
+    const state = createInitialState(11, undefined, 'dust_hollow'); // Village
+    pinShortage(state, 'bread', 300, 400);
+    const startAi = aiCount(state);
+    runFounderDaysMiserable(state, FOUNDER_EARLIEST_DAY + 60);
+    // The streak counter is never touched at Village size...
+    expect(state.marketUndersupplyDays['bread'] ?? 0).toBe(0);
+    // ...and no under-supply entry ever occurs (the miserable town also fails
+    // the vacancy path's satisfaction gate, so nothing founds at all).
+    expect(aiCount(state)).toBe(startAi);
+    expect(state.lastUndersupplyEntryDay).toBe(0);
+  });
+
+  it('the crowd-scale sim closes the bread shortage (founders enter, fill-rate recovers)', () => {
+    const state = createInitialState(11, { ...DEFAULT_CONFIG, sizePreset: 'city' });
+    const supply0 = totalMoneySupply(state);
+    const sim = new Simulation(state);
+    sim.dispatch({ type: 'RESUME' });
+    const startAi = aiCount(state);
+    const tpd = ticksPerDay(state.config);
+    sim.run(tpd * 130); // 130 crowd-running days
+
+    // Founders answered the shortage: more AI firms than the City opened with.
+    expect(aiCount(state)).toBeGreaterThan(startAi);
+
+    // Bread fill-rate over the last 14 finalized days has recovered well above
+    // the ~0.5 baseline the un-wired loop plateaued at (city-soak finding (a)).
+    // The bar sits AT the under-supply founder trigger (0.65): the worker
+    // catch-up (a fixed WORKER_CATCHUP_BASKETS top-up per urgent-need visit)
+    // makes the cast's TRUE staple demand visible, which grows the demand
+    // denominator and settles equilibrium fill near ~0.67 instead of ~0.72 —
+    // but an equilibrium BELOW the trigger would mean founders never stop
+    // firing, so the trigger is the honest floor.
+    const hist = state.marketStats['bread']!.history;
+    let sold = 0, unmet = 0;
+    for (let i = Math.max(0, hist.length - 14); i < hist.length; i++) {
+      sold += hist[i]!.unitsSold;
+      unmet += hist[i]!.unmetDemand;
+    }
+    const fillRate = sold / (sold + unmet);
+    expect(fillRate).toBeGreaterThan(0.65);
+    expect(totalMoneySupply(state)).toBe(supply0); // money conserved across the run
   });
 });

@@ -27,11 +27,12 @@ import { createFacility } from '../entities/factories';
 import type { Contract } from '../entities/Contract';
 import { hireCitizen, fireCitizen, findUnemployed } from './LaborSystem';
 import { clamp } from '../../utils/clamp';
-import { CENTS, RND_QUALITY_GAIN_PER_1000, MAX_RETAIL_PRODUCTS, IMPORT_MARKUP, WHOLESALE_DISCOUNT } from '../data/constants';
+import { CENTS, RND_QUALITY_GAIN_PER_1000, MAX_RETAIL_PRODUCTS, IMPORT_MARKUP, WHOLESALE_DISCOUNT, MAX_STAKE_PCT, DIVIDEND_PAYOUT_RATIO } from '../data/constants';
 import { wholesaleUnitPrice, localSurplus } from '../core/Wholesale';
 import { worldImportMult } from '../data/worldEvents';
-import { marketCap } from '../selectors/companySelectors';
+import { marketCap, operatingValuationOf } from '../selectors/companySelectors';
 import { tradeShares, sharePricePerPct } from '../core/Shares';
+import { smoothedProfitBase } from './DividendSystem';
 import { acquisitionCost, performAcquisition } from '../core/Acquisition';
 import { landCostMultiplier, landValueAt } from '../core/LandValue';
 import { MAX_FACILITY_LEVEL, upgradeCost, upgradeFacility } from '../core/Upgrades';
@@ -308,11 +309,21 @@ function maybeExpand(ctx: SimContext, firmId: string): void {
  * player's!) for dividend income — 5% at a time, capped at a 25% stake, and
  * never spending below a healthy cash buffer. Mirrors the pricing used by the
  * player's BUY_SHARES command so the market feels consistent.
+ *
+ * Two dispatchers by scale. Village keeps the classic "buy into the most
+ * valuable rival" path verbatim — every rng draw in the exact order it always
+ * took — so the 300-day bit-identity baseline is untouched. City routes to the
+ * Arc B2 yield-based path (maybeBuyStakeCity), which is structurally impossible
+ * to reach in a Village, so none of its new logic can perturb that baseline.
  */
 const AI_SHARE_CASH_FLOOR = 35000_00; // keep at least $35k after buying
 const AI_MAX_STAKE = 25;
 
 function maybeBuyShares(ctx: SimContext, firmId: string): void {
+  if (ctx.state.config.sizePreset !== 'village') {
+    maybeBuyStakeCity(ctx, firmId);
+    return;
+  }
   const { state, rng } = ctx;
   const firm = state.firms[firmId]!;
   if (firm.cash < AI_SHARE_CASH_FLOOR || !rng.chance(0.12)) return;
@@ -341,6 +352,82 @@ function maybeBuyShares(ctx: SimContext, firmId: string): void {
   if (tradeShares(state, firmId, target, 5)) {
     emitEvent(state, 'info', 'ai',
       `${firm.name} now holds ${firm.sharesHeld[target]}% of ${state.firms[target]!.name}.${ceoQuote(rng, firm, 'shares')}`,
+      target);
+  }
+}
+
+/**
+ * Arc B2 — city-scale yield-based stake buying. A solvent, flush AI parks
+ * surplus cash in the rival whose dividend pays the most per dollar of price:
+ * the target's smoothed dividend base over its marketCap (the same base the
+ * dividend actually pays from — DividendSystem.smoothedProfitBase). Only
+ * profitable, healthy, operating-solvent firms qualify — the classic "highest
+ * valuation" rule (Village) happily bought the priciest firm about to fold,
+ * paying the most per dividend dollar; this inverts that.
+ *
+ * RNG discipline: this deliberately keeps the Village path's exact draw
+ * structure — the same $35k floor short-circuit, the same rng.chance(0.12)
+ * cadence, the same 5% block size, the same ceoQuote(rng) on success — and
+ * changes ONLY deterministic logic (which target, and the persona-scaled cap).
+ * The city economy is chaotic and the A3 crowd/tier acceptance bands are pinned
+ * to its rng trajectory; perturbing the draw cadence (not just the outcome)
+ * reshuffles that trajectory wholesale. Persona appetite therefore expresses
+ * "aggressive personalities buy more" through the deterministic stake CAP — an
+ * expansionist accumulates toward 40%, an exporter stops near 18% — not through
+ * frequency, so no rng draw moves. tradeShares enforces MAX_STAKE_PCT, the city
+ * float cap, the 3% fee and price impact; a stake reaching CONTROL_BLOCK_PCT
+ * earns the takeover veto through the same ladder the player uses.
+ */
+const AI_CITY_STAKE_BASE_CAP = 25; // neutral stake cap; scaled by appetite (≤ MAX_STAKE_PCT)
+// Minimum trailing yield (smoothed daily net ÷ marketCap) worth buying for.
+// Pinned by the city-soak B2 probe: below this the dividend after the 3% fee is
+// noise; the surviving buyers at day 300 clear well above it (seed 11).
+const AI_CITY_YIELD_MIN = 0.0005;
+
+function maybeBuyStakeCity(ctx: SimContext, firmId: string): void {
+  const { state, rng } = ctx;
+  const firm = state.firms[firmId]!;
+  // Identical gate to the Village path: same floor, same cadence draw, same
+  // order — so the shared rng stream advances the same way regardless of scale.
+  if (firm.cash < AI_SHARE_CASH_FLOOR || !rng.chance(0.12)) return;
+
+  const appetite = getPersonality(firm.personalityId).stakeAppetite;
+  const cap = Math.min(MAX_STAKE_PCT, Math.round(AI_CITY_STAKE_BASE_CAP * appetite));
+
+  // Highest dividend yield among profitable, healthy, operating-solvent rivals
+  // we can still add to. Sorted scan with a strict-greater compare → the lowest
+  // firm id wins a tie, deterministically.
+  let target: string | null = null;
+  let bestYield = AI_CITY_YIELD_MIN;
+  for (const fid of Object.keys(state.firms).sort()) {
+    if (fid === firmId) continue;
+    const other = state.firms[fid]!;
+    if (other.ownerType !== 'player' && other.ownerType !== 'ai') continue;
+    if (other.bankruptcyStatus !== 'healthy') continue; // never buy into trouble
+    if ((firm.sharesHeld[fid] ?? 0) >= cap) continue;
+    const base = smoothedProfitBase(other);
+    if (base <= 0) continue; // only firms actually earning
+    if (operatingValuationOf(state, fid) <= 0) continue; // operating-valuation sanity
+    const mcap = marketCap(state, fid);
+    if (mcap <= 0) continue;
+    const yieldSignal = base / mcap;
+    if (yieldSignal > bestYield) {
+      bestYield = yieldSignal;
+      target = fid;
+    }
+  }
+  if (!target) return;
+
+  const want = Math.min(5, cap - (firm.sharesHeld[target] ?? 0)); // 5% block, capped by appetite
+  if (want <= 0) return;
+  // Fees + fill impact land on top of the quote — budget with headroom.
+  const cost = Math.round(want * sharePricePerPct(state, target) * 1.05);
+  if (firm.cash - cost < AI_SHARE_CASH_FLOOR) return;
+
+  if (tradeShares(state, firmId, target, want)) {
+    const yieldPct = (bestYield * DIVIDEND_PAYOUT_RATIO * 365 * 100).toFixed(0);
+    emitEvent(state, 'info', 'ai',
+      `${firm.name} took a ${firm.sharesHeld[target]}% dividend stake in ${state.firms[target]!.name} (~${yieldPct}%/yr yield).${ceoQuote(rng, firm, 'shares')}`,
       target);
   }
 }

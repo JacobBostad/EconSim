@@ -19,11 +19,11 @@ import type {
   ProductId,
 } from './Id';
 
-export type AccountKind = 'firm' | 'citizen' | 'world';
+export type AccountKind = 'firm' | 'citizen' | 'world' | 'cohort';
 
 export interface AccountRef {
   kind: AccountKind;
-  id: string | null; // firm/citizen id, or null for world
+  id: string | null; // firm/citizen/cohort id, or null for world
 }
 
 /**
@@ -70,3 +70,6 @@ export function citizenAccount(id: CitizenId): AccountRef {
   return { kind: 'citizen', id };
 }
 export const WORLD_ACCOUNT: AccountRef = { kind: 'world', id: null };
+export function cohortAccount(id: string): AccountRef {
+  return { kind: 'cohort', id };
+}

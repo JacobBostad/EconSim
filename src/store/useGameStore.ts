@@ -66,7 +66,7 @@ interface GameStore {
   setSpeed: (speed: Speed) => void;
   togglePause: () => void;
 
-  newGame: (seed?: number, difficulty?: Difficulty, scenarioId?: string, challenge?: boolean, size?: 'cozy' | 'bustling') => void;
+  newGame: (seed?: number, difficulty?: Difficulty, scenarioId?: string, challenge?: boolean, size?: 'cozy' | 'bustling', world?: 'village' | 'city') => void;
   save: () => void;
   load: () => void;
   hasSave: () => boolean;
@@ -147,15 +147,18 @@ export const useGameStore = create<GameStore>((set, get) => {
       bump(true);
     },
 
-    newGame: (seed = Math.floor(Math.random() * 1_000_000), difficulty = 'standard', scenarioId = 'meadowbrook', challenge = false, size = 'cozy') => {
+    newGame: (seed = Math.floor(Math.random() * 1_000_000), difficulty = 'standard', scenarioId = 'meadowbrook', challenge = false, size = 'cozy', world = 'village') => {
       // The 4s autosave would overwrite the old town within seconds of a new
       // game — stash it in the backup slot so a mis-click never costs a run.
       const old = get().sim.getState();
       if (old.tick > 0) saveGame(old, BACKUP_SLOT);
       const sizeOverrides =
         size === 'bustling' ? { maxHomes: 80, maxCitizens: 160, mapHeight: 124 } : {};
+      // World scale drives the cohort economy: 'city' turns the crowd on;
+      // 'village' (default) keeps the classic all-agent town bit-for-bit.
+      const worldOverride = world === 'city' ? { sizePreset: 'city' as const } : {};
       get().sim.setState(
-        createInitialState(seed, { ...configForDifficulty(difficulty), challengeMode: challenge, ...sizeOverrides }, scenarioId),
+        createInitialState(seed, { ...configForDifficulty(difficulty), challengeMode: challenge, ...sizeOverrides, ...worldOverride }, scenarioId),
       );
       recordTownFounded();
       set({ buildDefId: null, showNewGame: false });

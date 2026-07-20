@@ -12,9 +12,11 @@
 import type { GameState, SimContext } from '../core/GameState';
 import { formatMoney } from '../../utils/formatMoney';
 import { canAfford, emitEvent, recordTransaction } from '../core/GameState';
-import { firmAccount, WORLD_ACCOUNT } from '../core/Transactions';
+import { firmAccount, citizenAccount, WORLD_ACCOUNT } from '../core/Transactions';
+import type { AccountRef } from '../core/Transactions';
 import { isDayBoundary } from '../core/Tick';
 import type { FacilityId, CitizenId } from '../core/Id';
+import type { Citizen } from '../entities/Citizen';
 import { clamp } from '../../utils/clamp';
 
 /** Daily skill drift: practice on the job, rust off it. */
@@ -129,6 +131,42 @@ export function fireCitizen(
   cit.role = 'unemployed';
   cit.wage = 0;
   return true;
+}
+
+/**
+ * Remove a citizen from the world entirely, cleaning up every reference the
+ * town holds to them. This is the ONE removal path — extracted verbatim from
+ * ImmigrationSystem's emigration so departures and cast retirements share
+ * identical bookkeeping (the 300-day Village baseline is the referee): fire
+ * from any job, vacate the home, hand the citizen's savings to `cashTo`, drop
+ * any selection, and delete the record.
+ *
+ * The savings transfer routes through recordTransaction so money is conserved
+ * no matter where the citizen goes — the world account when they leave town,
+ * a cohort pool when they settle into the crowd. `cashTo` must already resolve
+ * to a live account (create the cohort before calling, if need be).
+ */
+export function removeCitizen(
+  state: GameState,
+  citizen: Citizen,
+  cashTo: AccountRef,
+  note: string,
+): void {
+  if (citizen.workplaceFacilityId) fireCitizen(state, citizen.workplaceFacilityId, citizen.id);
+  const home = state.facilities[citizen.homeFacilityId];
+  if (home) home.residentIds = home.residentIds.filter((id) => id !== citizen.id);
+  if (citizen.cash > 0) {
+    recordTransaction(state, {
+      from: citizenAccount(citizen.id),
+      to: cashTo,
+      amount: citizen.cash,
+      firmId: null,
+      category: 'none',
+      note,
+    });
+  }
+  if (state.selectedEntityId === citizen.id) state.selectedEntityId = null;
+  delete state.citizens[citizen.id];
 }
 
 /** First unemployed citizen id, or null. Deterministic by insertion order. */

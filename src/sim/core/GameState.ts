@@ -39,6 +39,15 @@ import { nextId } from './Id';
 
 export const SAVE_VERSION = 1;
 
+/**
+ * Dev/test builds fail loud on invariant violations (a settlement against a
+ * dead account); production keeps running. Vite defines import.meta.env.DEV
+ * (true under Vitest and `vite dev`, false in a production build); default to
+ * strict when the flag is absent so a bare runtime still catches the bug.
+ */
+const IS_DEV: boolean =
+  (import.meta as unknown as { env?: { DEV?: boolean } }).env?.DEV ?? true;
+
 export interface PerfMetrics {
   lastTickMs: number;
   avgTickMs: number;
@@ -174,12 +183,24 @@ export interface GameState {
   emigrationDepartures: number;
   /** Consecutive days each staple has had no staffed seller (AI founders). */
   marketGapDays: Record<string, number>;
+  /** Consecutive days each staple's smoothed town fill-rate has stayed below
+   * the under-supply threshold — the city-scale founder signal for an occupied
+   * but starved market (Village never accumulates it). */
+  marketUndersupplyDays: Record<string, number>;
+  /** Day of the last town-wide under-supply founder entry, for the entry
+   * rate-limit (0 = none yet). */
+  lastUndersupplyEntryDay: number;
   /**
    * Share-price displacement per firm: recent trades push the quote away
    * from fair value (marketCap), decaying back daily. Liquidity noise only —
    * valuation marks always use the undisplaced marketCap.
    */
   sharePriceShift: Record<FirmId, number>;
+  /** City districts — metadata partition of the map (world-scale, HD6). */
+  districts: Record<string, import('../entities/District').District>;
+  /** Crowd demographics beyond the simulated cast (world-scale, HD1).
+   * Empty at Village size — every Village town behaves exactly as before. */
+  cohorts: Record<string, import('../entities/Cohort').Cohort>;
   /** Last lapsed fire sale — that facility cools down before re-listing. */
   lastLapsedFireSale: { facilityId: FacilityId; day: number } | null;
 
@@ -216,7 +237,26 @@ export function makeContext(state: GameState): SimContext {
 function getAccountCash(state: GameState, ref: AccountRef): number {
   if (ref.kind === 'world') return state.worldCash;
   if (ref.kind === 'firm') return state.firms[ref.id!]?.cash ?? 0;
+  if (ref.kind === 'cohort') return state.cohorts[ref.id!]?.cashPool ?? 0;
   return state.citizens[ref.id!]?.cash ?? 0;
+}
+
+/**
+ * Whether an account reference resolves to a live holder. The world account
+ * always exists; a firm/cohort/citizen ref is valid only while that entity is
+ * still in state. A settlement against a vanished counterparty (a firm deleted
+ * mid-day by an acquisition, a citizen who emigrated) must not move money on
+ * only one side — see the guard in recordTransaction.
+ */
+function accountExists(state: GameState, ref: AccountRef): boolean {
+  if (ref.kind === 'world') return true;
+  if (ref.kind === 'firm') return !!state.firms[ref.id!];
+  if (ref.kind === 'cohort') return !!state.cohorts[ref.id!];
+  return !!state.citizens[ref.id!];
+}
+
+function describeAccount(ref: AccountRef): string {
+  return ref.kind === 'world' ? 'world' : `${ref.kind}:${ref.id ?? 'null'}`;
 }
 
 function addAccountCash(state: GameState, ref: AccountRef, delta: number): void {
@@ -227,6 +267,11 @@ function addAccountCash(state: GameState, ref: AccountRef, delta: number): void 
   if (ref.kind === 'firm') {
     const f = state.firms[ref.id!];
     if (f) f.cash += delta;
+    return;
+  }
+  if (ref.kind === 'cohort') {
+    const co = state.cohorts[ref.id!];
+    if (co) co.cashPool += delta;
     return;
   }
   const c = state.citizens[ref.id!];
@@ -264,6 +309,36 @@ export function recordTransaction(
   input: TransactionInput,
 ): Transaction {
   const amount = Math.round(input.amount);
+
+  // Both accounts must resolve, or money would move on only one side (a mint
+  // or burn). This fires when a counterparty died mid-settlement — a firm
+  // deleted by an acquisition, a citizen who emigrated. Fail loud in dev so
+  // the offending caller is fixed; in production skip the transfer atomically
+  // (both sides or neither) and keep the game running rather than corrupting
+  // the money supply.
+  const fromOk = accountExists(state, input.from);
+  const toOk = accountExists(state, input.to);
+  if (!fromOk || !toOk) {
+    const detail =
+      `recordTransaction: unresolved ${!fromOk ? 'from' : 'to'} account ` +
+      `(${describeAccount(input.from)} -> ${describeAccount(input.to)}), ` +
+      `category '${input.category}', amount ${amount}`;
+    if (IS_DEV) throw new Error(detail);
+    console.error(detail);
+    return {
+      id: nextId(state.idCounters, 'txn'),
+      tick: state.tick,
+      from: input.from,
+      to: input.to,
+      amount: 0,
+      firmId: input.firmId,
+      category: input.category,
+      productId: input.productId ?? null,
+      quantity: input.quantity ?? 0,
+      note: input.note ?? '',
+    };
+  }
+
   addAccountCash(state, input.from, -amount);
   addAccountCash(state, input.to, amount);
 
@@ -399,10 +474,11 @@ export function emitEvent(
   }
 }
 
-/** Total money across citizens + firms + world (should be constant). */
+/** Total money across citizens + firms + cohorts + world (constant). */
 export function totalMoneySupply(state: GameState): number {
   let sum = state.worldCash;
   for (const id in state.firms) sum += state.firms[id]!.cash;
   for (const id in state.citizens) sum += state.citizens[id]!.cash;
+  for (const id in state.cohorts) sum += state.cohorts[id]!.cashPool;
   return sum;
 }

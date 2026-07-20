@@ -22,6 +22,8 @@ import { getFacilityDef } from '../data/facilityDefinitions';
 import { defaultPersonalityFor, defaultCeoFor, type PersonalityId } from '../data/personalities';
 import { TRADE_CITY_IDS, cityBias } from '../data/tradeCities';
 import { marketCap } from '../selectors/companySelectors';
+import { defaultDistrictPartition } from '../data/districts';
+import { seedNeedBuckets } from '../entities/Cohort';
 
 type Raw = Record<string, unknown>;
 
@@ -91,7 +93,19 @@ function normalize(state: GameState): GameState {
   state.emigrationPressure = state.emigrationPressure ?? 0;
   state.emigrationDepartures = state.emigrationDepartures ?? 0;
   state.marketGapDays = state.marketGapDays ?? {};
+  state.marketUndersupplyDays = state.marketUndersupplyDays ?? {};
+  state.lastUndersupplyEntryDay = state.lastUndersupplyEntryDay ?? 0;
   state.sharePriceShift = state.sharePriceShift ?? {};
+  state.config.sizePreset = state.config.sizePreset ?? 'village';
+  state.districts = state.districts ?? defaultDistrictPartition(state.config);
+  state.cohorts = state.cohorts ?? {};
+  // Cohorts saved before the demand engine landed carry no urgency buckets;
+  // seed them at the baseline default (no-op for Village saves — empty map).
+  for (const cid in state.cohorts) {
+    const co = state.cohorts[cid]!;
+    co.needBuckets = co.needBuckets ?? seedNeedBuckets();
+    co.dayEvents = co.dayEvents ?? { fulfilled: 0, unmet: 0, pricedOut: 0 };
+  }
   state.lastLapsedFireSale = state.lastLapsedFireSale ?? null;
   // Prosperity tiers: pre-tier saves get a one-shot snapshot guess (no
   // streak history), then TierSystem takes over with hysteresis.
@@ -191,6 +205,8 @@ function normalize(state: GameState): GameState {
     f.level = f.level ?? 1;
     f.workerCapacity = f.workerCapacity ?? getFacilityDef(f.defId).workerCapacity;
     f.exportOrders = f.exportOrders ?? {};
+    f.crowdByCohort = f.crowdByCohort ?? {};
+    f.crowdTenants = f.crowdTenants ?? 0;
     f.builtAtTick = f.builtAtTick ?? 0;
     f.dailyStats.bottleneck = f.dailyStats.bottleneck ?? null;
     f.dailyStats.pricedOut = f.dailyStats.pricedOut ?? 0;

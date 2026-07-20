@@ -20,7 +20,8 @@ import { recordTransaction, emitEvent } from '../core/GameState';
 import { citizenAccount, WORLD_ACCOUNT } from '../core/Transactions';
 import { isDayBoundary } from '../core/Tick';
 import { createFacility, createCitizen } from '../entities/factories';
-import { fireCitizen } from './LaborSystem';
+import { firstFreeDistrictSlot, type SlotSpec } from '../core/DistrictSlots';
+import { removeCitizen } from './LaborSystem';
 import {
   IMMIGRATION_MIN_SATISFACTION,
   IMMIGRATION_MAX_UNEMPLOYED_FLOOR,
@@ -56,6 +57,10 @@ export function homeSlotFor(index: number, mapHeight: number): { x: number; y: n
   if (y > mapHeight - 4) return null;
   return { x: baseX + col * 11, y };
 }
+
+/** Home slot grid for City/Metropolis residential districts — the 11×8 spacing
+ * the legacy Village blocks used, so density reads the same on the big maps. */
+export const HOME_SLOT_SPEC: SlotSpec = { stepX: 11, stepY: 8, margin: 4, clearRadius: 6 };
 
 /** Comfortable+affluent share above which newcomers arrive skilled. */
 export const PROSPEROUS_SHARE = 0.4;
@@ -123,21 +128,9 @@ function runEmigration(
   const gone = pick;
 
   const wasJobless = gone.employmentStatus === 'unemployed';
-  if (gone.workplaceFacilityId) fireCitizen(state, gone.workplaceFacilityId, gone.id);
-  const home = state.facilities[gone.homeFacilityId];
-  if (home) home.residentIds = home.residentIds.filter((id) => id !== gone.id);
-  if (gone.cash > 0) {
-    recordTransaction(state, {
-      from: citizenAccount(gone.id),
-      to: WORLD_ACCOUNT,
-      amount: gone.cash,
-      firmId: null,
-      category: 'none',
-      note: 'Departed with savings',
-    });
-  }
-  if (state.selectedEntityId === gone.id) state.selectedEntityId = null;
-  delete state.citizens[gone.id];
+  // Their savings leave with them (paid back to the world account, the mirror
+  // of arrival cash). Shared removal path — see removeCitizen.
+  removeCitizen(state, gone, WORLD_ACCOUNT, 'Departed with savings');
   state.emigrationDepartures += 1;
 
   const reason = wasJobless
@@ -199,7 +192,14 @@ export function runImmigrationSystem(ctx: SimContext): void {
   }
   if (homeId === null) {
     if (homes >= ctx.config.maxHomes) return;
-    const slot = homeSlotFor(Math.max(0, homes - 20), ctx.config.mapHeight);
+    // Village keeps the legacy column march EXACTLY (bit-identity contract — the
+    // 300-day baseline pins these coordinates). City/Metropolis enumerate free
+    // slots inside residential districts, so homes stay in shopping reach of the
+    // commercial core instead of marching off the south edge (A4).
+    const slot =
+      ctx.config.sizePreset === 'village'
+        ? homeSlotFor(Math.max(0, homes - 20), ctx.config.mapHeight)
+        : firstFreeDistrictSlot(state, 'residential', HOME_SLOT_SPEC);
     if (!slot) return; // geographically full
     const home = createFacility(state, 'home', state.worldFirmId, slot, { name: `Home ${homes + 1}` });
     homeId = home.id;

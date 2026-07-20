@@ -1,4 +1,83 @@
-# Changelog — `claude/business-sim-game-enhancement` branch
+# Changelog
+
+## World-scale roadmap (in progress — see docs/design/ for the plan)
+
+The current arc rebuilds the engine for real-world scale: population in the
+thousands via statistical cohorts plus a fully-simulated cast, districts,
+25-30 firms, a broad product catalog, and specialist firm archetypes
+(real estate, investing, business services).
+
+- **Arc A3 complete — the City lives**: the crowd has a society
+  (CohortSocialSystem: satisfaction with real purchase/stockout nudges,
+  tier mobility on cohort-owned wealth signals, desirability-weighted
+  migration), pays rent (apartment blocks house crowd renters for their
+  landlords; everyone else pays the world — the sink that bounds the
+  pools), and the cast stays a faithful largest-remainder sample of it
+  (CastCuratorSystem retire/promote swaps). Supply answers demand: AI
+  founders enter occupied markets on persistent under-supply, and the
+  cast's true staple demand is visible through urgent-need catch-up
+  baskets. Final 300-day acceptance on three seeds: tier bands landed
+  (worker 59-66%, comfortable 32-39%), cast-vs-cohort satisfaction gap
+  1.3-3.5 points, money conserved to the cent, ~0.2ms/tick. City (beta)
+  is selectable in New Game; golden save v7 and City determinism guards
+  lock it in. Affluent stays a thin 2-3% top tier until product breadth
+  and physical districts give luxury a labor supply — measured and
+  documented, not assumed.
+- **The crowd works and shops (A3 slices 1-2)**: non-Village towns now hold
+  a real crowd. Worker cohorts bootstrap with cash in the residential
+  districts; CohortLaborSystem fills the slots the named cast leaves open
+  (cast always has priority, firms only hire crowd they can afford) and
+  crowd counts as present crew at the cohort's skill; payroll settles one
+  transaction per firm × cohort plus subsistence for idle crowd.
+  CohortDemandSystem settles crowd purchases through the SAME shelves,
+  store scoring, and market signals as the cast — trip-limited demand with
+  10-bucket urgency distributions per product (the shadow-parity probe's
+  measured model, ported wholesale), in 5 shop-window slices interleaved
+  with cast shopping and restocks. Facility inspector and Population
+  dashboard surface crowd staffing and district employment. Village towns
+  re-verified bit-identical at every slice.
+- **B1 — fair takeovers + control ladder**: full acquisitions cash out
+  minority holders at the acquisition price (cost basis released with
+  realized P&L) instead of clipping stakes; recordTransaction refuses to
+  move money against a dead account (both sides or neither); a 25% stake
+  earns board visibility and a 40% stake blocks hostile takeover of the
+  target.
+- **Shadow-cohort parity probe (A2 spike — the gate for A3)**: a prototype
+  cohort demand engine ran beside the live agent town for 300 days × 3
+  seeds with zero state mutation (end-of-run rng state matches the A1
+  baselines exactly). Twenty model iterations later, per-product unit
+  flows track the real economy within ±5% on every macro product on all
+  seeds, the satisfaction formula transfers, and the probe refuted four
+  design assumptions before any A3 code exists — demand is trip-limited
+  (not urgency-rate-limited), cohort urgency needs quantile-bucket
+  distribution state, tier gates need cohort-owned wealth distributions,
+  and the original 2%/day tier flow was 3-4× too slow. Verdict, binding
+  design directives, and the runnable probe are recorded in
+  docs/design/cohorts-and-districts.md and docs/design/probes/.
+- **Districts + dark cohorts (A2)**: the city gains structure without
+  changing a single behavior. Three districts partition the classic map
+  (Iron Row / Midmarket / The Rows) with a daily desirability cache; the
+  crowd's future home — `district × tier` cohorts with REAL cash-pool
+  accounts (a fourth account kind wired through the conservation
+  invariant) — lands empty and dark behind the new `sizePreset` config
+  ('village' = today's game, bit-identical, re-verified against the A1
+  baselines). A Districts panel shows the new geography. Old saves
+  backfill the partition on load; golden saves v1-v6 untouched.
+- **Demand is data now (A1)**: every consumer product declares a `needSpec`
+  (initial urgency, growth, quantity, walkaway price, per-tier appetite,
+  and deterministic migration defaults) and citizen needs are generated
+  from the catalog — the hand-authored need table, the TierSystem
+  growth/price tables, and the migration backfill table all collapsed into
+  one per-product declaration. The seeded draw order is pinned by an
+  explicit `order` field, and the refactor is verified BIT-IDENTICAL:
+  300-day runs on three seeds reproduce the exact pre-change rng state,
+  populations, and satisfaction. Satisfaction gains basket normalization
+  (min(1, W₀/Σw), W₀ = the shipped basket's 3.2): provably inert today,
+  it caps total unmet-need drag once the catalog grows, so each new
+  product redistributes satisfaction exposure instead of stacking
+  unbounded misery on the town.
+
+# Historical — `claude/business-sim-game-enhancement` branch
 
 One continuous development run turning EconSim from a solid simulation into a
 deep, self-explaining economy game. Everything below is tested (119 → 297

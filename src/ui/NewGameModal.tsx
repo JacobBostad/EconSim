@@ -47,6 +47,7 @@ export function NewGameModal(): React.ReactElement | null {
   const [seedText, setSeedText] = useState('');
   const [challenge, setChallenge] = useState(false);
   const [size, setSize] = useState<'cozy' | 'bustling'>('cozy');
+  const [world, setWorld] = useState<'village' | 'city'>('village');
 
   if (!show) return null;
   const records = loadRecords();
@@ -56,7 +57,7 @@ export function NewGameModal(): React.ReactElement | null {
     const seed = Number.isFinite(parsed)
       ? parsed
       : Math.floor(Math.random() * 1_000_000);
-    newGame(seed, difficulty, scenarioId, challenge, size);
+    newGame(seed, difficulty, scenarioId, challenge, size, world);
   };
 
   return (
@@ -120,6 +121,25 @@ export function NewGameModal(): React.ReactElement | null {
             <div style={{ fontSize: 20 }}>🏙️</div>
             <div style={{ fontWeight: 700 }}>Bustling</div>
             <div className="small" style={{ opacity: 0.85 }}>Double the caps (80 homes / 160 citizens) on a taller map — bigger markets, bigger empires.</div>
+          </button>
+        </div>
+        <div className="section-title">World scale</div>
+        <div className="row" style={{ gap: 8, alignItems: 'stretch' }}>
+          <button
+            className={`difficulty-card ${world === 'village' ? 'active' : ''}`}
+            onClick={() => setWorld('village')}
+          >
+            <div style={{ fontSize: 20 }}>🏘️</div>
+            <div style={{ fontWeight: 700 }}>Village</div>
+            <div className="small" style={{ opacity: 0.85 }}>Today’s game — every resident is a named citizen you can follow.</div>
+          </button>
+          <button
+            className={`difficulty-card ${world === 'city' ? 'active' : ''}`}
+            onClick={() => setWorld('city')}
+          >
+            <div style={{ fontSize: 20 }}>🌆</div>
+            <div style={{ fontWeight: 700 }}>City <span className="muted small">(beta)</span></div>
+            <div className="small" style={{ opacity: 0.85 }}>City (beta): a crowd of hundreds — cohort economy beyond your named cast.</div>
           </button>
         </div>
         <label className="small" style={{ display: 'block', marginTop: 10 }}>

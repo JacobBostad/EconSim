@@ -11,7 +11,7 @@ import type { Citizen } from '../entities/Citizen';
 import type { FirmId } from '../core/Id';
 import { grossProfit, operatingProfit, netProfit } from '../entities/Accounting';
 import { getProduct } from '../data/products';
-import { OBJECTIVE_LADDER } from '../data/constants';
+import { OBJECTIVE_LADDER, BOARD_VISIBILITY_PCT } from '../data/constants';
 
 export interface ObjectiveProgress {
   /** Number of ladder tiers already reached (0..ladder length). */
@@ -229,7 +229,7 @@ function earningsPremium(netWorth: number, avgNet: number): number {
  * stakes are excluded; this is the term other firms' marks are built from,
  * which keeps cross-holding valuation a closed form instead of a fixed point.
  */
-function operatingValuationOf(state: GameState, firmId: FirmId): number {
+export function operatingValuationOf(state: GameState, firmId: FirmId): number {
   const firm = state.firms[firmId];
   if (!firm) return 0;
   const inventoryValue = firmInventoryValue(state, firmId);
@@ -301,6 +301,42 @@ export function companyValuation(state: GameState, firmId: FirmId): Valuation {
   return {
     cash: firm.cash, inventoryValue, assetValue, holdingsValue,
     debt: firm.debt, netWorth, operatingNetWorth, valuation,
+  };
+}
+
+/** A significant holder's window into a firm it part-owns (control ladder). */
+export interface BoardView {
+  cash: number;
+  /** 7-day average daily net profit — the same smoothed figure the dashboard
+   * and dividend policy use, not a single noisy day. */
+  netProfit7d: number;
+  facilities: number;
+}
+
+/**
+ * Board visibility (Phase 3 control ladder): a firm holding at least
+ * BOARD_VISIBILITY_PCT of a target sees its books — cash, smoothed net profit,
+ * and facility count. Returns null below the threshold or for a missing firm,
+ * so the UI can gate the panel on a non-null result. Pure metadata; moves no
+ * money and grants no control (the 40% block is separate).
+ */
+export function boardVisibility(
+  state: GameState,
+  holderId: FirmId,
+  targetId: FirmId,
+): BoardView | null {
+  const holder = state.firms[holderId];
+  const target = state.firms[targetId];
+  if (!holder || !target) return null;
+  if ((holder.sharesHeld[targetId] ?? 0) < BOARD_VISIBILITY_PCT) return null;
+  const recent = target.accounting.dailyHistory.slice(-7);
+  const netProfit7d = recent.length
+    ? Math.round(recent.reduce((s, d) => s + d.netProfit, 0) / recent.length)
+    : 0;
+  return {
+    cash: target.cash,
+    netProfit7d,
+    facilities: target.facilities.length,
   };
 }
 

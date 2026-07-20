@@ -81,6 +81,15 @@ export const OBJECTIVE_LADDER: { valuation: number; title: string }[] = [
 export const DIVIDEND_PAYOUT_RATIO = 0.3;
 /** Max partial stake one firm may hold in another (full takeover is separate). */
 export const MAX_STAKE_PCT = 49;
+/** Control ladder (see docs/design/stock-market.md, Phase 3). A holder at or
+ * above this stake gains board visibility: the target's cash, 7-day net
+ * profit, and facility count (a selector, surfaced in the portfolio card). */
+export const BOARD_VISIBILITY_PCT = 25;
+/** A single outside firm at or above this stake blocks a hostile full
+ * acquisition of the target by anyone else — the blocker must consent, and AI
+ * never does, so 40% is takeover protection. Below MAX_STAKE_PCT so a stake
+ * short of the partial cap already buys a veto. */
+export const CONTROL_BLOCK_PCT = 40;
 /** Full takeover price multiple on valuation for a healthy target. */
 export const ACQUISITION_PREMIUM_HEALTHY = 1.3;
 /** Distressed/insolvent targets sell at a discount to valuation. */
@@ -114,6 +123,30 @@ export const WIZARD_AD_BUDGET = dollars(15);
 export const APARTMENT_RENT_PER_DAY = dollars(2.5);
 /** Satisfaction equilibrium bonus for living in premium housing. */
 export const APARTMENT_SATISFACTION_BONUS = 5;
+
+/**
+ * Total tenants an apartment BLOCK houses (Arc A3 / HD4 crowd housing). The
+ * named cast still pair up two-to-an-apartment as premium housing (the `< 2`
+ * home-pick checks elsewhere are untouched); the spare capacity above the cast
+ * residents houses anonymous crowd renters, so a landlord's income scales with
+ * the district's population rather than its two on-map tenants. See
+ * CrowdRentSystem.
+ */
+export const APARTMENT_CAPACITY = 50;
+
+/**
+ * Daily per-capita housing cost every cohort member pays (Arc A3 / HD4). The
+ * consumption sink that bounds the cohort pool drift the City soak measured at
+ * $3.7-4.4/capita/day upward (pools reaching $900-1,360/cap by day 300 and
+ * distorting the tier savings gates). Pinned just under that drift so the pool
+ * plateaus at a healthy $150-350/cap — enough to keep demand and the savings
+ * gates meaningful, not a runaway and not a collapse. Crowd renters in
+ * landlord-owned apartments pay it to the owning firm (booked exactly like cast
+ * rent); everyone else pays the world account (informal housing — the town's
+ * implicit landlord until real housing stock exists, symmetric with the
+ * subsistence stipend the world already pays idle crowd).
+ */
+export const CROWD_RENT_PER_DAY = dollars(3);
 
 /**
  * Measured (6 seeds, paired 100-day runs): the festival's direct revenue
@@ -166,8 +199,29 @@ export const FOUNDER_EARLIEST_DAY = 55;
 export const FOUNDER_GAP_DAYS = 20;
 /** Hash-gated daily odds of an entry once every gate is open. */
 export const FOUNDER_DAILY_CHANCE = 0.12;
-/** Total AI firms the town supports before founders stop coming. */
+/** Total AI firms the town supports before founders stop coming. This is the
+ * VILLAGE baseline; the live cap is `SIZE_PRESETS[preset].founderMaxAiFirms`
+ * (village resolves to exactly this 6), read via `founderMaxAiFirms()`. */
 export const FOUNDER_MAX_AI_FIRMS = 6;
+
+// --- AI founders: crowd under-supply response (city-scale only) -------------
+// A second, coexisting founder signal beyond total vacancy: a staple that is
+// SOLD but chronically UNDER-supplied (a queue at the counter, not an empty
+// shelf) draws a competitor into the occupied market. Structurally inert at
+// Village size — the founder loop never scans it there (see AIFounderSystem).
+/** A staple whose smoothed town fill-rate (fulfilled / (fulfilled + unmet))
+ * stays below this is chronically under-supplied. Starting value — measure
+ * against the City soak. */
+export const FOUNDER_UNDERSUPPLY_FILL_RATE = 0.65;
+/** Days to smooth the fill-rate over, read from marketStats daily history. */
+export const FOUNDER_UNDERSUPPLY_WINDOW = 7;
+/** Consecutive under-supplied days before a founder enters an OCCUPIED market.
+ * Starting value to measure. */
+export const FOUNDER_UNDERSUPPLY_DAYS = 15;
+/** Town-wide minimum days between under-supply entries, so a transient shock
+ * (a bad-logistics week, a world-event demand spike) doesn't spawn a glut of
+ * bakeries at once. Starting value to measure. */
+export const FOUNDER_UNDERSUPPLY_COOLDOWN = 20;
 /** Founders only chase towns worth living in (see also the satisfaction
  * gate — the immigration bar). */
 export const FOUNDER_MIN_POPULATION = 30;

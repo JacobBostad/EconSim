@@ -26,6 +26,7 @@ import type { SimContext, GameState } from '../core/GameState';
 import { emitEvent } from '../core/GameState';
 import { isDayBoundary } from '../core/Tick';
 import type { Citizen, CitizenTier } from '../entities/Citizen';
+import { PRODUCTS } from '../data/products';
 
 /** Wage bars as multiples of subsistence income ($14/day at standard). */
 export const COMFORTABLE_WAGE_MULT = 18 / 14; // ≈ $18/day
@@ -66,25 +67,16 @@ const ORDER: CitizenTier[] = ['worker', 'comfortable', 'affluent'];
  * IS the aspiration signal now, and its hysteresis means new money takes a
  * week to become new tastes.
  */
-const GROWTH_MULT: Record<CitizenTier, Record<string, number>> = {
-  worker: { pastries: 0, jewelry: 0 },
-  comfortable: { pastries: 0.5, jewelry: 0.3 },
-  affluent: { coffee: 1.5, clothes: 1.4, pastries: 1.5, jewelry: 1.5 },
-};
-
-/** Affluent citizens tolerate premium prices on their favorite categories. */
-const PRICE_CAP_MULT: Record<CitizenTier, Record<string, number>> = {
-  worker: {},
-  comfortable: {},
-  affluent: { bread: 1.1, coffee: 1.2, clothes: 1.2 },
-};
-
+// The per-product tier tables live on each product's needSpec (see
+// entities/Product.ts) — a new product declares its own prosperity profile
+// instead of editing tables here. Unlisted tiers default to 1.
 export function tierNeedGrowthMult(tier: CitizenTier, productId: string): number {
-  return GROWTH_MULT[tier][productId] ?? 1;
+  return PRODUCTS[productId]?.needSpec?.tierGrowthMult?.[tier] ?? 1;
 }
 
+/** Affluent citizens tolerate premium prices on their favorite categories. */
 export function tierPriceCapMult(tier: CitizenTier, productId: string): number {
-  return PRICE_CAP_MULT[tier][productId] ?? 1;
+  return PRODUCTS[productId]?.needSpec?.tierPriceCapMult?.[tier] ?? 1;
 }
 
 /**
