@@ -100,7 +100,7 @@ describe('Cast curator (world-scale A3 slice 4)', () => {
     }
   });
 
-  it('changes the cast by at most one swap per day, and swaps are balanced', () => {
+  it('changes the cast in balanced, population-neutral swaps, bounded per day', () => {
     const sim = citySim(4);
     const state = sim.getState();
     const tpd = ticksPerDay(state.config);
@@ -113,10 +113,11 @@ describe('Cast curator (world-scale A3 slice 4)', () => {
       const dayEvents = state.events.slice(before);
       const retires = dayEvents.filter((e) => e.message.includes('settled into the crowd')).length;
       const promotes = dayEvents.filter((e) => e.message.includes('stepped out of')).length;
-      // At most one of each per day.
-      expect(retires).toBeLessThanOrEqual(1);
-      expect(promotes).toBeLessThanOrEqual(1);
-      // A curator swap is atomic: one out, one in — never a lone half.
+      // Bounded per day: the curator drains an apportionment backlog but never
+      // more than MAX_SWAPS_PER_DAY (8) swaps in a single day.
+      expect(retires).toBeLessThanOrEqual(8);
+      expect(promotes).toBeLessThanOrEqual(8);
+      // Every curator swap is atomic: one out, one in — never a lone half.
       expect(retires).toBe(promotes);
       totalRetires += retires;
       totalPromotes += promotes;

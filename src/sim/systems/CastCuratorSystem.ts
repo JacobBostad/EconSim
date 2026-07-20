@@ -66,16 +66,34 @@ interface Stratum {
   tier: CitizenTier;
 }
 
+/** Most swaps the curator will perform in a single day. One swap/day was the
+ * A3 slice-4 pace, and it holds while cast tier mobility is slow. But a faithful-
+ * sample town has REAL churn — once RetailDemandSystem's worker catch-up lets the
+ * city cast provision like the crowd, cast workers promote out of the worker
+ * tier at the crowd's rate (many/day across districts), and a single swap/day
+ * falls behind: the soak measured one stratum drifting to 20+ off its
+ * apportionment. The curator now drains the backlog each day — it keeps swapping
+ * while SOME stratum is over by >= 2 and another under by >= 2, up to this cap.
+ * When the cast already sits within the hysteresis band (the pre-catch-up
+ * equilibrium, and every Village) the first census finds no qualifying pair and
+ * the loop makes ZERO swaps — identical to the old one-swap path, so no extra
+ * rng is ever drawn in a balanced town. */
+const MAX_SWAPS_PER_DAY = 8;
+
 export function runCastCuratorSystem(ctx: SimContext): void {
   const { state } = ctx;
   // Village stays dark: no crowd means no stratum can be crowd-backed, and no
   // shared-rng draw ever happens here.
   if (!anyCrowd(state)) return;
   if (!isDayBoundary(state.tick, ctx.config)) return;
-  curate(ctx);
+  for (let i = 0; i < MAX_SWAPS_PER_DAY; i++) {
+    if (!curate(ctx)) break;
+  }
 }
 
-function curate(ctx: SimContext): void {
+/** Perform at most one over→under swap; returns true iff a swap happened (so
+ * the daily loop can keep draining a backlog until the strata are balanced). */
+function curate(ctx: SimContext): boolean {
   const { state } = ctx;
 
   // --- census: cast + crowd per district × tier stratum ---
@@ -105,7 +123,7 @@ function curate(ctx: SimContext): void {
     pop[s.key] = castCount[s.key]! + crowd;
     totalPop += crowd;
   }
-  if (castTotal === 0 || totalPop === 0) return;
+  if (castTotal === 0 || totalPop === 0) return false;
 
   // --- largest-remainder apportionment of the cast over the strata ---
   const seats: Record<string, number> = {};
@@ -142,21 +160,22 @@ function curate(ctx: SimContext): void {
       under = s;
     }
   }
-  if (!over || !under || overBy < REBALANCE_HYSTERESIS || underBy < REBALANCE_HYSTERESIS) return;
+  if (!over || !under || overBy < REBALANCE_HYSTERESIS || underBy < REBALANCE_HYSTERESIS) return false;
 
   // The under-represented stratum only qualifies when crowd mass backs it (a
   // stratum with no crowd can never have a target above its cast count), so a
   // promotion source always exists — but guard anyway; if either half of the
   // swap can't happen, we skip BOTH so the cast size stays invariant.
   const source = state.cohorts[under.key];
-  if (!source || source.population <= 0) return;
+  if (!source || source.population <= 0) return false;
   const gone = pickRetiree(state, over);
-  if (!gone) return;
+  if (!gone) return false;
   const homeId = resolvePromoteHome(ctx, under.districtId, gone);
-  if (homeId === null) return;
+  if (homeId === null) return false;
 
   retire(ctx, gone, over);
   promote(ctx, under, source, homeId);
+  return true;
 }
 
 /**

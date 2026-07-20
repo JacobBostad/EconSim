@@ -471,6 +471,89 @@ affluent); cast strata within ±2 of apportionment throughout;
 starve cast shoppers — cast average satisfaction within 5 points of
 cohort average across the soak. Results appended when they ship.
 
+### City soak — tier-gate calibration (measured)
+
+The savings-route gate compared a cohort's per-capita pool against the
+CAST savings bars (`COMFORT_SAVINGS_CENTS` $250 et al.). But a cohort
+pool is not a citizen's nest egg — it also carries the crowd's **working
+float**, the cash cycling through daily rent + shopping. Measured
+throughput is **$17-19/capita/day** (rent ~$2-3 under the affordability
+cap + shopping ~$16; `spend-measure` probe, day 280). By mid-run every
+district's pool drifts past $250 of that turnover, so the binary
+`perCapita ≥ bar` promoted the whole block — comfortable ran **53% / 70%
+/ 30%** (seeds 11/4/7) at day 300 against the 25-40 band. Two structural
+fixes (`CohortSocialSystem`):
+
+- **Savings = pool above the float.** `perCapitaSavings = max(0,
+  perCapita − FLOAT_RESERVE)`, `FLOAT_RESERVE` = an ~8-day earn→spend
+  horizon on the measured throughput = **$140** (swept against the bands;
+  higher strands the poorest town below the comfortable band, lower
+  re-gentrifies the richer ones). A district whose pool is only
+  float-deep now reads $0 savings and never spuriously promotes.
+- **Proportional savings legs.** The promotion (and demotion-hold) savings
+  term is no longer binary — it is the fraction by which genuine savings
+  clears the bar (`clamp((savings − bar)/bar, 0, 1)`), so a per-capita
+  *mean* crossing the bar promotes a *fraction*, not the whole block.
+
+**Result — worker/comfortable land in band on all three seeds** (300 days
+× seeds 11/4/7; conservation exact, ≤0.3 ms/tick):
+
+| seed | before (W/C/A) | after (W/C/A) |
+|------|----------------|---------------|
+| 11   | 43 / 53 / 4    | **64 / 34** / 2 |
+| 4    | 25 / 70 / 5    | **60 / 36** / 4 |
+| 7    | 69 / 30 / 1    | **65 / 33** / 2 |
+
+**Affluent stays under the 5-15 band (2-4%) and unhappy — a supply limit,
+reported honestly.** Two coupled causes, both structural:
+
+- *Formation is rare.* Comfortable satisfaction tops out ~62 at city scale
+  (supply strain), well under the affluent promotion bar (70), so the
+  `satTerm²` gate crushes comfortable→affluent flow — few ever cross.
+- *The few that form crave what the city can't stock.* Founder luxury
+  entry was tried (extend the under-supply signal + luxury chain
+  blueprints): the chains go **labor-starved and insolvent** — a 40-cast,
+  cohort-scale town has no unemployed to staff jewelry/pastries workshops,
+  so luxury never reaches the shelves at volume. An affluent block (mostly
+  fully-employed → few shopping trips, `T_EMP` 0.8) then pours its trip
+  budget onto empty luxury shelves and starves on staples; its cravings
+  pin at the urgency cap and satisfaction collapses to single digits, so
+  it demotes as fast as it forms. The tier/satisfaction FORMULA is sound
+  — a well-fed, employed affluent cohort holds a healthy mood (measured
+  ~65 in the calibration probe; the tierAcceptance suite test asserts the
+  not-collapsed floor of ≥25) — the limiter is city-scale luxury SUPPLY,
+  not the gate. A demand
+  fix (felt-urgency luxury trip de-weighting) was prototyped and rejected:
+  redirecting the crowd's luxury trips onto staples deepened the staple
+  shortage, dropped bread fill-rate below the founder-response test's bar,
+  and destabilized the worker/comfortable bands — net negative.
+
+Not addressed here: the **worker cast-vs-cohort satisfaction gap** (cast
+workers 38-47 vs cohort workers 60-65, gap 15-24) is a satisfaction-parity
+question, not a tier-share one — the calibration targets tier composition
+and leaves the cast/cohort mood gap for a separate pass.
+
+### Combined re-measure — the two fixes interact (measured)
+
+The worker-gap fix (cast catch-up baskets + curator backlog drain, see
+`RetailDemandSystem`) and the tier calibration above were each validated
+solo. Integrated together, the 300-day × 3-seed acceptance shows an
+**interaction**: the catch-up makes the cast's true staple demand visible,
+which raises firm revenue and crowd employment, and the extra wage-leg
+strength re-inflates promotion — comfortable runs **54 / 83 / 45%**
+against the 25-40 band (calibration-alone measured 34/36/33), and the
+worker cohorts' own prosperity widens the comfortable cast-vs-cohort gap
+to 9-12. Meanwhile the worker-gap metric itself is firmly met (**5.6 /
+3.0 / 6.4**, target ≤ 5-8), cast population holds at 88/80/80 (was
+collapsing to 17-30 pre-fix), and conservation stays exact. Verdict:
+both mechanisms are right and stay; the tier gates need a **joint**
+calibration pass against the combined economy — the savings leg still
+saturates once pools clear ~2× the bar (pro-rata tier moves equalize
+per-capita pools, so the pool cannot discriminate tiers; satisfaction
+and the wage legs must carry the discrimination). The tight 300-day band
+test enters the suite when that pass lands; until then the 150-day
+forming-band tests guard shape, not the band.
+
 ## Phase A4 — physical districts (PLANNED)
 
 Districts stop being metadata and become the map.

@@ -74,12 +74,13 @@ describe('Crowd housing costs (A3 / HD4 — the pool-drift sink)', () => {
     const driftPerDay = (perCapAt[120]! - perCapAt[40]!) / 80;
     expect(driftPerDay).toBeLessThan(200); // < $2.00/cap/day
 
-    // Not monotonically increasing in the last 40 days: the pool dips from its
-    // recent peak (immigration dilutes per-capita whenever it fires), so day
-    // 120 is not the high-water mark of the window.
-    const last40 = [80, 90, 100, 110, 120].map((d) => perCapAt[d]!);
-    const peak = Math.max(...last40);
-    expect(perCapAt[120]!).toBeLessThan(peak);
+    // Flat plateau across the last 40 days: the pool has stopped climbing and
+    // just wobbles (immigration dilutes per-capita whenever it fires), so day
+    // 120 sits within a few percent of the day-80 level rather than riding a
+    // trend upward. (The window is now near-flat — days 80-120 span ~$8/cap —
+    // so the old "day 120 is below the window's exact peak" check turned on
+    // sub-dollar noise; this asserts the plateau itself.)
+    expect(Math.abs(perCapAt[120]! - perCapAt[80]!)).toBeLessThan(perCapAt[80]! * 0.1);
   });
 
   it('an apartment landlord earns crowd rent from its spare capacity', () => {

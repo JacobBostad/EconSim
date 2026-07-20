@@ -259,6 +259,12 @@ describe('AI founder — city under-supply entry', () => {
 
     // Bread fill-rate over the last 14 finalized days has recovered well above
     // the ~0.5 baseline the un-wired loop plateaued at (city-soak finding (a)).
+    // The bar sits AT the under-supply founder trigger (0.65): the worker
+    // catch-up (a fixed WORKER_CATCHUP_BASKETS top-up per urgent-need visit)
+    // makes the cast's TRUE staple demand visible, which grows the demand
+    // denominator and settles equilibrium fill near ~0.67 instead of ~0.72 —
+    // but an equilibrium BELOW the trigger would mean founders never stop
+    // firing, so the trigger is the honest floor.
     const hist = state.marketStats['bread']!.history;
     let sold = 0, unmet = 0;
     for (let i = Math.max(0, hist.length - 14); i < hist.length; i++) {
@@ -266,7 +272,7 @@ describe('AI founder — city under-supply entry', () => {
       unmet += hist[i]!.unmetDemand;
     }
     const fillRate = sold / (sold + unmet);
-    expect(fillRate).toBeGreaterThan(0.7);
+    expect(fillRate).toBeGreaterThan(0.65);
     expect(totalMoneySupply(state)).toBe(supply0); // money conserved across the run
   });
 });

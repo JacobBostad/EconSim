@@ -77,6 +77,30 @@ const GATE_HOLD_FRAC = 0.02;
  * distribution (+σ), a demotion the bottom (−σ), so the gate self-limits. */
 const SAT_SKIM = 6;
 
+/**
+ * The crowd's WORKING FLOAT — the cash that cycles through daily rent + shopping,
+ * which a cohort's shared pool carries alongside any real savings. A citizen at
+ * $250 has a nest egg; a cohort at $250/capita may be holding one week of the
+ * block's spending money. The savings-route tier gate subtracts this float
+ * before comparing per-capita cash to the cast savings bars, so the signal reads
+ * genuine savings, not turnover: a district's pool has to clear a week-plus of
+ * living costs before its cash counts toward promotion, and a poor district
+ * whose pool is only float-deep reads $0 savings (never spuriously promoting).
+ *
+ * Pinned from the city soak: crowd throughput measured $17-19/capita/day (rent
+ * ~$2-3 under the affordability cap + shopping ~$16, spend-measure probe at
+ * day 280 across seeds 11/4/7), and an ~8-day earn→spend horizon — the liquidity
+ * a daily-paid, daily-shopping household keeps on hand — pins the float at $140.
+ * (The 30-day figure in the original design note assumed ~$3/day of shopping;
+ * the live crowd spends ~5× that, so the horizon, not the daily rate, is what
+ * keeps the float a working buffer rather than a month of consumption.) The
+ * horizon was swept against the 300-day × 3-seed tier bands: $140 lands worker
+ * and comfortable inside 50-70 / 25-40 on all three seeds (higher over-taxes the
+ * savings route and strands the poorest town below the comfortable band; lower
+ * lets the pool drift back through the bar and re-gentrifies the richer towns).
+ */
+const FLOAT_RESERVE_CENTS = 140_00;
+
 /** Migration rates at cohort scale (starting values, to pin against soaks). */
 const INFLOW_RATE = 0.004;
 const OUTFLOW_RATE = 0.003;
@@ -189,6 +213,10 @@ function runTierGates(
   if (pop <= 0) return;
   const idx = ORDER.indexOf(cohort.tier);
   const perCapitaCash = cohort.cashPool / pop;
+  // Genuine savings = per-capita cash above the working float (daily rent +
+  // shopping turnover the pool must carry). This is the cohort's nest-egg
+  // signal; the raw pool is not, since it also holds the crowd's spending money.
+  const perCapitaSavings = Math.max(0, perCapitaCash - FLOAT_RESERVE_CENTS);
 
   // Fraction of the block employed at a firm whose wage clears a given bar.
   const wageFracAtLeast = (wageBar: number): number => {
@@ -214,9 +242,16 @@ function runTierGates(
     const needed = toAffluent ? AFFLUENT_PROMOTION_DAYS : PROMOTION_DAYS;
 
     const wageFrac = wageFracAtLeast(wageBar);
-    const savingsOk = perCapitaCash >= savingsBar ? 1 : 0;
+    // Proportional savings route: a cohort's per-capita mean is not a promise
+    // every member holds the bar, so the savings LEG is the fraction by which
+    // the block's genuine (float-adjusted) savings clears the bar — 0 at the
+    // bar, saturating at 1 by twice the bar. The old binary `perCapita >= bar`
+    // promoted the WHOLE block the day the mean crossed, which — with the pool
+    // drifting past the bar for every district by mid-run — gentrified the town
+    // (city soak: comfortable ran 53-70% vs the 25-40 band).
+    const savingsFrac = clamp((perCapitaSavings - savingsBar) / savingsBar, 0, 1);
     const satTerm = logistic((cohort.avgSatisfaction - satBar) / 5);
-    const qualFrac = satTerm * satTerm * Math.max(wageFrac, savingsOk);
+    const qualFrac = satTerm * satTerm * Math.max(wageFrac, savingsFrac);
 
     if (qualFrac > GATE_HOLD_FRAC) {
       cohort.gateStreaks.promote += 1;
@@ -243,8 +278,12 @@ function runTierGates(
     const savingsFloorBar = isAffluent ? AFFLUENT_WEALTH_FLOOR_CENTS : COMFORT_SAVINGS_FLOOR_CENTS;
 
     const wageFloorFrac = wageFracAtLeast(wageFloorBar);
-    const savingsFloorOk = perCapitaCash >= savingsFloorBar ? 1 : 0;
-    const holdFactor = Math.max(wageFloorFrac, savingsFloorOk);
+    // Proportional, float-adjusted savings floor (mirrors the promotion leg):
+    // the fraction whose genuine savings still clears the demotion floor. A
+    // block coasting on a pool that is mostly working float no longer holds its
+    // whole tier by the savings leg — only the share genuinely above the floor.
+    const savingsFloorFrac = clamp((perCapitaSavings - savingsFloorBar) / savingsFloorBar, 0, 1);
+    const holdFactor = Math.max(wageFloorFrac, savingsFloorFrac);
     const failFrac = 1 - logistic((cohort.avgSatisfaction - satFloorBar) / 5) * holdFactor;
 
     if (failFrac > GATE_HOLD_FRAC) {
