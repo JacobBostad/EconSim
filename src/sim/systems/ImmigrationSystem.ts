@@ -20,7 +20,7 @@ import { recordTransaction, emitEvent } from '../core/GameState';
 import { citizenAccount, WORLD_ACCOUNT } from '../core/Transactions';
 import { isDayBoundary } from '../core/Tick';
 import { createFacility, createCitizen } from '../entities/factories';
-import { fireCitizen } from './LaborSystem';
+import { removeCitizen } from './LaborSystem';
 import {
   IMMIGRATION_MIN_SATISFACTION,
   IMMIGRATION_MAX_UNEMPLOYED_FLOOR,
@@ -123,21 +123,9 @@ function runEmigration(
   const gone = pick;
 
   const wasJobless = gone.employmentStatus === 'unemployed';
-  if (gone.workplaceFacilityId) fireCitizen(state, gone.workplaceFacilityId, gone.id);
-  const home = state.facilities[gone.homeFacilityId];
-  if (home) home.residentIds = home.residentIds.filter((id) => id !== gone.id);
-  if (gone.cash > 0) {
-    recordTransaction(state, {
-      from: citizenAccount(gone.id),
-      to: WORLD_ACCOUNT,
-      amount: gone.cash,
-      firmId: null,
-      category: 'none',
-      note: 'Departed with savings',
-    });
-  }
-  if (state.selectedEntityId === gone.id) state.selectedEntityId = null;
-  delete state.citizens[gone.id];
+  // Their savings leave with them (paid back to the world account, the mirror
+  // of arrival cash). Shared removal path — see removeCitizen.
+  removeCitizen(state, gone, WORLD_ACCOUNT, 'Departed with savings');
   state.emigrationDepartures += 1;
 
   const reason = wasJobless

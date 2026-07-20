@@ -102,6 +102,7 @@ function normalize(state: GameState): GameState {
   for (const cid in state.cohorts) {
     const co = state.cohorts[cid]!;
     co.needBuckets = co.needBuckets ?? seedNeedBuckets();
+    co.dayEvents = co.dayEvents ?? { fulfilled: 0, unmet: 0, pricedOut: 0 };
   }
   state.lastLapsedFireSale = state.lastLapsedFireSale ?? null;
   // Prosperity tiers: pre-tier saves get a one-shot snapshot guess (no

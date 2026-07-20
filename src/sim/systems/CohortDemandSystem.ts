@@ -379,6 +379,11 @@ function attemptCohortPurchase(
   // price participation is a logistic in price, not a cliff.
   const buyFrac = 1 / (1 + Math.exp((price - cap) / (0.06 * Math.max(1, cap))));
 
+  // Priced-out shopper-events: the fraction of eligible visitors who walked
+  // because the shelf price cleared their walkaway cap. Booked whether or not
+  // the remaining buyers can be served (a satisfaction signal, not a sale).
+  cohort.dayEvents.pricedOut += visits * eligFrac * (1 - buyFrac);
+
   const wantQty = Math.max(
     1,
     Math.round(spec.preferredQuantity * worldDemandMult(state, productId) * seasonDemandMult(state, productId)),
@@ -419,10 +424,16 @@ function attemptCohortPurchase(
     if (price > stat.highestPrice) stat.highestPrice = price;
   }
 
+  // Fulfilled shopper-events: units bought expressed as satisfied basket-fills.
+  if (qty > 0) cohort.dayEvents.fulfilled += qty / wantQty;
+
   const unmet = attempted - qty;
   if (unmet > 0) {
     stat.unmetDemand += unmet;
     store.dailyStats.lostSales += unmet;
+    // Unmet shopper-events: the shortfall as basket-fills the crowd wanted but
+    // the shelf couldn't cover.
+    cohort.dayEvents.unmet += unmet / wantQty;
   }
   return qty;
 }

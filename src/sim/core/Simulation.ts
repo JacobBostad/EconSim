@@ -74,9 +74,11 @@ import { runMarketingSystem } from '../systems/MarketingSystem';
 import { runFinanceSystem } from '../systems/FinanceSystem';
 import { runDividendSystem } from '../systems/DividendSystem';
 import { runImmigrationSystem } from '../systems/ImmigrationSystem';
+import { runCastCuratorSystem } from '../systems/CastCuratorSystem';
 import { runAIFounderSystem } from '../systems/AIFounderSystem';
 import { runDistrictSystem } from '../systems/DistrictSystem';
 import { runSatisfactionSystem } from '../systems/SatisfactionSystem';
+import { runCohortSocialSystem } from '../systems/CohortSocialSystem';
 import { runAccountingSystem } from '../systems/AccountingSystem';
 import { runPayrollSystem } from '../systems/PayrollSystem';
 import { runRentSystem } from '../systems/RentSystem';
@@ -116,8 +118,10 @@ const SYSTEMS: SystemFn[] = [
   runBankruptcySystem,
   runSatisfactionSystem,
   runTierSystem, // prosperity ladder: derives tiers after satisfaction lands
+  runCohortSocialSystem, // crowd satisfaction, tier mobility, migration (A3)
   runTownStatsSystem, // record daily town vitals after the satisfaction step
   runImmigrationSystem, // a prosperous town attracts new citizens
+  runCastCuratorSystem, // keep the cast a faithful sample of the crowd (A3; cast arrivals land first)
   runAIFounderSystem, // ...and its unserved markets attract new rivals
   runRentSystem, // apartment rent (before accounting snapshots the day)
   runAccountingSystem, // maintenance + snapshot + reset daily accumulators

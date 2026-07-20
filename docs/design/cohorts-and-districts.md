@@ -231,10 +231,12 @@ replaced):
    this spike showed is bounded by harness observability, not by the
    engine design.
 
-## Phase A3 — the cohort economy live (PLANNED)
+## Phase A3 — the cohort economy live (IN PROGRESS)
 
 City preset turns on: ~2,000 residents, of whom ~150 are cast and the
-rest live in cohorts. The full HD1 mechanics:
+rest live in cohorts. The full HD1 mechanics (design intent — the
+**As-built** subsection below records what slices 1-2 actually ship, and
+corrects the drift between this plan and the code):
 
 - **`CohortDemandSystem`** — demand settles in **5 slices across the
   shop window** (hours 16-21, `SimulationConfig.ts:98-99`), not one
@@ -286,6 +288,150 @@ rest live in cohorts. The full HD1 mechanics:
   `createCitizen`, `factories.ts:112`), keeping every stratum within
   ±2 of its largest-remainder apportionment as the crowd's
   demographics shift.
+
+### As-built — slices 1-2 (shipped)
+
+What turned on so far is the **crowd's labor and demand**, not its social
+life. Two systems and a payroll extension; the satisfaction/tier/migration
+and curator machinery above is slice 3+ and is **not** in the code yet.
+
+**Preset wiring — what is actually read.** Of the `SIZE_PRESETS` fields
+(`SimulationConfig.ts:93-96`) only **`crowdStart`** is consumed — by
+`seedCrowd` (`startingScenario.ts:423`). `castTarget`, `cohortCap`, and
+`founderMaxAiFirms` are declared but **read nowhere in `src/`**. Concrete
+consequences for a `{...DEFAULT_CONFIG, sizePreset:'city'}` town:
+- the **cast is still capped at `maxCitizens` = 80**, not 150 — the City
+  cast is today's Village cast, and the config override alone does not
+  raise it;
+- **no cohort population cap** is enforced (`cohortCap` unused), which is
+  moot in slices 1-2 because there is no cohort migration yet;
+- the **founder cap is the hard constant `FOUNDER_MAX_AI_FIRMS` = 6**
+  (`constants.ts:179`), not the preset's 18.
+
+**One cohort, not a `district × tier` grid.** The default partition
+(`districts.ts`) has a single residential district (`the_rows`), and
+`seedCrowd` places the entire `crowdStart` as **one worker-tier cohort**
+(`the_rows:worker`) holding all 300 people and `300 × $50` starting cash
+(direct assignment — bootstrap precedent, like citizen start cash). There
+are no comfortable/affluent cohorts and no second district; the
+`district × tier` schema exists but only one cell is ever populated.
+Crowd population is **static at 300** for the whole run — no cohort
+immigration/emigration ships until slice 3.
+
+**Dormant Cohort fields.** `avgSatisfaction` (stays at its seed 70 — no
+system writes it), `backlogByProduct` (superseded by `needBuckets`, never
+read), and `gateStreaks` (tier-gate hysteresis, slice 3) are all A2/A3-schema
+placeholders that **no shipped code touches**. `needBuckets`, `population`,
+`employed`, `cashPool`, and `avgSkill` are the live fields.
+
+**Slice 1 — `CohortLaborSystem` + crowd payroll.** Runs after the cast job
+market, before `CohortDemandSystem`; guards on `anyCrowd` so Village takes
+no path. Daily `reconcileCrowdJobs` is three sorted passes — evict from
+closed/ineligible facilities and yield to the cast when
+`employees + crowd > workerCapacity` (largest holding first); release crowd
+above a shrunken population (dormant while population is static); then fill
+open slots from idle cohorts, each firm hiring only while its cash covers
+`CROWD_WAGE_BUFFER_DAYS` = 7 days of the projected cast+crowd bill.
+`employed` is rebuilt from assignments each day so it can't drift. Per tick
+during work hours, crowd headcount adds to `presentWorkers`/`presentSkill`
+at the cohort's `avgSkill` (0.95) — all `ProductionSystem` needs.
+`PayrollSystem.payCrowd` pays **one transaction per firm × cohort**
+(firm→pool) plus one idle-crowd subsistence stipend per cohort (world→pool);
+a firm that can't cover a cohort's bill **releases those workers on the
+spot** (no three-payday grace). Zero rng, sorted iteration throughout.
+
+**Slice 2 — `CohortDemandSystem`.** The shadow-parity probe's engine ported
+wholesale (its refuted-alternatives history and every constant carried in
+the header comments). Daily `growBuckets` grows each cohort's 10 quantile
+urgency buckets per `needSpec` product; the shop window (hours 16-20, one
+slice per hour = 5 slices) settles demand as **trips**: per-slice budget
+`pop × (0.8·empShare + 1.4·(1−empShare)) / 5`, softmax product targeting
+(temp 0.25) over servable products, urgent repeat trips (0.75/capita/day),
+store split ∝ `cohortStoreScore²` (agent `scoreStore` with reliability
+pinned at 0.4 and origin at the district center), basket-buying every
+carried product above the 0.3 eligibility gate. Each purchase is a
+`recordTransaction` (cohort→firm, `revenue`) booking the **same**
+`marketStats` and `dailyStats` signals a cast purchase does; quantity floors
+to whole units, capped by shelf stock, `cashPool`, and a logistic walkaway
+price. Buckets drain lowest-eligible-first. The probe's town-wide supply cap
+is deliberately absent — real production/logistics interleave. Runs **before
+`RetailDemandSystem`** in the tick, so the crowd reaches the shelves ahead of
+the cast each tick. Zero rng, sorted iteration; `anyCrowd` keeps Village
+dark.
+
+### City soak — slices 1-2 baseline (measured)
+
+Probe: `docs/design/probes/city-soak.ts` (`npx tsx`, `DAYS`/`SEEDS`
+overrides). City preset, **300 days × seeds 11/4/7**, per-10-day capture of
+crowd population/employment, pool total, cast satisfaction, per-product
+units-sold/unmet-demand, firm counts, ms/tick (wall time via
+`process.hrtime`, outside the sim), and money conservation. Honest numbers:
+
+**(e) Conservation — PASS, exact.** `totalMoneySupply` held at the starting
+`$3,169,000.00` to **0 cents** on every seed, every checkpoint. Cohort pools
+as `'cohort'` accounts conserve by construction, as designed.
+
+**(d) Perf — PASS, comfortable.** Steady-state **0.08-0.19 ms/tick**; worst
+window 0.265 ms (seed 11, JIT warm-up); engine `avgTickMs` 0.12-0.28. Well
+under the **0.6 ms** A3 budget — the crowd's aggregate settlement is far
+cheaper than per-agent shopping, exactly the point of cohorts.
+
+**(a) Founder response — the founder loop does NOT see crowd demand.** AI
+firm count is **3 → 3 on all three seeds across 300 days** — not one new
+seller founds. Meanwhile bread runs a persistent shortage: unmet/day
+1226→355 (s11), 939→421 (s4), 992→393 (s7). The gap never closes; it
+plateaus at ~350-420 unmet bread/day once the three incumbent bakeries hit
+throughput. Root cause: `AIFounderSystem` gates on `soldSomewhere` — a
+**total vacancy** (no staffed seller at all) — not on unmet demand. Three
+bakeries always sell *some* bread, so `marketGapDays` never reaches
+`FOUNDER_GAP_DAYS` and no founder fires, no matter how deep the shortage.
+Capital chases empty shelves' *absence of a seller*, not a queue at the
+counter.
+
+**(b) Pool drift — unbounded, ~linear, does not decelerate.** Per-capita
+worker pool climbs from **$157** (day 10) to **$927 / $1,190 / $1,362**
+(seeds 11/4/7, day 300) — drift **+$2.66 / +$3.56 / +$4.15 per capita per
+day**; total pool $47k → $278k / $357k / $409k. Wage + stipend inflow
+outruns the crowd's trip-limited, shelf-limited spending, and because the
+pool is nowhere near binding the affordability cap, the surplus simply
+accumulates. Money is conserved (it flows in from the world stipend and firm
+wages) but piles up **unproductively** in the cohort account. Drift *grows*
+with employment (24→~105 employed over the run), so it is not a transient.
+
+**(c) Cast starvation — the cast is crowded off the shelves.** Cast average
+satisfaction craters from ~48-51 (day 10) to a trough of **25-31** (days
+50-90), then partially recovers to the mid-30s/40s: final 35.9 / 40.6 / 36.8,
+run-minimum 25.8 / 30.2 / 25.1. Against a measured Village reference at the
+same seed (~68-77) and the doc's stated ~48-58 band, the City cast is
+**badly under-served**. Worse, the **cast empties out**: population 40 → 28 /
+25 / 17 as low-satisfaction citizens emigrate. Cause is structural: the crowd
+shops (before `RetailDemandSystem`) each tick and drains the same shelves the
+cast needs, and three bakeries cannot feed 300 crowd + 40 cast — the shelf
+competition flagged in Open Questions is live and severe **today**.
+
+**Implications for slice 3 and A3 balancing:**
+- **Cohorts have no satisfaction yet** (`avgSatisfaction` static 70), so the
+  secondary A3 acceptance probe — cast within 5 points of its cohort — would
+  fail on arrival (cast ~36 vs cohort 70, a ~34-point gap). `CohortSocialSystem`
+  is necessary but *not sufficient*: the cast starvation is a **shelf-supply**
+  problem, not a satisfaction-formula problem. Slice 3 (or a slice 2.5) needs
+  the Open-Questions fallback — **per-slice stock reservation proportional to
+  demand**, or reordering crowd settlement after the cast — before satisfaction
+  can be compared meaningfully.
+- **Tier gates will trip instantly on the runaway pool.** A worker cohort at
+  $900-1,360/capita is orders of magnitude over the savings-route promotion
+  thresholds (`COMFORT_SAVINGS_CENTS` et al.), so a naive savings gate promotes
+  the whole block on day one. Slice 3 must either add a **consumption/spending
+  sink** that bounds the pool or calibrate the cash gate against this drift —
+  the pool is not a proxy for prosperity while spending is supply-capped.
+- **Wire the founder loop to demand.** For capital to answer the crowd, the
+  founder gate needs an **unmet-demand / fill-rate** signal, not just total
+  vacancy — and the preset `founderMaxAiFirms` (18/30) must actually be read
+  (today the cap is the constant 6 regardless of preset).
+- **crowdStart 300 is supply-starved by construction** against 3 bakeries and
+  a 40-cast, 80-cap town. A playable City needs founder response, more/larger
+  staple capacity, or a smaller opening crowd — a balancing decision for A3,
+  measured here rather than assumed.
 
 Golden save **v7** is minted here (the first fixture with live
 cohorts) and joins the load / run-conserved / round-trip trio.

@@ -54,6 +54,11 @@ export interface Cohort {
    * with a needSpec appear. Grown daily, drained lowest-first by purchases;
    * the demand engine's core state (see CohortDemandSystem). */
   needBuckets: Record<ProductId, number[]>;
+  /** Fractional shopper-events booked during the day by CohortDemandSystem —
+   * the cohort analogue of the cast's intraday purchase/stockout/priced-out
+   * satisfaction nudges. CohortSocialSystem folds these into satisfaction and
+   * resets them at the day boundary. */
+  dayEvents: { fulfilled: number; unmet: number; pricedOut: number };
 }
 
 /**
@@ -88,5 +93,6 @@ export function emptyCohort(districtId: DistrictId, tier: CitizenTier): Cohort {
     backlogByProduct: {},
     gateStreaks: { promote: 0, demote: 0 },
     needBuckets: seedNeedBuckets(),
+    dayEvents: { fulfilled: 0, unmet: 0, pricedOut: 0 },
   };
 }
