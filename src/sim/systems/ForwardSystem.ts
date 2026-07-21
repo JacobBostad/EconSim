@@ -24,7 +24,7 @@ import type { FirmId, ProductId } from '../core/Id';
 import { getProduct } from '../data/products';
 import { getTradeCity } from '../data/tradeCities';
 import { getQuantity, removeStock } from '../entities/Inventory';
-import { cityPrice, exportFreightFee, applyPriceImpact, impactedFillPrice } from '../core/Trade';
+import { cityPrice, exportFreightFee, applyPriceImpact, impactedFillPrice, feedPool } from '../core/Trade';
 import { formatMoney } from '../../utils/formatMoney';
 
 export const FORWARD_MAX_OPEN = 2;
@@ -200,6 +200,21 @@ export function runForwardSystem(ctx: SimContext): void {
           firmId: fid, category: 'revenue', productId: fwd.productId, quantity: pulled,
           note: `Forward delivered: ${pulled} ${product.name} to ${city.name} @ ${formatMoney(net)} locked-net`,
         });
+        // Arc E: settlement SHIPS goods into the city, so a pooled consumer
+        // good feeds the larder exactly as a spot export does — the same
+        // per-product guard (pool?.inventory[productId] !== undefined), a
+        // durable cover overhang consumption works off over days. Only the
+        // DELIVERED quantity (`pulled`) moves; the deliberate-default shortfall
+        // (`missed`, below) ships nothing and feeds nothing. The sign/close
+        // paper impacts on the walk (applyPriceImpact at sellForward /
+        // closeForward) stay as they are: those hedge the city's DEMAND at
+        // paper time when no goods move, so there is no larder delta to book
+        // then — only settlement puts physical stock on the shelf. This is the
+        // divergence region.md flagged (a forward delivery used to create no
+        // cover overhang a spot export would), now resolved.
+        if (state.tradeCities[fwd.cityId]?.pool?.inventory[fwd.productId] !== undefined) {
+          feedPool(state, fwd.cityId, fwd.productId, pulled);
+        }
         if (fwd.lockedPrice >= product.basePrice * FORWARD_WIN_MULT) {
           firm.forwardWins += 1;
         }

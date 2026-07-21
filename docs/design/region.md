@@ -127,7 +127,8 @@ has used (`servicesEnabled`, `realEstateEnabled`, `investorsEnabled`, and now
    carries goods between two live economies.
 5. **The region UI.** A town switcher; the Gazette and trade desk report
    per-town and cross-town. (This arc adds the smallest seed of that: the trade
-   desk now reports a partner city's *cover*.)
+   desk now reports *both* partner cities' *cover*, and the advisor nudges an
+   export when a partner runs thin on stock the player holds.)
 
 Save migration rides the existing `SAVE_VERSION` machinery: step 3's wrap is one
 versioned migration (old saves load into `towns.home`), exactly the pattern D1
@@ -198,11 +199,18 @@ single impact tick; a starved city pays a premium until its larder refills.
    raws/intermediates a pool never stocks keep the classic one-tick impact even
    on a pool city (the review caught a city-level guard silently exempting raw
    exports from all impact — the exact riskless round-trip the impact exists to
-   prevent). Known modeling divergence: forward contracts keep their sign/close
-   hedge impacts on the walk and their SETTLEMENT does not feed the larder — a
-   forward delivery of a consumer good creates no cover overhang a spot export
-   would. Anti-arbitrage holds (forwards carry their own impact); unifying
-   settlement with `feedPool` is a follow-up if forwards on pool cities matter.
+   prevent). Forward settlement is now UNIFIED with the spot path (Arc E
+   follow-up): a settling forward SHIPS goods into the city, so for a pooled
+   consumer good on a pool city the delivered quantity feeds the larder through
+   the same per-product guard (`pool?.inventory[productId] !== undefined`) — a
+   delivered forward creates the exact cover overhang a spot export of the same
+   size would (measured below). The sign/close paper impacts on the walk stay as
+   they are, and correctly so: signing (and closing) hedges the city's *demand*
+   at paper time when **no goods move**, so there is no larder delta to book then
+   — only settlement puts physical stock on the shelf. A deliberate default (the
+   15% penalty path) delivers nothing and feeds nothing. *(This resolves the
+   "known divergence" an earlier draft of this doc flagged — a forward delivery
+   creating no overhang a spot export would.)*
 4. **Consumption from spec midpoints, no second demand table.** Per-capita daily
    consumption is read straight off each product's `needSpec` at its midpoint
    (`growthPerDay` midpoint × `preferredQuantity`) — the same numbers the crowd's
@@ -225,10 +233,23 @@ single impact tick; a starved city pays a premium until its larder refills.
 ### The smallest honest surface
 
 Where the game already reports export prices — the Gazette's **trade desk** —
-each row now also shows the better port's **cover in days** when a pool is live
-(`🔥` thin / `🧊` glutted), so the supply/demand read is visible, not just
-implied by the price. No new panel; the classic pure-walk desk (flag off) is
-unchanged.
+each row now shows **cover in days on BOTH ports** when a pool is live (`🔥`
+thin / `🧊` glutted, each chip prefixed by its port's emoji), so the reader sees
+the full supply picture — which port is short, which is glutted — not just the
+one the desk routes to. And the **morning advisor** gains a pool-aware nudge: it
+tells the player to ship into a thin port's premium when they actually hold
+exportable stock of what that port is short of (cover below the `🔥` thin bar,
+`TRADE_POOL_THIN_COVER_DAYS = 4`, ≥ 10 units on hand) — the desk shows the
+shortage, the advisor turns it into an action. Both are cover-driven (no rng)
+and inert flag-off by construction (no pool ⇒ nothing to read). No new panel;
+the classic pure-walk desk and advisor (flag off) are unchanged.
+
+**Skipped (smallest honest surface):** no dedicated pool/region panel, no
+per-product cover history sparkline, no second advisor line stacking multiple
+thin ports — one nudge for the first held-and-short product is enough for a
+briefing, and the desk already carries the full both-port read. The advisor's
+walk-price premium line (#5) is kept distinct from the cover line (#5b): a walk
+spike and a drained larder are different signals and can fire independently.
 
 ### Measured (trade-pool probe, City preset, seed 11)
 
@@ -243,6 +264,16 @@ unchanged.
   work off ⇒ a longer glut even at the same clamped depth).
 - **Starvation premium** (larder drained to ~1 day of cover): quote pays up to
   **~1.25–1.39×** and holds for ~6 days until restock refills the shelf.
+- **Forward settlement feeds the pool** (Arc E follow-up; deliver 200 bread by
+  forward vs a deliberate default, walk held at center, measured 3 days out at
+  settlement): **before** — a settling forward moved no larder, so its quote sat
+  at the **1.000×** baseline (no overhang, cover 6.0d). **After** — the delivered
+  200 units land the quote at **0.874× (cover 6.9d)**, the *exact* overhang a
+  200-unit **spot** dump produces (0.874× in the sizing table above) — settlement
+  is now unified with the spot path. A **deliberate default** (nothing staged)
+  ships nothing and its larder is **byte-identical to the no-forward baseline**
+  (1.000×, cover 6.0d) — delivers nothing, feeds nothing. Money invariant across
+  the delivered settlement (Δ = 0).
 - **Conservation:** money invariant across a pooled export (Δ = 0).
 - **Determinism:** two seed-7 pooled runs agree bit-for-bit (inventory, rngState,
   full serialized state).

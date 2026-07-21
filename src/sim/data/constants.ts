@@ -131,6 +131,14 @@ export const TRADE_POOL_COVER_ELASTICITY = 1.0;
  * past the walk's own [0.6, 1.8]× band; the pool layers within, not beyond. */
 export const TRADE_POOL_MULT_MIN = 0.65;
 export const TRADE_POOL_MULT_MAX = 1.55;
+/** Cover (days of stock) at or below which the desk flags a pool city as
+ * running THIN (🔥) and the advisor nudges a stocked player to ship into the
+ * premium; at or above the GLUT bar it flags an overhang (🧊). Target cover is
+ * 6 days, so 4d ⇒ mult ≈ 1.5× (a strong, near-clamp premium worth acting on)
+ * and 9d ⇒ mult ≈ 0.67× (a clear multi-day glut). These are DISPLAY/advice
+ * thresholds only — they read cover, they never move price. */
+export const TRADE_POOL_THIN_COVER_DAYS = 4;
+export const TRADE_POOL_GLUT_COVER_DAYS = 9;
 /** During an announced tender (annMult > 1 — a pre-broadcast demand crunch) the
  * city can only restock at this fraction: its larder actually runs down, so the
  * headline shift bites through real cover, not just the walk center. 0.25 drains

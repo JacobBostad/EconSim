@@ -47,6 +47,33 @@ bit-identical, every-resident-simulated town.
   the store path targets (`probes/ai-lease.ts`: City 11/4/7 → 2 leases each,
   landlord healthy ~$56k, repossession returns the asset, money conserved; flag
   off → 0 landlords, 0 leases). Suite +7 (realEstate.test.ts, now 15).
+- **E follow-up — forward settlement feeds the pool + trade-desk polish**
+  (see docs/design/region.md): closes the divergence that doc flagged. A settling
+  forward SHIPS goods into the city, so for a pooled consumer good on a pool city
+  the delivered quantity now feeds the larder through the same per-product guard a
+  spot export uses (`pool?.inventory[productId] !== undefined`) — a delivered
+  forward creates the *exact* cover overhang a spot dump of the same size does. The
+  sign/close paper impacts on the walk stay put, correctly: they hedge the city's
+  demand at paper time when no goods move, so there's no larder delta to book then
+  — only settlement puts stock on the shelf. A deliberate default (the 15% penalty
+  path) ships nothing and feeds nothing. Flag-off is untouched by construction
+  (the pool only exists with `tradeDemandPoolsEnabled` on; `feedPool` no-ops when
+  there's no pool). **Polish:** the trade desk now shows cover in days on BOTH
+  ports (🔥 thin / 🧊 glutted, each chip prefixed by its port emoji) rather than
+  only the routed one, and the morning advisor gains a pool-aware nudge — ship
+  into a thin port's premium when you hold ≥ 10 units of what it's short of (cover
+  below the `TRADE_POOL_THIN_COVER_DAYS = 4` 🔥 bar), cover-driven and inert
+  flag-off. *Skipped:* no dedicated pool panel, no cover sparkline, no stacked
+  multi-port advisor lines — the desk carries the full both-port read and one nudge
+  per briefing suffices. Measured (trade-pool probe, City seed 11): a forward
+  delivering 200 bread lands the quote at 0.874× (cover 6.9d), the exact overhang a
+  200-unit spot dump produces, vs a 1.000× baseline before; a deliberate default is
+  byte-identical to the no-forward baseline (1.000×, 6.0d); money conserved across
+  settlement (Δ = 0). Suite +7 (forwards.test.ts: delivered-vs-default overhang,
+  forward-feeds-like-spot parity, village flag-off touches no pool; advisor.test.ts:
+  thin-pool nudge fires on thin-city + stocked-player, silent on no-stock / at-target
+  / flag-off village). Village 1/11/777 and city 11 pins untouched (no sim-path
+  change flag-off). Full suite green.
 - **Metropolis becomes a New Game option** (beta): the biggest world scale — a
   390×276 map, the 30-firm founder field, and the full 18-product catalog with
   the deep C3 chains — was engine-only and soak-proven for unattended AI; it is
