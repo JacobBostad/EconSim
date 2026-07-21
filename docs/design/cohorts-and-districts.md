@@ -873,6 +873,100 @@ calmed it re-collapsed a band), deferred.
   the bistable gates into a different-but-still-chaotic basin (crowdStart 150
   overshot comfortable to 43% on two seeds while blowing the gap to 15-20).
 
+### City headroom recalibration — the teens-firm target diagnosed (measured)
+
+The deferred-twice A3 crowd-tier pass: raise `founderUndersupplyFillRate` (City
+0.65) so the City carries 11-14 firms like the task's target, WITHOUT tripping
+the pinned pool-drift and worker-gap guards. Probe: `docs/design/probes/
+city-headroom.ts` (`FILLRATE`/`DAYS`/`SEEDS` env overrides), which reports the
+firm count, the 15-day test bands, BOTH gap metrics, and the full pool-drift
+guard (drift / $500 level / plateau) together, per seed. **Verdict: the teens
+target is blocked by a structural conflict, not a tuning gap — a robust landing
+needs a mechanism redesign beyond a calibration pass. No trigger change ships;
+the diagnosis and the validated first ingredient are recorded here.**
+
+**Reproduced — the raised trigger trips two guards (300 days × seeds 11/4/7):**
+
+| trigger | firms (11/4/7) | seed-11 band15 W/C | seed-11 gap(daily15) | seed-11 pool drift40→120 |
+|---------|----------------|--------------------|----------------------|--------------------------|
+| 0.65 (shipped) | 9 / 9 / 8 | 0.61 / 0.37 | **5.84** ✓ | **$0.46** ✓ |
+| 0.68 | 11 / 11 / 8 | 0.63 / 0.34 | 7.07 ✓ | **$2.22** ✗ |
+| 0.70 | 12 / 13 / 9 | 0.63¹/0.34¹ | **14.97** ✗ | **$2.22** ✗ |
+| 0.72 | 13 / 11 / 14 | 0.63¹/0.35¹ | **22.12** ✗ | **$2.22** ✗ |
+
+(¹ 45-day band; the A5 disclosure "221 > $2.00/cap/day, 22 > 8" is reproduced
+exactly at 0.72 seed 11: drift $2.22 = 221¢, gap 22.12.) **0.68 is the unique
+sweet spot** where seed 11 (the pinned seed) holds the bands AND the worker gap
+at 11 firms — the trigger sweep is chaotically non-monotone (0.66/0.67 fail the
+gap at 12.4/10.9; 0.68 passes at 7.07; 0.70 fails again at 15.0), the same
+bistability the A4 recalibration documented. At 0.68 the ONLY failing guard is
+pool-drift.
+
+**Why the pool-drift guard fires — a genuine runaway, not a bounded higher
+equilibrium.** At 0.68 seed 11 the per-capita cohort pool climbs monotonically
+**$367 (d80) → $466 (d120) → $556 (d200) → $662 (d290)** — it never plateaus (the
+flat `CROWD_RENT_PER_DAY` sink was calibrated for the ~9-firm equilibrium's
+~0.38 crowd employment; the extra firms lift employment to ~0.51, and the wage
+inflow scales with employment while the flat sink does not, so the pool runs away
+exactly as the pre-sink city-soak did). Against the shipped 0.65 (bounded:
+$362 → $325 → $367 → $407), this is the failure mode the guard exists to catch.
+The guard is correct; it is not re-pinnable.
+
+**The structural conflict — the runaway pool IS what feeds the comfortable band.**
+Founder firms pay `baseWage` **$16**, but the comfortable wage bar is `sub ×
+COMFORTABLE_WAGE_MULT` = **$18** — so crowd workers never clear the WAGE leg of
+the promotion gate, and comfortable-band formation rides the SAVINGS (pool) leg
+instead. That pool is the very thing the drift guard bounds. So the two guards
+pull in opposite directions at the raised trigger: a sink strong enough to tame
+the runaway drains the pool that the comfortable band lives on. Measured directly
+— a prosperity-scaled sink (drain per-capita pool above a floor) lands seed-11
+drift back under $2.00 and the pool plateaus, but comfortable **collapses to
+0.23-0.28**, out the bottom of the 25-40 band. The pool-drift guard and the
+comfortable-floor guard are the same knife-edge seen from two sides.
+
+**Validated first ingredient — decouple comfortable from the pool via wages.**
+The clean root-cause fix is to make comfortable formation ride the WAGE leg (which
+scales with firm count) rather than the runaway pool. Preset-gating the founder
+crowd wage to **$18** (Village keeps $16 — bit-identity) so crowd workers clear
+the comfortable bar, PLUS the prosperity sink, was measured at 0.68 seed 11:
+**10 firms, 0 insolvent, worker 0.68 ✓, comfortable 0.298 (at the band floor),
+gap(daily15) 2.26 ✓, drift $0.40 ✓, and the pool now PLATEAUS (d120−d80 = $6.9 «
+the 10% bar)** — the
+drift/level/plateau guards all pass with the band held and the field solvent,
+because comfortable no longer depends on the pool. This confirms the diagnosis
+and is the direction a future pass should build on.
+
+**Why it still does not ship — the worker gap stays chaotically bistable.** With
+the pool conflict decoupled, the last holdout is the worker cast-vs-cohort gap,
+and it remains the chaotic curator↔demotion oscillation this doc has documented
+throughout: across the founder-wage × sink sweep the seed-11 gap ranged 2.3-14.4
+and seeds 4/7 ranged 1.5-30 with no single setting seating the worker/comfortable
+split AND the gap on all three seeds at once (the persistent 21-point cast-worker
+starvation at 13-14 firms is a trip-limited-cast vs frictionless-cohort
+equilibrium divergence that WIDENS with supply, and the daily-|diff| oscillation
+component resists constant-level damping — a trailing-window demotion-flow EMA was
+prototyped and REJECTED: it damps the day-to-day variance but its lag shifts the
+mean flow enough to re-collapse a band, even at the shipped 0.65 trigger it pushed
+seed-11 worker to 0.72 / comfortable to 0.26). Widening the pinned 50-70 / 25-40
+bands to admit that regime is the one move this calibration does not make, so the
+trigger stays at 0.65 and the headroom work is scoped forward: the founder-wage
+decoupling lands cleanly, but the cast-worker gap needs a mechanism that gives the
+trip-limited cast the cohort's URGENT_TRIPS throughput WITHOUT feeding the founder
+fill-rate signal (which turns `WORKER_CATCHUP_BASKETS` twitchy — 2→3 collapsed the
+firm count to 5 by lifting fill above the trigger), a larger change than this pass.
+
+**Rejected/deferred here** (each measured): the honest slope re-pin of the drift
+guard (rejected — the pool is a true runaway, not a bounded turnover);
+constant-level demotion/curator damping (`DEMOTION_FLOW_RATE`, `MAX_SWAPS_PER_DAY`
+hysteresis — each re-collapsed a band, reproducing the A4 finding); a trailing-
+window demotion EMA (rejected — mean-shift re-collapses a band); `RESERVE_FACTOR`
+and `WORKER_CATCHUP_BASKETS` sweeps (the demand-side levers do not move the
+trip-limited cast worker, and the catch-up fights the founder signal); a shorter
+City founder cooldown for smoother pacing (pushed seed 11 into the collapsed
+comfortable-11 basin). The founder-wage-decoupling + prosperity-sink pair is the
+one measured result that resolves the pool↔comfortable conflict; it is documented
+as the forward path rather than shipped half-finished.
+
 ## Open questions
 
 - **Cast-vs-cohort shelf competition.** Within a shop-window slice,
