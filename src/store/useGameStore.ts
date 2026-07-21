@@ -20,7 +20,7 @@
 import { create } from 'zustand';
 import { Simulation } from '../sim/core/Simulation';
 import { createInitialState } from '../sim/data/startingScenario';
-import { configForDifficulty, type Difficulty } from '../sim/core/SimulationConfig';
+import { worldScaleConfig, type Difficulty } from '../sim/core/SimulationConfig';
 import type { GameState } from '../sim/core/GameState';
 import type { Command, Speed } from '../sim/core/Commands';
 import type { EntityId, FacilityDefId } from '../sim/core/Id';
@@ -51,6 +51,9 @@ interface GameStore {
   sim: Simulation;
   version: number;
   buildDefId: FacilityDefId | null;
+  /** When set, the next placed facility is LEASED from this landlord firm (HD4)
+   * instead of bought — the landlord fronts the cost and collects daily rent. */
+  leaseFromFirmId: string | null;
   dashboard: DashboardTab;
   showIntro: boolean;
   setShowIntro: (v: boolean) => void;
@@ -66,7 +69,7 @@ interface GameStore {
   setSpeed: (speed: Speed) => void;
   togglePause: () => void;
 
-  newGame: (seed?: number, difficulty?: Difficulty, scenarioId?: string, challenge?: boolean, size?: 'cozy' | 'bustling', world?: 'village' | 'city') => void;
+  newGame: (seed?: number, difficulty?: Difficulty, scenarioId?: string, challenge?: boolean, size?: 'cozy' | 'bustling', world?: 'village' | 'city' | 'metropolis') => void;
   save: () => void;
   load: () => void;
   hasSave: () => boolean;
@@ -76,6 +79,7 @@ interface GameStore {
 
   select: (id: EntityId | null) => void;
   setBuildDef: (defId: FacilityDefId | null) => void;
+  setLeaseFrom: (firmId: string | null) => void;
   setDashboard: (tab: DashboardTab) => void;
   /** Supply-chain flow overlay on the map (toggled with F). */
   flowOverlay: boolean;
@@ -109,6 +113,7 @@ export const useGameStore = create<GameStore>((set, get) => {
     sim,
     version: 0,
     buildDefId: null,
+    leaseFromFirmId: null,
     dashboard: 'none',
     showIntro: (() => {
       try { return localStorage.getItem('econsim.introSeen') !== '1'; } catch { return true; }
@@ -152,13 +157,14 @@ export const useGameStore = create<GameStore>((set, get) => {
       // game — stash it in the backup slot so a mis-click never costs a run.
       const old = get().sim.getState();
       if (old.tick > 0) saveGame(old, BACKUP_SLOT);
-      const sizeOverrides =
-        size === 'bustling' ? { maxHomes: 80, maxCitizens: 160, mapHeight: 124 } : {};
-      // World scale drives the cohort economy: 'city' turns the crowd on;
-      // 'village' (default) keeps the classic all-agent town bit-for-bit.
-      const worldOverride = world === 'city' ? { sizePreset: 'city' as const } : {};
+      // World scale drives the cohort economy: 'city'/'metropolis' turn the crowd
+      // on AND open the archetype/services/trade channels their founder baselines
+      // are gated for; Metropolis is the biggest map + full 18-product catalog and
+      // adds the player-only cash uplift. 'village' (default) keeps the classic
+      // all-agent town bit-for-bit. worldScaleConfig owns the wiring (shared with
+      // its tests).
       get().sim.setState(
-        createInitialState(seed, { ...configForDifficulty(difficulty), challengeMode: challenge, ...sizeOverrides, ...worldOverride }, scenarioId),
+        createInitialState(seed, worldScaleConfig(difficulty, challenge, size, world), scenarioId),
       );
       recordTownFounded();
       set({ buildDefId: null, showNewGame: false });
@@ -195,7 +201,8 @@ export const useGameStore = create<GameStore>((set, get) => {
       bump(true);
     },
 
-    setBuildDef: (defId) => set({ buildDefId: defId }),
+    setBuildDef: (defId) => set(defId ? { buildDefId: defId } : { buildDefId: null, leaseFromFirmId: null }),
+    setLeaseFrom: (firmId) => set({ leaseFromFirmId: firmId }),
     setDashboard: (tab) => set({ dashboard: tab }),
     flowOverlay: false,
     toggleFlowOverlay: () => set((s) => ({ flowOverlay: !s.flowOverlay })),

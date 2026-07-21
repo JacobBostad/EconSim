@@ -5,7 +5,7 @@
 
 import type { GameState } from '../core/GameState';
 import { companyValuation } from './companySelectors';
-import { CONSUMER_PRODUCT_IDS, getProduct } from '../data/products';
+import { CONSUMER_PRODUCT_IDS_BY_PRESET, getProduct } from '../data/products';
 import { getAchievementDef } from '../data/achievements';
 import { getMissionDef } from '../data/missions';
 import { ticksPerDay } from '../core/Tick';
@@ -74,7 +74,7 @@ export function quarterReport(state: GameState, quarter: number): QuarterReport 
   const netProfitTotal = hist.reduce((a, d) => a + d.netProfit, 0);
   const revenueTotal = hist.reduce((a, d) => a + d.revenue, 0);
 
-  const shares: ShareLine[] = CONSUMER_PRODUCT_IDS.map((pid) => {
+  const shares: ShareLine[] = CONSUMER_PRODUCT_IDS_BY_PRESET[state.config.sizePreset].map((pid) => {
     const h = state.marketStats[pid]?.history ?? [];
     const at = (day: number): number => {
       // Latest snapshot at or before `day` (0 when none).

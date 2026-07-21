@@ -23,6 +23,13 @@ export interface District {
   /** Live attractiveness cache (0..1), recomputed daily by DistrictSystem
    * from homes, jobs, and shops present — never read for money math in A2. */
   desirability: number;
+  /** Live land-value cache (0..1): the home-proximity land value sampled at the
+   * district's centre, recomputed daily by DistrictSystem from the same home
+   * snapshot the money path's landValueAt uses (A4). A per-district DAILY digest
+   * of the point kernel — a location-premium readout for the Districts panel, not
+   * a money-path input (the money path stays live; see LandValue.ts). Absent on
+   * saves written before A4 until the first daily pass repopulates it. */
+  landValue?: number;
   /** Cohort housing stock this district can hold (people, not homes). The
    * on-map homes remain the CAST's housing; the crowd lives here. */
   housingCapacity: number;

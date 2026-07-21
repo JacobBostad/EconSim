@@ -719,21 +719,448 @@ district land-value cache and the renderer culling/LOD/ambient-density
   and REJECTED (scaling the baskets up spikes promotion churn and pushes
   comfortable below its floor — measured seed-11 gap 26, comfortable 0.245).
 
+**As-built — district land-value cache (A4 deferred slice, now landed):**
+
+The deferral reasoning held up under measurement and shaped the final design.
+`landValueAt` (`core/LandValue.ts`) is *not* a per-tick sim cost: on a day-300
+City it is called ~115× over 300 days (2× on the final day) against 55 homes —
+the money path reads it only at build time (command-driven or day-boundary AI),
+never per tick. So caching the *point value* buys no tick-budget, and a
+per-district STEP aggregate could not reproduce the smooth kernel without
+gating. The cache therefore lands where the O(homes) sweeps actually are, and
+without touching the money path at all:
+
+- **`HomeIndex` (byte-identical selector).** `landValueAt` now resolves through
+  a flat homes-only snapshot (`buildHomeIndex` → `landValueFromIndex`), summing
+  the identical homes in the identical order with a `|dx|/|dy| ≥ REACH`
+  bounding-box reject that only short-circuits terms that were already 0. It is
+  a pure caching layer — `districtLandValue.test.ts` pins cached == direct
+  (the pre-A4 kernel, verbatim) byte-for-byte on a live City across seeds
+  11/4/7 × 120 days, and the Village 300-day rngState / money / econ-state hash
+  are unchanged (the money path stays live; a daily cache can't be same-day
+  exact when homes shift mid-tick, so it deliberately does not back it — the
+  timing contract is documented on `landValueAt`).
+- **Renderer overlay sweep.** `TownRenderer.landValues` built its cols×rows
+  land-value grid by calling `landValueAt` per cell — O(cols×rows×facilities).
+  It now builds one `HomeIndex` and samples every cell against it, pixel-for-
+  pixel unchanged. Measured on the 260×184 City (66×47 grid, 55 homes,
+  day-300 state): **14.1 ms → 0.6 ms per rebuild (~20–23×)**, checksum identical.
+- **Per-district daily digest.** DistrictSystem's existing daily pass now also
+  writes `district.landValue` (home-proximity value at the district centre) off
+  the same shared index — the Districts panel reads the cached number instead of
+  anything re-walking homes. A display digest, not a money-path input; written
+  at the top of the roll-up (the same snapshot timing `desirability` has).
+- **Perf.** City sim ms/tick day-281–300 is unchanged within run-to-run noise
+  (~0.52 → ~0.55, both far under the 0.8 ms A4 budget): there was no per-tick
+  land-value cost to remove, exactly as the deferral predicted. The win is the
+  render-time sweep above.
+
 **Deferred (explicitly not started):**
 
-- **District land-value cache.** `landValueAt` (`core/LandValue.ts`) is a
-  smooth per-point home-proximity kernel; a per-district daily aggregate is
-  a STEP function, so a Village-identical result is impossible without
-  gating (Village must keep the exact kernel). More to the point,
-  `landValueAt` is not in the per-tick sim hot path — it is read at build
-  time and in the renderer overlay — so the cache is a render-time
-  optimization, not a tick-budget necessity (City already runs at 0.27
-  ms/tick). Deferred to avoid re-perturbing the freshly-stabilized City
-  land-cost → build-cost → economy calibration for no tick-perf gain.
 - **Renderer culling / LOD / ambient density.** The renderer already reads
   `mapWidth`/`mapHeight` generically and draws the bigger maps (build + e2e
   smokes green), but viewport culling, LOD, and hash-derived crowd density
   are unstarted.
+
+### A4 geometry recalibration — the City tier economy back into band (measured)
+
+The A4 as-built flagged the drift and deferred the cure; this is the cure. The
+`tier-joint` probe reproduced the drift (300 days × seeds 11/4/7, 45-day-mean
+band): **worker 74/82/78, comfortable 24/17/20** against the 50-70 / 25-40
+target, with the worker cast-vs-cohort gap (the `tierAcceptance` daily-|diff|
+metric, 15-day mean) at **12.8/12.5/2.5** — the guard temporarily widened to 14.
+Both diagnosed causes were verified against ground truth, and one was refuted:
+
+- **(a) confirmed — the cast is trip-starved, not the crowd.** The doubled map
+  makes a cast worker's after-work shop window reach fewer stores, so it
+  completes fewer buys than its frictionless cohort (cast worker sat **49.5** vs
+  cohort **61.0**, seed 11). But the A3 lever for this — `WORKER_CATCHUP_BASKETS`
+  — is **supply-capped and cannot be turned up**: the city runs a chronic bread
+  shortage (~250-350 unmet/day), so buying MORE per trip just stockouts more
+  often and cast worker sat FALLS (measured WCB 2→3: 49.5→48.4, gap 11.5→13.9;
+  2→4: →46.9). The catch-up is already at its supply-limited optimum.
+- **(b) re-diagnosed — the depressor is jobless immigration, not shelf geometry.**
+  The bootstrap contention is real but not the binding constraint: crowd
+  employment has **no reach limit** (`CohortLaborSystem` pass 3 fills any firm's
+  open slots), so it is bounded by firm job-count, not by which district the
+  crowd sits in. The measured killer is that immigration gates on town
+  **satisfaction only** (≥ 55), never job supply, and inflow is proportional to
+  the worker cohort's own population — so it **compounds**. On the 260×184 map
+  the crowd floods to **472** against only **~155** jobs, and worker employment
+  share collapses to **0.20**. That cratered empShare quadratically throttles the
+  promotion gate (qualFrac ∝ satTerm²·wageFrac·empShare, wageFrac ≤ empShare, so
+  ∝ empShare²) — worker promotion's move-quantity `floor(pop · 0.07 · qualFrac)`
+  rounds to **zero** — while the idle over-tier is demoted at 2×. The gates land
+  in a **chaotic, bistable regime**: a 35-config constant sweep found the SAME
+  gate settings seating one seed at 60/37 and another at 92/6, each seed falling
+  into a "healthy" (~68/30) or "collapsed" (~90/6) basin by trajectory phase.
+  Pure gate-constant tuning cannot seat all three (documented below).
+
+**The two fixes** (both cohort-population-gated, hence Village bit-identical —
+re-verified: the 416-test suite incl. golden fixtures v1-v7 passes unchanged):
+
+- **`INFLOW_RATE` 0.004 → 0.002** (`CohortSocialSystem`). Halving the immigration
+  rate breaks the compounding, so the crowd stays proportionate to jobs (worker
+  empShare recovers to **0.32-0.38**) and the gates return to the stable regime
+  the A3 calibration was tuned for. The doc always called the migration rates
+  "starting values to pin against the soaks" — this is that pinning. The effect
+  is a **plateau, not a knife-edge**: once the flood stops, town avg sat sits
+  near the 55 bar and immigration barely fires, so 0.4×/0.5×/0.6× the base rate
+  give **bit-identical** 300-day outcomes; the plateau breaks upward only at
+  ~0.7× (immigration resumes, seed-7 comfortable falls back to 0.16). The crowd
+  now holds steady at **300** (bootstrap size) instead of ballooning to 472.
+- **`RESERVE_FACTOR` 1.0 → 1.7** (`CohortDemandSystem`). A **super-proportional**
+  cast shelf reservation: the trip-disadvantaged cast's fewer window trips now
+  land against a protected shelf (cast worker sat **49.5 → ~54-57**), which is
+  what the catch-up could not buy. This closes the worker gap AND — because a
+  happier cast worker promotes through the cast `TierSystem` and the curator
+  retires it into the crowd's comfortable cohort — **feeds the comfortable band**
+  (the curator re-seed is the real comfortable inflow, not the zero-flooring
+  promotion gate; the A3 "Combined re-measure" established this). `INFLOW` alone
+  lands only one seed with bad gaps (seed-4 gap 16.9); `RESERVE_FACTOR` alone
+  fixes the gap but leaves the bands flooded — the two are **complementary**.
+  Swept against the bands: 1.65 blows seed-4's gap to 18 and leaves seed-7 over
+  band, 1.8 pushes seed-11 back out; 1.7 seats all three (a narrow sweet spot —
+  the same chaotic-gate knife-edge the A3 `DEMOTION_FLOW_RATE`=2.0 pinning has).
+
+**Result — worker/comfortable/affluent land in band on all three seeds** (300
+days × seeds 11/4/7; 45-day-mean band; conservation exact to the cent):
+
+| seed | before (W/C/A) | after (W/C/A) | worker empShare (before→after) |
+|------|----------------|---------------|--------------------------------|
+| 11   | 74 / 24 / 2    | **68 / 30 / 2** | 0.20 → 0.38 |
+| 4    | 82 / 17 / 2    | **65 / 32 / 2** | 0.26 → 0.32 |
+| 7    | 78 / 20 / 2    | **66 / 31 / 2** | 0.24 → 0.36 |
+
+Worker 50-70 ✓ (all), comfortable 25-40 ✓ (all), affluent ≤ 15 ✓ (2-3%, its 5%
+floor still **waived** — the city-scale luxury-supply limit documented in the A3
+soak is unchanged), conservation exact ✓, crowd 300 / employment ~42-49% ✓,
+cast pop 109-123 ✓, **≤ 0.72 ms/tick** (engine avg; wall-clock ≤ 0.46) under the
+0.8 ms A4 budget ✓. Cast average satisfaction improved to 53.7/55.8/54.9 (run
+minimum 38/42/45), and the bread shortage eased (unmet 245/276/248/day vs 344 at
+the seed-11 baseline) — the smaller crowd is better fed.
+
+**Worker cast-vs-cohort gap — fixed on the tested seed, one honest residual.** By
+the `tier-joint` probe's mean-of-means metric the gap lands **2.6 / 8.0 / 5.7**
+(from 11.5 / 6.9 / 5.4) — in-band on all three. By the `tierAcceptance` suite's
+stricter **daily-|diff|** metric (15-day mean, which also captures the
+curator↔demotion day-to-day churn) it lands **5.84 / 7.02 / 14.88** (from
+12.8 / 12.5 / 2.5): seeds 11 and 4 improve, but **seed 7 oscillates to ~15**. Its
+45-day mean-of-means gap is 5.7 (cast and cohort worker sat track closely ON
+AVERAGE) — this is churn OSCILLATION, not a persistent gap, a known property of
+the chaotic gates this doc documents. The suite's 300-day case pins **seed 11**
+(the improved, tested seed, gap 5.84 ≤ 8); the residual is disclosed here rather
+than papered over. Driving seed-7's daily oscillation down requires damping the
+curator↔demotion churn (a mechanism change — every demotion-rate tweak that
+calmed it re-collapsed a band), deferred.
+
+**Rejected alternatives** (each measured, then discarded):
+
+- *Turning up `WORKER_CATCHUP_BASKETS`* — supply-capped; 2→3/4 LOWERS cast worker
+  sat and comfortable (cause (a) above). The A3 lever is dead on the big map.
+- *Gate-constant retuning* (`DEMOTION_FLOW_RATE`, promotion empShare exponent,
+  `GATE_HOLD_FRAC`) — the low-employment regime is bistable; no single setting
+  seats all three seeds (35-config sweep). Reducing demotion to lift comfortable
+  re-opened the worker gap (weak demotion stops dragging the cohort worker sat
+  down toward the cast's); the gap and the bands pull opposite ways under the
+  gates alone.
+- *Commercial-strip-above-residential map flip* (Village-faithful geometry) —
+  shortens cast trips but the **cohort shops from the residential CENTER**, which
+  the flip pushes farther from the top-placed stores; comfortable-cohort
+  satisfaction cratered to 8-32 and the band collapsed. The cohort, not the cast,
+  is most of the demand, and it wants commerce near the band center.
+- *Reversing home placement bottom-up / reducing `crowdStart`* — both perturbed
+  the bistable gates into a different-but-still-chaotic basin (crowdStart 150
+  overshot comfortable to 43% on two seeds while blowing the gap to 15-20).
+
+### City headroom recalibration — the teens-firm target diagnosed (measured)
+
+The deferred-twice A3 crowd-tier pass: raise `founderUndersupplyFillRate` (City
+0.65) so the City carries 11-14 firms like the task's target, WITHOUT tripping
+the pinned pool-drift and worker-gap guards. Probe: `docs/design/probes/
+city-headroom.ts` (`FILLRATE`/`DAYS`/`SEEDS` env overrides), which reports the
+firm count, the 15-day test bands, BOTH gap metrics, and the full pool-drift
+guard (drift / $500 level / plateau) together, per seed. **Verdict: the teens
+target is blocked by a structural conflict, not a tuning gap — a robust landing
+needs a mechanism redesign beyond a calibration pass. No trigger change ships;
+the diagnosis and the validated first ingredient are recorded here.**
+
+**Reproduced — the raised trigger trips two guards (300 days × seeds 11/4/7):**
+
+| trigger | firms (11/4/7) | seed-11 band15 W/C | seed-11 gap(daily15) | seed-11 pool drift40→120 |
+|---------|----------------|--------------------|----------------------|--------------------------|
+| 0.65 (shipped) | 9 / 9 / 8 | 0.61 / 0.37 | **5.84** ✓ | **$0.46** ✓ |
+| 0.68 | 11 / 11 / 8 | 0.63 / 0.34 | 7.07 ✓ | **$2.22** ✗ |
+| 0.70 | 12 / 13 / 9 | 0.63¹/0.34¹ | **14.97** ✗ | **$2.22** ✗ |
+| 0.72 | 13 / 11 / 14 | 0.63¹/0.35¹ | **22.12** ✗ | **$2.22** ✗ |
+
+(¹ 45-day band; the A5 disclosure "221 > $2.00/cap/day, 22 > 8" is reproduced
+exactly at 0.72 seed 11: drift $2.22 = 221¢, gap 22.12.) **0.68 is the unique
+sweet spot** where seed 11 (the pinned seed) holds the bands AND the worker gap
+at 11 firms — the trigger sweep is chaotically non-monotone (0.66/0.67 fail the
+gap at 12.4/10.9; 0.68 passes at 7.07; 0.70 fails again at 15.0), the same
+bistability the A4 recalibration documented. At 0.68 the ONLY failing guard is
+pool-drift.
+
+**Why the pool-drift guard fires — a genuine runaway, not a bounded higher
+equilibrium.** At 0.68 seed 11 the per-capita cohort pool climbs monotonically
+**$367 (d80) → $466 (d120) → $556 (d200) → $662 (d290)** — it never plateaus (the
+flat `CROWD_RENT_PER_DAY` sink was calibrated for the ~9-firm equilibrium's
+~0.38 crowd employment; the extra firms lift employment to ~0.51, and the wage
+inflow scales with employment while the flat sink does not, so the pool runs away
+exactly as the pre-sink city-soak did). Against the shipped 0.65 (bounded:
+$362 → $325 → $367 → $407), this is the failure mode the guard exists to catch.
+The guard is correct; it is not re-pinnable.
+
+**The structural conflict — the runaway pool IS what feeds the comfortable band.**
+Founder firms pay `baseWage` **$16**, but the comfortable wage bar is `sub ×
+COMFORTABLE_WAGE_MULT` = **$18** — so crowd workers never clear the WAGE leg of
+the promotion gate, and comfortable-band formation rides the SAVINGS (pool) leg
+instead. That pool is the very thing the drift guard bounds. So the two guards
+pull in opposite directions at the raised trigger: a sink strong enough to tame
+the runaway drains the pool that the comfortable band lives on. Measured directly
+— a prosperity-scaled sink (drain per-capita pool above a floor) lands seed-11
+drift back under $2.00 and the pool plateaus, but comfortable **collapses to
+0.23-0.28**, out the bottom of the 25-40 band. The pool-drift guard and the
+comfortable-floor guard are the same knife-edge seen from two sides.
+
+**Validated first ingredient — decouple comfortable from the pool via wages.**
+The clean root-cause fix is to make comfortable formation ride the WAGE leg (which
+scales with firm count) rather than the runaway pool. Preset-gating the founder
+crowd wage to **$18** (Village keeps $16 — bit-identity) so crowd workers clear
+the comfortable bar, PLUS the prosperity sink, was measured at 0.68 seed 11:
+**10 firms, 0 insolvent, worker 0.68 ✓, comfortable 0.298 (at the band floor),
+gap(daily15) 2.26 ✓, drift $0.40 ✓, and the pool now PLATEAUS (d120−d80 = $6.9 «
+the 10% bar)** — the
+drift/level/plateau guards all pass with the band held and the field solvent,
+because comfortable no longer depends on the pool. This confirms the diagnosis
+and is the direction a future pass should build on.
+
+**Why it still does not ship — the worker gap stays chaotically bistable.** With
+the pool conflict decoupled, the last holdout is the worker cast-vs-cohort gap,
+and it remains the chaotic curator↔demotion oscillation this doc has documented
+throughout: across the founder-wage × sink sweep the seed-11 gap ranged 2.3-14.4
+and seeds 4/7 ranged 1.5-30 with no single setting seating the worker/comfortable
+split AND the gap on all three seeds at once (the persistent 21-point cast-worker
+starvation at 13-14 firms is a trip-limited-cast vs frictionless-cohort
+equilibrium divergence that WIDENS with supply, and the daily-|diff| oscillation
+component resists constant-level damping — a trailing-window demotion-flow EMA was
+prototyped and REJECTED: it damps the day-to-day variance but its lag shifts the
+mean flow enough to re-collapse a band, even at the shipped 0.65 trigger it pushed
+seed-11 worker to 0.72 / comfortable to 0.26). Widening the pinned 50-70 / 25-40
+bands to admit that regime is the one move this calibration does not make, so the
+trigger stays at 0.65 and the headroom work is scoped forward: the founder-wage
+decoupling lands cleanly, but the cast-worker gap needs a mechanism that gives the
+trip-limited cast the cohort's URGENT_TRIPS throughput WITHOUT feeding the founder
+fill-rate signal (which turns `WORKER_CATCHUP_BASKETS` twitchy — 2→3 collapsed the
+firm count to 5 by lifting fill above the trigger), a larger change than this pass.
+
+**Rejected/deferred here** (each measured): the honest slope re-pin of the drift
+guard (rejected — the pool is a true runaway, not a bounded turnover);
+constant-level demotion/curator damping (`DEMOTION_FLOW_RATE`, `MAX_SWAPS_PER_DAY`
+hysteresis — each re-collapsed a band, reproducing the A4 finding); a trailing-
+window demotion EMA (rejected — mean-shift re-collapses a band); `RESERVE_FACTOR`
+and `WORKER_CATCHUP_BASKETS` sweeps (the demand-side levers do not move the
+trip-limited cast worker, and the catch-up fights the founder signal); a shorter
+City founder cooldown for smoother pacing (pushed seed 11 into the collapsed
+comfortable-11 basin). The founder-wage-decoupling + prosperity-sink pair is the
+one measured result that resolves the pool↔comfortable conflict; it is documented
+as the forward path rather than shipped half-finished.
+
+### City decoupling — the forward path built, measured against the real pins, and NOT shipped
+
+The follow-up pass built the two validated ingredients as real code and measured
+them across BOTH triggers × all three seeds × the ACTUAL committed guards (not just
+the probe), to answer the one question the diagnosis left open: does the decoupling
+ship at the shipped 0.65 trigger with margin restored, or does it hold all guards on
+all seeds at 0.68? **Verdict: neither. The decoupling is inseparable from the trigger
+raise — a raised-employment mechanism that BREAKS the pinned bands at 0.65 — and the
+raise itself still fails the cast-worker gap on seeds 4/7. The city stays at fill 0.65,
+$16 founder crowd wage, flat rent sink, bit-identical to today; the code was reverted.**
+
+**What was built (exactly the two ingredients).** (a) A per-preset `founderCrowdWage`
+in `SIZE_PRESETS`: City $18, Village/Metropolis $16 — the wage gate scoped to City
+alone, the honest preset-scope decision, because Metropolis's 24-30 founder / 0-insolvent
+pins are bit-identity-pinned at fill 0.80 with a 10k crowd, a regime the $18 decoupling
+was neither measured nor needed against (raising it there perturbs those pins for no gain).
+The comfortable wage bar `sub × 18/14` carries a sub-cent float tail (1800.0000000000002¢),
+so the cohort promotion bar was cent-rounded so a $18 founder wage clears it — provably
+inert to every pinned run (no pinned firm pays inside the sub-cent gap; the demotion FLOOR
+bar was left un-rounded because Metropolis $16 crowd sits a float epsilon under the $16
+floor and rounding would flip that pinned behavior). (b) A prosperity-scaled pool sink in
+`CrowdRentSystem` (`prosperityDrainFloor` / `prosperityDrainRate`, City-only, rate 0 for
+Village AND Metropolis so both stay byte-identical): above the floor a cohort sheds a
+fraction of its per-capita excess to the world each day, so the pool plateaus at any firm
+count.
+
+**The mechanism reproduces the diagnosis exactly (validation confirmed).** At 0.68 seed 11
+with the sink at floor $450 / rate 0.08, the probe measures **10 firms, 0 insolvent, worker
+0.625 / comfortable 0.351 (both in band), gap(daily15) 3.41 ✓, drift $1.35 ✓, pool plateaus
+d80 $369 → d120 $396** — the pool runaway is bounded and comfortable is held on the WAGE leg
+(the pool is drained below its savings bars, so comfortable no longer depends on it). This is
+the validated result the diagnosis recorded; the implementation is faithful.
+
+**Full guard table — 3 seeds × {0.65, 0.68} × {before, after decoupling}** (300-day probe;
+"after" = $18 wage + sink floor $450 / rate 0.08, the setting that reproduces the seed-11/0.68
+validation; band15 W/C, gap = daily-|diff| 15-day, drift = 40→120 $/cap/day; all 0 insolvent
+except where noted):
+
+| trigger | seed | before firms · W/C · gap · drift | after firms · W/C · gap · drift | after verdict |
+|---------|------|-----------------------------------|----------------------------------|---------------|
+| 0.65 | 11 | 9 · .609/.365 · 5.84 · 0.46 (PASS) | 10 · .645/.332 · **17.13** · 1.37 | gap ✗ |
+| 0.65 | 4 | 9 · .666/.310 · 7.02 · 0.39 (PASS) | 7 · **.771/.206** · 7.45 · −0.37 | band ✗ |
+| 0.65 | 7 | 8 · .655/.321 · 4.18 · 1.02 (PASS) | 9 · .651/.325 · 0.57 · 1.33 | bands ✓, plateau ✗ |
+| 0.68 | 11 | 11 · .632/.344 · 7.07 · **2.22** | 10 · .625/.351 · 3.41 · 1.35 | **PASS** |
+| 0.68 | 4 | 11 · .608/.367 · **13.33** · 0.39 (1 distressed) | 10 · **.791/.185** · **13.15** · −0.34 | band+gap ✗ |
+| 0.68 | 7 | 8 · .618/.358 · 3.91 · 1.02 | 9 · **.722/.254** · **10.13** · 1.60 | band+gap ✗ |
+
+**Against the ACTUAL committed tests (the load-bearing check).** `tierAcceptance.test.ts`
+guards seeds 4/7 with the 150-day forming band (W 0.58-0.80) and carries the tight 300-day
+band + gap≤8 on seed 11 only. Run with the decoupling live at the shipped 0.65 trigger:
+- **The $18 wage ALONE (sink inert) breaks seed-7's 150-day worker ceiling: 0.847 > 0.80** —
+  and 0.847 is not noise, it is the SAME value under wage-only and under every sink setting
+  (0.03/0.04/0.05), because the sink does not fire in the first 150 days. Worker 0.85 /
+  comfortable ~0.13 at day 150 is precisely the pre-A4-recalibration broken regime the band
+  was tightened to exclude ("seed 7 formed W 0.87 / C 0.11 at day 150" — the test's own
+  cited failure). Admitting it would widen a band to re-admit a broken regime, which this
+  calibration does not do.
+- Seed 11's 300-day pin holds under wage-only (0.655/0.322, gap 5.37) but ANY active sink
+  founds extra firms and blows its gap (17.13) or its worker ceiling (0.715).
+- At steady state (day 300) the decoupled 0.65 regime leaves **seed 4 comfortable 0.245 and
+  seed 7 comfortable 0.298 — both below the 25-40 band floor.** Broken, not slow-forming.
+
+**Root cause — sharper than the diagnosis (why it cannot ship incrementally at 0.65).** The
+decoupling shifts comfortable-band maintenance from the pool SAVINGS leg (capped at
+`SAVINGS_ROUTE_CAP` = 0.5) onto the WAGE leg, whose value is ≈ crowd `empShare`. That holds
+comfortable only when empShare ≥ ~0.5 — which happens ONLY at the raised trigger's higher firm
+count (the diagnosis's own "extra firms lift employment to ~0.51"). At the shipped 0.65 trigger
+employment runs ~0.30-0.42, AND the $18 payroll bump (+12.5%) suppresses it FURTHER through the
+`CROWD_WAGE_BUFFER_DAYS` hiring throttle — cash-constrained founders hire fewer crowd (seed 4:
+0.32 → 0.23). So the wage leg is WEAKER than the savings cap it replaced and comfortable falls
+out of the band bottom. **The decoupling is a raised-trigger-regime fix; it is inseparable from
+the trigger raise and degrades the 0.65 equilibrium it would ship into.** Firm solvency is not
+the failure mode — 0 insolvent throughout; the higher payroll bites as reduced HIRING, and the
+empShare-weighted gates translate that straight into a collapsed comfortable band.
+
+**Verdict.** Both ship paths are closed by measurement: the 0.68 raise fails the seeds-4/7 gap
+(13.15 / 10.13); the decoupling at 0.65 fails the pinned seed-7 150-day band and the seeds-4/7
+comfortable floor. The two ingredients are VALIDATED at seed-11/0.68 (pool runaway bounded,
+plateau, comfortable held on wages, 0 insolvent) but cannot seat all three seeds at either
+trigger. Blast radius confirmed inert by construction: the wage gate + sink are City-only
+(Village/Metropolis pin $16 and rate 0, byte-identical — Metropolis's 24-30/0-insolvent pins
+untouched), so nothing outside City ever moved. The pass reverts to bit-identity rather than
+ship a change that breaks a pinned band or re-pins one to admit a broken regime. The forward
+path from here is unchanged and is the whole-mechanism change the diagnosis named: give the
+trip-limited cast the cohort's URGENT_TRIPS throughput to close the cast-worker gap AND lift
+City crowd employment toward ~0.5 (so the wage leg can carry comfortable at 0.65) — e.g. a
+City founder-cash uplift to absorb the $18 payroll without shedding hires, measured jointly
+with the gap mechanism. The `founderCrowdWage` + prosperity-sink pair is the validated engine;
+it waits on that employment/gap work, not on further calibration of these two knobs alone.
+
+**Stretch (investors-on-city / C1-on-city) — untouched, as scoped.** Both remain gated off in
+the pinned City run (`investorsEnabled`/breadth catalog). They only become relevant once the
+decoupling actually ships (i.e. once the trigger can rise): an active holdco drains the firm
+sector against the public float, which would move the very crowd-tier bands this pass could not
+seat, and the C1 breadth engages the metropolis-only `BASKET_WEIGHT_BASELINE` renormalization
+on the City crowd — each is its own re-pin against a regime that does not yet exist. Not
+attempted here; noted as the next dependency after the employment/gap mechanism lands.
+
+### The City cast-parity mechanism — built, measured across the full grid, and NOT shipped
+
+This pass took up the forward path the decoupling verdict named: build the cast-parity
+gap mechanism and the employment lift, measure them JOINTLY across the full grid against
+all committed guards on all three seeds. The three ingredients the diagnosis asked for were
+built as real, City-preset-gated code — every one INERT at its default, so a plain
+`{...DEFAULT_CONFIG, sizePreset:'city'}` town is bit-identical to before (verified: the full
+545-test suite passes unchanged, Village untouched by construction). They are reproducible via
+`docs/design/probes/city-decoupling.ts` (env overrides `FILLRATE/WAGE/WCB/SYNTH/SINKFLOOR/
+SINKRATE/FCASH/IMMIGFLOOR`). **Verdict: NO SHIP. The full mechanism seats the pinned seed 11 on
+EVERY committed guard, but the trip-limited-cast worker gap stays supply-capped and bistable on
+seeds 4/7 — no grid cell seats all three. The City stays at fill 0.65, $16 founder crowd wage,
+flat rent, shipped-gate immigration, bit-identical to today; the mechanism lands dark.**
+
+**The gap mechanism (built).** `RetailDemandSystem`'s worker catch-up is now a preset knob
+(`catchupBaskets`) with an honest ACCOUNTING SPLIT (`catchupSyntheticSignal`): the catch-up
+tranche buys real stock and pays real revenue (money conserved, the citizen's need and the
+firm's P&L see the full purchase) but is EXCLUDED from the founder-visible market shortage gauge
+(`marketStats` units/unmet) — worker-catch-up demand is synthetic parity demand standing in for
+the URGENT_TRIPS the after-work window denies the jobbed cast worker, not market demand. This is
+exactly the "give the cast the cohort's throughput WITHOUT feeding the founder fill-rate signal"
+the diagnosis asked for, and it works as designed — but it uncovered the FIRST sharp result.
+
+**Sharp finding 1 — the honest split REVEALS the catch-up was inflating the firm count.** With
+the catch-up counted as market demand (shipped), its persistent UNMET portion inflated the
+founder's shortage signal — so some of the raised trigger's extra firms were an artifact of
+counting parity demand as a market shortage. Making the accounting honest DROPS the firm
+equilibrium: at 0.68 the field falls from 10/10/9 firms to 7/6/7 (synthetic on, WCB 4), and even
+at 0.78 the honest signal only carries ~9-11 firms (vs 12/11/13 with the catch-up double-counted).
+The gap mechanism and the firm-count headroom pull in OPPOSITE directions through the founder
+signal — the cleaner the accounting, the fewer firms capital is told to build.
+
+**Sharp finding 2 — closing the cast gap RE-TRIGGERS the jobless-immigration flood.** Recovering
+the firms via a higher trigger, combined with a happier cast, floods the crowd: immigration gates
+on town SATISFACTION only (≥ 55), never job supply (the A4 wall), so a well-served town attracts
+worker households faster than founders add jobs and crowd empShare craters to ~0.25-0.28
+regardless of firm count OR founder cash (a $22k→$30k founder-cash uplift left empShare at 0.28 —
+the binding constraint is NOT firm cash, it is the flood). The doc's `INFLOW_RATE = 0.002` pin
+only ever held because the STARVED cast kept town satisfaction near the bar; fix the cast's mood
+and 0.002 floods again. This pass built the missing third mechanism — an EMPLOYMENT-AWARE
+immigration gate (`immigrationEmpFloor`): inflow scaled by `clamp((empShare − floor)/(1 − floor))`
+so capital attracts labor only where there is work. It works: with the gate at floor 0.5 the crowd
+holds at its 300 bootstrap on every seed (no flood), and **seed 11 then seats every committed
+guard** (0.78 trigger, $18 wage, sink, WCB 4, gate 0.5: 9 firms, W 0.64 / C 0.34, gap 3.8, drift
+$0.14, 0 insolvent, conserved).
+
+**Sharp finding 3 — the cast-worker gap itself is supply-capped and bistable; the basket lever
+cannot close it on all seeds.** With the flood fixed and seed 11 seated, the last holdout is the
+cast-vs-cohort worker gap on seeds 4/7. Raising the catch-up does NOT close it: WCB 4→6→8 leaves
+the seed-4/7 gap pinned at ~20 (cast worker sat 47-52 vs frictionless cohort 63-67), and higher
+baskets make it WORSE (seed-4 cast worker 47→44 from WCB 4→6) — the cast is TRIP-limited, not
+basket-limited, so folding more into its one after-work visit just stockouts against a depleting
+shelf, exactly the supply cap the A4 recalibration measured. Decoupling the founder signal removed
+the twitchiness but not the cap. Seed 11 falls in the "healthy" basin and seeds 4/7 in the
+"collapsed" one — the same chaotic bistability documented throughout — and no basket count,
+trigger, sink, cash, or gate-floor setting swept here seats all three.
+
+**The joint grid (300 days × seeds 11/4/7; all rows $18 wage + prosperity sink floor $450 /
+rate 0.08 except the shipped baseline; band15 W/C, gap = daily-|diff| 15-day, drift = 40→120
+$/cap/day; committed guards = W .50-.70, C .30-.40, gap ≤ 8, drift < $2.00, level < $500, conserved):**
+
+| trigger · synth · WCB · gate | firms 11/4/7 | seed 11 W/C·gap·drift | seed 4 W/C·gap·drift | seed 7 W/C·gap·drift | verdict |
+|------------------------------|--------------|-----------------------|---------------------|---------------------|---------|
+| 0.65 · off · 2 · — (SHIPPED)  | 9/9/8   | .61/.37 · 5.8 · 0.46 | .67/.31 · 7.0 · 0.39 | .65/.32 · 4.2 · 1.02 | **all PASS** |
+| 0.68 · off · 2 · —            | 10/10/9 | .63/.35 · 3.4 · 1.35 | **.79/.18 · 13.2** · −.34 | **.72/.25 · 10.1** · 1.60 | 4/7 band+gap ✗ |
+| 0.68 · on · 4 · —             | 7/6/7   | **.84/.14 · 11.7** · .03 | **.78/.20** · 7.7 · .36 | **.71/.27** · 2.7 · .27 | firms collapse ✗ |
+| 0.72 · on · 3 · —             | 9/9/7   | .64/.33 · **15.9** · .32 | **.71/.27 · 13.4** · .31 | **.68/.30 · 13.4** · −.40 | gap+band ✗ |
+| 0.72 · on · 3 · — · $30k cash | —/9/8   | (empW 0.31) | .73/.25 · 3.7 · .42 | .69/.29 · 3.0 · −.32 | band ✗ (cash ≠ employment) |
+| 0.78 · on · 3 · —             | 12/11/13| .71/.27 · 9.6 · .32 | **.73/.24 · 15.8** · .31 | **.63/.35 · 19.6** · 1.30 | gap ✗ (empW flood) |
+| 0.78 · on · 4 · floor 0.5     | 9/10/11 | **.64/.34 · 3.8 · .14 PASS** | .69/**.29** · **21.4** · 1.06 | **.73/.26 · 17.0** · 1.12 | 4/7 gap+band ✗ |
+| 0.78 · on · 6 · floor 0.5     | 9/12/7  | .61/… · ~4 · — | .62/.35 · **20.4** · .10 | **.83/.16 · 21.5** · −.19 | gap ✗ (WCB worse) |
+| 0.78 · on · 8 · floor 0.5     | 10/12/8 | .65/… · ~5 · — | .65/.35 · **20.4** · .24 | .52/**.46 · 19.3** · .34 | gap ✗ (cap confirmed) |
+
+**What shipped: nothing (mechanism / decoupling / trigger all held at baseline).** No guard was
+re-pinned; no band was widened. The employment-gated immigration is the one genuinely new,
+clean mechanism the pass produced (it does exactly what the A4 flood diagnosis wanted), but it
+delivers no user-visible win ALONE at the shipped trigger (the baseline crowd already holds ~300)
+and cannot ship without the trigger raise it exists to enable — which the cast gap still blocks.
+All four ingredients (`founderCrowdWage`, `catchupSyntheticSignal` + `catchupBaskets`,
+`prosperityDrainFloor`/`Rate`, `immigrationEmpFloor`) remain in `SIZE_PRESETS` at their inert
+defaults as measured dark foundations for the next attempt.
+
+**The root cause, now three-layered (the pass's contribution over the prior diagnosis).** The
+prior verdict named ONE wall (the cast gap is trip-limited and bistable). This pass measured that
+the three levers are mutually locked: (1) the gap mechanism's honest accounting SUPPRESSES the
+firm count it needs, because the catch-up unmet was propping the founder signal up; (2) the
+employment the wage-leg needs is capped not by firms or cash but by a satisfaction-gated
+immigration flood that a HAPPIER cast makes WORSE, curable only by a new employment-aware gate;
+and (3) even with (1) and (2) resolved and seed 11 seated, the underlying cast-worker gap is
+supply-capped — more throughput stockouts rather than satisfies — so it stays bistable across
+seeds. The forward path is no longer "close the gap"; it is a cast-shopping model that gives the
+trip-limited worker the cohort's throughput WITHOUT more single-visit basket depth — a genuine
+extra shop-window VISIT against a restocked shelf (the cohort's slice settlement), which
+`CitizenScheduleSystem` does not today grant and which prior "extra cast trips" probes found
+contention-negative. That is a scheduling/routing change, not a demand-constant one, and is where
+the next attempt must start.
 
 ## Open questions
 

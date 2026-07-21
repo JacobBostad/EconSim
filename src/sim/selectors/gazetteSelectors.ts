@@ -6,10 +6,11 @@
 
 import type { GameState } from '../core/GameState';
 import type { GameEvent } from '../core/Events';
-import { CONSUMER_PRODUCT_IDS, ALL_PRODUCT_IDS, getProduct } from '../data/products';
+import { CONSUMER_PRODUCT_IDS_BY_PRESET, PRODUCT_IDS_BY_PRESET, getProduct } from '../data/products';
 import { ticksPerDay } from '../core/Tick';
 import { cityPrice, exportFreightFee } from '../core/Trade';
 import { TRADE_CITY_IDS, getTradeCity } from '../data/tradeCities';
+import { poolCoverDays } from '../data/tradePool';
 
 export interface GazetteStory {
   severity: GameEvent['severity'];
@@ -82,7 +83,7 @@ export function gazetteEditions(state: GameState, days: number): GazetteEdition[
       .map((ev) => ({ severity: ev.severity, category: ev.category, text: ev.message }));
 
     const ticker: string[] = [];
-    for (const pid of CONSUMER_PRODUCT_IDS) {
+    for (const pid of CONSUMER_PRODUCT_IDS_BY_PRESET[state.config.sizePreset]) {
       const hist = state.marketStats[pid]?.history ?? [];
       const snap = hist.find((h) => h.day === day) ?? (day === today ? null : undefined);
       if (snap) {
@@ -115,6 +116,15 @@ export interface TradeDeskRow {
   otherNet: number;
   /** Per-unit advantage of shipping to the better port, cents. */
   spread: number;
+  /** Days of cover the better port's demand pool holds (Arc E, opt-in) —
+   * thin cover means it's paying a premium, an overhang means a glut.
+   * Undefined when the pool is off (the classic pure-walk desk). */
+  bestCover?: number;
+  /** The OTHER port's emoji and cover, so the desk shows the supply read on
+   * both cities rather than only the one it routes to (both run pools flag-on;
+   * both undefined flag-off). */
+  otherCityEmoji: string;
+  otherCover?: number;
 }
 
 /**
@@ -124,7 +134,7 @@ export interface TradeDeskRow {
  */
 export function tradeDesk(state: GameState, limit = 4): TradeDeskRow[] {
   const rows: TradeDeskRow[] = [];
-  for (const pid of ALL_PRODUCT_IDS) {
+  for (const pid of PRODUCT_IDS_BY_PRESET[state.config.sizePreset]) {
     const nets = TRADE_CITY_IDS.map((cid) => ({
       cid,
       net: Math.round(cityPrice(state, cid, pid) * (1 - exportFreightFee(state, cid))),
@@ -132,6 +142,14 @@ export function tradeDesk(state: GameState, limit = 4): TradeDeskRow[] {
     const best = nets[0]!;
     const other = nets[nets.length - 1]!;
     const city = getTradeCity(best.cid);
+    // Arc E: if the better port runs a demand pool for this product, read its
+    // cover (days of stock) so the desk shows WHY the quote is where it is.
+    const stock = state.tradeCities[best.cid]?.pool?.inventory[pid];
+    const bestCover =
+      stock === undefined ? undefined : poolCoverDays(best.cid, pid, stock);
+    const otherStock = state.tradeCities[other.cid]?.pool?.inventory[pid];
+    const otherCover =
+      otherStock === undefined ? undefined : poolCoverDays(other.cid, pid, otherStock);
     rows.push({
       productId: pid,
       productName: getProduct(pid).name,
@@ -141,6 +159,9 @@ export function tradeDesk(state: GameState, limit = 4): TradeDeskRow[] {
       bestNet: best.net,
       otherNet: other.net,
       spread: best.net - other.net,
+      otherCityEmoji: getTradeCity(other.cid).emoji,
+      ...(bestCover === undefined ? {} : { bestCover }),
+      ...(otherCover === undefined ? {} : { otherCover }),
     });
   }
   rows.sort((a, b) => b.spread - a.spread);

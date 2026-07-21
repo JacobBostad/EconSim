@@ -58,7 +58,7 @@ describe('SELL_FACILITY', () => {
     ).toBe(false);
   });
 
-  it("cannot sell a rival's facility or a home", () => {
+  it("cannot sell a rival's facility or the importer", () => {
     const { sim, state, player } = chainedPlayer(23);
     const rivalFac = findFacilityByName(state, 'Sunrise Bakery');
     const cashBefore = player.cash;
@@ -66,7 +66,19 @@ describe('SELL_FACILITY', () => {
     expect(state.facilities[rivalFac.id]).toBeTruthy();
     expect(player.cash).toBe(cashBefore);
 
+    // The importer is a world fixture, never a business asset.
+    const importer = Object.values(state.facilities).find((f) => f.type === 'importer')!;
+    expect(sellRefund(state, importer.ownerFirmId, importer.id)).toBeNull();
+  });
+
+  it('lets an apartment be sold like any facility (Phase 5)', () => {
+    // Homes carry book value and sell now — building one is no longer a
+    // permanent write-off. The world firm owns the town's homes; selling one
+    // refunds half its (land-adjusted) build cost, conserved.
+    const { state } = chainedPlayer(24);
     const home = Object.values(state.facilities).find((f) => f.type === 'home')!;
-    expect(sellRefund(state, home.ownerFirmId, home.id)).toBeNull();
+    const refund = sellRefund(state, home.ownerFirmId, home.id);
+    expect(refund).not.toBeNull();
+    expect(refund).toBe(Math.floor(home.buildCost * 0.5));
   });
 });

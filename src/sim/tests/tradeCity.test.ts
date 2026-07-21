@@ -2,7 +2,10 @@ import { describe, it, expect } from 'vitest';
 import { newSim } from './helpers';
 import { ticksPerDay } from '../core/Tick';
 import { totalMoneySupply } from '../core/GameState';
-import { getProduct, ALL_PRODUCT_IDS } from '../data/products';
+import { getProduct, PRODUCT_IDS_BY_PRESET } from '../data/products';
+// Village sims: trade cities price only the products present at the Village
+// preset (the Arc C1 breadth is metropolis-only — see products.ts). Iterate the
+// preset catalog, not the whole table, or the C1 ids have no Village trade book.
 import { getQuantity, addStock } from '../entities/Inventory';
 import { deserialize, serialize } from '../persistence/saveLoad';
 import {
@@ -22,7 +25,7 @@ describe('Port Rosa trade', () => {
     b.run(tpd * 30 + 1);
 
     let moved = false;
-    for (const pid of ALL_PRODUCT_IDS) {
+    for (const pid of PRODUCT_IDS_BY_PRESET['village']) {
       const base = getProduct(pid).basePrice;
       const price = a.getState().tradeCities['port_rosa']!.pricesByProduct[pid]!;
       expect(price).toBeGreaterThanOrEqual(Math.round(base * TRADE_PRICE_MIN_MULT));
@@ -70,7 +73,7 @@ describe('Port Rosa trade', () => {
     const raw = JSON.parse(serialize(state));
     delete raw.tradeCities;
     const loaded = deserialize(JSON.stringify(raw));
-    for (const pid of ALL_PRODUCT_IDS) {
+    for (const pid of PRODUCT_IDS_BY_PRESET['village']) {
       expect(loaded.tradeCities['port_rosa']!.pricesByProduct[pid]).toBe(getProduct(pid).basePrice);
       expect(loaded.tradeCities['ironvale']!.pricesByProduct[pid]).toBe(
         Math.round(getProduct(pid).basePrice * cityBias('ironvale', pid)),
@@ -100,7 +103,7 @@ describe('Ironvale — the second trade city', () => {
     b.run(tpd * 30 + 1);
 
     let differs = false;
-    for (const pid of ALL_PRODUCT_IDS) {
+    for (const pid of PRODUCT_IDS_BY_PRESET['village']) {
       const base = getProduct(pid).basePrice;
       const bias = cityBias('ironvale', pid);
       const price = a.getState().tradeCities['ironvale']!.pricesByProduct[pid]!;

@@ -12,7 +12,7 @@
 import { SAVE_VERSION } from '../core/GameState';
 import type { GameState } from '../core/GameState';
 import type { AccountingPeriod } from '../entities/Accounting';
-import { CONSUMER_PRODUCT_IDS, ALL_PRODUCT_IDS } from '../data/products';
+import { PRODUCT_IDS_BY_PRESET, CONSUMER_PRODUCT_IDS_BY_PRESET } from '../data/products';
 import { emptyMarketStat } from '../entities/Market';
 import { defaultNeedFor } from '../entities/factories';
 import { emptyFacilityDailyStats } from '../entities/Facility';
@@ -27,9 +27,22 @@ import { seedNeedBuckets } from '../entities/Cohort';
 
 type Raw = Record<string, unknown>;
 
-const MIGRATIONS: Record<number, (raw: Raw) => Raw> = {
-  // Example for the future:
-  // 1: (raw) => ({ ...raw, saveVersion: 2, newField: defaultValue }),
+export const MIGRATIONS: Record<number, (raw: Raw) => Raw> = {
+  // v1 -> v2 (Arc D1, the firm-archetype framework): every firm's strategy gains
+  // an `archetype`. Old saves predate specialist firms, so every firm was an
+  // operator — stamp `strategy.archetype = 'operator'` on each. Money, rng,
+  // facilities, contracts are untouched: the loaded world is byte-for-byte the
+  // same run it was, now carrying one new classifier field per firm.
+  1: (raw) => {
+    const firms = raw.firms as Record<string, { strategy?: { archetype?: string } }> | undefined;
+    if (firms) {
+      for (const id in firms) {
+        const strat = firms[id]?.strategy;
+        if (strat && strat.archetype === undefined) strat.archetype = 'operator';
+      }
+    }
+    return { ...raw, saveVersion: 2 };
+  },
 };
 
 export function migrate(raw: Raw): GameState {
@@ -56,6 +69,8 @@ function normPeriod(p: Partial<AccountingPeriod> | undefined): AccountingPeriod 
     maintenance: p?.maintenance ?? 0,
     logisticsCost: p?.logisticsCost ?? 0,
     variableProductionCost: p?.variableProductionCost ?? 0,
+    serviceExpense: p?.serviceExpense ?? 0,
+    rentExpense: p?.rentExpense ?? 0,
     marketing: p?.marketing ?? 0,
     rnd: p?.rnd ?? 0,
     interest: p?.interest ?? 0,
@@ -90,20 +105,43 @@ function normalize(state: GameState): GameState {
   state.facilityOffer = state.facilityOffer ?? null;
   state.fireSalesBought = state.fireSalesBought ?? 0;
   state.deskTrades = state.deskTrades ?? 0;
+  // World-scale era player-action tallies (missions/achievements): saves
+  // predating them load at 0 and stay inert until a City/Metropolis game turns
+  // the underlying channels on.
+  state.forwardsClosed = state.forwardsClosed ?? 0;
+  state.poolFeedsWhileThin = state.poolFeedsWhileThin ?? 0;
+  state.poolCoversRestored = state.poolCoversRestored ?? 0;
+  state.landlordRepossessions = state.landlordRepossessions ?? 0;
   state.emigrationPressure = state.emigrationPressure ?? 0;
   state.emigrationDepartures = state.emigrationDepartures ?? 0;
   state.marketGapDays = state.marketGapDays ?? {};
   state.marketUndersupplyDays = state.marketUndersupplyDays ?? {};
   state.lastUndersupplyEntryDay = state.lastUndersupplyEntryDay ?? 0;
+  state.investorSignalDays = state.investorSignalDays ?? 0;
+  state.lastInvestorEntryDay = state.lastInvestorEntryDay ?? 0;
+  // Service-provider founder signal (Arc D4): saves predating it load with empty
+  // counters and no last-entry day — inert until a City game turns services on.
+  state.serviceUncoveredDays = state.serviceUncoveredDays ?? {};
+  state.lastServiceEntryDay = state.lastServiceEntryDay ?? 0;
   state.sharePriceShift = state.sharePriceShift ?? {};
   state.config.sizePreset = state.config.sizePreset ?? 'village';
+  // B2B services channel (HD3): saves predating it load with the channel off and
+  // no contracts — inert until a new City game turns it on.
+  state.config.servicesEnabled = state.config.servicesEnabled ?? false;
+  state.config.investorsEnabled = state.config.investorsEnabled ?? false;
+  state.serviceContracts = state.serviceContracts ?? {};
+  // Real-estate firms channel (Arc D2, HD4): saves predating it load with the
+  // channel off — no landlord ever founds until a City game turns it on.
+  state.config.realEstateEnabled = state.config.realEstateEnabled ?? false;
+  state.housingTightDays = state.housingTightDays ?? 0;
+  state.lastLandlordEntryDay = state.lastLandlordEntryDay ?? 0;
   state.districts = state.districts ?? defaultDistrictPartition(state.config);
   state.cohorts = state.cohorts ?? {};
   // Cohorts saved before the demand engine landed carry no urgency buckets;
   // seed them at the baseline default (no-op for Village saves — empty map).
   for (const cid in state.cohorts) {
     const co = state.cohorts[cid]!;
-    co.needBuckets = co.needBuckets ?? seedNeedBuckets();
+    co.needBuckets = co.needBuckets ?? seedNeedBuckets(state.config.sizePreset);
     co.dayEvents = co.dayEvents ?? { fulfilled: 0, unmet: 0, pricedOut: 0 };
   }
   state.lastLapsedFireSale = state.lastLapsedFireSale ?? null;
@@ -126,6 +164,10 @@ function normalize(state: GameState): GameState {
   let aiSeen = 0;
   for (const id in state.firms) {
     const f = state.firms[id]!;
+    // Firm archetype (Arc D1): the versioned v1->v2 migration stamps this on
+    // every firm; the defensive fill covers any save that reaches here without
+    // it (e.g. a hand-rolled fixture) — every firm today is an operator.
+    f.strategy.archetype = f.strategy.archetype ?? 'operator';
     f.brandByProduct = f.brandByProduct ?? {};
     f.adBudgetByProduct = f.adBudgetByProduct ?? {};
     f.qualityByProduct = f.qualityByProduct ?? {};
@@ -158,6 +200,8 @@ function normalize(state: GameState): GameState {
     f.accounting.today = normPeriod(f.accounting.today);
     f.accounting.dailyHistory = (f.accounting.dailyHistory ?? []).map((d) => ({
       ...d,
+      serviceExpense: d.serviceExpense ?? 0,
+      rentExpense: d.rentExpense ?? 0,
       marketing: d.marketing ?? 0,
       rnd: d.rnd ?? 0,
       interest: d.interest ?? 0,
@@ -168,6 +212,8 @@ function normalize(state: GameState): GameState {
     }));
     f.accounting.weeklyHistory = (f.accounting.weeklyHistory ?? []).map((d) => ({
       ...d,
+      serviceExpense: d.serviceExpense ?? 0,
+      rentExpense: d.rentExpense ?? 0,
       marketing: d.marketing ?? 0,
       rnd: d.rnd ?? 0,
       interest: d.interest ?? 0,
@@ -191,7 +237,9 @@ function normalize(state: GameState): GameState {
     c.storeReliability = c.storeReliability ?? {};
     c.skill = c.skill ?? 1.0;
     // Products added after the save was written: give citizens the need.
-    for (const pid of CONSUMER_PRODUCT_IDS) {
+    // Preset-gated (C1): a Village save never gains a City-only need, so
+    // loading it stays byte-identical; a City save backfills the breadth needs.
+    for (const pid of CONSUMER_PRODUCT_IDS_BY_PRESET[state.config.sizePreset]) {
       if (!c.needs.some((n) => n.productId === pid)) {
         const need = defaultNeedFor(pid);
         if (need) c.needs.push(need);
@@ -225,8 +273,9 @@ function normalize(state: GameState): GameState {
       delete (f as unknown as { retailProductId?: string | null }).retailProductId;
     }
   }
-  // ...and give the market a stat entry for them.
-  for (const pid of ALL_PRODUCT_IDS) {
+  // ...and give the market a stat entry for them (preset-gated so a Village
+  // save never grows a City-only product key — see startingScenario).
+  for (const pid of PRODUCT_IDS_BY_PRESET[state.config.sizePreset]) {
     state.marketStats[pid] = state.marketStats[pid] ?? emptyMarketStat(pid);
   }
   // Trade cities: single-city saves carried `tradeCity` (Port Rosa); move it
@@ -239,7 +288,7 @@ function normalize(state: GameState): GameState {
   delete (state as unknown as { tradeCity?: unknown }).tradeCity;
   for (const cid of TRADE_CITY_IDS) {
     state.tradeCities[cid] = state.tradeCities[cid] ?? { pricesByProduct: {} };
-    for (const pid of ALL_PRODUCT_IDS) {
+    for (const pid of PRODUCT_IDS_BY_PRESET[state.config.sizePreset]) {
       state.tradeCities[cid]!.pricesByProduct[pid] =
         state.tradeCities[cid]!.pricesByProduct[pid] ??
         Math.round(getProduct(pid).basePrice * cityBias(cid, pid));

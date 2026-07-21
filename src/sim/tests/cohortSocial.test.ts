@@ -88,7 +88,7 @@ describe('Cohort social (world-scale A3 slice 3)', () => {
     // Replace the crowd with one struggling comfortable block: no jobs, low
     // satisfaction, and savings under the floor.
     state.cohorts = {};
-    const comfortable = emptyCohort(districtId, 'comfortable');
+    const comfortable = emptyCohort(districtId, 'comfortable', 'city');
     comfortable.population = 100;
     comfortable.employed = 0;
     comfortable.avgSatisfaction = 20;

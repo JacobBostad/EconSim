@@ -23,6 +23,18 @@ export interface MissionDef {
   /** Reward in cents, paid on completion. */
   reward: number;
   check: (state: GameState) => boolean;
+  /**
+   * Optional eligibility gate. A mission is only offered in a game where its
+   * systems EXIST: `activeMission` skips a def whose `eligible` returns false, so
+   * it never becomes the active mission and never completes there. World-scale
+   * era missions gate on their channel's config flag, which is OFF at Village
+   * preset — so the Village chain is byte-identical (state.missions never gains
+   * an era id) and the era arc only surfaces in a City/Metropolis game. A def
+   * with no `eligible` is offered everywhere (the classic chain). See the
+   * scenario-gated achievements (town_lifted / mill_country) for the sibling
+   * idiom on the achievement side.
+   */
+  eligible?: (state: GameState) => boolean;
 }
 
 function player(state: GameState) {
@@ -218,6 +230,89 @@ export const MISSION_DEFS: MissionDef[] = [
     reward: dollars(5000),
     check: (s) => companyValuation(s, s.playerFirmId).valuation >= dollars(30000),
   },
+
+  // --- World-scale era (City/Metropolis only) ------------------------------
+  // These teach the specialist channels a full City world switches on: leasing
+  // premises, B2B compute, rival stakes, and the trade-city demand pools. Each
+  // gates on its channel's config flag (OFF at Village preset), so activeMission
+  // skips them in a Village game and the classic chain stays byte-identical.
+  {
+    id: 'lease_premises',
+    name: "Lease, Don't Buy",
+    icon: '🔑',
+    description:
+      'Open a premises without the build bill: when you place a facility, pick a landlord to LEASE from (the Build panel offers it once a property firm is in town) — the landlord fronts the capital and you pay daily rent instead.',
+    reward: dollars(3000),
+    eligible: (s) => s.config.realEstateEnabled,
+    check: (s) => {
+      const p = player(s);
+      if (!p) return false;
+      return p.facilities.some((fid) => s.facilities[fid]?.landlordFirmId !== undefined);
+    },
+  },
+  {
+    id: 'subscribe_compute',
+    name: 'Plug In',
+    icon: '🔌',
+    description:
+      "Subscribe your firm to a datacenter's compute (the Company dashboard lists providers and their per-seat price) — full coverage runs every producing facility of yours a few percent faster.",
+    reward: dollars(3000),
+    eligible: (s) => s.config.servicesEnabled,
+    check: (s) => {
+      const p = player(s);
+      if (!p) return false;
+      return Object.values(s.serviceContracts).some(
+        (c) => c.subscriberFirmId === p.id && c.serviceId === 'compute',
+      );
+    },
+  },
+  {
+    id: 'buy_stake',
+    name: 'Own a Piece',
+    icon: '📜',
+    description:
+      "Buy a stake in a rival (the Company dashboard's holdings tab) — a healthy firm pays you dividends on your share of its profit, an income stream you never have to staff.",
+    reward: dollars(4000),
+    eligible: (s) => s.config.sizePreset !== 'village',
+    check: (s) => {
+      const p = player(s);
+      if (!p) return false;
+      return Object.values(p.sharesHeld).some((v) => v > 0);
+    },
+  },
+  {
+    id: 'read_ports',
+    name: 'Read the Ports',
+    icon: '🧭',
+    description:
+      "Ship into a hungry port: the Trade Desk flags a port whose larder has run thin (🔥 low cover) and pays a premium for it — export a staple there from your warehouse while its cover is below the thin bar.",
+    reward: dollars(3000),
+    eligible: (s) => s.config.tradeDemandPoolsEnabled,
+    check: (s) => s.poolFeedsWhileThin >= 1,
+  },
+  {
+    id: 'four_streams',
+    name: 'Four Streams',
+    icon: '🏙️',
+    description:
+      'Run a full world-scale firm: hold all four income streams at once — a selling retail store, a rent stream (a premises you lease OR one you lease OUT as landlord), a dividend stake in a rival, and a live compute boost.',
+    reward: dollars(8000),
+    eligible: (s) => s.config.servicesEnabled && s.config.realEstateEnabled,
+    check: (s) => {
+      const p = player(s);
+      if (!p) return false;
+      const retail = p.facilities.some((fid) => {
+        const f = s.facilities[fid];
+        return f?.type === 'retail' && f.retailProductIds.length > 0;
+      });
+      const rent =
+        p.facilities.some((fid) => s.facilities[fid]?.landlordFirmId !== undefined) ||
+        Object.values(s.facilities).some((f) => f.landlordFirmId === p.id);
+      const dividends = Object.values(p.sharesHeld).some((v) => v > 0);
+      const boost = (p.serviceBoost ?? 1) > 1;
+      return retail && rent && dividends && boost;
+    },
+  },
 ];
 
 const DEF_BY_ID: Record<string, MissionDef> = Object.fromEntries(
@@ -228,11 +323,23 @@ export function getMissionDef(id: string): MissionDef | undefined {
   return DEF_BY_ID[id];
 }
 
-/** The first incomplete mission in the chain, or null when all are done. */
+/** Missions offered in THIS game — the classic chain plus any era missions
+ * whose channel is switched on. Village drops every eligible-gated era mission,
+ * so its chain is exactly the classic list. */
+export function eligibleMissions(state: GameState): MissionDef[] {
+  return MISSION_DEFS.filter((d) => !d.eligible || d.eligible(state));
+}
+
+/** The first incomplete, ELIGIBLE mission in the chain, or null when all the
+ * game's offered missions are done. An ineligible def (an era mission in a
+ * Village game) is skipped, never surfaced, and never checked — so it can never
+ * complete and perturb Village's serialized mission list. */
 export function activeMission(state: GameState): MissionDef | null {
   const done = new Set(state.missions.map((m) => m.id));
   for (const def of MISSION_DEFS) {
-    if (!done.has(def.id)) return def;
+    if (done.has(def.id)) continue;
+    if (def.eligible && !def.eligible(state)) continue;
+    return def;
   }
   return null;
 }

@@ -135,9 +135,12 @@ describe('Cast stock reservation (soak finding (b): the crowd starves the cast)'
     expect(crowdPurchasableStock(100, 1)).toBe(0);
     // Empty shelf reserves nothing to divide.
     expect(crowdPurchasableStock(0, 0.5)).toBe(0);
-    // Rounds the reservation UP: 100 x 0.12 = 12 reserved -> crowd may buy 88.
-    expect(crowdPurchasableStock(100, 0.12)).toBe(88);
-    // A thin shelf still leaves the cast something: ceil(1 x 0.05) = 1 reserved,
+    // Rounds the reservation UP and scales by RESERVE_FACTOR (1.7, A4 geometry
+    // recalibration): ceil(100 x 0.12 x 1.7) = ceil(20.4) = 21 reserved for the
+    // trip-disadvantaged cast -> the crowd may buy 79.
+    expect(crowdPurchasableStock(100, 0.12)).toBe(79);
+    // A thin shelf still leaves the cast something: ceil(1 x 0.05 x 1.7) = 1
+    // reserved,
     // so the crowd's purchasable stock is 0 and the last unit survives for the
     // cast's RetailDemandSystem.
     expect(crowdPurchasableStock(1, 0.05)).toBe(0);

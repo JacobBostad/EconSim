@@ -2,6 +2,14 @@ import React from 'react';
 import { useGameStore } from '../store/useGameStore';
 import { gazetteEditions, tradeDesk } from '../sim/selectors/gazetteSelectors';
 import { formatMoney } from '../utils/formatMoney';
+import { TRADE_POOL_THIN_COVER_DAYS, TRADE_POOL_GLUT_COVER_DAYS } from '../sim/data/constants';
+
+/** A cover reading as a compact chip: 🔥 thin (premium) / 🧊 glutted, then days. */
+function coverChip(emoji: string, cover: number): string {
+  const icon = cover < TRADE_POOL_THIN_COVER_DAYS ? '🔥 ' : cover > TRADE_POOL_GLUT_COVER_DAYS ? '🧊 ' : '';
+  const days = cover >= 100 ? '99+' : cover.toFixed(1);
+  return `${emoji} ${icon}${days}d`;
+}
 
 /** The Town Gazette — a daily-newspaper view of the event stream. */
 export function GazetteDashboard(): React.ReactElement {
@@ -27,6 +35,12 @@ export function GazetteDashboard(): React.ReactElement {
                 {r.bestCityEmoji} {r.bestCityName} nets {formatMoney(r.bestNet)}/u
                 {r.spread > 0 && (
                   <span className="muted"> (+{formatMoney(r.spread)} vs the other port)</span>
+                )}
+                {r.bestCover !== undefined && (
+                  <span className="muted">
+                    {' '}· cover {coverChip(r.bestCityEmoji, r.bestCover)}
+                    {r.otherCover !== undefined && `  ${coverChip(r.otherCityEmoji, r.otherCover)}`}
+                  </span>
                 )}
               </span>
             </div>

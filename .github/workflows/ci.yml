@@ -33,3 +33,4 @@ jobs:
       - run: npx vite preview --port 4173 & sleep 3
       - run: npm run e2e
       - run: npm run e2e:deep
+      - run: npm run e2e:city

@@ -15,8 +15,10 @@ import { getProduct } from '../data/products';
 import { getQuantity } from '../entities/Inventory';
 import { formatMoney } from '../../utils/formatMoney';
 import { pickBestCity } from '../core/Trade';
-import { getTradeCity } from '../data/tradeCities';
-import { FOUNDER_GAP_DAYS } from '../data/constants';
+import { getTradeCity, TRADE_CITY_IDS } from '../data/tradeCities';
+import { poolCoverDays } from '../data/tradePool';
+import { PRODUCT_IDS_BY_PRESET } from '../data/products';
+import { FOUNDER_GAP_DAYS, TRADE_POOL_THIN_COVER_DAYS } from '../data/constants';
 import { founderMaxAiFirms } from '../systems/AIFounderSystem';
 
 export interface Advice {
@@ -199,6 +201,37 @@ export function morningBriefing(state: GameState): Advice[] {
       }
     }
     if (found) break;
+  }
+
+  // 5b. Trade (Arc E, pool-on): a trade city's larder is running THIN on
+  // something the player actually holds, so shipping into the premium pays.
+  // This is COVER-driven, not walk-price-driven like #5 above: a pooled city
+  // can drain its shelf below the desk's 🔥 bar (paying up) even while the walk
+  // sits at center, and #5's `best.price >= 1.3× base` test would miss it.
+  // Pure over state — no rng; the pool only exists flag-on, so this is inert in
+  // every pinned (flag-off) run by construction (pool is undefined → skipped).
+  // Sorted-product iteration; fires on the first held short product, one line.
+  poolThin: for (const facId of player.facilities) {
+    const fac = state.facilities[facId];
+    if (!fac) continue;
+    for (const cid of TRADE_CITY_IDS) {
+      const pool = state.tradeCities[cid]?.pool;
+      if (!pool) continue;
+      for (const pid of PRODUCT_IDS_BY_PRESET[state.config.sizePreset]) {
+        const stock = pool.inventory[pid];
+        if (stock === undefined) continue; // not a product this city stocks
+        if (poolCoverDays(cid, pid, stock) >= TRADE_POOL_THIN_COVER_DAYS) continue; // not thin
+        const held = getQuantity(fac.inputInventory, pid) + getQuantity(fac.outputInventory, pid);
+        if (held < 10) continue; // nothing exportable to ship in
+        const city = getTradeCity(cid);
+        items.push({
+          icon: '🔥',
+          severity: 'info',
+          text: `${city.name} is running thin on ${getProduct(pid).name} (${poolCoverDays(cid, pid, stock).toFixed(1)}d cover) and you hold ${held} — stage them in a warehouse and export into the premium before its larder refills.`,
+        });
+        break poolThin;
+      }
+    }
   }
 
   // Emigration pressure: the town has been miserable for days and families

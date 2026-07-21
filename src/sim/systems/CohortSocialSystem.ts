@@ -41,7 +41,7 @@ import type { CitizenTier } from '../entities/Citizen';
 import { clamp } from '../../utils/clamp';
 import { dollars } from '../data/constants';
 import { SIZE_PRESETS } from '../core/SimulationConfig';
-import { needWeight, soldSomewhere } from './SatisfactionSystem';
+import { needWeight, soldSomewhere, BASKET_WEIGHT_BASELINE } from './SatisfactionSystem';
 import {
   COMFORTABLE_WAGE_MULT,
   COMFORTABLE_WAGE_FLOOR_MULT,
@@ -58,6 +58,7 @@ import {
   PROMOTION_DAYS,
   AFFLUENT_PROMOTION_DAYS,
   DEMOTION_DAYS,
+  tierNeedGrowthMult,
 } from './TierSystem';
 import {
   IMMIGRATION_MIN_SATISFACTION,
@@ -145,8 +146,36 @@ const SAVINGS_ROUTE_CAP = 0.5;
  */
 const FLOAT_RESERVE_CENTS = 140_00;
 
-/** Migration rates at cohort scale (starting values, to pin against soaks). */
-const INFLOW_RATE = 0.004;
+/**
+ * Migration rates at cohort scale. OUTFLOW is the A3 starting value. INFLOW was
+ * RE-PINNED from 0.004 to 0.002 in the A4 geometry recalibration (docs/design/
+ * cohorts-and-districts.md, "A4 geometry recalibration").
+ *
+ * The immigration gate reads only town SATISFACTION (≥ 55), never job supply, so
+ * a satisfied-but-jobless town keeps attracting worker households — and inflow is
+ * proportional to the worker cohort's own population, so it COMPOUNDS. On the
+ * 130×92 A3 City the crowd stayed roughly proportionate to the jobs the firms
+ * could staff; on the 260×184 A4 map the same 0.004 floods the worker tier faster
+ * than founders add jobs (crowd 472 vs ~155 jobs at day 300), so worker
+ * employment share collapses to ~0.20. That cratered empShare quadratically
+ * throttles the promotion gate (qualFrac ∝ satTerm²·wageFrac·empShare, and
+ * wageFrac ≤ empShare, so ∝ empShare²) AND drives the demotion holdFactor down
+ * (an idle over-tier is demoted at 2×), pushing the whole gate system into a
+ * chaotic, bistable regime — measured worker 74-82 / comfortable 16-25 against
+ * the 50-70 / 25-40 bands, with the same constants landing one seed at 60/37 and
+ * another at 92/6.
+ *
+ * Halving the rate breaks the compounding so the crowd stays proportionate to
+ * jobs (worker empShare ~0.27-0.40): the gates return to the stable regime the A3
+ * calibration was tuned for, and worker/comfortable seat in-band on all three
+ * seeds. The effect is a PLATEAU, not a knife-edge — immigration barely fires
+ * once the flood stops (town avg sat sits near the 55 bar), so 0.4×, 0.5×, and
+ * 0.6× the base rate give BIT-IDENTICAL 300-day outcomes; the plateau breaks
+ * upward at ~0.7× (immigration resumes, seed-7 comfortable falls back to 16).
+ * 0.002 sits mid-plateau. Cohort-gated (runMigration is behind the anyCrowd
+ * guard), so Village is untouched.
+ */
+const INFLOW_RATE = 0.002;
 const OUTFLOW_RATE = 0.003;
 /** Each arrival brings this much cash from the world account — the same
  * per-capita the seedCrowd bootstrap and cast immigration use. */
@@ -210,13 +239,17 @@ function updateSatisfaction(ctx: SimContext, cohort: Cohort, soldCache: Record<s
 
   // Unmet-need pressure summed over the urgency buckets (convex in urgency, so
   // buckets read the persistent tail a mean would miss). Averaged over the
-  // NEED_BUCKETS, and left un-renormalized against today's basket (baseline 1).
+  // NEED_BUCKETS.
   let pressure = 0;
+  let basketW = 0;
   for (const pid of Object.keys(cohort.needBuckets).sort()) {
     const b = cohort.needBuckets[pid]!;
     if (soldCache[pid] === undefined) soldCache[pid] = soldSomewhere(state, pid);
     const sellerFactor = soldCache[pid] ? 1 : 0.5;
     const w = needWeight(pid);
+    // Basket weight this tier actually wants — the denominator of the same A1
+    // renormalization the cast applies (SatisfactionSystem.basketNormalization).
+    if (tierNeedGrowthMult(cohort.tier, pid) > 0) basketW += w;
     let sum = 0;
     for (let i = 0; i < NEED_BUCKETS; i++) {
       const over = b[i]! - config.needUrgentThreshold;
@@ -224,6 +257,16 @@ function updateSatisfaction(ctx: SimContext, cohort: Cohort, soldCache: Record<s
     }
     pressure += sum / NEED_BUCKETS;
   }
+  // Renormalize against the tier's basket exactly as the cast does (A1): a
+  // broader catalog REDISTRIBUTES the crowd's unmet-need exposure instead of
+  // stacking unbounded satisfaction drag as products are added. Provably inert
+  // for the CITY crowd — its basket is the base catalog (the C1 breadth is
+  // metropolis-only), and every base tier's wanted basket sums to <=
+  // BASKET_WEIGHT_BASELINE (3.2), so the factor is exactly 1 and the pinned city
+  // tier calibration is untouched. It engages only for the METROPOLIS crowd,
+  // whose basket carries the C1 breadth past the baseline. Village never runs
+  // this system.
+  if (basketW > BASKET_WEIGHT_BASELINE) pressure *= BASKET_WEIGHT_BASELINE / basketW;
 
   let target = 50 + 20 * empShare - 5 * (1 - empShare);
   target += clamp(15 - pressure * 12, -30, 15);
@@ -286,7 +329,14 @@ function runTierGates(
   let promoted = false;
   if (nextTier) {
     const toAffluent = nextTier === 'affluent';
-    const wageBar = sub * (toAffluent ? AFFLUENT_WAGE_MULT : COMFORTABLE_WAGE_MULT);
+    // Cent-round the promotion wage bar: `sub * (18/14)` carries a sub-cent float
+    // tail (1800.0000000000002¢), so a founder paying exactly $18 (1800¢) would
+    // NOT clear a raw `>=` compare. Rounding to the nearest cent lets the City
+    // decoupling's $18 crowd wage clear the comfortable bar, and is provably inert
+    // to every pinned run (no pinned firm pays inside the sub-cent gap). The
+    // demotion FLOOR bar is left un-rounded on purpose (Metropolis's $16 crowd
+    // sits a float epsilon under the $16 floor — rounding would flip that pin).
+    const wageBar = Math.round(sub * (toAffluent ? AFFLUENT_WAGE_MULT : COMFORTABLE_WAGE_MULT));
     const satBar = toAffluent ? AFFLUENT_SATISFACTION : COMFORTABLE_SATISFACTION;
     const savingsBar = toAffluent ? AFFLUENT_WEALTH_CENTS : COMFORT_SAVINGS_CENTS;
     const needed = toAffluent ? AFFLUENT_PROMOTION_DAYS : PROMOTION_DAYS;
@@ -396,7 +446,7 @@ function moveMass(
   const destId = cohortId(source.districtId, targetTier);
   let dest = state.cohorts[destId];
   if (!dest) {
-    dest = emptyCohort(source.districtId, targetTier);
+    dest = emptyCohort(source.districtId, targetTier, state.config.sizePreset);
     // The moved crowd keeps its cravings — copy the source's buckets rather
     // than starting the new tier at the seed baseline.
     dest.needBuckets = {};
@@ -488,6 +538,15 @@ function runMigration(state: GameState, cohortIds: string[]): void {
   }
   const townAvg = headcount > 0 ? satMass / headcount : 0;
 
+  // Employment-aware immigration gate (City cast-parity pass). The satisfaction
+  // gate below never reads job supply, so a well-served town floods its worker
+  // cohort faster than founders add jobs and empShare craters — the wall the
+  // cast-parity mechanism hit (closing the cast gap raises town satisfaction and
+  // re-triggers the flood). When `immigrationEmpFloor` > 0, inflow is scaled by
+  // the worker cohort's employment headroom above the floor, so immigration halts
+  // when jobs are scarce and resumes as they fill. 0 = disabled = shipped gate.
+  const empFloor = SIZE_PRESETS[state.config.sizePreset].immigrationEmpFloor;
+
   // Inflow to worker cohorts while the town is attractive and there is room.
   if (townAvg >= IMMIGRATION_MIN_SATISFACTION) {
     for (const cid of cohortIds) {
@@ -497,6 +556,11 @@ function runMigration(state: GameState, cohortIds: string[]): void {
       if (room <= 0) break;
       const desirability = state.districts[cohort.districtId]?.desirability ?? 0;
       let inflow = Math.floor(cohort.population * INFLOW_RATE * (0.5 + desirability));
+      if (empFloor > 0) {
+        const empShare = cohort.population > 0 ? cohort.employed / cohort.population : 0;
+        const jobFactor = clamp((empShare - empFloor) / (1 - empFloor), 0, 1);
+        inflow = Math.floor(inflow * jobFactor);
+      }
       inflow = Math.min(inflow, room);
       if (inflow <= 0) continue;
       cohort.population += inflow;

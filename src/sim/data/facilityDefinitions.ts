@@ -7,8 +7,11 @@
  */
 
 import type { FacilityDefinition } from '../entities/Facility';
-import type { FacilityDefId } from '../core/Id';
+import type { FacilityDefId, RecipeId } from '../core/Id';
+import type { SizePreset } from '../core/SimulationConfig';
 import { dollars } from './constants';
+import { getRecipe } from './recipes';
+import { productAvailableInPreset } from './products';
 
 export const FACILITY_DEFS: Record<FacilityDefId, FacilityDefinition> = {
   home: {
@@ -46,10 +49,10 @@ export const FACILITY_DEFS: Record<FacilityDefId, FacilityDefinition> = {
     maintenanceCostPerDay: dollars(8),
     workerCapacity: 5,
     storageCapacity: 200,
-    allowedRecipes: ['grow_grain', 'grow_cotton'],
+    allowedRecipes: ['grow_grain', 'grow_cotton', 'grow_produce', 'tan_leather', 'cut_lumber', 'grow_grapes'],
     allowedProductsForSale: [],
     footprint: 4,
-    description: 'Grows grain or cotton. Needs workers; no inputs required.',
+    description: 'Grows grain or cotton — and, in a city, produce, leather, lumber or grapes. Needs workers; no inputs required.',
   },
   mine: {
     id: 'mine',
@@ -72,11 +75,17 @@ export const FACILITY_DEFS: Record<FacilityDefId, FacilityDefinition> = {
     maintenanceCostPerDay: dollars(11),
     workerCapacity: 6,
     storageCapacity: 240,
-    allowedRecipes: ['bake_bread', 'roast_coffee', 'make_tools', 'sew_clothes', 'bake_pastries', 'craft_jewelry'],
+    // Arc C3 appends the intermediate/deep-chain recipes (smelt_steel,
+    // forge_appliances, mill_planks, assemble_furniture) AFTER the classic and
+    // C1 entries: their outputs are metropolis-only, so facilityRecipesForPreset
+    // filters them out of Village/City — the Village slice keeps its exact order
+    // and membership. The legacy assemble_appliances/build_furniture stay for
+    // save-compat (a mid-flight metropolis factory set to them keeps running).
+    allowedRecipes: ['bake_bread', 'roast_coffee', 'make_tools', 'sew_clothes', 'bake_pastries', 'craft_jewelry', 'cook_meals', 'make_shoes', 'build_furniture', 'assemble_appliances', 'ferment_wine', 'smelt_steel', 'forge_appliances', 'mill_planks', 'assemble_furniture'],
     allowedProductsForSale: [],
     footprint: 4,
     description:
-      'Manufactures goods from inputs: bread, tools, clothes — or luxury pastries and jewelry once your craft quality reaches 75.',
+      'Manufactures goods from inputs: bread, tools, clothes — or luxury pastries and jewelry once your craft quality reaches 75. In a metropolis, also meals, shoes, wine, and the deep chains that smelt steel into appliances and mill planks into furniture.',
   },
   warehouse: {
     id: 'warehouse',
@@ -100,9 +109,45 @@ export const FACILITY_DEFS: Record<FacilityDefId, FacilityDefinition> = {
     workerCapacity: 4,
     storageCapacity: 160,
     allowedRecipes: [],
-    allowedProductsForSale: ['bread', 'coffee', 'tools', 'clothes', 'pastries', 'jewelry'],
+    allowedProductsForSale: ['bread', 'coffee', 'tools', 'clothes', 'pastries', 'jewelry', 'meals', 'shoes', 'furniture', 'appliances', 'wine'],
     footprint: 3,
-    description: 'Sells one consumer product to citizens. Needs staff to operate.',
+    description: 'Sells consumer products to citizens. Needs staff to operate.',
+  },
+  datacenter: {
+    id: 'datacenter',
+    name: 'Datacenter',
+    type: 'datacenter',
+    // Pricier than a factory: a datacenter is a capital play whose return is a
+    // recurring seat bill from other firms, not goods on a shelf.
+    buildCost: dollars(9000),
+    maintenanceCostPerDay: dollars(30),
+    // A small ops crew; not required to serve seats (capacity is 40 × level),
+    // but the slots let a provider run payroll like any other employer.
+    workerCapacity: 3,
+    storageCapacity: 0,
+    allowedRecipes: [],
+    allowedProductsForSale: [],
+    footprint: 4,
+    description:
+      'Sells compute seats to other firms (city-scale B2B). 40 seats per level; a firm with full seat coverage produces 6% faster company-wide.',
+  },
+  office: {
+    id: 'office',
+    name: 'Consulting Office',
+    type: 'office',
+    // Cheaper than a datacenter (Arc D4): an office is a lighter capital play —
+    // advisory seats, not compute — whose return is a recurring seat bill.
+    buildCost: dollars(4000),
+    maintenanceCostPerDay: dollars(14),
+    // A small advisory crew; not required to serve seats (capacity is 24 × level),
+    // but the slots let a provider run payroll like any other employer.
+    workerCapacity: 3,
+    storageCapacity: 0,
+    allowedRecipes: [],
+    allowedProductsForSale: [],
+    footprint: 3,
+    description:
+      'Sells advisory seats to other firms (city-scale B2B). 24 seats per level; a firm with full seat coverage builds brand 10% faster per ad dollar.',
   },
   importer: {
     id: 'importer',
@@ -125,7 +170,23 @@ export function getFacilityDef(id: FacilityDefId): FacilityDefinition {
   return d;
 }
 
-/** Definitions the player may build (excludes home/importer). */
+/**
+ * The recipes a facility of this definition may run at a given preset — the
+ * master `allowedRecipes` minus any whose output product doesn't exist here
+ * (Arc C1). A facility's serialized `recipes` array is a copy of this list, so
+ * gating the copy keeps every Village facility byte-identical (the C1 recipes
+ * append after the classic ones, so the Village slice is unchanged in order and
+ * membership) while City/Metropolis facilities gain the breadth recipes.
+ */
+export function facilityRecipesForPreset(def: FacilityDefinition, preset: SizePreset): RecipeId[] {
+  return def.allowedRecipes.filter((rid) =>
+    getRecipe(rid).outputs.every((o) => productAvailableInPreset(o.productId, preset)),
+  );
+}
+
+/** Definitions the player may build (excludes home/importer). The service
+ * facilities (datacenter, office) are NOT here: they are city-scale only and
+ * appended by buildableDefs() below so a Village build menu never shows them. */
 export const BUILDABLE_DEFS: FacilityDefinition[] = [
   FACILITY_DEFS.farm!,
   FACILITY_DEFS.apartment!,
@@ -134,3 +195,20 @@ export const BUILDABLE_DEFS: FacilityDefinition[] = [
   FACILITY_DEFS.warehouse!,
   FACILITY_DEFS.retail!,
 ];
+
+/**
+ * Buildable set for a given world scale. Village gets exactly BUILDABLE_DEFS
+ * (the classic menu, untouched). City-scale worlds with the B2B services
+ * channel enabled also offer the two service facilities (datacenter, office) —
+ * the facilities gated on both the size preset AND the services flag, mirroring
+ * the engine's gates.
+ */
+export function buildableDefs(config: {
+  sizePreset: 'village' | 'city' | 'metropolis';
+  servicesEnabled: boolean;
+}): FacilityDefinition[] {
+  if (config.sizePreset !== 'village' && config.servicesEnabled) {
+    return [...BUILDABLE_DEFS, FACILITY_DEFS.datacenter!, FACILITY_DEFS.office!];
+  }
+  return BUILDABLE_DEFS;
+}

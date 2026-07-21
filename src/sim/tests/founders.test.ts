@@ -1,10 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { ticksPerDay, computeTime } from '../core/Tick';
-import { Rng } from '../core/Random';
+import { ticksPerDay } from '../core/Tick';
 import { Simulation } from '../core/Simulation';
 import { createInitialState } from '../data/startingScenario';
 import type { GameState } from '../core/GameState';
-import { totalMoneySupply } from '../core/GameState';
+import { makeContext, totalMoneySupply } from '../core/GameState';
 import { runAIFounderSystem, founderRoll, founderMaxAiFirms } from '../systems/AIFounderSystem';
 import {
   FOUNDER_EARLIEST_DAY,
@@ -23,10 +22,7 @@ function runFounderDays(state: GameState, days: number, satisfaction = 70): void
   for (let i = 0; i < days; i++) {
     state.tick += tpd - (state.tick % tpd || tpd) + tpd;
     for (const c of Object.values(state.citizens)) c.satisfaction = satisfaction;
-    runAIFounderSystem({
-      state, config: state.config, rng: new Rng(state),
-      time: computeTime(state.tick, state.config),
-    });
+    runAIFounderSystem(makeContext(state));
   }
 }
 
@@ -175,10 +171,7 @@ function runFounderDaysMiserable(state: GameState, days: number): void {
     state.tick += tpd - (state.tick % tpd || tpd) + tpd;
     for (const c of Object.values(state.citizens)) c.satisfaction = 30;
     for (const cid in state.cohorts) state.cohorts[cid]!.avgSatisfaction = 30;
-    runAIFounderSystem({
-      state, config: state.config, rng: new Rng(state),
-      time: computeTime(state.tick, state.config),
-    });
+    runAIFounderSystem(makeContext(state));
   }
 }
 
@@ -274,5 +267,64 @@ describe('AI founder — city under-supply entry', () => {
     const fillRate = sold / (sold + unmet);
     expect(fillRate).toBeGreaterThan(0.65);
     expect(totalMoneySupply(state)).toBe(supply0); // money conserved across the run
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Metropolis founder scale-up (A5) — the 30-firm cap actually HAPPENS, and the
+// scale-up is solvent. The founder-scale probe measured the pre-A5 loop stuck at
+// 5-6 firms on Metropolis (the world-cash gate blocked ~200/300 days while a
+// screaming shortage went unanswered); after the A5 pacing fixes it fills to
+// ~24-30. One seed / 250 crowd-running days: a full-sim Metropolis run is the
+// suite's heaviest (~3.5s of engine work — the 10k-cohort crowd plus 25+ firms),
+// so this pins the achievement at a single representative seed rather than
+// paying that cost three times. City coverage stays with the shortage test above.
+// ---------------------------------------------------------------------------
+describe('AI founder — metropolis scale-up (A5)', () => {
+  it('fills toward the 30-firm cap with a solvent field and no silent placement abort', () => {
+    const state = createInitialState(7, { ...DEFAULT_CONFIG, sizePreset: 'metropolis' });
+    const supply0 = totalMoneySupply(state);
+    const sim = new Simulation(state);
+    sim.dispatch({ type: 'RESUME' });
+    const startAi = aiCount(state);
+    const storeCount = () =>
+      Object.values(state.facilities).filter((f) => f.retailProductIds.length > 0).length;
+    const startStores = storeCount();
+    const tpd = ticksPerDay(state.config);
+    sim.run(tpd * 250);
+
+    // Scale-up: the founders answered the crowd's shortage in force — far past
+    // the pre-A5 5-6 ceiling and into the 25+ band the cap now supports. The bar
+    // (22) sits well under the ~27 this seed reaches, so ordinary drift can't
+    // flake it, while still proving the metropolis-class fill (a City tops out
+    // near 13, a Village at 6).
+    const ai = aiCount(state);
+    expect(ai).toBeGreaterThanOrEqual(22);
+    expect(ai).toBeLessThanOrEqual(SIZE_PRESETS.metropolis.founderMaxAiFirms); // never exceeds the cap
+
+    // No silent placement abort: foundFirm dissolves a firm whose chain can't be
+    // built (returns the capital and deletes it), so every surviving AI firm must
+    // carry a real, fully-built chain — a retail store to sell from and its
+    // producer+factory behind it. A store-less or partial firm would mean a build
+    // that half-failed; there are none.
+    for (const f of Object.values(state.firms)) {
+      if (f.ownerType !== 'ai') continue;
+      const facs = f.facilities.map((id) => state.facilities[id]!).filter(Boolean);
+      expect(facs.some((fac) => fac.type === 'retail')).toBe(true);
+      expect(facs.length).toBeGreaterThanOrEqual(3); // producer + factory + store
+    }
+    // The store count grew with the firm count — the district commercial slots
+    // absorbed every founding without running out of ground.
+    expect(storeCount()).toBeGreaterThan(startStores + 15);
+    expect(ai).toBeGreaterThan(startAi);
+
+    // Solvent scale-up: 25+ firms competing must NOT cascade into mass insolvency
+    // (the A5 founding-runway + solvency-brake work). No AI firm is insolvent at
+    // day 250, and the founding capital stayed conserved to the cent throughout.
+    const insolvent = Object.values(state.firms).filter(
+      (f) => f.ownerType === 'ai' && f.bankruptcyStatus === 'insolvent',
+    ).length;
+    expect(insolvent).toBe(0);
+    expect(totalMoneySupply(state)).toBe(supply0);
   });
 });

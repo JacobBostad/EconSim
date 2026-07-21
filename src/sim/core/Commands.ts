@@ -35,6 +35,13 @@ export type Command =
       firmId: FirmId;
       defId: FacilityDefId;
       location: Vec2;
+      /**
+       * Lease the premises from this landlord firm instead of buying it (HD4).
+       * The landlord fronts the build cost and collects daily rent; the builder
+       * pays $0 upfront and operates it. A firm can never lease from itself
+       * (`leaseFrom !== firmId`, rejected). Omit for an ordinary owned build.
+       */
+      leaseFrom?: FirmId;
     }
   | { type: 'SELECT_RECIPE'; facilityId: FacilityId; recipeId: RecipeId | null }
   | {
@@ -74,6 +81,12 @@ export type Command =
       cityId: string;
       /** Absolute game day to deliver by (3–10 days out). */
       deliveryDay: number;
+    }
+  | {
+      type: 'CLOSE_FORWARD';
+      firmId: FirmId;
+      /** The open forward to cash-settle at its current mark. */
+      forwardId: string;
     }
   | {
       type: 'EXPORT_GOODS';
@@ -137,6 +150,11 @@ export type Command =
   | { type: 'TRAIN_CREW'; firmId: FirmId; facilityId: FacilityId }
   | { type: 'BUY_SHARES'; firmId: FirmId; targetFirmId: FirmId; percent: number }
   | { type: 'SELL_SHARES'; firmId: FirmId; targetFirmId: FirmId; percent: number }
+  /** Subscribe a firm to a provider's compute (B2B services, HD3). Seats
+   * default to the firm's current seat demand. */
+  | { type: 'SUBSCRIBE_SERVICE'; firmId: FirmId; providerFirmId: FirmId }
+  /** Cancel a firm's compute subscription. */
+  | { type: 'CANCEL_SERVICE'; firmId: FirmId }
   | { type: 'SELECT_ENTITY'; entityId: EntityId | null };
 
 export type CommandType = Command['type'];

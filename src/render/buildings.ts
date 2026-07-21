@@ -324,6 +324,47 @@ function drawImporter(p: BuildingPaint): void {
   ctx.beginPath(); ctx.moveTo(x + w * 0.55, y - w * 1.5); ctx.lineTo(x + w * 0.55, y - w * 0.85); ctx.stroke();
 }
 
+function drawDatacenter(p: BuildingPaint): void {
+  const { ctx, x, y, w, level, night } = p;
+  const halfW = w * (1.0 + (level - 1) * 0.12);
+  const h = w * 0.95;
+  block(ctx, x, y, halfW, h, '#5fb3a1', { roof: '#3f8676' });
+  // Rows of server-rack LEDs on the front wall (green/amber "activity").
+  const cols = 4, rows = 3;
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const lx = x - halfW * 0.7 + (halfW * 1.4 * (c + 0.5)) / cols;
+      const ly = y - h * 0.85 + (h * 0.7 * (r + 0.5)) / rows;
+      ctx.fillStyle = (r + c) % 3 === 0
+        ? (night > 0.25 ? '#ffd678' : '#e0a94a')
+        : (night > 0.25 ? '#7dffce' : '#2f8f70');
+      ctx.fillRect(lx - w * 0.06, ly - w * 0.06, w * 0.12, w * 0.12);
+    }
+  }
+  // Rooftop cooling unit.
+  ctx.fillStyle = '#cfe0db';
+  ctx.fillRect(x - halfW * 0.3, y - h - w * 0.22, halfW * 0.6, w * 0.22);
+}
+
+function drawOffice(p: BuildingPaint): void {
+  const { ctx, x, y, w, level, night } = p;
+  const halfW = w * (0.85 + (level - 1) * 0.1);
+  const h = w * (1.15 + (level - 1) * 0.1); // a taller, slimmer block than a datacenter
+  block(ctx, x, y, halfW, h, '#6f9bc4', { roof: '#4c749b' });
+  // A grid of office windows, lit warm at night.
+  const cols = 3, rows = 4;
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const lx = x - halfW * 0.7 + (halfW * 1.4 * (c + 0.5)) / cols;
+      const ly = y - h * 0.9 + (h * 0.78 * (r + 0.5)) / rows;
+      ctx.fillStyle = night > 0.25
+        ? ((r + c) % 2 === 0 ? '#ffe6a8' : '#3b4a5e')
+        : '#c8dced';
+      ctx.fillRect(lx - w * 0.07, ly - w * 0.09, w * 0.14, w * 0.18);
+    }
+  }
+}
+
 const DRAWERS: Record<FacilityType, (p: BuildingPaint) => void> = {
   home: drawHouse,
   farm: drawFarm,
@@ -332,6 +373,8 @@ const DRAWERS: Record<FacilityType, (p: BuildingPaint) => void> = {
   warehouse: drawWarehouse,
   retail: drawRetail,
   importer: drawImporter,
+  datacenter: drawDatacenter,
+  office: drawOffice,
 };
 
 /** Draw one building. `defId` picks apartment over plain home. */

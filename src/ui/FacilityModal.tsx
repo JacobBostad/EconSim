@@ -12,7 +12,7 @@ import { useGameStore } from '../store/useGameStore';
 import type { Facility } from '../sim/entities/Facility';
 import { getFacilityDef } from '../sim/data/facilityDefinitions';
 import { getRecipe } from '../sim/data/recipes';
-import { getProduct, ALL_PRODUCT_IDS } from '../sim/data/products';
+import { getProduct, productAvailableInPreset, PRODUCT_IDS_BY_PRESET } from '../sim/data/products';
 import { facilityEmployees } from '../sim/selectors/facilitySelectors';
 import { contractsByDestination } from '../sim/selectors/supplyChainSelectors';
 import { getQuantity } from '../sim/entities/Inventory';
@@ -26,8 +26,15 @@ import { pricingInsight } from '../sim/selectors/marketSelectors';
 import { pickBestCity, cityPrice, exportFreightFee } from '../sim/core/Trade';
 import { TRADE_CITY_IDS, getTradeCity } from '../sim/data/tradeCities';
 import { managerCandidates, managerDuties } from '../sim/systems/ManagerSystem';
-import { FORWARD_MAX_OPEN } from '../sim/systems/ForwardSystem';
+import { FORWARD_MAX_OPEN, FORWARD_CLOSE_FEE, forwardMark } from '../sim/systems/ForwardSystem';
 import { computeTime } from '../sim/core/Tick';
+import {
+  serviceCapacity,
+  listedPrice,
+  serviceSeatDemand,
+} from '../sim/systems/ServiceBillingSystem';
+import { SERVICES, COMPUTE_SERVICE_ID, getServiceDef } from '../sim/data/services';
+import type { ServiceDef } from '../sim/data/services';
 
 export function FacilityActions({ fac }: { fac: Facility }): React.ReactElement {
   const sim = useGameStore((s) => s.sim);
@@ -51,6 +58,9 @@ export function FacilityActions({ fac }: { fac: Facility }): React.ReactElement 
 
   return (
     <div>
+      {/* Service provider — the B2B compute (datacenter) / advisory (office) card */}
+      {(fac.type === 'datacenter' || fac.type === 'office') && <ServiceProviderCard fac={fac} />}
+
       {/* Recipe selection */}
       {producing && (
         <div className="card">
@@ -158,7 +168,7 @@ export function FacilityActions({ fac }: { fac: Facility }): React.ReactElement 
             whichever port pays — the button routes each product to today's best
             net price.
           </p>
-          {ALL_PRODUCT_IDS.map((pid) => {
+          {PRODUCT_IDS_BY_PRESET[state.config.sizePreset].map((pid) => {
             const qty = getQuantity(fac.inputInventory, pid) + getQuantity(fac.outputInventory, pid);
             if (qty <= 0) return null;
             const base = getProduct(pid).basePrice;
@@ -197,7 +207,7 @@ export function FacilityActions({ fac }: { fac: Facility }): React.ReactElement 
               </div>
             );
           })}
-          {ALL_PRODUCT_IDS.every(
+          {PRODUCT_IDS_BY_PRESET[state.config.sizePreset].every(
             (pid) => getQuantity(fac.inputInventory, pid) + getQuantity(fac.outputInventory, pid) <= 0,
           ) && <div className="muted small">Nothing staged — wire a supply contract into this warehouse.</div>}
 
@@ -210,7 +220,7 @@ export function FacilityActions({ fac }: { fac: Facility }): React.ReactElement 
           <CommodityDesk fac={fac} />
 
           <div className="section-title">Standing orders (auto-export daily)</div>
-          {ALL_PRODUCT_IDS.filter(
+          {PRODUCT_IDS_BY_PRESET[state.config.sizePreset].filter(
             (pid) =>
               fac.exportOrders[pid] !== undefined ||
               getQuantity(fac.inputInventory, pid) + getQuantity(fac.outputInventory, pid) > 0,
@@ -276,7 +286,9 @@ export function FacilityActions({ fac }: { fac: Facility }): React.ReactElement 
           </div>
           {isPlayer ? (
             <div className="row" style={{ gap: 10, flexWrap: 'wrap', marginBottom: 4 }}>
-              {def.allowedProductsForSale.map((pid) => (
+              {def.allowedProductsForSale
+                .filter((pid) => productAvailableInPreset(pid, state.config.sizePreset))
+                .map((pid) => (
                 <label key={pid} className="row small" style={{ cursor: 'pointer', gap: 4 }}>
                   <input
                     type="checkbox"
@@ -501,7 +513,8 @@ export function FacilityActions({ fac }: { fac: Facility }): React.ReactElement 
         {employees.length === 0 && <div className="small muted">No workers.</div>}
       </div>
 
-      {/* Supply contracts feeding this facility */}
+      {/* Supply contracts feeding this facility (service facilities hold no goods) */}
+      {fac.type !== 'datacenter' && fac.type !== 'office' && (
       <div className="card">
         <div className="section-title" style={{ marginTop: 0 }}>Inbound Supply Contracts</div>
         {contractsByDestination(state, fac.id).map((c) => (
@@ -572,7 +585,7 @@ export function FacilityActions({ fac }: { fac: Facility }): React.ReactElement 
               </select>
               <select value={ctrProduct} onChange={(e) => setCtrProduct(e.target.value)}>
                 <option value="">product…</option>
-                {ALL_PRODUCT_IDS.map((pid) => (
+                {PRODUCT_IDS_BY_PRESET[state.config.sizePreset].map((pid) => (
                   <option key={pid} value={pid}>{getProduct(pid).name}</option>
                 ))}
               </select>
@@ -612,6 +625,7 @@ export function FacilityActions({ fac }: { fac: Facility }): React.ReactElement 
           </div>
         )}
       </div>
+      )}
 
       {/* Buy from importer */}
       {isPlayer && (fac.type === 'factory' || fac.type === 'warehouse' || fac.type === 'retail') && (
@@ -641,6 +655,107 @@ export function FacilityActions({ fac }: { fac: Facility }): React.ReactElement 
           <div className="small muted">Have: {getQuantity(fac.inputInventory, importProduct)} in input store.</div>
         </div>
       )}
+    </div>
+  );
+}
+
+/** The catalog service a facility provides (datacenter→compute, office→advisory). */
+function serviceForFacility(fac: Facility): ServiceDef {
+  for (const id of Object.keys(SERVICES)) {
+    if (SERVICES[id]!.facilityType === fac.type) return SERVICES[id]!;
+  }
+  return getServiceDef(COMPUTE_SERVICE_ID); // datacenter fallback
+}
+
+/**
+ * Service-provider inspector (HD3 compute; Arc D4 generalized to advisory): the
+ * provider's seat capacity, utilization, and current listed seat price, its
+ * subscriber list, and — for a COMPUTE provider a player firm doesn't own — a
+ * one-click Subscribe/Cancel for the player's own firm (the player subscribe path
+ * is wired for compute today). One honest surface per service.
+ */
+function ServiceProviderCard({ fac }: { fac: Facility }): React.ReactElement {
+  const sim = useGameStore((s) => s.sim);
+  const dispatch = useGameStore((s) => s.dispatch);
+  const state = sim.getState();
+  const def = serviceForFacility(fac);
+  const provider = state.firms[fac.ownerFirmId];
+  const capacity = provider ? serviceCapacity(state, provider, def) : 0;
+  const price = provider ? listedPrice(provider, def) : 0;
+  const customers = Object.values(state.serviceContracts).filter(
+    (c) => c.providerFirmId === fac.ownerFirmId && c.serviceId === def.id,
+  );
+  const sold = customers.reduce((s, c) => s + c.seats, 0);
+  const util = capacity > 0 ? sold / capacity : 0;
+
+  const playerFirm = state.firms[state.playerFirmId];
+  const isPlayerProvider = fac.ownerFirmId === state.playerFirmId;
+  // Player subscribe/cancel is wired for compute only (SUBSCRIBE_SERVICE).
+  const playerCanSubscribe = def.id === COMPUTE_SERVICE_ID;
+  const playerSub = playerFirm
+    ? Object.values(state.serviceContracts).find(
+        (c) => c.subscriberFirmId === state.playerFirmId && c.serviceId === def.id,
+      )
+    : undefined;
+  const playerSubbedHere = playerSub?.providerFirmId === fac.ownerFirmId;
+  const playerDemand = playerFirm ? serviceSeatDemand(playerFirm) : 0;
+  const isCompute = def.id === COMPUTE_SERVICE_ID;
+  const benefitPct = Math.round((def.boostMult - 1) * 100);
+
+  return (
+    <div className="card">
+      <div className="section-title" style={{ marginTop: 0 }}>
+        {isCompute ? '🖥️ Compute provider' : '💼 Advisory provider'}
+      </div>
+      <div className="small" style={{ lineHeight: 1.6 }}>
+        Capacity <strong>{capacity}</strong> seats (L{fac.level}) · sold <strong>{sold}</strong>{' '}
+        (<span className="mono">{(util * 100).toFixed(0)}%</span>) · list price{' '}
+        <span className="mono">{formatMoney(price)}</span>/seat/day
+      </div>
+      <p className="muted small" style={{ margin: '4px 0' }}>
+        {isCompute
+          ? `A subscriber with full seat coverage produces ${benefitPct}% faster company-wide.`
+          : `A subscriber with full seat coverage builds brand ${benefitPct}% faster per ad dollar.`}
+        {' '}The price walks with utilization.
+      </p>
+
+      {playerCanSubscribe && !isPlayerProvider && playerFirm && (
+        <div className="row" style={{ gap: 6, marginTop: 4 }}>
+          {playerSubbedHere ? (
+            <button onClick={() => dispatch({ type: 'CANCEL_SERVICE', firmId: state.playerFirmId })}>
+              Cancel your subscription ({playerSub!.seats} seats)
+            </button>
+          ) : (
+            <button
+              disabled={util >= 1 || (playerSub !== undefined)}
+              title={
+                playerSub
+                  ? 'Your firm already subscribes elsewhere — cancel that first.'
+                  : util >= 1
+                    ? 'This provider is fully subscribed.'
+                    : `Reserve ${playerDemand} seats at ${formatMoney(price)}/seat/day.`
+              }
+              onClick={() => dispatch({ type: 'SUBSCRIBE_SERVICE', firmId: state.playerFirmId, providerFirmId: fac.ownerFirmId })}
+            >
+              Subscribe your firm — {playerDemand} seats (~{formatMoney(playerDemand * price)}/day)
+            </button>
+          )}
+        </div>
+      )}
+
+      <div className="small" style={{ marginTop: 6 }}>
+        <div className="muted">Subscribers ({customers.length}):</div>
+        {customers.length === 0 && <div className="muted">— none yet —</div>}
+        {customers
+          .slice()
+          .sort((a, b) => (a.subscriberFirmId < b.subscriberFirmId ? -1 : 1))
+          .map((c) => (
+            <div className="row between" key={c.id}>
+              <span>{state.firms[c.subscriberFirmId]?.name ?? c.subscriberFirmId}</span>
+              <span className="mono muted">{c.seats} seats · {formatMoney(c.pricePerSeatDay * c.seats)}/day</span>
+            </div>
+          ))}
+      </div>
     </div>
   );
 }
@@ -706,7 +821,7 @@ function CommodityDesk({ fac }: { fac: Facility }): React.ReactElement {
   return (
     <div className="row small" style={{ gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
       <select value={buyPid} onChange={(e) => setBuyPid(e.target.value)}>
-        {ALL_PRODUCT_IDS.map((pid) => (
+        {PRODUCT_IDS_BY_PRESET[state.config.sizePreset].map((pid) => (
           <option key={pid} value={pid}>{getProduct(pid).name}</option>
         ))}
       </select>
@@ -771,16 +886,28 @@ function CommodityDesk({ fac }: { fac: Facility }): React.ReactElement {
                 </button>
               );
             })}
-            {firm.forwards.map((f) => (
-              <span
-                key={f.id}
-                className="badge small"
-                title={`Deliver ${f.quantity} ${getProduct(f.productId).name} to ${getTradeCity(f.cityId).name} by day ${f.deliveryDay} at the locked ${formatMoney(f.lockedPrice)}/unit (minus that day's freight). Short units cost a 15% penalty.`}
-                style={{ color: f.deliveryDay - day <= 2 ? 'var(--amber)' : undefined }}
-              >
-                📜 {f.quantity} {getProduct(f.productId).name} → {getTradeCity(f.cityId).emoji} day {f.deliveryDay} @ {formatMoney(f.lockedPrice)}
-              </span>
-            ))}
+            {firm.forwards.map((f) => {
+              const mark = forwardMark(state, f);
+              const closeFee = Math.round(f.lockedPrice * f.quantity * FORWARD_CLOSE_FEE);
+              return (
+                <span key={f.id} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                  <span
+                    className="badge small"
+                    title={`Deliver ${f.quantity} ${getProduct(f.productId).name} to ${getTradeCity(f.cityId).name} by day ${f.deliveryDay} at the locked ${formatMoney(f.lockedPrice)}/unit (minus that day's freight). Short units cost a 15% penalty.`}
+                    style={{ color: f.deliveryDay - day <= 2 ? 'var(--amber)' : undefined }}
+                  >
+                    📜 {f.quantity} {getProduct(f.productId).name} → {getTradeCity(f.cityId).emoji} day {f.deliveryDay} @ {formatMoney(f.lockedPrice)}
+                  </span>
+                  <button
+                    title={`Close now at the mark: ${formatMoney(mark)} P&L against today's ${getTradeCity(f.cityId).name} quote, less a ${formatMoney(closeFee)} fee. Cheaper than delivering short.`}
+                    style={{ color: mark >= 0 ? 'var(--green)' : 'var(--amber)' }}
+                    onClick={() => dispatch({ type: 'CLOSE_FORWARD', firmId: fac.ownerFirmId, forwardId: f.id })}
+                  >
+                    Close @ {formatMoney(mark)}
+                  </button>
+                </span>
+              );
+            })}
           </>
         );
       })()}

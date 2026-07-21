@@ -26,9 +26,10 @@ import { emptyAccounting } from '../entities/Accounting';
 import { emptyMarketStat } from '../entities/Market';
 import { addStock, type Inventory } from '../entities/Inventory';
 import { makeCitizenNeeds } from '../entities/factories';
-import { getFacilityDef } from './facilityDefinitions';
-import { getProduct, CONSUMER_PRODUCT_IDS, ALL_PRODUCT_IDS } from './products';
-import { TRADE_CITY_IDS, cityBias } from './tradeCities';
+import { getFacilityDef, facilityRecipesForPreset } from './facilityDefinitions';
+import { getProduct, PRODUCT_IDS_BY_PRESET, CONSUMER_PRODUCT_IDS_BY_PRESET } from './products';
+import { TRADE_CITY_IDS, cityBias, getTradeCity } from './tradeCities';
+import { poolTargetInventory } from './tradePool';
 import { FIRST_NAMES, LAST_NAMES } from './names';
 import { dollars } from './constants';
 import { defaultPersonalityFor, defaultCeoFor } from './personalities';
@@ -68,7 +69,7 @@ function newFacility(
     inputInventory: {},
     outputInventory: {},
     storageCapacity: def.storageCapacity,
-    recipes: [...def.allowedRecipes],
+    recipes: facilityRecipesForPreset(def, b.state.config.sizePreset),
     activeRecipeId: opts.activeRecipeId ?? null,
     retailProductIds: opts.retailProductIds ?? [],
     positioning: 'standard',
@@ -150,7 +151,7 @@ function newCitizen(b: Builder, homeId: string, homeLoc: Vec2): Citizen {
   const first = b.rng.pick(FIRST_NAMES) ?? 'Sam';
   const last = b.rng.pick(LAST_NAMES) ?? 'Doe';
   const prefs: Record<string, number> = {};
-  for (const pid of CONSUMER_PRODUCT_IDS) prefs[pid] = b.rng.range(0.85, 1.15);
+  for (const pid of CONSUMER_PRODUCT_IDS_BY_PRESET[b.state.config.sizePreset]) prefs[pid] = b.rng.range(0.85, 1.15);
   const cit: Citizen = {
     id,
     name: `${first} ${last}`,
@@ -160,7 +161,7 @@ function newCitizen(b: Builder, homeId: string, homeLoc: Vec2): Citizen {
     role: 'unemployed',
     wage: 0,
     cash: CITIZEN_START_CASH,
-    needs: makeCitizenNeeds(b.rng),
+    needs: makeCitizenNeeds(b.rng, b.state.config.sizePreset),
     preferences: prefs,
     currentLocation: { ...homeLoc },
     targetLocation: { ...homeLoc },
@@ -227,6 +228,7 @@ export function createInitialState(
     facilities: {},
     vehicles: {},
     contracts: {},
+    serviceContracts: {},
     marketStats: {},
     worldCash: dollars(1_000_000),
     playerFirmId: '',
@@ -244,11 +246,21 @@ export function createInitialState(
     facilityOffer: null,
     fireSalesBought: 0,
     deskTrades: 0,
+    forwardsClosed: 0,
+    poolFeedsWhileThin: 0,
+    poolCoversRestored: 0,
+    landlordRepossessions: 0,
     emigrationPressure: 0,
     emigrationDepartures: 0,
     marketGapDays: {},
     marketUndersupplyDays: {},
     lastUndersupplyEntryDay: 0,
+    housingTightDays: 0,
+    lastLandlordEntryDay: 0,
+    investorSignalDays: 0,
+    lastInvestorEntryDay: 0,
+    serviceUncoveredDays: {},
+    lastServiceEntryDay: 0,
     sharePriceShift: {},
     // Districts are built AFTER the size-preset block below (which may raise
     // the map dimensions), so the partition tiles the preset's real map.
@@ -280,12 +292,28 @@ export function createInitialState(
   state.districts = defaultDistrictPartition(state.config);
 
   for (const cid of TRADE_CITY_IDS) state.tradeCities[cid] = { pricesByProduct: {} };
-  for (const pid of ALL_PRODUCT_IDS) {
+  // Preset-gated (C1): Village seeds only the classic catalog, so its serialized
+  // marketStats/trade-city books are byte-identical to pre-C1. City/Metropolis
+  // additionally seed the breadth products they actually trade.
+  for (const pid of PRODUCT_IDS_BY_PRESET[state.config.sizePreset]) {
     state.marketStats[pid] = emptyMarketStat(pid);
     for (const cid of TRADE_CITY_IDS) {
       state.tradeCities[cid]!.pricesByProduct[pid] = Math.round(
         getProduct(pid).basePrice * cityBias(cid, pid),
       );
+    }
+  }
+  // Arc E (opt-in): each trade city grows a demand pool seeded AT its target
+  // buffer, so a fresh game opens in equilibrium (cover mult 1.0). Flag off ⇒
+  // no pool key is written and the book stays byte-identical to pre-Arc-E.
+  if (state.config.tradeDemandPoolsEnabled) {
+    for (const cid of TRADE_CITY_IDS) {
+      const book = state.tradeCities[cid]!;
+      book.pool = { population: getTradeCity(cid).population, inventory: {} };
+      for (const pid of PRODUCT_IDS_BY_PRESET[state.config.sizePreset]) {
+        const target = poolTargetInventory(cid, pid);
+        if (target > 0) book.pool.inventory[pid] = target;
+      }
     }
   }
 
@@ -429,8 +457,42 @@ export function createInitialState(
   }
 
   seedCrowd(state);
+  seedComputeProvider(b);
 
   return state;
+}
+
+/**
+ * B2B services bootstrap (HD3): when the services channel is enabled on a
+ * city-scale world, stand up one compute provider so the market exists on day
+ * one and subscribers have something to buy. It is a dedicated AI firm ("Cirrus
+ * Compute") owning a single datacenter — kept separate from the chain firms so
+ * it never trips the founder invariant that every *chain* firm carries a full
+ * producer→factory→store (this firm is a pure service play). Built last so it
+ * shifts none of the earlier deterministic ids or rng draws.
+ *
+ * Gated on servicesEnabled AND non-Village, so every existing baseline (Village
+ * bit-identity, and the plain city/metropolis founder/soak runs that leave the
+ * flag off) sees nothing here.
+ */
+const COMPUTE_PROVIDER_CASH = dollars(40000);
+
+function seedComputeProvider(b: Builder): void {
+  const { state } = b;
+  if (!state.config.servicesEnabled || state.config.sizePreset === 'village') return;
+  // Seeded as a 'service' archetype firm (Arc D4): the dispatcher routes it to
+  // ai/ServiceBehavior, so it grows its own capacity under load (level up / add a
+  // site) instead of running the shopkeeper loop it has no shop for.
+  const firm = newFirm(b, 'Cirrus Compute', 'ai', COMPUTE_PROVIDER_CASH, emptyStrategy('none', 'service'), DEFAULT_AI_WAGE);
+  const personality = defaultPersonalityFor(1); // steady operator; no chain to run
+  firm.personalityId = personality;
+  firm.ceoName = defaultCeoFor(personality, 1);
+  // Place it in the commercial-ish middle of the map, clear of the homes band.
+  const loc: Vec2 = {
+    x: Math.round(state.config.mapWidth * 0.5),
+    y: Math.round(state.config.mapHeight * 0.35),
+  };
+  newFacility(b, 'datacenter', firm.id, loc, { name: 'Cirrus Datacenter' });
 }
 
 /**
@@ -457,7 +519,7 @@ function seedCrowd(state: GameState): void {
   // shops (concentrated in the inner district) can't yet reach.
   const primary = residential[0]!;
   const id = cohortId(primary.id, 'worker');
-  const cohort = emptyCohort(primary.id, 'worker');
+  const cohort = emptyCohort(primary.id, 'worker', state.config.sizePreset);
   cohort.population = preset.crowdStart;
   cohort.cashPool = preset.crowdStart * CROWD_START_CASH_PER_CAPITA;
   state.cohorts[id] = cohort;

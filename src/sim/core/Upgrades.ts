@@ -49,6 +49,19 @@ export function upgradeFacility(
     from: firmAccount(firmId), to: WORLD_ACCOUNT, amount: cost,
     firmId, category: 'buildSpend', note: `Upgraded ${fac.name} to L${fac.level + 1}`,
   });
+  // Accrue the upgrade capex into the facility's book value (fac.upgradeCapex),
+  // kept PARALLEL to buildCost so the invested capital reaches the scoreboard
+  // valuation, the SELL_FACILITY refund (Demolition), and fire-sale asks
+  // (FireSaleSystem) — an L3 facility no longer books at its L1 cost — WITHOUT
+  // touching buildCost, which the AI-pricing tier (operatingValuationOf →
+  // marketCap → stake decisions) reads and which the city rng trajectory is
+  // pinned to. City-scale only: never set in a Village, so the serialized
+  // facility (and the marketCap the Village AI reads) stays byte-identical to
+  // the 300-day bit-identity baseline the orchestrator re-runs. The upgrade
+  // capex still leaves as cash in a Village exactly as before.
+  if (state.config.sizePreset !== 'village') {
+    fac.upgradeCapex = (fac.upgradeCapex ?? 0) + cost;
+  }
   fac.level += 1;
   fac.storageCapacity = Math.round(def.storageCapacity * (1 + 0.4 * (fac.level - 1)));
   fac.workerCapacity = def.workerCapacity + (fac.level - 1);

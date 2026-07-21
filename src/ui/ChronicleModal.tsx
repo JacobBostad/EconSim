@@ -4,7 +4,7 @@ import { objectiveProgress } from '../sim/selectors/companySelectors';
 import { currentDay } from '../sim/selectors/reportSelectors';
 import { getAchievementDef } from '../sim/data/achievements';
 import { OBJECTIVE_LADDER } from '../sim/data/constants';
-import { CONSUMER_PRODUCT_IDS, getProduct } from '../sim/data/products';
+import { CONSUMER_PRODUCT_IDS_BY_PRESET, getProduct } from '../sim/data/products';
 import { Sparkline } from './Sparkline';
 import { formatMoney } from '../utils/formatMoney';
 
@@ -82,7 +82,7 @@ export function ChronicleModal(): React.ReactElement | null {
             )}
             <div className="kv small"><span className="k">Market share</span>
               <span className="mono small">
-                {CONSUMER_PRODUCT_IDS
+                {CONSUMER_PRODUCT_IDS_BY_PRESET[state.config.sizePreset]
                   .map((pid) => ({ pid, sh: player?.marketShareByProduct[pid] ?? 0 }))
                   .filter((x) => x.sh > 0.05)
                   .map((x) => `${getProduct(x.pid).name} ${(x.sh * 100).toFixed(0)}%`)

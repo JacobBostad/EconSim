@@ -261,7 +261,7 @@ function retire(ctx: SimContext, gone: Citizen, over: Stratum): void {
   const { state } = ctx;
   let cohort = state.cohorts[over.key];
   if (!cohort) {
-    cohort = emptyCohort(over.districtId, over.tier);
+    cohort = emptyCohort(over.districtId, over.tier, state.config.sizePreset);
     state.cohorts[over.key] = cohort;
   }
   const name = gone.name;

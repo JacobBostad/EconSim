@@ -8,17 +8,20 @@
  */
 
 import type { Vec2 } from '../entities/Location';
+import type { ProductId } from '../core/Id';
+import type { SizePreset } from '../core/SimulationConfig';
 import { dollars } from './constants';
 import type { PersonalityId } from './personalities';
 
 export interface AiChainSpec {
   firmName: string;
-  /** Consumer product the chain ends in. */
-  product: 'bread' | 'tools' | 'clothes';
+  /** Consumer product the chain ends in. Any product id — adding a product is
+   * a data change (a new chain factory), not a type change here. */
+  product: ProductId;
   producerDef: 'farm' | 'mine';
   producerRecipe: string;
   factoryRecipe: string;
-  inputProduct: string;
+  inputProduct: ProductId;
   producerName: string;
   factoryName: string;
   retailName: string;
@@ -58,6 +61,17 @@ export interface ScenarioDef {
    * the player or the AI landlord — builds.
    */
   homes?: number;
+  /**
+   * World-scale requirement (UX gate only — the sim never reads it). Absent =
+   * a classic town that composes at ANY scale (the default Meadowbrook + City IS
+   * the pinned City baseline, so a village-authored scenario is viable at City
+   * by construction). A scenario tagged 'city' is authored for — and only makes
+   * sense at — the world-scale era (crowd + the specialist archetypes), so the
+   * New Game picker shows it ONLY when that world scale is chosen and never in
+   * the Village flow. It never touches SimulationConfig; worldScaleConfig still
+   * owns every flag. See NewGameModal (the picker filter) and grand_junction.
+   */
+  worldScale?: SizePreset;
 }
 
 const breadChain = (over: Partial<AiChainSpec> = {}): AiChainSpec => ({
@@ -288,10 +302,111 @@ export const SCENARIOS: Record<string, ScenarioDef> = {
     homes: 24,
     aiChains: [],
   },
+  grand_junction: {
+    id: 'grand_junction',
+    name: 'Grand Junction',
+    icon: '🌆',
+    // The first scenario authored FOR the world-scale era: it only appears when
+    // the City world scale is chosen (worldScale gate), so it never lands as a
+    // village. Everything that makes it a *City* — the crowd of hundreds, the
+    // compute provider humming from day zero, the landlord that breaks ground
+    // under the housing squeeze, the holdco that shows up for the yields — comes
+    // from the City flags worldScaleConfig turns on, NOT from this data. The
+    // scenario only sets the opening posture: two entrenched incumbents and a
+    // deliberately tight housing stock.
+    worldScale: 'city',
+    description:
+      'The crowd is already here, the datacenter already hums, and housing is tight enough that a landlord breaks ground within weeks. Two entrenched giants hold bread and tools and a struggling boutique clings to clothes — but the city is far bigger than they can serve, and a quarter to nearly half of the staple demand goes unmet. Build into that hungry market while rent, seats, and stakes already flow.',
+    // Grounded in the 300-day unattended City probe (docs/design/probes/grand-junction.ts,
+    // seeds 11/4/7): the founder floods to the City cap (16-18 firms) with zero
+    // insolvencies, the crowd lands renter-heavy (worker share ~.67-.71), and
+    // even a full field leaves the staples ~25-45% unmet — the real, permanent
+    // opening a newcomer enters (a scripted operator building into the bread
+    // market grows its book +$9-27k over 200 days; the balance run below).
+    society:
+      'A working city that never sits still — a broad renter class, incumbents entrenched at the top, and a ladder the newcomer climbs by serving the crowd the giants can never fully reach.',
+    // Tight on purpose but not brutal: at City scale 16 homes house the cast near
+    // capacity from day one, so occupancy sits above the landlord bar and a
+    // rentals firm founds early (measured ~day 56) — the "rent already flows" of
+    // the pitch — without starving the cast the way a harder squeeze did (probed:
+    // 14 homes + a missing staple pushed cast satisfaction and pool drift out of
+    // the City norms; 16 homes + all staples supplied holds them inside). The
+    // crowd itself lives in cohorts (preset crowdStart), untouched by this number.
+    homes: 16,
+    aiChains: [
+      // A brand-led bakery that has owned the city's bread for years: deep
+      // pockets, a full crew, and shelves it keeps stocked. An incumbent to
+      // undercut, not a gap to fill.
+      breadChain({
+        firmName: 'Junction Baking Co',
+        producerName: 'Junction Grain Fields',
+        factoryName: 'Junction Bakehouse',
+        retailName: 'Junction Bread Market',
+        cash: dollars(60000),
+        adBudget: dollars(28),
+        brand: 30,
+        stocks: { producerOut: 90, factoryIn: 45, factoryOut: 36, shopIn: 60 },
+        staff: { producer: 3, factory: 3, retail: 3 },
+        pf: { target: 60, reorder: 24, max: 120 },
+        fs: { target: 90, reorder: 36, max: 160 },
+        personality: 'brand_builder',
+      }),
+      // The city's hardware giant — an exporter that ships tools region-wide and
+      // still holds the home shelf. Well-capitalized and hard to dislodge.
+      toolsChain({
+        firmName: 'Ironline Supply Co',
+        producerName: 'Ironline Quarry',
+        factoryName: 'Ironline Toolworks',
+        retailName: 'Ironline Hardware',
+        cash: dollars(64000),
+        adBudget: dollars(20),
+        brand: 26,
+        stocks: { producerOut: 75, factoryIn: 36, factoryOut: 18, shopIn: 30 },
+        staff: { producer: 3, factory: 3, retail: 2 },
+        pf: { target: 45, reorder: 18, max: 90 },
+        fs: { target: 60, reorder: 21, max: 120 },
+        personality: 'exporter',
+      }),
+      // A thin, undercapitalized boutique clinging to the clothes trade. Its role
+      // is structural: it keeps the third staple nominally supplied so the crowd
+      // can spend and the cohort pool doesn't balloon (probed — a missing staple
+      // pushed pool drift out of the City norms). It is also a weak incumbent the
+      // player can displace, though the fatter opening is the underserved VOLUME
+      // in the staples the giants can't fully reach (measured: bread is the
+      // stronger entry than clothes, which this boutique keeps adequately fed).
+      clothesChain({
+        firmName: 'Thimble & Co',
+        producerName: 'Thimble Cotton Plot',
+        factoryName: 'Thimble Sewing Room',
+        retailName: 'Thimble Corner',
+        cash: dollars(26000),
+        adBudget: dollars(6),
+        brand: 10,
+        stocks: { producerOut: 24, factoryIn: 12, factoryOut: 6, shopIn: 10 },
+        staff: { producer: 1, factory: 1, retail: 1 },
+        pf: { target: 20, reorder: 8, max: 40 },
+        fs: { target: 24, reorder: 10, max: 50 },
+        personality: 'price_fighter',
+      }),
+    ],
+  },
 };
 
 export const DEFAULT_SCENARIO_ID = 'meadowbrook';
 
 export function getScenario(id: string): ScenarioDef {
   return SCENARIOS[id] ?? SCENARIOS[DEFAULT_SCENARIO_ID]!;
+}
+
+/**
+ * The scenarios the New Game picker offers for a given world scale. Scenarios
+ * and world scale are orthogonal choices, but a scenario authored FOR a
+ * particular world (worldScale set) is only coherent there, so it is offered
+ * only at that scale and a City-only town never surfaces in the Village flow. A
+ * classic (untagged) scenario composes at any scale — the default Meadowbrook +
+ * City IS the pinned City baseline — so it is always offered. Pure and UX-only:
+ * the sim never reads worldScale; worldScaleConfig still owns every flag.
+ */
+export function scenariosForWorld(world: SizePreset): ScenarioDef[] {
+  return Object.values(SCENARIOS).filter((sc) => !sc.worldScale || sc.worldScale === world);
 }

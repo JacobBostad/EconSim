@@ -122,6 +122,169 @@ export const RECIPES: Record<RecipeId, Recipe> = {
     minQuality: 75,
   },
 
+  // --- Arc C1 breadth chains (city/metropolis products) ------------------
+  // Extraction yields/labor mirror the classic farm/mine recipes; manufacturing
+  // costs scale with the product's ticket so a chain's margin lands in the same
+  // band as the shipped chains (bread/tools) rather than out-earning them.
+  grow_produce: {
+    id: 'grow_produce',
+    name: 'Grow Produce',
+    facilityType: 'farm',
+    inputs: [],
+    outputs: [{ productId: 'produce', quantity: 10 }],
+    laborRequired: 2,
+    ticksRequired: 3,
+    baseEfficiency: 1,
+    variableCost: dollars(1.6),
+  },
+  cook_meals: {
+    id: 'cook_meals',
+    name: 'Cook Meals',
+    facilityType: 'factory',
+    inputs: [{ productId: 'produce', quantity: 3 }],
+    outputs: [{ productId: 'meals', quantity: 11 }],
+    laborRequired: 2,
+    ticksRequired: 2,
+    baseEfficiency: 1,
+    variableCost: dollars(1.4),
+  },
+  tan_leather: {
+    id: 'tan_leather',
+    name: 'Tan Leather',
+    facilityType: 'farm',
+    inputs: [],
+    outputs: [{ productId: 'leather', quantity: 8 }],
+    laborRequired: 2,
+    ticksRequired: 3,
+    baseEfficiency: 1,
+    variableCost: dollars(1.9),
+  },
+  make_shoes: {
+    id: 'make_shoes',
+    name: 'Make Shoes',
+    facilityType: 'factory',
+    inputs: [{ productId: 'leather', quantity: 3 }],
+    outputs: [{ productId: 'shoes', quantity: 8 }],
+    laborRequired: 2,
+    ticksRequired: 3,
+    baseEfficiency: 1,
+    variableCost: dollars(1.6),
+  },
+  cut_lumber: {
+    id: 'cut_lumber',
+    name: 'Cut Lumber',
+    facilityType: 'farm',
+    inputs: [],
+    outputs: [{ productId: 'lumber', quantity: 8 }],
+    laborRequired: 2,
+    ticksRequired: 3,
+    baseEfficiency: 1,
+    variableCost: dollars(1.5),
+  },
+  // Arc C3 legacy alias: the ORIGINAL 2-stage furniture recipe (lumber ->
+  // furniture). No new build uses it — the furniture CHAIN_BLUEPRINT now runs
+  // the 3-stage planks path (mill_planks -> assemble_furniture). Kept for
+  // save-compat (see assemble_appliances above).
+  build_furniture: {
+    id: 'build_furniture',
+    name: 'Build Furniture',
+    facilityType: 'factory',
+    inputs: [{ productId: 'lumber', quantity: 4 }],
+    outputs: [{ productId: 'furniture', quantity: 6 }],
+    laborRequired: 2,
+    ticksRequired: 4,
+    baseEfficiency: 1,
+    variableCost: dollars(2.6),
+  },
+  // Arc C3 legacy alias: the ORIGINAL 2-stage appliances recipe (minerals ->
+  // appliances). No new build uses it — the appliances CHAIN_BLUEPRINT now runs
+  // the 3-stage steel path (smelt_steel -> forge_appliances). Kept in the
+  // catalog (and in factory.allowedRecipes) purely so a mid-flight metropolis
+  // save whose factory is set to this recipe keeps producing after the update.
+  assemble_appliances: {
+    id: 'assemble_appliances',
+    name: 'Assemble Appliances',
+    facilityType: 'factory',
+    inputs: [{ productId: 'minerals', quantity: 4 }],
+    outputs: [{ productId: 'appliances', quantity: 5 }],
+    laborRequired: 2,
+    ticksRequired: 4,
+    baseEfficiency: 1,
+    variableCost: dollars(3.4),
+  },
+  grow_grapes: {
+    id: 'grow_grapes',
+    name: 'Grow Grapes',
+    facilityType: 'farm',
+    inputs: [],
+    outputs: [{ productId: 'grapes', quantity: 9 }],
+    laborRequired: 2,
+    ticksRequired: 3,
+    baseEfficiency: 1,
+    variableCost: dollars(1.7),
+  },
+  ferment_wine: {
+    id: 'ferment_wine',
+    name: 'Ferment Wine',
+    facilityType: 'factory',
+    inputs: [{ productId: 'grapes', quantity: 3 }],
+    outputs: [{ productId: 'wine', quantity: 6 }],
+    laborRequired: 2,
+    ticksRequired: 4,
+    baseEfficiency: 1,
+    variableCost: dollars(2.2),
+  },
+
+  // --- Arc C3 intermediate stages (metropolis 3-stage chains) ------------
+  // Each is the MIDDLE stage: a factory turns a raw into an intermediate, which
+  // a second factory turns into the consumer good. Yields/costs are tuned so
+  // the two stages split roughly the margin the old single factory stage held,
+  // and the deep chain lands profitable end-to-end (see docs probe c3-chains).
+  smelt_steel: {
+    id: 'smelt_steel',
+    name: 'Smelt Steel',
+    facilityType: 'factory',
+    inputs: [{ productId: 'minerals', quantity: 4 }],
+    outputs: [{ productId: 'steel', quantity: 6 }],
+    laborRequired: 2,
+    ticksRequired: 3,
+    baseEfficiency: 1,
+    variableCost: dollars(1.6),
+  },
+  forge_appliances: {
+    id: 'forge_appliances',
+    name: 'Forge Appliances',
+    facilityType: 'factory',
+    inputs: [{ productId: 'steel', quantity: 3 }],
+    outputs: [{ productId: 'appliances', quantity: 5 }],
+    laborRequired: 2,
+    ticksRequired: 4,
+    baseEfficiency: 1,
+    variableCost: dollars(2.0),
+  },
+  mill_planks: {
+    id: 'mill_planks',
+    name: 'Mill Planks',
+    facilityType: 'factory',
+    inputs: [{ productId: 'lumber', quantity: 4 }],
+    outputs: [{ productId: 'planks', quantity: 6 }],
+    laborRequired: 2,
+    ticksRequired: 3,
+    baseEfficiency: 1,
+    variableCost: dollars(1.4),
+  },
+  assemble_furniture: {
+    id: 'assemble_furniture',
+    name: 'Assemble Furniture',
+    facilityType: 'factory',
+    inputs: [{ productId: 'planks', quantity: 3 }],
+    outputs: [{ productId: 'furniture', quantity: 6 }],
+    laborRequired: 2,
+    ticksRequired: 4,
+    baseEfficiency: 1,
+    variableCost: dollars(2.2),
+  },
+
   // --- Importer (extraction from the outside world) ----------------------
   import_grain: {
     id: 'import_grain',

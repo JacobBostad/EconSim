@@ -12,7 +12,7 @@
 
 import type { SimContext } from '../core/GameState';
 import { isDayBoundary, isHourBoundary } from '../core/Tick';
-import { ALL_PRODUCT_IDS } from '../data/products';
+import { PRODUCT_IDS_BY_PRESET } from '../data/products';
 import { safeDiv } from '../../utils/math';
 import { getQuantity } from '../entities/Inventory';
 import { pickBestCity } from '../core/Trade';
@@ -24,24 +24,27 @@ export function runMarketStatsSystem(ctx: SimContext): void {
 
 function computeInventoryTotals(ctx: SimContext): void {
   const { state } = ctx;
+  // Preset-gated (C1): only products present at this preset have a marketStats
+  // entry, so Village iterates its classic catalog exactly (no missing-key hit).
+  const ids = PRODUCT_IDS_BY_PRESET[state.config.sizePreset];
   const totals: Record<string, number> = {};
-  for (const pid of ALL_PRODUCT_IDS) totals[pid] = 0;
+  for (const pid of ids) totals[pid] = 0;
   for (const fid in state.facilities) {
     const fac = state.facilities[fid]!;
     if (fac.type === 'importer') continue; // exclude the infinite buffer
-    for (const pid of ALL_PRODUCT_IDS) {
+    for (const pid of ids) {
       totals[pid]! +=
         getQuantity(fac.inputInventory, pid) + getQuantity(fac.outputInventory, pid);
     }
   }
-  for (const pid of ALL_PRODUCT_IDS) {
+  for (const pid of ids) {
     state.marketStats[pid]!.totalInventory = totals[pid]!;
   }
 }
 
 function finalizeAndReset(ctx: SimContext): void {
   const { state } = ctx;
-  for (const pid of ALL_PRODUCT_IDS) {
+  for (const pid of PRODUCT_IDS_BY_PRESET[state.config.sizePreset]) {
     const stat = state.marketStats[pid]!;
     stat.averagePrice = Math.round(safeDiv(stat.revenueAccum, stat.unitsSold, 0));
     stat.averageQuality = safeDiv(stat.qualityAccum, stat.unitsSold, 0);

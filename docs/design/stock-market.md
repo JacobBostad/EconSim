@@ -260,33 +260,187 @@ new city yield-buying is the only pressure toward full float. Measured
 (b2-portfolio probe, 300 days): max aggregate float per target stays
 ≤ 88% across seeds 11/4/7; no target is ever over-sold.
 
-## Phase 5 — asset-liquidity sweep
+## Phase 5 / Arc B3 — asset-liquidity sweep (SHIPPED)
 
 The share market prices firms off their balance sheets, so the worst
-balance-sheet distortions from the assets map get fixed here:
+balance-sheet distortions from the assets map get fixed here. As shipped:
 
-- **Upgrade capex adds to `buildCost`** (`Upgrades.ts:48-54`), so it
-  reaches valuation, the SELL_FACILITY refund base (`Demolition.ts:32`),
-  and fire-sale asks (`FireSaleSystem.ts:98`). An L3 facility stops
-  booking at L1 cost.
-- **Apartments become sellable and valued** — remove `'home'` from
-  `UNSELLABLE_TYPES` (`Demolition.ts:23`) and from the valuation
-  exclusion (`companySelectors.ts:223`); building one no longer
-  permanently destroys its $4,500 cost from measured valuation.
-- **Forwards closeable early at mark.** A close-out command
-  (`Commands.ts:70-77` is sign-only today) cash-settles the remaining
-  obligation at its mark instead of forcing the 15% deliberate-default
-  exit that books as a miscategorized `'logistics'` expense
-  (`ForwardSystem.ts:113-118`).
-- **SELL_FACILITY salvages inventory** instead of writing off stored
-  goods and in-transit cargo (`Demolition.ts:8-9,63-69`).
-- **Insolvent AI sells facilities instead of closing them.**
-  `BankruptcySystem` closing the costliest facility
-  (`BankruptcySystem.ts:73-99`) zeroes its valuation contribution,
-  while selling would recover 50% — the strictly better option becomes
-  available to AI (`Demolition.ts:36` is player-only today).
+- **The pinning constraint that shaped this phase.** Two valuation
+  functions read facility book value: `operatingValuationOf` (the
+  AI-PRICING tier — it flows into `marketCap`, which the city AI's
+  `maybeBuyStakeCity` and the Village AI's `maybeBuyShares` read to pick
+  stake targets and to price the trade) and `companyValuation` (the
+  SCOREBOARD — written into the serialized `DailySnapshot.valuation`, and
+  read by the objective ladder, grade, and rankings; NOT read by any AI
+  decision or rng draw). The Village 300-day run is an exact
+  rng-state / serialize bit-identity contract, and the A3 crowd/tier bands
+  are pinned to the *city* rng trajectory — both of which a cash-flow-driven
+  short-circuit in `maybeBuyStakeCity`/`maybeBuyShares`
+  (`if (cash < $35k || !rng.chance(0.12))`, `||` short-circuits the draw)
+  turn into hard invariants: any change to a firm's marked valuation shifts
+  which stakes get bought, which shifts firm cash, which shifts whether the
+  rng draw fires at all. So Phase 5's book-value enrichment feeds the
+  **scoreboard only** and the AI-pricing tier stays byte-for-byte pristine.
+  Verified: the b2-portfolio probe's whole portfolio (holders, positions,
+  basis, mark, turnover, float) is byte-identical before/after across seeds
+  11/4/7, and the A3 `founders`/`tierAcceptance` suites pass unchanged.
+
+- **Upgrade capex accrues to a parallel `Facility.upgradeCapex`**, NOT to
+  `buildCost` (`Upgrades.ts`). buildCost has other semantics — it is the
+  AI-pricing tier's base — so per the assets-map's own guidance the capex
+  goes to a parallel book-value field. `facilityBookValue(fac) =
+  buildCost + (upgradeCapex ?? 0)` (`Demolition.ts`) is what the scoreboard
+  valuation, the SELL_FACILITY refund, and the fire-sale ask
+  (`FireSaleSystem`) read; an L3 facility stops booking at L1 cost on the
+  scoreboard. City-scale only: `upgradeCapex` is never set in a Village, so
+  it is absent from Village saves and the field is `?? 0`-inert there.
+
+- **Apartments become sellable and valued.** `'home'` dropped from
+  `UNSELLABLE_TYPES` (`Demolition.ts`) so an apartment sells back like any
+  facility (its residents fall through as homeless — every reader of
+  `homeFacilityId` is null-safe). `companyValuation` counts homes' book
+  value at city scale (gated off Village), so building one no longer
+  permanently destroys its $4,500 cost from the scoreboard.
+  `operatingValuationOf` still excludes homes (pristine AI-pricing tier).
+
+- **Forwards closeable early at mark.** `closeForward` + a `CLOSE_FORWARD`
+  command (`ForwardSystem.ts`, `Commands.ts`, `FacilityModal.tsx` gets a
+  "Close @ mark" button) cash-settle a forward at
+  `forwardMark = (lockedPrice − cityPrice) × (1 − freight) × qty` — the
+  locked-price edge over selling the goods spot today, so closing (and
+  keeping the goods to sell) equals riding to settlement. Closing releases
+  the hedge back to the book FIRST (`applyPriceImpact +1`, the mirror of the
+  sign-time −1), so the mark is read without the firm's own footprint and a
+  sign-then-close round trip nets the spread it paid, not a free gain. A 3%
+  notional fee (the `tradeShares` idiom) goes to the world; far cheaper than
+  the 15% deliberate-default it replaces. AI never signs forwards, so this
+  is player-only and inert to every baseline.
+
+- **SELL_FACILITY salvages inventory** instead of stranding it: stored
+  input/output stock and the cargo on the seller's own removed vehicles are
+  salvaged back to the seller at the wholesale haircut
+  (`SALVAGE_RATE = WHOLESALE_DISCOUNT = 0.7 × basePrice`), conserved via the
+  world account (`Demolition.ts`).
+
+- **Insolvent AI sells its least-productive facility before closing one.**
+  The B2 distress ladder gains a rung: after portfolio liquidation, a
+  city-scale AI sells its worst-EMA facility at market
+  (`sellLeastProductiveFacility`, 50% book refund + salvaged stock) and only
+  CLOSES a facility — which recovers nothing — if that still leaves it
+  underwater. Each rung can lift cash back to solvent and stop the ladder.
+  The sale refunds from the world account (no buyer firm), so it can never
+  feed a sell-then-buy loop with any expansion path. Homes are excluded from
+  the block (no tenant displacement; symmetric with close, which never
+  touches homes). Gated city-scale AI only; Village closes exactly as before.
+
+## Arc D3 — investor holdco archetype (SHIPPED, city-scale)
+
+D3 is the first specialist to fill a Firm-archetype dispatcher row
+(docs/design/firm-archetypes.md): a **pure holding company** that owns no
+production and runs one loop — its equity book. It reuses the Arc B machinery
+this document already shipped rather than inventing a second one; the only new
+code is a behavior module (`systems/ai/investor.ts`), a founder row, and an
+opt-in flag. As shipped:
+
+- **The holdco loop** (`runInvestorBehavior`). No pricing, staffing, or
+  building — the firm has nothing to run. Each day it: deleverages when flush
+  (`manageDebt`); ladders into the highest-yielding rival
+  (`maybeBuyStakeHoldco`); and, once rich enough, absorbs a dying rival at the
+  distressed discount (`maybeRescueAcquisition`). Every trade routes through
+  `tradeShares`, so **MAX_STAKE_PCT, the 40% hostile blocker
+  (`acquisitionBlocker`), the 100% public-float ledger, the 3% fee and price
+  impact** all bind a holdco exactly as they bind the player and the operator
+  field. Distress SELLING (the exit) reuses `BankruptcySystem.liquidatePortfolio`
+  — a distressed holdco sells its whole book at market before it can go
+  insolvent, the same rung an operator gets.
+
+- **Holdco-sized, not operator-dabbling.** Where the operator's B2 side-buying
+  keeps a $35k idle floor, buys 5% blocks, and caps near 25%
+  (`finance.ts`), the holdco keeps a $15k floor (its business IS the book),
+  moves 10% blocks, and ladders toward a `round(40 × stakeAppetite)` cap — an
+  expansionist holdco saturates the 49% partial cap / 40% control block; an
+  exporter stops near 24%. Persona expresses appetite through the deterministic
+  cap, never through a draw.
+
+- **RNG discipline.** The buy path is fully DETERMINISTIC (a sorted yield scan,
+  no `rng.chance`, no `ceoQuote`), so a holdco never advances the shared draw
+  stream on its buys — only its settled cash couples into the economy. The one
+  rng it can touch is the shared `maybeRescueAcquisition` cadence, and that
+  `||`-short-circuits below its $60k floor, which a fresh $30k holdco never
+  reaches early.
+
+- **Holdco valuation was already correct (B1 groundwork), verified not
+  duplicated.** A zero-facility firm flows through the same three tiers:
+  `operatingValuationOf` sums no facilities/inventory ⇒ cash − debt + the
+  earnings premium; `companyValuation` adds `holdingsValue` (stakes marked at
+  each target's `marketCap/100`). Because dividend income books as `dividendIn`
+  (part of `netProfit`, P2's fix), a holdco living on its book earns the 30×
+  multiple on that income. Portfolio mark + cash, no facility tier to value —
+  no new valuation code, a unit test pins the zero-facility case.
+
+- **The founder signal** (`AIFounderSystem` investor row). The signal is the
+  **median trailing dividend yield across listed firms** (`base/marketCap`, the
+  same base the DividendSystem pays from) sustained above `INVESTOR_YIELD_BAR`
+  (0.002 daily ≈ ~22%/yr gross at the 0.3 payout) for `INVESTOR_SIGNAL_DAYS`
+  (30) days — a broad spread of well-paying, reasonably-priced equity is what a
+  holdco enters for. It honours the shared founder cap and a
+  `unhealthy/aiCount ≤ 12%` solvency brake, and a 30-day town-wide cooldown so a
+  durable fat-yield regime seeds a holdco or two, not a swarm. The row is
+  **appended after** the operator row, so operators claim the day's single
+  founding slot first; the holdco takes days they don't.
+
+- **The pinning constraint that shaped D3 (the honesty measurement).** An active
+  holdco is a large NET BUYER, and shares trade against the public float — so
+  every stake it buys drains that cash out of the firm sector to the world
+  account. Measured, this materially shifts the A3 city crowd-tier bands: with
+  the archetype live in the tierAcceptance city soak, three seed-11 holdcos
+  drove the 300-day worker share **0.609 → 0.714** (over the 0.70 ceiling) and
+  comfortable **0.365 → 0.263** (under the 0.30 floor) — a real, non-monotonic
+  perturbation of a pinned baseline. So D3 is gated behind an **opt-in
+  `config.investorsEnabled` flag** (the shipped `servicesEnabled` precedent),
+  OFF in DEFAULT_CONFIG and every pinned soak, double-gated on
+  `sizePreset === 'city'`. With the flag off, **zero investors found and the
+  city economy is byte-identical to pre-D3** (city seed 11, 300 days:
+  `rngState` 2546912297 and total money $3,169,000.00 unchanged — the D1 pins;
+  Village seeds 1/777 `rngState` 3593176944 / 3403302807 unchanged; the
+  tierAcceptance bands, city under-supply founder, and Metropolis 24-30-firm
+  0-insolvent pins all pass untouched). The UI turns the flag on for a City
+  world; probes and tests opt in explicitly.
+
+- **beforeAfter (d3-investor probe, City, 300 days, flag ON).** *Before* (flag
+  off): 0 investors, city untouched. *After*: seeds 11/4/7 found **3 / 3 / 2**
+  holdcos (first entries day 56), all **0 insolvent** at day 300; portfolio P&L
+  (mark − basis + dividends) **+$39,190 / +$44,910 / −$12,394** with dividend
+  income **$18,056 / $15,978 / $3,592** (seed 7's holdco rides a marked
+  drawdown but stays solvent on cash — the honest losing case). Turnover
+  **1.55 / 2.08 / 1.95** (all build-up, no wash-trading), every stake ≤ 49% and
+  every target's float ≤ 100%, conserved to the cent on all three seeds. No
+  founder-pin shift lands on any pinned baseline — the flag holds them all at
+  their pre-D3 values (see the constraint above).
 
 ## Open questions / accepted quirks
+
+- **Phase 5 city valuation drift is under the re-pin trigger.** Because the
+  Phase 5 book-value enrichment (apartments + upgrade capex) feeds only the
+  scoreboard `companyValuation` and NOT the AI-pricing tier, the city
+  day-300 valuation MEDIAN barely moves: seeds 11/4/7 go
+  $25,907.67 / $23,989.32 / $27,865.67 → $25,907.67 / $24,528.89 /
+  $27,865.67 (b2-portfolio probe), i.e. 0% / +2.2% / 0% — well under the 10%
+  re-pin trigger, so the objective ladder is NOT re-pinned (and the decision
+  was never the orchestrator's to make here). The portfolio metrics are
+  byte-identical to pre-Phase-5, since `operatingValuationOf`/`marketCap`
+  (the yield math) are untouched. The player-facing goal is still met: a
+  player who builds an apartment or upgrades a facility in a city game sees
+  the invested capital in their own valuation (unit-tested at
+  `assetLiquidity.test.ts`). Verified per Arc B3 item 7.
+- **Village 300-day bit-identity re-verified for B3.** Every B3 path is
+  gated off Village or provably unreachable in the unattended baseline
+  (upgrade capex: field never set; scoreboard enrichment: `enrich=false`;
+  apartment sellability + inventory salvage: no Village code calls
+  `sellFacility` on the baseline, player-only; forward close: AI never signs
+  forwards; distress facility sale: gated city-scale AI). The 300-day
+  serialize + rngState hash for seeds 1 / 11 / 777 is identical with and
+  without the B3 patch (`docs/design/probes/village-bitidentity-check.ts`).
 
 - **B2 city valuation drift is AI-side, not a ladder re-pin.** Because
   yield-buying builds real portfolios, and `companyValuation` marks held

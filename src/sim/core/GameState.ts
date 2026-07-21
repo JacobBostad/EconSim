@@ -27,6 +27,7 @@ import type { Facility } from '../entities/Facility';
 import type { Vehicle } from '../entities/Vehicle';
 import type { Contract } from '../entities/Contract';
 import type { MarketStat } from '../entities/Market';
+import type { TradeCityPool } from '../data/tradePool';
 import type { GameEvent, EventSeverity, EventCategory } from './Events';
 import {
   type Transaction,
@@ -36,8 +37,13 @@ import {
 import { Rng } from './Random';
 import { computeTime, type GameTime } from './Tick';
 import { nextId } from './Id';
+import {
+  buildContractIndex,
+  indexAddContract,
+  type ContractIndex,
+} from './ContractIndex';
 
-export const SAVE_VERSION = 1;
+export const SAVE_VERSION = 2;
 
 /**
  * Dev/test builds fail loud on invariant violations (a settlement against a
@@ -142,6 +148,10 @@ export interface GameState {
   facilities: Record<FacilityId, Facility>;
   vehicles: Record<VehicleId, Vehicle>;
   contracts: Record<ContractId, Contract>;
+  /** Standing firm-to-firm service subscriptions (B2B services channel, HD3).
+   * Additive field — old/Village saves load with {}, and the channel is inert
+   * whenever this is empty. Sorted-key iteration everywhere it is read. */
+  serviceContracts: Record<string, import('../entities/ServiceContract').ServiceContract>;
   marketStats: Record<ProductId, MarketStat>;
 
   /** External-world cash account (utilities, government, outside economy). */
@@ -158,8 +168,11 @@ export interface GameState {
   achievements: UnlockedAchievement[];
   /** Completed guided missions (ordered chain; see data/missions.ts). */
   missions: CompletedMission[];
-  /** Distant trade cities' per-product export prices (see data/tradeCities). */
-  tradeCities: Record<string, { pricesByProduct: Record<ProductId, number> }>;
+  /** Distant trade cities' per-product export prices (see data/tradeCities).
+   * `pool` is the Arc E demand pool (opt-in tradeDemandPoolsEnabled) — present
+   * only when the flag was on at creation, so a pinned (flag-off) game
+   * serializes exactly the pre-Arc-E book. */
+  tradeCities: Record<string, { pricesByProduct: Record<ProductId, number>; pool?: TradeCityPool }>;
   /** Active rush order (timed bulk-export contract), if any. */
   rushOrder: RushOrder | null;
   /** Pre-announced city price shock, if one is pending or in effect. */
@@ -173,6 +186,26 @@ export interface GameState {
   fireSalesBought: number;
   /** Lifetime commodity-desk purchases from the trade cities (missions). */
   deskTrades: number;
+  /**
+   * World-scale era player-action tallies (missions/achievements). Each is a
+   * plain lifetime counter incremented only on the PLAYER's action, the
+   * deskTrades idiom — never read by any sim branch, so they perturb no
+   * trajectory. All four are structurally inert in Village: pools and leases
+   * only exist with their flags on (off at Village preset), and while a Village
+   * player CAN close a forward, the era achievement that reads `forwardsClosed`
+   * is itself preset-gated, so the count is never consulted there. Default 0.
+   */
+  /** Forwards the player closed early at the mark (any P&L) — closed_forward. */
+  forwardsClosed: number;
+  /** Player spot-exports shipped into a pool city whose cover was below the thin
+   * bar (TRADE_POOL_THIN_COVER_DAYS) at ship time — the read_ports mission. */
+  poolFeedsWhileThin: number;
+  /** Player spot-exports that lifted a pool product from below its target cover
+   * (TRADE_POOL_TARGET_COVER_DAYS) to at-or-above it — pool_restored. */
+  poolCoversRestored: number;
+  /** Premises the player-as-LANDLORD repossessed from an insolvent tenant (the
+   * landlord side of the repossession rung) — landlord_repossession. */
+  landlordRepossessions: number;
   /**
    * Consecutive days the town has met the emigration misery bar (worker-heavy
    * AND deeply unsatisfied). Past the grace period families start leaving;
@@ -190,6 +223,29 @@ export interface GameState {
   /** Day of the last town-wide under-supply founder entry, for the entry
    * rate-limit (0 = none yet). */
   lastUndersupplyEntryDay: number;
+  /** Consecutive days town housing occupancy has stayed above the landlord
+   * founder's "housing is tight" bar — the city-scale signal that draws a
+   * real-estate firm to town (Arc D2, HD4). Village never accumulates it. */
+  housingTightDays: number;
+  /** Day of the last landlord founder entry, for its entry cooldown (0 = none
+   * yet). */
+  lastLandlordEntryDay: number;
+  /** Consecutive days the median trailing dividend yield across listed firms has
+   * stayed above the investor-founder bar — the city-scale signal that draws a
+   * holdco to town (Arc D3). City-only: Village/Metropolis never accumulate it. */
+  investorSignalDays: number;
+  /** Day of the last investor (holdco) founder entry, for its entry rate-limit
+   * (0 = none yet). */
+  lastInvestorEntryDay: number;
+  /** Consecutive days each SERVICE's aggregate uncovered seat demand (desired
+   * seats across all firms minus provider capacity) has stayed above the founder
+   * bar — the city-scale + servicesEnabled signal that a service provider should
+   * move in (Arc D4). Only ever accrued at city scale with the flag on; empty
+   * everywhere else. */
+  serviceUncoveredDays: Record<string, number>;
+  /** Day of the last town-wide service-provider founder entry, for that entry's
+   * rate-limit (0 = none yet). */
+  lastServiceEntryDay: number;
   /**
    * Share-price displacement per firm: recent trades push the quote away
    * from fair value (marketCap), decaying back daily. Liquidity noise only —
@@ -219,6 +275,13 @@ export interface SimContext {
   config: SimulationConfig;
   rng: Rng;
   time: GameTime;
+  /**
+   * Per-tick contract lookup tables (see ContractIndex.ts). Built once here and
+   * kept current by the mid-tick mutation sites so the AI-strategy/logistics
+   * paths answer "which contracts source/feed this facility / belong to this
+   * firm?" in O(bucket) instead of scanning every contract.
+   */
+  contractIndex: ContractIndex;
 }
 
 export function makeContext(state: GameState): SimContext {
@@ -227,7 +290,30 @@ export function makeContext(state: GameState): SimContext {
     config: state.config,
     rng: new Rng(state),
     time: computeTime(state.tick, state.config),
+    contractIndex: buildContractIndex(state),
   };
+}
+
+/**
+ * Rebuild the context's contract index from the live contract set. Called by
+ * the mid-tick sites that change a contract's source/owner key (repointed
+ * sourcing, rival consolidation) or spawn a whole chain (founder entry) — a
+ * fresh rebuild is trivially identical to the `for..in` scan it stands in for.
+ * Rare enough (at most a handful per tick) that the O(contracts) rebuild never
+ * shows up against the O(bucket) reads it protects.
+ */
+export function reindexContracts(ctx: SimContext): void {
+  ctx.contractIndex = buildContractIndex(ctx.state);
+}
+
+/**
+ * Register a newly created contract in state AND the live index in one step, so
+ * mid-tick add sites can't forget to keep the index current. Appending is
+ * order-exact (a new contract sorts last everywhere), so no rebuild is needed.
+ */
+export function addContract(ctx: SimContext, contract: Contract): void {
+  ctx.state.contracts[contract.id] = contract;
+  indexAddContract(ctx.contractIndex, contract);
 }
 
 // ---------------------------------------------------------------------------
@@ -406,6 +492,12 @@ function applyToLedger(
       break;
     case 'variableCost':
       period.variableProductionCost += amount;
+      break;
+    case 'serviceExpense':
+      period.serviceExpense += amount;
+      break;
+    case 'rentExpense':
+      period.rentExpense += amount;
       break;
     case 'marketing':
       period.marketing += amount;

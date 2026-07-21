@@ -12,9 +12,16 @@ import { firmAccount, WORLD_ACCOUNT } from './Transactions';
 import type { FirmId, FacilityId, ProductId } from './Id';
 import { getProduct } from '../data/products';
 import { getQuantity, removeStock, addStock, totalUnits } from '../entities/Inventory';
-import { EXPORT_FREIGHT_FEE, TRADE_PRICE_MIN_MULT, TRADE_PRICE_MAX_MULT } from '../data/constants';
+import {
+  EXPORT_FREIGHT_FEE,
+  TRADE_PRICE_MIN_MULT,
+  TRADE_PRICE_MAX_MULT,
+  TRADE_POOL_TARGET_COVER_DAYS,
+  TRADE_POOL_THIN_COVER_DAYS,
+} from '../data/constants';
 import { worldTransportMult } from '../data/worldEvents';
 import { getTradeCity, TRADE_CITY_IDS, cityBias, type TradeCityId } from '../data/tradeCities';
+import { poolCoverMult, poolCoverDays } from '../data/tradePool';
 
 /**
  * Price impact: trading against a city MOVES its quote — buying pushes the
@@ -61,9 +68,43 @@ export function exportFreightFee(state: GameState, cityId: string = 'port_rosa')
   return Math.min(0.5, EXPORT_FREIGHT_FEE * worldTransportMult(state) * getTradeCity(cityId).freightMult);
 }
 
-/** A city's quoted price for a product (base price if unknown). */
+/** A city's quoted price for a product (base price if unknown).
+ *
+ * With a demand pool live (Arc E, opt-in), the walked quote picks up the pool's
+ * cover multiplier — a premium when the city's stock of this product is thin, a
+ * discount when an export overhang has piled it up — clamped back into the
+ * walk's own [MIN, MAX]× band so the pool layers WITHIN it, never beyond. Flag
+ * off (or a product the city doesn't stock) ⇒ the bare walked quote, unchanged.
+ */
 export function cityPrice(state: GameState, cityId: string, productId: ProductId): number {
-  return state.tradeCities[cityId]?.pricesByProduct[productId] ?? getProduct(productId).basePrice;
+  const book = state.tradeCities[cityId];
+  const walk = book?.pricesByProduct[productId] ?? getProduct(productId).basePrice;
+  const stock = book?.pool?.inventory[productId];
+  if (stock === undefined) return walk; // no pool, or a product this city doesn't consume
+  const mult = poolCoverMult(cityId, productId, stock);
+  if (mult === 1) return walk;
+  const center = getProduct(productId).basePrice * cityBias(cityId, productId);
+  return Math.round(
+    Math.max(center * TRADE_PRICE_MIN_MULT, Math.min(center * TRADE_PRICE_MAX_MULT, walk * mult)),
+  );
+}
+
+/**
+ * Move a city's demand-pool stock by `delta` units (a supply shock the pool
+ * absorbs): an export ships goods IN (+), a city-purchase draws them OUT (−).
+ * No-op when the city has no pool or doesn't consume the product. Pure stock
+ * bookkeeping — no money moves here (the trade's cash settled through
+ * recordTransaction); the changed cover shows up in the next cityPrice read.
+ */
+export function feedPool(
+  state: GameState,
+  cityId: string,
+  productId: ProductId,
+  delta: number,
+): void {
+  const pool = state.tradeCities[cityId]?.pool;
+  if (!pool || pool.inventory[productId] === undefined) return;
+  pool.inventory[productId] = Math.max(0, pool.inventory[productId]! + delta);
 }
 
 export interface ExportQuote {
@@ -115,7 +156,18 @@ export function performCityPurchase(
     note: `Bought ${qty} ${product.name} from ${getTradeCity(cityId).name} @ ${formatMoney(unitCost)}`,
   });
   addStock(fac.inputInventory, productId, qty, product.defaultQuality);
-  applyPriceImpact(state, cityId, productId, qty, 1); // buying moves the quote up
+  // A POOLED product draws the buy down the city's larder (durable cover,
+  // healed by restock over days); anything else — a plain city, or a
+  // raw/intermediate the pool never stocks — takes the classic one-tick
+  // impact the walk's center-pull heals. The guard tests the PRODUCT, not
+  // just the city: feedPool no-ops on un-pooled products, and skipping the
+  // impact there would reopen the riskless cross-city arbitrage the impact
+  // exists to prevent (review blocker). Either way buying moves the quote UP.
+  if (state.tradeCities[cityId]?.pool?.inventory[productId] !== undefined) {
+    feedPool(state, cityId, productId, -qty);
+  } else {
+    applyPriceImpact(state, cityId, productId, qty, 1);
+  }
   if (firmId === state.playerFirmId) state.deskTrades += 1;
   const city = getTradeCity(cityId);
   emitEvent(state, 'success', 'logistics',
@@ -182,7 +234,33 @@ export function performExport(
   fac.dailyStats.revenue += revenue; // exports are the warehouse's earnings
   firm.exportRevenue += revenue;
   firm.exportRevenueByCity[cityId] = (firm.exportRevenueByCity[cityId] ?? 0) + revenue;
-  applyPriceImpact(state, cityId, productId, qty, -1); // a glut softens the quote
+  // A POOLED product is absorbed into the city's larder — a durable overhang
+  // that depresses the quote for days as consumption works it off; anything
+  // else — a plain city, or a raw/intermediate the pool never stocks — takes
+  // the classic one-tick glut the walk heals. Product-level guard, same
+  // reasoning as the purchase path (review blocker: a city-level guard
+  // silently exempted raw exports from ALL impact). Either way it softens.
+  if (state.tradeCities[cityId]?.pool?.inventory[productId] !== undefined) {
+    // Read the pool's cover for this product BEFORE the ship, then feed it. Only
+    // the player's own reads-the-ports action is tallied (missions/achievements):
+    // shipping into a THIN port (cover under the 🔥 bar) teaches the read, and an
+    // export that lifts a thin port back over its target buffer is the restore.
+    // AI exports never touch these counters. Structurally inert flag-off (no pool).
+    if (firmId === state.playerFirmId) {
+      const invBefore = state.tradeCities[cityId]!.pool!.inventory[productId]!;
+      const coverBefore = poolCoverDays(cityId, productId, invBefore);
+      feedPool(state, cityId, productId, qty);
+      const coverAfter = poolCoverDays(cityId, productId, state.tradeCities[cityId]!.pool!.inventory[productId]!);
+      if (coverBefore < TRADE_POOL_THIN_COVER_DAYS) state.poolFeedsWhileThin += 1;
+      if (coverBefore < TRADE_POOL_TARGET_COVER_DAYS && coverAfter >= TRADE_POOL_TARGET_COVER_DAYS) {
+        state.poolCoversRestored += 1;
+      }
+    } else {
+      feedPool(state, cityId, productId, qty);
+    }
+  } else {
+    applyPriceImpact(state, cityId, productId, qty, -1);
+  }
   emitEvent(state, 'success', 'logistics',
     `${city.emoji} ${note} to ${city.name}: ${qty} ${product.name} for ${formatMoney(revenue)} (after freight).`, fac.id);
   creditRushOrder(state, firmId, productId, qty);

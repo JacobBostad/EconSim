@@ -6,6 +6,11 @@
  * diminishing returns toward the cap. All brands also decay daily, so brand is a
  * stock that must be maintained — the classic Capitalism-Lab marketing loop.
  * Brand feeds retail demand and willingness-to-pay (see RetailDemandSystem).
+ *
+ * B2B consulting (Arc D4): a firm with full advisory coverage builds brand faster
+ * per ad dollar — its `advisoryBoost` (stamped by ServiceBillingSystem, which runs
+ * later in the day, so this reads the prior day's coverage) scales the ad→brand
+ * gain. Undefined ⇒ 1, so Village and every services-off baseline are untouched.
  */
 
 import type { SimContext } from '../core/GameState';
@@ -28,6 +33,11 @@ export function runMarketingSystem(ctx: SimContext): void {
       firm.brandByProduct[pid] = (firm.brandByProduct[pid] ?? 0) * (1 - BRAND_DECAY_PER_DAY);
     }
 
+    // Consulting coverage lifts ad→brand conversion (Arc D4). 1 (or undefined)
+    // for every firm in every services-off baseline, so multiplying by it is
+    // exact-identity there (×1.0 in IEEE754).
+    const advisory = firm.advisoryBoost ?? 1;
+
     // Spend ad budgets to build brand.
     for (const pid in firm.adBudgetByProduct) {
       const budget = firm.adBudgetByProduct[pid] ?? 0;
@@ -44,7 +54,7 @@ export function runMarketingSystem(ctx: SimContext): void {
       });
       const cur = firm.brandByProduct[pid] ?? 0;
       const headroom = 1 - cur / MAX_BRAND;
-      const gain = AD_BRAND_GAIN_PER_DOLLAR * (budget / CENTS) * headroom;
+      const gain = AD_BRAND_GAIN_PER_DOLLAR * (budget / CENTS) * headroom * advisory;
       firm.brandByProduct[pid] = clamp(cur + gain, 0, MAX_BRAND);
     }
   }

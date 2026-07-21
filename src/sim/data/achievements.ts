@@ -15,6 +15,7 @@ import { activeWorldEvents } from './worldEvents';
 import { seasonOf, seasonOfDay } from './seasons';
 import { ticksPerDay } from '../core/Tick';
 import { dollars } from './constants';
+import { SERVICE_BOOST_MULT } from './services';
 
 export interface AchievementDef {
   id: string;
@@ -429,6 +430,86 @@ export const ACHIEVEMENT_DEFS: AchievementDef[] = [
       if (cits.length === 0) return false;
       const avg = cits.reduce((a, c) => a + c.satisfaction, 0) / cits.length;
       return avg >= 50;
+    },
+  },
+  // --- World-scale era (City/Metropolis specialist channels) ---------------
+  // Each check gates on its channel's config flag FIRST and returns false when
+  // it's off (Village always). The underlying state — a landlord lease, a
+  // compute boost, a demand pool — never exists in a Village game anyway, but
+  // the explicit gate makes the inertness structural, not incidental: these
+  // achievements can never fire in a Village run, so its serialized achievement
+  // list stays byte-identical. Same discipline as town_lifted's scenario gate.
+  {
+    id: 'first_lease',
+    name: 'Keys, Not Deeds',
+    icon: '🔑',
+    description: 'Opened a premises on a lease instead of buying it.',
+    hint: 'Place a facility and lease it from a landlord (City-scale, real estate on).',
+    check: (s) => {
+      if (!s.config.realEstateEnabled) return false;
+      const p = player(s);
+      if (!p) return false;
+      return p.facilities.some((fid) => s.facilities[fid]?.landlordFirmId !== undefined);
+    },
+  },
+  {
+    id: 'full_compute',
+    name: 'Fully Plugged In',
+    icon: '🔌',
+    description: 'Ran on full compute coverage — every facility a few percent faster.',
+    hint: 'Subscribe to enough datacenter seats to cover your whole firm (City-scale, services on).',
+    check: (s) => {
+      if (!s.config.servicesEnabled) return false;
+      // Full coverage stamps serviceBoost at exactly the boost multiplier; a
+      // partial subscription lands proportionally under it. Epsilon guards the
+      // float compare.
+      return (player(s)?.serviceBoost ?? 1) >= SERVICE_BOOST_MULT - 1e-9;
+    },
+  },
+  {
+    id: 'closed_forward',
+    name: 'Closed at the Mark',
+    icon: '🎯',
+    description: 'Closed a forward early at the mark — the exit is the skill, whatever the P&L.',
+    hint: 'On the commodity desk, close an open forward before delivery (City-scale).',
+    check: (s) => {
+      if (s.config.sizePreset === 'village') return false;
+      return s.forwardsClosed >= 1;
+    },
+  },
+  {
+    id: 'three_stakes',
+    name: 'Portfolio',
+    icon: '📊',
+    description: 'Held stakes in three different rivals at once.',
+    hint: 'Buy and hold equity in three separate firms (City-scale).',
+    check: (s) => {
+      if (s.config.sizePreset === 'village') return false;
+      const p = player(s);
+      if (!p) return false;
+      return Object.values(p.sharesHeld).filter((v) => v > 0).length >= 3;
+    },
+  },
+  {
+    id: 'landlord_repossession',
+    name: 'Called the Loan',
+    icon: '🏚️',
+    description: 'Repossessed a leased premises when its tenant went under.',
+    hint: 'Lease a premises out as landlord and recover it when the tenant folds (City-scale, real estate on).',
+    check: (s) => {
+      if (!s.config.realEstateEnabled) return false;
+      return s.landlordRepossessions >= 1;
+    },
+  },
+  {
+    id: 'pool_restored',
+    name: 'Filled the Larder',
+    icon: '🧭',
+    description: 'Shipped a thin port back up to its target cover.',
+    hint: 'Export into a port whose larder has run below its buffer until its cover is restored (City-scale, trade pools on).',
+    check: (s) => {
+      if (!s.config.tradeDemandPoolsEnabled) return false;
+      return s.poolCoversRestored >= 1;
     },
   },
   {

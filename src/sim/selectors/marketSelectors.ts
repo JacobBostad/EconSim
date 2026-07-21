@@ -5,7 +5,7 @@
 import type { GameState } from '../core/GameState';
 import type { MarketStat } from '../entities/Market';
 import type { ProductId } from '../core/Id';
-import { ALL_PRODUCT_IDS, CONSUMER_PRODUCT_IDS, getProduct } from '../data/products';
+import { PRODUCT_IDS_BY_PRESET, CONSUMER_PRODUCT_IDS_BY_PRESET, getProduct } from '../data/products';
 import { crowdCount } from '../entities/Facility';
 
 export interface MarketRow {
@@ -29,7 +29,9 @@ export function marketStat(state: GameState, productId: ProductId): MarketStat |
 }
 
 export function marketRows(state: GameState, consumerOnly = true): MarketRow[] {
-  const ids = consumerOnly ? CONSUMER_PRODUCT_IDS : ALL_PRODUCT_IDS;
+  const ids = consumerOnly
+    ? CONSUMER_PRODUCT_IDS_BY_PRESET[state.config.sizePreset]
+    : PRODUCT_IDS_BY_PRESET[state.config.sizePreset];
   return ids.map((pid) => {
     const stat = state.marketStats[pid]!;
     const product = getProduct(pid);

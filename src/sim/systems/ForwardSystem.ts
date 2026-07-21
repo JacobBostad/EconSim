@@ -24,7 +24,7 @@ import type { FirmId, ProductId } from '../core/Id';
 import { getProduct } from '../data/products';
 import { getTradeCity } from '../data/tradeCities';
 import { getQuantity, removeStock } from '../entities/Inventory';
-import { cityPrice, exportFreightFee, applyPriceImpact, impactedFillPrice } from '../core/Trade';
+import { cityPrice, exportFreightFee, applyPriceImpact, impactedFillPrice, feedPool } from '../core/Trade';
 import { formatMoney } from '../../utils/formatMoney';
 
 export const FORWARD_MAX_OPEN = 2;
@@ -34,6 +34,13 @@ export const FORWARD_MAX_DAYS = 10;
 export const FORWARD_DEFAULT_PENALTY = 0.15;
 /** The locked multiple that counts as a genuine spike (achievement bar). */
 export const FORWARD_WIN_MULT = 1.3;
+/**
+ * Fee to close a forward early, as a share of the position's locked notional —
+ * the same friction idiom as a share trade (SHARE_TRADE_FEE, 3%), paid to the
+ * world. Early exit at the mark is far cheaper than the 15% deliberate-default,
+ * but not free: the desk still takes its cut for unwinding the paper.
+ */
+export const FORWARD_CLOSE_FEE = 0.03;
 
 /** Sign a forward: lock today's gross city price for delivery by `deliveryDay`. */
 export function sellForward(
@@ -64,6 +71,103 @@ export function sellForward(
   const city = getTradeCity(cityId);
   emitEvent(state, 'info', 'finance',
     `${city.emoji} ${firm.name} signs a forward: ${qty} ${getProduct(productId).name} to ${city.name} by day ${deliveryDay} at ${formatMoney(locked)}/unit locked.`, firmId);
+  return true;
+}
+
+/**
+ * Mark-to-market value of an open short forward: the locked-price advantage
+ * over selling the same goods at today's city quote, freight-adjusted —
+ * `(lockedPrice − cityPrice) × (1 − freight) × qty`. Positive = the lock is
+ * still in the money (the market fell below it); negative = the market ran
+ * past the lock and the position is underwater. This mirrors settlement: a
+ * firm that delivers owned goods nets `lockedPrice × (1 − freight) × qty`,
+ * exactly `mark` more than it would get selling those goods spot today, so
+ * closing at the mark and holding to settlement are economically equivalent.
+ */
+export function forwardMark(state: GameState, fwd: { productId: ProductId; quantity: number; cityId: string; lockedPrice: number }): number {
+  const freight = exportFreightFee(state, fwd.cityId);
+  const spot = cityPrice(state, fwd.cityId, fwd.productId);
+  return Math.round((fwd.lockedPrice - spot) * (1 - freight) * fwd.quantity);
+}
+
+/**
+ * Close an open forward early, cash-settling it at the mark instead of riding
+ * to delivery (or eating the 15% deliberate-default). Releasing the hedge un-
+ * softens the city quote FIRST (the mirror of the impact signing applied), so
+ * the mark is read against the market without this firm's own footprint — a
+ * sign-then-close round trip nets the spread it paid, not a free gain. A 3%
+ * notional fee (the share-trade idiom) is taken to the world. All settlement
+ * is via recordTransaction, so money stays conserved. Returns true on success.
+ */
+export function closeForward(state: GameState, firmId: FirmId, forwardId: string): boolean {
+  const firm = state.firms[firmId];
+  if (!firm) return false;
+  const fwd = firm.forwards.find((f) => f.id === forwardId);
+  if (!fwd) return false;
+  const product = getProduct(fwd.productId);
+  const city = getTradeCity(fwd.cityId);
+
+  // Release the hedged demand back to the book before marking (signing pushed
+  // the quote down with direction -1; closing restores it with +1). Snapshot
+  // the raw quote first: applyPriceImpact rounds and clamps, so +1 then -1 is
+  // NOT an exact round trip — a rejected close must restore the snapshot, or
+  // repeated unaffordable CLOSE_FORWARD dispatches would ratchet the quote
+  // down for free (review finding).
+  const book = state.tradeCities[fwd.cityId];
+  const quoteBefore = book?.pricesByProduct[fwd.productId];
+  applyPriceImpact(state, fwd.cityId, fwd.productId, fwd.quantity, 1);
+
+  const mark = forwardMark(state, fwd);
+  const fee = Math.round(fwd.lockedPrice * fwd.quantity * FORWARD_CLOSE_FEE);
+
+  // A firm can't be forced to close into insolvency: the net cash effect is
+  // mark − fee (the mark is settled before the fee, so a winning close is
+  // always affordable even from zero cash). A losing close is rejected only if
+  // it would push the firm negative.
+  if (firm.cash + mark - fee < 0) {
+    emitEvent(state, 'warning', 'finance',
+      `${city.emoji} ${firm.name} can't afford to close its ${product.name} forward (${formatMoney(fee - mark - firm.cash)} short).`, firmId);
+    // Restore the exact pre-close quote so a rejected close leaves the book
+    // byte-identical.
+    if (book) {
+      if (quoteBefore === undefined) delete book.pricesByProduct[fwd.productId];
+      else book.pricesByProduct[fwd.productId] = quoteBefore;
+    }
+    return false;
+  }
+
+  firm.forwards = firm.forwards.filter((f) => f.id !== forwardId);
+
+  if (mark > 0) {
+    recordTransaction(state, {
+      from: WORLD_ACCOUNT, to: firmAccount(firmId), amount: mark,
+      firmId, category: 'revenue', productId: fwd.productId,
+      note: `Closed forward at mark (+${formatMoney(mark)}) on ${fwd.quantity} ${product.name} to ${city.name}`,
+    });
+  } else if (mark < 0) {
+    recordTransaction(state, {
+      from: firmAccount(firmId), to: WORLD_ACCOUNT, amount: -mark,
+      firmId, category: 'logistics', productId: fwd.productId,
+      note: `Closed forward at mark (${formatMoney(mark)}) on ${fwd.quantity} ${product.name} to ${city.name}`,
+    });
+  }
+  if (fee > 0) {
+    recordTransaction(state, {
+      from: firmAccount(firmId), to: WORLD_ACCOUNT, amount: fee,
+      firmId, category: 'logistics', productId: fwd.productId,
+      note: `Forward close fee (${formatMoney(fee)})`,
+    });
+  }
+  emitEvent(state, mark >= 0 ? 'success' : 'info', 'finance',
+    `${city.emoji} ${firm.name} closed its ${fwd.quantity} ${product.name} forward to ${city.name} at mark — ${formatMoney(mark)} P&L (${formatMoney(fee)} fee).`, firmId);
+  // Player-only tally for the closed_forward achievement (any P&L — the skill is
+  // closing at the mark, not the sign of the settlement). Preset-gated so the
+  // counter's Village inertness is STRUCTURAL like its three era siblings, not
+  // resting on "the pinned Village scripts happen not to close forwards"
+  // (review note); the achievement that reads it is city-scale anyway.
+  if (firmId === state.playerFirmId && state.config.sizePreset !== 'village') {
+    state.forwardsClosed += 1;
+  }
   return true;
 }
 
@@ -104,6 +208,21 @@ export function runForwardSystem(ctx: SimContext): void {
           firmId: fid, category: 'revenue', productId: fwd.productId, quantity: pulled,
           note: `Forward delivered: ${pulled} ${product.name} to ${city.name} @ ${formatMoney(net)} locked-net`,
         });
+        // Arc E: settlement SHIPS goods into the city, so a pooled consumer
+        // good feeds the larder exactly as a spot export does — the same
+        // per-product guard (pool?.inventory[productId] !== undefined), a
+        // durable cover overhang consumption works off over days. Only the
+        // DELIVERED quantity (`pulled`) moves; the deliberate-default shortfall
+        // (`missed`, below) ships nothing and feeds nothing. The sign/close
+        // paper impacts on the walk (applyPriceImpact at sellForward /
+        // closeForward) stay as they are: those hedge the city's DEMAND at
+        // paper time when no goods move, so there is no larder delta to book
+        // then — only settlement puts physical stock on the shelf. This is the
+        // divergence region.md flagged (a forward delivery used to create no
+        // cover overhang a spot export would), now resolved.
+        if (state.tradeCities[fwd.cityId]?.pool?.inventory[fwd.productId] !== undefined) {
+          feedPool(state, fwd.cityId, fwd.productId, pulled);
+        }
         if (fwd.lockedPrice >= product.basePrice * FORWARD_WIN_MULT) {
           firm.forwardWins += 1;
         }

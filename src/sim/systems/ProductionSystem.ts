@@ -125,12 +125,16 @@ export function runProductionSystem(ctx: SimContext): void {
     fac.dailyStats.ticksActive += 1;
 
     // inputAvailability == 1 here; seasons cycle farm output and world events
-    // (droughts, rich veins...) scale it further while they last.
+    // (droughts, rich veins...) scale it further while they last. Full B2B
+    // compute coverage lifts the owning firm's output firm-wide (serviceBoost,
+    // set daily by ServiceBillingSystem; undefined ⇒ 1, so Village is untouched).
     const levelMult = 1 + 0.15 * (fac.level - 1);
+    const serviceBoost = state.firms[fac.ownerFirmId]?.serviceBoost ?? 1;
     const efficiency =
       recipe.baseEfficiency *
       workerFactor *
       levelMult *
+      serviceBoost *
       worldProductionMult(state, fac.type) *
       seasonProductionMult(state, fac.type);
     fac.productionProgress += efficiency;

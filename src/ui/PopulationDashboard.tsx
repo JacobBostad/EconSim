@@ -143,8 +143,11 @@ export function PopulationDashboard(): React.ReactElement {
                 <span className="bar" style={{ flex: 1 }}>
                   <span style={{ width: `${Math.round(d.desirability * 100)}%` }} />
                 </span>
-                <span className="mono" style={{ width: 36, textAlign: 'right' }}>
+                <span className="mono" style={{ width: 36, textAlign: 'right' }} title="Desirability (homes + jobs + shops nearby)">
                   {Math.round(d.desirability * 100)}%
+                </span>
+                <span className="mono muted" style={{ width: 44, textAlign: 'right' }} title="Land value at the district centre — the location premium that sets build cost & rent">
+                  {d.landValue === undefined ? '—' : `${Math.round(d.landValue * 100)}%L`}
                 </span>
                 <span className="mono" style={{ width: 56, textAlign: 'right' }} title="Crowd population (cohorts)">
                   {crowd > 0 ? crowd : '—'}

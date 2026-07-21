@@ -44,7 +44,7 @@ import type { Vec2 } from '../entities/Location';
 import { distance } from '../entities/Location';
 import { districtAt, shoppingDistrictIds } from '../entities/District';
 import { getQuantity, getQuality, removeStock } from '../entities/Inventory';
-import { PRODUCTS, ALL_PRODUCT_IDS, getProduct } from '../data/products';
+import { PRODUCTS, COHORT_DEMAND_PRODUCT_IDS, getProduct } from '../data/products';
 import { worldDemandMult, worldSpendingMult } from '../data/worldEvents';
 import { seasonDemandMult } from '../data/seasons';
 import { tierNeedGrowthMult, tierPriceCapMult, positioningAffinity, positioningPriceImage } from './TierSystem';
@@ -110,10 +110,27 @@ const COHORT_RELIABILITY = 0.4;
  * stockout would.
  *
  * RESERVE_FACTOR scales the reserved share; 1.0 is full proportional
- * reservation (a starting value — the soak measures whether the cast recovers
- * without over-starving the crowd, and this dials the trade-off).
+ * reservation. Re-pinned to 1.7 in the A4 geometry recalibration (docs/design/
+ * cohorts-and-districts.md, "A4 geometry recalibration"): the 260×184 map's
+ * doubled trip lengths mean a cast worker — jobbed ~95-100% and shopping only
+ * the narrow after-work window — completes far fewer buys than its frictionless
+ * cohort (cast worker sat 49.5 vs cohort 61 at seed 11, gap 11.5). The catch-up
+ * lever the A3 small-City tuned (WORKER_CATCHUP_BASKETS) can't close it on the
+ * big map — MORE baskets deepen the chronic bread shortage and cast sat FALLS
+ * (measured WCB 2→3: cast worker sat 49.5→48.4, gap 11.5→13.9). A super-
+ * proportional reservation instead lets the cast's fewer trips land against a
+ * protected shelf: 1.7 lifts cast worker sat to ~54-57 and drops the worker
+ * cast-vs-cohort gap to 2.6/8.0/5.7 (seeds 11/4/7, from 11.5/6.9/5.4) — and
+ * the higher cast sat feeds the curator→comfortable path (a happier cast worker
+ * promotes through the cast TierSystem and the curator retires it into the
+ * crowd's comfortable cohort), which is what lands the tier bands (see the
+ * INFLOW_RATE note in CohortSocialSystem). Swept against the 300-day × 3-seed
+ * bands: 1.65 blows seed-4's gap to 18 and leaves seed-7 worker over 70; 1.8
+ * pushes seed-11 back over 70/under 25; 1.7 seats all three (worker 68/65/66,
+ * comfortable 30/32/31). Cohort-population-gated (crowdPurchasableStock only
+ * runs when a cohort shops), so Village is untouched.
  */
-const RESERVE_FACTOR = 1.0;
+const RESERVE_FACTOR = 1.7;
 
 /**
  * The crowd's purchasable share of a shelf after the cast reservation: the
@@ -132,8 +149,11 @@ const VISIT_EPS = 0.0002;
 const ELIG_EPS = 0.001;
 const ATTEMPT_EPS = 0.0002;
 
-/** Products the crowd can crave (have a needSpec) — the only ones with buckets. */
-const NEEDSPEC_PRODUCT_IDS: string[] = ALL_PRODUCT_IDS.filter((pid) => PRODUCTS[pid]!.needSpec);
+// Products the crowd can crave = the base consumer catalog only
+// (COHORT_DEMAND_PRODUCT_IDS) at every preset. The Arc C1 breadth is
+// cast/player/founder territory, kept out of the crowd's need loop so the
+// pinned A3/A4 city tier calibration stays byte-stable and a crowd never craves
+// an unserved product into a founder-blocking satisfaction drag. See products.ts.
 
 function anyCrowd(state: GameState): boolean {
   for (const cid in state.cohorts) {
@@ -165,10 +185,11 @@ export function runCohortDemandSystem(ctx: SimContext): void {
  * decays toward 0 (exactly SatisfactionSystem's rule, applied per bucket). */
 function growBuckets(ctx: SimContext): void {
   const { state } = ctx;
+  const needspecIds = COHORT_DEMAND_PRODUCT_IDS;
   for (const cid of Object.keys(state.cohorts).sort()) {
     const cohort = state.cohorts[cid]!;
     if (cohort.population <= 0) continue;
-    for (const pid of NEEDSPEC_PRODUCT_IDS) {
+    for (const pid of needspecIds) {
       const spec = PRODUCTS[pid]!.needSpec!;
       const g = (spec.growthPerDay[0] + spec.growthPerDay[1]) / 2;
       const mult = tierNeedGrowthMult(cohort.tier, pid);
@@ -209,7 +230,7 @@ function runSlice(ctx: SimContext): void {
   // never target a trip (else capped urgency for a product nobody stocks
   // swallows the softmax and the crowd stops shopping for what it CAN buy).
   const sold: Record<string, boolean> = {};
-  for (const pid of NEEDSPEC_PRODUCT_IDS) sold[pid] = soldSomewhere(state, pid);
+  for (const pid of COHORT_DEMAND_PRODUCT_IDS) sold[pid] = soldSomewhere(state, pid);
 
   // Cast reservation share, computed ONCE per slice (not per store): the cast's
   // town population against the total demand (cast + crowd). A coarse but honest
@@ -321,7 +342,7 @@ function shopCohortSlice(
   // gate count toward the mean), spec-order biased, servable products only.
   const tripW: Record<string, number> = {};
   let tripWSum = 0;
-  for (const pid of NEEDSPEC_PRODUCT_IDS) {
+  for (const pid of COHORT_DEMAND_PRODUCT_IDS) {
     if (!sold[pid]) continue;
     const b = cohort.needBuckets[pid];
     if (!b) continue;

@@ -25,7 +25,14 @@ export type FacilityType =
   | 'factory'
   | 'warehouse'
   | 'retail'
-  | 'importer';
+  | 'importer'
+  /** Sells compute seats to other firms (B2B services, HD3). No physical
+   * inventory; capacity = DATACENTER_SEATS_PER_LEVEL × level. City-scale only. */
+  | 'datacenter'
+  /** Sells advisory (consulting) seats to other firms (B2B services second
+   * service, Arc D4). No physical inventory; capacity = OFFICE_SEATS_PER_LEVEL
+   * × level. City-scale only; a covered firm builds brand faster per ad dollar. */
+  | 'office';
 
 /** Retail market positioning — who the store courts (Phase 3 of the
  * classes-and-ascension design). */
@@ -110,6 +117,17 @@ export interface Facility {
   positioning: StorePositioning;
   operatingCostPerDay: number; // maintenance, cents
   buildCost: number; // cents
+  /**
+   * Upgrade capital sunk into this facility beyond its base build cost, cents
+   * (Phase 5 / Arc B3). Kept SEPARATE from buildCost on purpose: buildCost is
+   * the AI-pricing tier's base (operatingValuationOf → marketCap → stake
+   * decisions), pinned to the city rng trajectory; the enriched book value
+   * (buildCost + upgradeCapex) feeds only the scoreboard valuation, the sell
+   * refund, and fire-sale asks. City-scale only — never set in a Village, so
+   * it is absent from Village saves and the 300-day bit-identity baseline.
+   * Absent (undefined) reads as 0.
+   */
+  upgradeCapex?: number; // cents
   productionProgress: number;
   status: FacilityStatus;
   bottleneckReason: string | null;
@@ -157,6 +175,19 @@ export interface Facility {
   workerCapacity: number;
   /** For homes: which citizen lives here (informational). */
   residentIds: CitizenId[];
+  /**
+   * Commercial lease (Arc D2, HD4). When set, this facility is LEASED: the
+   * operating firm (`ownerFirmId`) runs its business here but does NOT own the
+   * premises — a property firm (`landlordFirmId`) fronted the build capital and
+   * collects `rentPerDay` from the operator every day (CommercialRentSystem).
+   * A firm never leases from itself (`landlordFirmId !== ownerFirmId`, enforced
+   * at creation). Absent on a normal owned facility; city-scale only, so absent
+   * from Village saves and the bit-identity baseline. See docs/design/real-estate.md.
+   */
+  landlordFirmId?: FirmId;
+  /** Daily lease rent (cents) the operator pays its landlord. Present iff
+   * `landlordFirmId` is set. */
+  rentPerDay?: number;
   /**
    * Whether other firms may buy this facility's surplus wholesale. Defaults
    * on; a player staging stock for an export spike can switch it off so AI

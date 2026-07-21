@@ -106,6 +106,48 @@ export const TRADE_WALK_STEP = 0.12;
 export const TRADE_BOOM_MULT = 1.45;
 export const TRADE_GLUT_MULT = 0.7;
 
+// --- Trade-city demand pools (Arc E slice; opt-in tradeDemandPoolsEnabled) ---
+// A tiny cohort-style consumption model behind each trade city: the city holds
+// an inventory per consumer product that exports refill and daily consumption
+// drains, and its quote picks up a premium/discount off the resulting COVER
+// (days of stock). Pure price model — holds no money, draws no shared rng, and
+// materializes only when the flag is on, so every pinned baseline is untouched.
+/** Buffer the pool targets in days of consumption (mult 1.0 at exactly this).
+ * 6 days: a 500-unit bread dump on a ~150-soul port (see tradeCities population)
+ * lands ~3-4 extra days of cover, a clear multi-day discount without pegging the
+ * band (probe: overhang decays ~0.78×→1.0 over ~7 days). */
+export const TRADE_POOL_TARGET_COVER_DAYS = 6;
+/** Daily fraction of the gap to target the city's IMPORTS close (on top of the
+ * consumption its own production doesn't meet — Arc E step 2). 0.12 sets the
+ * near-target overhang half-life at ln2/0.12 ≈ 5.8 days; a DEEP overhang instead
+ * drains at consumption-minus-production (imports clamp to zero — no city ships
+ * its glut away), so a good the port SELF-SUPPLIES lingers far longer than one it
+ * imports. See TradeCitySystem.updatePools and the trade-pool probe overhang arm. */
+export const TRADE_POOL_REPLENISH_RATE = 0.12;
+/** Price elasticity to the cover ratio (target stock / actual stock). 1.0 is
+ * unit-elastic — a constant-expenditure demand curve, quote ∝ 1/stock — so a
+ * 500-unit bread dump on a ~180-soul port (target ~1400) lands a ~26% discount
+ * that decays as consumption works the overhang off, and a shortage pays up to
+ * the clamp (probe: overhang 0.74×→~0.87× over a week; starvation → the cap). */
+export const TRADE_POOL_COVER_ELASTICITY = 1.0;
+/** Clamp on the cover multiplier so one dump or shortage can't peg the quote
+ * past the walk's own [0.6, 1.8]× band; the pool layers within, not beyond. */
+export const TRADE_POOL_MULT_MIN = 0.65;
+export const TRADE_POOL_MULT_MAX = 1.55;
+/** Cover (days of stock) at or below which the desk flags a pool city as
+ * running THIN (🔥) and the advisor nudges a stocked player to ship into the
+ * premium; at or above the GLUT bar it flags an overhang (🧊). Target cover is
+ * 6 days, so 4d ⇒ mult ≈ 1.5× (a strong, near-clamp premium worth acting on)
+ * and 9d ⇒ mult ≈ 0.67× (a clear multi-day glut). These are DISPLAY/advice
+ * thresholds only — they read cover, they never move price. */
+export const TRADE_POOL_THIN_COVER_DAYS = 4;
+export const TRADE_POOL_GLUT_COVER_DAYS = 9;
+/** During an announced tender (annMult > 1 — a pre-broadcast demand crunch) the
+ * city can only restock at this fraction: its larder actually runs down, so the
+ * headline shift bites through real cover, not just the walk center. 0.25 drains
+ * a shortage to a standing premium over the tender window (probe starvation arm). */
+export const TRADE_POOL_SHORTAGE_THROTTLE = 0.25;
+
 /** Max products one retail store can carry. */
 export const MAX_RETAIL_PRODUCTS = 3;
 
@@ -228,6 +270,31 @@ export const FOUNDER_MIN_POPULATION = 30;
 /** Founding capital, paid in from the world account (conserved): a starter
  * chain (~$8-10k at land prices) plus working-capital runway. */
 export const FOUNDER_CASH = dollars(22000);
+
+// --- AI founders: investor holdco (Arc D3, city-scale only) ------------------
+// A third founder signal: when equity is cheap and dividends are fat, a holding
+// company moves to town to work the book (no chain, no shelves — just stakes).
+// The signal is the MEDIAN trailing dividend yield across listed firms; a broad
+// spread of well-paying, reasonably-priced equity is what a holdco enters for.
+// Structurally inert outside the City preset (Village bit-identity + the pinned
+// Metropolis founder soak both found zero investors — see AIFounderSystem).
+/** Median daily dividend yield (smoothed profit base ÷ marketCap, the base the
+ * DividendSystem actually pays from) across listed firms above which the equity
+ * market is "fat" enough to draw a holdco. Pinned by the d3-investor probe: a
+ * live City median sits at ~0.0025-0.0045 for most of a 300-day run (seeds
+ * 11/4/7), so this bar (0.002 ≈ a ~22%/yr gross yield at the 0.3 payout ratio)
+ * is a real spread, not noise, and clears with room in a healthy city. */
+export const INVESTOR_YIELD_BAR = 0.002;
+/** Consecutive days the median yield must hold above the bar before a holdco
+ * enters — a sustained spread, not a one-week blip. */
+export const INVESTOR_SIGNAL_DAYS = 30;
+/** Town-wide minimum days between investor entries, so a durable fat-yield
+ * regime seeds a holdco or two, not a swarm. */
+export const INVESTOR_ENTRY_COOLDOWN = 30;
+/** Founding capital for a holdco (from the world account, conserved). Larger
+ * than the operator's $22k: a holdco has no chain to build, so all of it is
+ * deployable into the book — this is its starting war chest. */
+export const INVESTOR_FOUNDER_CASH = dollars(30000);
 
 // --- Stock market friction (see docs/design/stock-market.md, Phase 2) -------
 /** Brokerage fee on every share trade, both directions, paid to the world —

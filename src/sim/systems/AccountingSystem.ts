@@ -60,6 +60,8 @@ export function runAccountingSystem(ctx: SimContext): void {
       maintenance: today.maintenance,
       logisticsCost: today.logisticsCost,
       variableProductionCost: today.variableProductionCost,
+      serviceExpense: today.serviceExpense ?? 0,
+      rentExpense: today.rentExpense ?? 0,
       marketing: today.marketing,
       rnd: today.rnd,
       interest: today.interest,
@@ -142,6 +144,8 @@ function aggregateWeek(firm: import('../entities/Firm').Firm): void {
     maintenance: 0,
     logisticsCost: 0,
     variableProductionCost: 0,
+    serviceExpense: 0,
+    rentExpense: 0,
     marketing: 0,
     rnd: 0,
     interest: 0,
@@ -161,6 +165,8 @@ function aggregateWeek(firm: import('../entities/Firm').Firm): void {
     acc.maintenance += d.maintenance;
     acc.logisticsCost += d.logisticsCost;
     acc.variableProductionCost += d.variableProductionCost;
+    acc.serviceExpense = (acc.serviceExpense ?? 0) + (d.serviceExpense ?? 0);
+    acc.rentExpense = (acc.rentExpense ?? 0) + (d.rentExpense ?? 0);
     acc.marketing += d.marketing;
     acc.rnd += d.rnd;
     acc.interest += d.interest;

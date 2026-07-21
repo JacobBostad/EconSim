@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useMemo, useState } from 'react';
 import { useGameStore } from '../store/useGameStore';
+import { ticksPerDay } from '../sim/core/Tick';
 import {
   getPlayerFirm,
   firmFacilities,
@@ -28,11 +29,24 @@ import { TrendCard } from './Sparkline';
 import { SHOW_CHRONICLE_EVENT } from './ChronicleModal';
 import { getPersonality } from '../sim/data/personalities';
 
+/** Rows shown in the standings table before the "show all" reveal. A Village
+ * (≤7 firms) never trips this; it exists for City/Metropolis (18/30 firms),
+ * where the full ladder is a long re-rendering list. */
+const STANDINGS_TOP_N = 12;
+
 export function CompanyDashboard(): React.ReactElement {
   const sim = useGameStore((s) => s.sim);
   const select = useGameStore((s) => s.select);
   const dispatch = useGameStore((s) => s.dispatch);
   const state = sim.getState();
+  const [showAllStandings, setShowAllStandings] = useState(false);
+  // Rankings valuations move slowly and cost a full-roster sort + per-firm
+  // valuation; recompute once a day (React re-renders ~7×/s), not per render.
+  // `state` is mutated in place with a stable reference, so it only changes on
+  // load / new game — both cases the memo should refresh through. Kept above
+  // the no-firm guard so the hook order never varies between renders.
+  const day = Math.floor(state.tick / ticksPerDay(state.config));
+  const standings = useMemo(() => rankings(state), [state, day]);
   const firm = getPlayerFirm(state);
   if (!firm) return <div>No player firm.</div>;
   const today = firmPnLToday(state, firm.id);
@@ -41,7 +55,6 @@ export function CompanyDashboard(): React.ReactElement {
   const history = firm.accounting.dailyHistory.slice(-14);
   const trend = firm.accounting.dailyHistory.slice(-60);
   const val = companyValuation(state, firm.id);
-  const standings = rankings(state);
   const objective = objectiveProgress(state);
   const objTarget = objective.next?.valuation ?? OBJECTIVE_VALUATION;
   const objPct = clamp((val.valuation / objTarget) * 100, 0, 100);
@@ -114,6 +127,11 @@ export function CompanyDashboard(): React.ReactElement {
         <thead><tr><th>#</th><th>Company</th><th>Valuation</th><th>Price / 1%</th><th>You own</th><th>Trade</th></tr></thead>
         <tbody>
           {standings.map((e, i) => {
+            // Cap the ladder at the top N (the player's own row always shows,
+            // even when ranked below the cutoff) until "show all" is toggled.
+            // Returning null keeps `i` as the true rank and skips the per-row
+            // dividend math for hidden rows.
+            if (!showAllStandings && i >= STANDINGS_TOP_N && !e.isPlayer) return null;
             const pricePerPct = Math.max(1, Math.round(e.valuation / 100));
             const owned = firm.sharesHeld[e.firmId] ?? 0;
             const targetFirm = state.firms[e.firmId];
@@ -188,6 +206,13 @@ export function CompanyDashboard(): React.ReactElement {
           })}
         </tbody>
       </table>
+      {standings.length > STANDINGS_TOP_N && (
+        <button className="small" style={{ marginTop: 4 }} onClick={() => setShowAllStandings((v) => !v)}>
+          {showAllStandings
+            ? `Show top ${STANDINGS_TOP_N}`
+            : `Show all ${standings.length} companies`}
+        </button>
+      )}
       {(() => {
         const stakes = Object.keys(firm.sharesHeld)
           .sort()
@@ -256,6 +281,9 @@ export function CompanyDashboard(): React.ReactElement {
         <Card label="Inventory value" value={formatMoney(firmInventoryValue(state, firm.id))} />
         <Card label="Net profit (today)" value={formatMoney(today.netProfit)} color={today.netProfit < 0 ? 'var(--red)' : 'var(--green)'} />
         <Card label="Operating profit (life)" value={formatMoney(life.operatingProfit)} color={life.operatingProfit < 0 ? 'var(--red)' : 'var(--green)'} />
+        {(life.serviceExpense ?? 0) > 0 && (
+          <Card label="Compute fees (life)" value={formatMoney(life.serviceExpense ?? 0)} color="var(--amber)" />
+        )}
         <Card label="Facilities" value={String(facilities.length)} />
         <Card label="Employees" value={String(firmEmployees(state, firm.id).length)} />
       </div>
@@ -311,7 +339,7 @@ export function CompanyDashboard(): React.ReactElement {
       <h3>Daily History (last {history.length} days)</h3>
       <div className="scroll">
       <table>
-        <thead><tr><th>Day</th><th>Revenue</th><th>COGS</th><th>Wages</th><th>Maint</th><th>Log</th><th>Var</th><th>Mktg</th><th>R&amp;D</th><th>Int</th><th>Operating</th><th>Net</th><th>Cash</th><th>Debt</th></tr></thead>
+        <thead><tr><th>Day</th><th>Revenue</th><th>COGS</th><th>Wages</th><th>Maint</th><th>Log</th><th>Var</th><th title="Firm-to-firm service fees (compute)">Svc</th><th>Mktg</th><th>R&amp;D</th><th>Int</th><th>Operating</th><th>Net</th><th>Cash</th><th>Debt</th></tr></thead>
         <tbody>
           {history.map((d) => (
             <tr key={d.day}>
@@ -322,6 +350,7 @@ export function CompanyDashboard(): React.ReactElement {
               <td className="mono">{formatMoney(d.maintenance)}</td>
               <td className="mono">{formatMoney(d.logisticsCost)}</td>
               <td className="mono">{formatMoney(d.variableProductionCost)}</td>
+              <td className="mono">{formatMoney(d.serviceExpense ?? 0)}</td>
               <td className="mono">{formatMoney(d.marketing)}</td>
               <td className="mono">{formatMoney(d.rnd)}</td>
               <td className="mono">{formatMoney(d.interest)}</td>
@@ -331,7 +360,7 @@ export function CompanyDashboard(): React.ReactElement {
               <td className="mono">{formatMoney(d.debt)}</td>
             </tr>
           ))}
-          {history.length === 0 && <tr><td colSpan={14} className="muted">History appears after the first full day.</td></tr>}
+          {history.length === 0 && <tr><td colSpan={15} className="muted">History appears after the first full day.</td></tr>}
         </tbody>
       </table>
       </div>

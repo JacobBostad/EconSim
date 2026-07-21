@@ -27,7 +27,7 @@ import { createFacility, createCitizen } from '../entities/factories';
 import { Rng } from './Random';
 import { getFacilityDef } from '../data/facilityDefinitions';
 import { getRecipe } from '../data/recipes';
-import { getProduct } from '../data/products';
+import { getProduct, productAvailableInPreset } from '../data/products';
 import { addStock, totalUnits } from '../entities/Inventory';
 import {
   IMPORT_MARKUP,
@@ -50,9 +50,16 @@ import { upgradeFacility } from './Upgrades';
 import { sellFacility } from './Demolition';
 import { performExport, performCityPurchase, pickBestCity } from './Trade';
 import { landCostMultiplier, landValueAt } from './LandValue';
+import { commercialLeaseAsk } from '../systems/ai/LandlordBehavior';
 import { placementBlocker } from './Placement';
 import { WHOLESALE_MULT_MIN, WHOLESALE_MULT_MAX } from './Wholesale';
 import type { Contract } from '../entities/Contract';
+import { COMPUTE_SERVICE_ID } from '../data/services';
+import {
+  computeCapacity,
+  computeSeatDemand,
+  listedComputePrice,
+} from '../systems/ServiceBillingSystem';
 
 import { runTimeSystem } from '../systems/TimeSystem';
 import { runWorldEventSystem } from '../systems/WorldEventSystem';
@@ -66,7 +73,7 @@ import { runMissionSystem } from '../systems/MissionSystem';
 import { runMarketStatsSystem } from '../systems/MarketStatsSystem';
 import { runAIStrategySystem } from '../systems/AIStrategySystem';
 import { runManagerSystem, managerCandidates } from '../systems/ManagerSystem';
-import { runForwardSystem, sellForward } from '../systems/ForwardSystem';
+import { runForwardSystem, sellForward, closeForward } from '../systems/ForwardSystem';
 import { runTradeAnnouncementSystem } from '../systems/TradeAnnouncementSystem';
 import { runEventLogSystem } from '../systems/EventLogSystem';
 import { runBankruptcySystem } from '../systems/BankruptcySystem';
@@ -83,6 +90,8 @@ import { runAccountingSystem } from '../systems/AccountingSystem';
 import { runPayrollSystem } from '../systems/PayrollSystem';
 import { runRentSystem } from '../systems/RentSystem';
 import { runCrowdRentSystem } from '../systems/CrowdRentSystem';
+import { runCommercialRentSystem } from '../systems/CommercialRentSystem';
+import { runServiceBillingSystem } from '../systems/ServiceBillingSystem';
 import { runTownStatsSystem } from '../systems/TownStatsSystem';
 import { runCitizenScheduleSystem } from '../systems/CitizenScheduleSystem';
 import { runMovementSystem } from '../systems/MovementSystem';
@@ -126,6 +135,8 @@ const SYSTEMS: SystemFn[] = [
   runAIFounderSystem, // ...and its unserved markets attract new rivals
   runRentSystem, // apartment rent (before accounting snapshots the day)
   runCrowdRentSystem, // crowd housing cost: the pool-drift sink + crowd-scale landlording (A3)
+  runCommercialRentSystem, // commercial-lease rent: operator -> landlord, firm-to-firm (HD4; no-op until leased)
+  runServiceBillingSystem, // B2B compute: firm-to-firm seat bills + coverage boost (HD3; city+ & flag)
   runAccountingSystem, // maintenance + snapshot + reset daily accumulators
   runPayrollSystem,
   // --- per-tick simulation ---
@@ -312,6 +323,9 @@ export class Simulation {
           command.cityId, command.deliveryDay, computeTime(s.tick, s.config).day,
         );
         return;
+      case 'CLOSE_FORWARD':
+        closeForward(s, command.firmId, command.forwardId);
+        return;
       case 'BUY_FROM_CITY':
         performCityPurchase(
           s, command.firmId, command.facilityId, command.productId,
@@ -393,7 +407,59 @@ export class Simulation {
       case 'SELL_SHARES':
         tradeShares(s, command.firmId, command.targetFirmId, -command.percent);
         return;
+      case 'SUBSCRIBE_SERVICE':
+        this.subscribeService(command.firmId, command.providerFirmId);
+        return;
+      case 'CANCEL_SERVICE': {
+        for (const cid of Object.keys(s.serviceContracts)) {
+          if (s.serviceContracts[cid]!.subscriberFirmId === command.firmId) {
+            delete s.serviceContracts[cid];
+          }
+        }
+        return;
+      }
     }
+  }
+
+  /**
+   * Player-side compute subscription. Reserves the firm's seat demand (capped by
+   * the provider's free capacity) at the provider's current listed price. The
+   * daily ServiceBillingSystem then bills, reprices, and grants coverage boost
+   * exactly as it does for AI subscribers. No-op unless the services channel is
+   * live and the named provider actually runs a datacenter with room.
+   */
+  private subscribeService(firmId: FirmId, providerFirmId: FirmId): void {
+    const s = this.state;
+    if (!s.config.servicesEnabled || s.config.sizePreset === 'village') return;
+    const firm = s.firms[firmId];
+    const provider = s.firms[providerFirmId];
+    if (!firm || !provider || firmId === providerFirmId) return;
+    const capacity = computeCapacity(s, provider);
+    if (capacity <= 0) return;
+    let sold = 0;
+    for (const cid in s.serviceContracts) {
+      const c = s.serviceContracts[cid]!;
+      if (c.subscriberFirmId === firmId) return; // already subscribed
+      if (c.providerFirmId === providerFirmId) sold += c.seats;
+    }
+    const desired = computeSeatDemand(firm);
+    const seats = Math.min(desired, capacity - sold);
+    if (seats <= 0) {
+      emitEvent(s, 'warning', 'player', `${provider.name} has no free compute seats right now.`, firmId);
+      return;
+    }
+    const price = listedComputePrice(provider);
+    const id = nextId(s.idCounters, 'svc');
+    s.serviceContracts[id] = {
+      id,
+      providerFirmId,
+      subscriberFirmId: firmId,
+      serviceId: COMPUTE_SERVICE_ID,
+      seats,
+      pricePerSeatDay: price,
+    };
+    emitEvent(s, 'success', 'player',
+      `Subscribed to ${provider.name} compute — ${seats} seats at ${formatMoney(price)}/seat/day.`, firmId);
   }
 
   /**
@@ -407,6 +473,9 @@ export class Simulation {
     const firm = s.firms[firmId];
     const bp = CHAIN_BLUEPRINTS[productId];
     if (!firm || !bp) return;
+    // C1: the wizard only builds chains whose product exists at this preset —
+    // the breadth chains (meals/shoes/furniture/appliances/wine) are city-only.
+    if (!productAvailableInPreset(productId, s.config.sizePreset)) return;
 
     // Wizard placements sit in mid-value rows; budget for a modest premium.
     const cost = Math.round(chainCost(bp) * 1.2);
@@ -420,7 +489,7 @@ export class Simulation {
       emitEvent(s, 'warning', 'player', 'No clear ground for a full chain — build the stages manually.', firmId);
       return;
     }
-    const { producer, factory, store } = built;
+    const { store } = built;
 
     // Entering a market where an incumbent has brand and loyal customers takes
     // penetration pricing AND advertising — the AI's own playbook. Default
@@ -436,8 +505,11 @@ export class Simulation {
       firm.adBudgetByProduct[bp.productId] = WIZARD_AD_BUDGET;
     }
 
+    // Name every stage in order (deep C3 chains have an intermediate factory
+    // between the producer and the finishing factory), then the store.
+    const chainPath = [...built.stages.map((f) => f.name), store.name].join(' → ');
     emitEvent(s, 'success', 'player',
-      `🪄 Built a full ${getProduct(bp.productId).name} chain: ${producer.name} → ${factory.name} → ${store.name} — wired, staffed, auto-priced, and advertised. Tune any of it in the store inspector.`,
+      `🪄 Built a full ${getProduct(bp.productId).name} chain: ${chainPath} — wired, staffed, auto-priced, and advertised. Tune any of it in the store inspector.`,
       store.id);
   }
 
@@ -641,6 +713,14 @@ export class Simulation {
     const firm = s.firms[command.firmId];
     if (!firm) return;
     const def = getFacilityDef(command.defId);
+    // The service facilities (datacenter, office) are city-scale only and gated on
+    // the services flag — never buildable in a Village (they aren't in the Village
+    // build menu either).
+    if ((def.type === 'datacenter' || def.type === 'office')
+      && (!s.config.servicesEnabled || s.config.sizePreset === 'village')) {
+      emitEvent(s, 'warning', 'player', 'Service facilities need the city-scale services channel.', firm.id);
+      return;
+    }
     const blocker = placementBlocker(s, command.location);
     if (blocker) {
       emitEvent(s, 'warning', 'player', `Too close to ${blocker.name} — pick clearer ground.`, firm.id);
@@ -649,6 +729,46 @@ export class Simulation {
     // Location economics: pricier ground (and rent) near the homes.
     const mult = landCostMultiplier(landValueAt(s, command.location));
     const cost = Math.round(def.buildCost * mult);
+
+    // Lease path (HD4): a landlord firm fronts the build cost, the builder pays
+    // $0 upfront and operates the premises for a daily rent. "Lease for $X/day
+    // instead of $Y upfront."
+    if (command.leaseFrom !== undefined) {
+      // SELF-LEASE BLOCK: a firm can never lease its own premises from itself
+      // (it would pay itself rent — money to nowhere).
+      if (command.leaseFrom === firm.id) {
+        emitEvent(s, 'warning', 'player', 'A firm cannot lease premises from itself.', firm.id);
+        return;
+      }
+      const landlord = s.firms[command.leaseFrom];
+      if (!landlord || (landlord.ownerType !== 'ai' && landlord.ownerType !== 'player')) {
+        emitEvent(s, 'warning', 'player', 'No such landlord to lease from.', firm.id);
+        return;
+      }
+      if (!canAfford(s, firmAccount(landlord.id), cost)) {
+        emitEvent(s, 'warning', 'player', `${landlord.name} can't finance this premises right now.`, firm.id);
+        return;
+      }
+      const fac = createFacility(s, command.defId, firm.id, command.location);
+      fac.buildCost = cost; // book value the landlord carries (yield basis)
+      fac.operatingCostPerDay = Math.round(def.maintenanceCostPerDay * mult);
+      fac.landlordFirmId = landlord.id;
+      fac.rentPerDay = commercialLeaseAsk(cost);
+      // The LANDLORD fronts the construction capital (it carries the asset).
+      recordTransaction(s, {
+        from: firmAccount(landlord.id),
+        to: WORLD_ACCOUNT,
+        amount: cost,
+        firmId: landlord.id,
+        category: 'buildSpend',
+        note: `Financed ${fac.name} for lease`,
+      });
+      emitEvent(s, 'success', 'player',
+        `Leased ${fac.name} from ${landlord.name} — ${formatMoney(fac.rentPerDay)}/day instead of ${formatMoney(cost)} upfront.`,
+        fac.id);
+      return;
+    }
+
     if (!canAfford(s, firmAccount(firm.id), cost)) {
       emitEvent(s, 'danger', 'player', `Cannot afford to build ${def.name} here (${formatMoney(cost)} with land premium).`, firm.id);
       return;
@@ -695,6 +815,11 @@ export class Simulation {
     if (command.productId !== null && !def.allowedProductsForSale.includes(command.productId)) {
       return;
     }
+    // C1: a store can only stock products that exist at this preset (a Village
+    // store can never shelve a city-only breadth product).
+    if (command.productId !== null && !productAvailableInPreset(command.productId, this.state.config.sizePreset)) {
+      return;
+    }
     // Legacy single-product semantics: replace the whole assortment.
     fac.retailProductIds = command.productId ? [command.productId] : [];
     if (command.productId) this.seedDefaultPrice(fac.ownerFirmId, command.productId);
@@ -708,6 +833,7 @@ export class Simulation {
     if (!fac || fac.type !== 'retail') return;
     const def = getFacilityDef(fac.defId);
     if (!def.allowedProductsForSale.includes(command.productId)) return;
+    if (!productAvailableInPreset(command.productId, this.state.config.sizePreset)) return;
     const idx = fac.retailProductIds.indexOf(command.productId);
     if (idx >= 0) {
       fac.retailProductIds.splice(idx, 1);

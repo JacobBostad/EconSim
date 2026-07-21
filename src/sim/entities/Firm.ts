@@ -14,6 +14,21 @@ export type FirmOwnerType = 'player' | 'ai' | 'external' | 'world';
 
 export type BankruptcyStatus = 'healthy' | 'distressed' | 'insolvent';
 
+/**
+ * The firm's operating archetype (Arc D1, design HD5) — which behavior loop the
+ * AI dispatcher routes it through each day. Every firm today is an 'operator':
+ * it runs the full shopkeeper loop (price/staff/source/expand/…). D2–D4 add the
+ * specialist archetypes — a 'landlord' that only builds and rents housing, an
+ * 'investor' holdco that only works its equity book, a 'service' provider that
+ * only runs its datacenter — each dispatching to its own behavior module.
+ *
+ * Distinct from `personalityId` (the CEO's temperament — brand builder, price
+ * fighter, …): archetype picks WHICH loop a firm runs; personality only shades
+ * the knobs WITHIN the operator loop. A landlord has no use for a price-cut
+ * multiplier; an operator does.
+ */
+export type FirmArchetype = 'operator' | 'landlord' | 'investor' | 'service';
+
 export interface WagePolicy {
   /** Default wage in cents paid per payday, per employee. */
   baseWage: number;
@@ -21,7 +36,14 @@ export interface WagePolicy {
 
 /** Lightweight AI strategy memory used by AIStrategySystem. */
 export interface FirmStrategy {
-  kind: 'none' | 'bread' | 'tools' | 'clothes' | 'retail';
+  /** Which behavior loop the AI dispatcher runs for this firm (Arc D1). Set at
+   * founding; every firm is 'operator' today. Old saves normalize to 'operator'
+   * through the SAVE_VERSION 2 migration. */
+  archetype: FirmArchetype;
+  /** The chain's anchor product id, or 'none'/'retail' for the non-product
+   * roles. A `ProductId` (open string) so a new product needs no type edit —
+   * this classifier is set at founding and not branched on by product. */
+  kind: ProductId | 'none' | 'retail';
   /** Per-product count of consecutive days the firm sold out (drives price up). */
   selloutStreak: Record<ProductId, number>;
   /** Per-product count of consecutive days of excess inventory (drives price down). */
@@ -32,8 +54,11 @@ export interface FirmStrategy {
   startingWage?: number;
 }
 
-export function emptyStrategy(kind: FirmStrategy['kind']): FirmStrategy {
-  return { kind, selloutStreak: {}, gluttStreak: {}, lossStreak: 0 };
+export function emptyStrategy(
+  kind: FirmStrategy['kind'],
+  archetype: FirmArchetype = 'operator',
+): FirmStrategy {
+  return { archetype, kind, selloutStreak: {}, gluttStreak: {}, lossStreak: 0 };
 }
 
 export interface Firm {
@@ -94,6 +119,33 @@ export interface Firm {
   forwards: ForwardContract[];
   /** Lifetime forward deliveries locked at ≥1.3× base (achievement). */
   forwardWins: number;
+
+  // --- B2B services (HD3/D4; city-scale only, all optional/undefined in Village) --
+  /**
+   * This firm's listed price per service id (cents/seat/day) for each service it
+   * provides — walked daily by utilization (ServiceBillingSystem). Undefined
+   * until the firm becomes a provider; Village firms never set it. */
+  servicePriceByService?: Record<string, number>;
+  /**
+   * Firm-wide PRODUCTION multiplier from full COMPUTE coverage this day
+   * (SERVICE_BOOST_MULT when fully covered, proportional when partial, 1
+   * otherwise). Set daily by ServiceBillingSystem; read by ProductionSystem.
+   * Undefined ⇒ no boost. */
+  serviceBoost?: number;
+  /**
+   * Firm-wide BRAND-per-ad-dollar multiplier from full CONSULTING coverage this
+   * day (CONSULTING_BRAND_MULT when fully covered, proportional when partial, 1
+   * otherwise). Set daily by ServiceBillingSystem; read by MarketingSystem (one
+   * tick later — marketing runs before billing in the day). Undefined ⇒ none. */
+  advisoryBoost?: number;
+  /** Per-service consecutive days an AI subscriber's benefit value has failed to
+   * cover its seat bill — the per-service cancel hysteresis counters. Undefined
+   * or missing key ⇒ 0. Keyed by service id so compute and consulting each
+   * cancel on their own clock. */
+  serviceFailingDaysByService?: Record<string, number>;
+  /** Per-service consecutive days a PROVIDER firm's own capacity has run full —
+   * the persistence signal the service archetype expands on. Undefined ⇒ 0. */
+  serviceFullDaysByService?: Record<string, number>;
 }
 
 /** A promise to deliver goods to a trade city by a deadline at a price

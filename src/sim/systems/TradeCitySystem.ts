@@ -20,14 +20,21 @@
 import type { SimContext } from '../core/GameState';
 import { emitEvent } from '../core/GameState';
 import { isDayBoundary } from '../core/Tick';
-import { ALL_PRODUCT_IDS, getProduct } from '../data/products';
+import { PRODUCT_IDS_BY_PRESET, getProduct } from '../data/products';
 import {
   TRADE_PRICE_MIN_MULT,
   TRADE_PRICE_MAX_MULT,
   TRADE_WALK_STEP,
   TRADE_BOOM_MULT,
   TRADE_GLUT_MULT,
+  TRADE_POOL_REPLENISH_RATE,
+  TRADE_POOL_SHORTAGE_THROTTLE,
 } from '../data/constants';
+import {
+  poolConsumptionPerDay,
+  poolLocalProductionPerDay,
+  poolTargetInventory,
+} from '../data/tradePool';
 import { clamp } from '../../utils/clamp';
 import { getQuantity } from '../entities/Inventory';
 import { performExport, pickBestCity } from '../core/Trade';
@@ -42,13 +49,61 @@ export function runTradeCitySystem(ctx: SimContext): void {
   const { state } = ctx;
   if (!isDayBoundary(state.tick, ctx.config)) return;
   updatePrices(ctx);
+  updatePools(ctx);
   runStandingOrders(ctx);
+}
+
+/**
+ * Arc E (opt-in): each trade city is TWO-SIDED. Every day it eats its ration
+ * (`drain`), its OWN producers make a fraction of that consumption (`localProd`
+ * — the step-2 supply side, unthrottled: the stub town's economy), and IMPORTS
+ * (the throttleable restock tender) cover only the REMAINING gap — the
+ * consumption production doesn't meet, plus the pull back to the target buffer.
+ *
+ * Imports never go negative (a city doesn't ship its own glut away — that would
+ * erase an export overhang the same day), so a deep overhang can only work off
+ * through consumption-minus-production: a port that SELF-SUPPLIES a good keeps
+ * its shelf full and a dump there lingers hard/long, while a port that IMPORTS
+ * it absorbs the dump fast — the specialization the arc is about. Equilibrium is
+ * untouched by the supply side: at inv = target with no tender, imports =
+ * (drain − localProd) exactly replaces the consumption production doesn't, so a
+ * seeded-at-target pool still quotes mult 1.0 day to day (only SHOCKED
+ * trajectories diverge from step 1). A pre-announced TENDER (annMult > 1)
+ * throttles the imports so the larder runs down and the headline shock bites
+ * through real cover — biting HARDEST on goods the city under-produces (it can't
+ * self-supply the shortfall) and barely on those it makes itself.
+ *
+ * The changed cover is read by cityPrice; this loop moves stock only — no money
+ * (production is the town's own economy, cash-free like consumption), no shared
+ * rng, sorted-product iteration. Absent the pool (flag off) it never runs.
+ */
+function updatePools(ctx: SimContext): void {
+  const { state } = ctx;
+  for (const cid of TRADE_CITY_IDS) {
+    const pool = state.tradeCities[cid]?.pool;
+    if (!pool) continue;
+    for (const pid of PRODUCT_IDS_BY_PRESET[state.config.sizePreset]) {
+      const inv = pool.inventory[pid];
+      if (inv === undefined) continue; // a product this city doesn't consume
+      const drain = poolConsumptionPerDay(cid, pid);
+      const localProd = poolLocalProductionPerDay(cid, pid);
+      const target = poolTargetInventory(cid, pid);
+      const annMult = tradeAnnouncementMult(state, cid, pid, ctx.time.day);
+      const throttle = annMult > 1 ? TRADE_POOL_SHORTAGE_THROTTLE : 1;
+      const imports =
+        Math.max(0, drain - localProd + (target - inv) * TRADE_POOL_REPLENISH_RATE) * throttle;
+      pool.inventory[pid] = Math.max(0, inv - drain + localProd + imports);
+    }
+  }
 }
 
 function updatePrices(ctx: SimContext): void {
   const { state } = ctx;
 
-  for (const pid of ALL_PRODUCT_IDS) {
+  // Preset-gated (C1): the shared-rng price walk draws exactly one jitter per
+  // product PRESENT at this preset — Village walks only the classic catalog, so
+  // its draw count and order (hence rngState) are byte-identical to pre-C1.
+  for (const pid of PRODUCT_IDS_BY_PRESET[state.config.sizePreset]) {
     const base = getProduct(pid).basePrice;
     // One rng draw per product, shared by all cities (see header).
     const jitter = ctx.rng.jitter(TRADE_WALK_STEP);

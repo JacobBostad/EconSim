@@ -17,6 +17,7 @@ import type { SimContext, GameState, FacilityOffer } from '../core/GameState';
 import { emitEvent } from '../core/GameState';
 import { isDayBoundary } from '../core/Tick';
 import { FIRE_SALE_RATE } from '../core/FireSale';
+import { facilityBookValue } from '../core/Demolition';
 import { formatMoney } from '../../utils/formatMoney';
 
 export const FIRE_SALE_EARLIEST_DAY = 20;
@@ -95,7 +96,7 @@ export function runFireSaleSystem(ctx: SimContext): void {
   const offer: FacilityOffer = {
     facilityId: fac.id,
     sellerFirmId: seller.id,
-    askCents: Math.round(fac.buildCost * FIRE_SALE_RATE),
+    askCents: Math.round(facilityBookValue(fac) * FIRE_SALE_RATE),
     startDay: day,
     deadlineDay: day + FIRE_SALE_WINDOW_DAYS,
   };

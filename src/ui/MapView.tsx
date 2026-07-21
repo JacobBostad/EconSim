@@ -40,6 +40,7 @@ export function MapView(): React.ReactElement {
             firmId: store.sim.getState().playerFirmId,
             defId,
             location: world,
+            ...(store.leaseFromFirmId ? { leaseFrom: store.leaseFromFirmId } : {}),
           });
           store.setBuildDef(null);
         },

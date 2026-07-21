@@ -46,7 +46,7 @@ describe('Districts + dark cohorts (world-scale A2)', () => {
     const state = newSim(11).getState();
     const supply0 = totalMoneySupply(state);
     const id = cohortId('the_rows', 'worker');
-    state.cohorts[id] = emptyCohort('the_rows', 'worker');
+    state.cohorts[id] = emptyCohort('the_rows', 'worker', 'city');
     expect(totalMoneySupply(state)).toBe(supply0); // empty pool adds nothing
 
     recordTransaction(state, {
@@ -168,6 +168,69 @@ describe('Districts A4 — map presets + partition invariants', () => {
     assertTiles(s.districts, s.config.mapWidth, s.config.mapHeight);
     expect(Object.keys(s.districts).length).toBeGreaterThan(3);
     expect(Object.values(s.districts).filter((x) => x.kind === 'residential').length).toBe(3);
+  });
+
+  /**
+   * Residential reach guard (batch-7 minor): every residential quarter must be
+   * able to reach a staple-capable COMMERCIAL district through
+   * `shoppingDistrictIds` (its own id + `adjacent`) AND be geometrically close
+   * enough that a home anywhere in the quarter can walk to a store within
+   * `maxShoppingDistance` — the same reach the runtime `districts.test.ts` city
+   * soak asserts on placed stores. This is a PURE-DATA guard: the runtime reach
+   * check can only exercise the bootstrap district (`the_rows`, where the crowd
+   * seeds and immigration fills first — homes never spill into `the_yards` /
+   * `westgate` within a soak), so a layout edit that stranded an outer quarter
+   * (dropping `midmarket` from its `adjacent`, or pushing the residential band
+   * north until the commercial core falls out of walking range) would slip past
+   * every runtime test. On the shipped Metropolis, `westgate`'s worst home corner
+   * sits 89 units from `midmarket` against a 95 budget — 6 units of margin — so
+   * this guard is what keeps that margin from silently going negative.
+   */
+  describe('residential reach guard — every quarter reaches a staple-capable commercial', () => {
+    /** Distance from a point to the nearest point of an axis-aligned rect (0 if
+     * inside). The point of a residential rect farthest from a commercial rect is
+     * always one of its four corners, so the worst-case home is a corner. */
+    const distToRect = (px: number, py: number, b: { x: number; y: number; w: number; h: number }): number => {
+      const dx = Math.max(b.x - px, 0, px - (b.x + b.w));
+      const dy = Math.max(b.y - py, 0, py - (b.y + b.h));
+      return Math.hypot(dx, dy);
+    };
+
+    for (const preset of ['village', 'city', 'metropolis'] as const) {
+      it(`${preset}: every residential district reaches a commercial within maxShoppingDistance`, () => {
+        const s = createInitialState(1, { ...DEFAULT_CONFIG, sizePreset: preset });
+        const { districts } = s;
+        const max = s.config.maxShoppingDistance;
+        const residential = Object.values(districts).filter((d) => d.kind === 'residential');
+        expect(residential.length).toBeGreaterThan(0);
+
+        for (const r of residential) {
+          const b = r.bounds;
+          const corners: [number, number][] = [
+            [b.x, b.y], [b.x + b.w, b.y], [b.x, b.y + b.h], [b.x + b.w, b.y + b.h],
+          ];
+          // Commercial districts inside r's own+adjacent shopping set (the hard
+          // gate district-local shopping applies before any distance score).
+          const reachableCommercial = [...shoppingDistrictIds(districts, r.id)]
+            .map((id) => districts[id]!)
+            .filter((d) => d.kind === 'commercial');
+          expect(
+            reachableCommercial.length,
+            `${preset}/${r.id} has no commercial district in its own+adjacent set`,
+          ).toBeGreaterThanOrEqual(1);
+
+          // At least one of them must be close enough that even the residential
+          // quarter's farthest corner is within a shop-window walk of it.
+          const worstCornerToNearest = Math.min(
+            ...reachableCommercial.map((c) => Math.max(...corners.map(([px, py]) => distToRect(px, py, c.bounds)))),
+          );
+          expect(
+            worstCornerToNearest,
+            `${preset}/${r.id} strands its far corner ${worstCornerToNearest.toFixed(1)} units from any reachable commercial (max ${max})`,
+          ).toBeLessThanOrEqual(max);
+        }
+      });
+    }
   });
 });
 

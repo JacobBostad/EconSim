@@ -49,7 +49,12 @@ export function Intro(): React.ReactElement | null {
               prices, or real quality). Prosperous towns attract newcomers;
               a neglected one 🧳 <strong>loses families</strong> — and one
               scenario, 🏚️ <strong>Dust Hollow</strong>, opens mid-exodus.
-              Watch the ladder in <strong>Population</strong>.</p>
+              Watch the ladder in <strong>Population</strong>. Pick your
+              <strong> world scale</strong> in New Game: a 🌆 <strong>City</strong>
+              grows a crowd of hundreds as <strong>district × tier cohorts</strong>
+              beyond your named cast, and a 🏙️ <strong>Metropolis</strong> (beta)
+              goes bigger still — the largest map, a field of up to 30 rival firms, and the full
+              18-product catalog with <strong>deep chains</strong>.</p>
           </div>
           <div>
             <h4>Trade, seasons, and the town</h4>
@@ -85,7 +90,11 @@ export function Intro(): React.ReactElement | null {
               shares, outright <strong>acquisitions</strong> — and 🏷️
               <strong> fire-sale bargains</strong> in the ticker when a rival
               stumbles), and
-              <strong> real estate</strong> (apartments collect rent). The
+              <strong> real estate</strong> (apartments collect rent — or
+              <strong> lease</strong> your premises from a landlord instead of
+              building). A <strong>City</strong> grows specialist rivals too:
+              <strong> landlords</strong>, stock-holding <strong>holdcos</strong>,
+              and 🖥 <strong>datacenter</strong> service firms. The
               🧭 <strong>Advisor</strong> card tells you what needs attention;
               press <strong>F</strong> to see supply chains flow. Want a score?
               Start a 🏁 <strong>Challenge run</strong> — or the 📅
