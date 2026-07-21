@@ -364,6 +364,28 @@ double the caps on a taller map. Growth is earned either way: immigration
 only flows while satisfaction and employment stay high, so the ceiling you
 reach is the economy you built.
 
+**World scale** (`docs/design/cohorts-and-districts.md`): New Game also picks the
+*shape* of the world. **Village** (default) is the classic game, bit-for-bit —
+every resident is a named, fully-simulated citizen you can follow. **City** keeps
+that cast but grows a crowd of hundreds as statistical **district × tier
+cohorts** that earn, shop, and climb the same ladder alongside them, on a bigger
+authored map partitioned into **districts** (shown in the Population tab). A City
+game opens the specialist economy: a **B2B services** channel (firms sell
+datacenter **compute** and consulting to each other) and the three firm
+**archetypes**
+(`docs/design/firm-archetypes.md`) wake up: **landlords** that develop and rent
+housing — and lease commercial premises to you, so you can pick a landlord in the
+Build panel and pay daily rent instead of the build cost upfront
+(`real-estate.md`); **holdcos** that work an equity book against rivals' public
+float (`stock-market.md`); and **service firms** running the compute/consulting
+providers (`b2b-services.md`). A third, larger **Metropolis** preset exists in
+the engine (not yet a New Game option): a 390×276 map whose founder fills toward
+**25-30 firms** across a **wider catalog** — the consumer chains grow from 8 to
+18 there (prepared food, shoes, furniture, appliances, wine, plus the steel and
+planks deep chains) — it is where the scale probes and soak tests run. City is
+beta; Village stays the reference world the determinism and conservation
+guarantees are pinned against.
+
 **Challenge mode**: tick the 🏁 box on New Game and the run ends with a final
 0–1000 score at day 200 (valuation-weighted, plus town satisfaction, peak
 share, and export revenue). Satisfaction only scores above 55 — an unattended
@@ -460,11 +482,17 @@ income, etc. Config is part of saved state.
 
 ## Known limitations
 
-- One city; the consumer catalog is three staple chains (bread, tools,
-  clothes), everyday coffee, and the two luxury crafts.
+- One town. The Village AND City consumer catalog is three staple chains
+  (bread, tools, clothes), everyday coffee, and the two luxury crafts; the
+  broadened 18-product catalog and the 25-30-firm founder live in the
+  **Metropolis** engine preset (see World scale), which is not yet a New Game
+  option — the City crowd deliberately shops the base catalog to keep its
+  calibration stable.
+- **City is beta**: the crowd, districts, and specialist archetypes are pinned by
+  probes and soak tests, but only Village carries the full bit-identity guarantee.
 - AI stores are deliberately single-product (running a general store is a
-  player edge); AI expansion opens retail outlets only (capped) and AI-initiated
-  M&A is limited to rescue takeovers of distressed rivals.
+  player edge); operator AI expansion opens retail outlets only (capped) and
+  AI-initiated M&A is limited to rescue takeovers of distressed rivals.
 
 ## Roadmap
 

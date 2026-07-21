@@ -1,11 +1,23 @@
 # Changelog
 
-## World-scale roadmap (in progress — see docs/design/ for the plan)
+## World-scale roadmap (shipped — see docs/design/ for the plan)
 
 The current arc rebuilds the engine for real-world scale: population in the
 thousands via statistical cohorts plus a fully-simulated cast, districts,
 25-30 firms, a broad product catalog, and specialist firm archetypes
 (real estate, investing, business services).
+
+The work runs in four arcs, and the fragments below are told newest-first
+within the section — so this navigation map reads the opposite way, oldest
+foundation first: **A — the engine** (data-driven demand, districts + dark
+cohorts, the live crowd economy, and the founder scaling that fills a
+Metropolis); **B — investing** (fair takeovers and the minority-stake control
+ladder); **C — breadth** (a wider consumer catalog, the B2B services channel,
+deep 3-stage chains); **D — the specialists** (the firm-archetype framework,
+then the landlord, holdco, and service-provider archetypes that ride it). A
+real City or Metropolis game switches the whole stack on together (crowd +
+districts + all three specialist channels); Village stays the classic,
+bit-identical, every-resident-simulated town.
 
 - **D2 — real-estate firms** (design HD4; see docs/design/real-estate.md): the
   first live specialist archetype. `ai/LandlordBehavior` runs the `landlord`

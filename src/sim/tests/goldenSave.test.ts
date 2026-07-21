@@ -6,6 +6,7 @@ import fixture4Json from './fixtures/golden-save-v4.json';
 import fixture5Json from './fixtures/golden-save-v5.json';
 import fixture6Json from './fixtures/golden-save-v6.json';
 import fixture7Json from './fixtures/golden-save-v7.json';
+import fixture8Json from './fixtures/golden-save-v8.json';
 import { Simulation } from '../core/Simulation';
 import { deserialize, serialize } from '../persistence/saveLoad';
 import { totalMoneySupply } from '../core/GameState';
@@ -290,6 +291,99 @@ describe('Golden save fixture v7 (cohort era, City preset)', () => {
 
   it('the cohort city keeps running with money conserved to the cent', () => {
     const state = deserialize(raw7);
+    const supply0 = totalMoneySupply(state);
+    const sim = new Simulation(state);
+    expect(() => sim.run(ticksPerDay(state.config) * 5)).not.toThrow();
+    expect(totalMoneySupply(sim.getState())).toBe(supply0);
+    expect(Object.keys(sim.getState().citizens).length).toBeGreaterThan(0);
+  });
+});
+
+/**
+ * Golden save v8 — the archetype era (City preset, seed 11, day 120): the first
+ * fixture with the full world-scale specialist economy LIVE — the three flags a
+ * real City game sets (servicesEnabled + realEstateEnabled + investorsEnabled)
+ * all on. Every Arc D archetype has founded and gone to work: landlord firms
+ * (D2) holding rental housing, a service provider (D4) running a datacenter +
+ * office against live compute contracts (D4/HD3 billing), investor holdcos (D3)
+ * carrying equity stakes worked against the public float, all riding on the A3
+ * crowd cohorts × A4 districts. Same contract as v1-v7: never regenerate to
+ * paper over a break — add a migration instead.
+ */
+describe('Golden save fixture v8 (archetype era, City preset)', () => {
+  const raw8 = JSON.stringify(fixture8Json);
+
+  it('loads intact with every Arc D archetype live on the crowd economy', () => {
+    const state = deserialize(raw8);
+    // City preset with the full specialist channel opted in.
+    expect(state.config.sizePreset).toBe('city');
+    expect(state.config.servicesEnabled).toBe(true);
+    expect(state.config.realEstateEnabled).toBe(true);
+    expect(state.config.investorsEnabled).toBe(true);
+
+    const businesses = Object.values(state.firms).filter(
+      (f) => f.ownerType === 'ai' || f.ownerType === 'player',
+    );
+    const archetypes = new Set(businesses.map((f) => f.strategy.archetype));
+    // All four archetypes founded: operators plus the three D specialists.
+    expect(archetypes.has('operator')).toBe(true);
+    expect(archetypes.has('landlord')).toBe(true);
+    expect(archetypes.has('investor')).toBe(true);
+    expect(archetypes.has('service')).toBe(true);
+
+    // D2: a landlord archetype holds rental housing it built.
+    const landlords = businesses.filter((f) => f.strategy.archetype === 'landlord');
+    expect(landlords.length).toBeGreaterThanOrEqual(1);
+    expect(
+      landlords.some((f) => f.facilities.some((id) => state.facilities[id]?.type === 'home')),
+    ).toBe(true);
+
+    // D4: a service provider runs a datacenter and carries live compute
+    // contracts; every contract links a real provider to a real subscriber,
+    // and no subscriber is itself a provider (the billing rule).
+    const providers = businesses.filter((f) => f.strategy.archetype === 'service');
+    expect(providers.some((f) => f.facilities.some((id) => state.facilities[id]?.defId === 'datacenter'))).toBe(true);
+    const contracts = Object.values(state.serviceContracts);
+    expect(contracts.length).toBeGreaterThan(0);
+    for (const c of contracts) {
+      expect(state.firms[c.providerFirmId]).toBeTruthy();
+      const sub = state.firms[c.subscriberFirmId];
+      expect(sub).toBeTruthy();
+      expect(sub!.strategy.archetype).not.toBe('service');
+      expect(c.seats).toBeGreaterThan(0);
+    }
+
+    // D3: an investor holdco carries an equity book against the public float —
+    // every stake targets a real firm and respects the 0..49% cap.
+    const investors = businesses.filter((f) => f.strategy.archetype === 'investor');
+    const totalStakes = investors.reduce((n, f) => n + Object.keys(f.sharesHeld).length, 0);
+    expect(totalStakes).toBeGreaterThanOrEqual(1);
+    for (const f of investors) {
+      for (const [targetId, pct] of Object.entries(f.sharesHeld)) {
+        expect(state.firms[targetId]).toBeTruthy();
+        expect(pct).toBeGreaterThan(0);
+        expect(pct).toBeLessThanOrEqual(49);
+      }
+    }
+
+    // A4 districts partition the map; A3 cohorts hold the crowd across tiers.
+    expect(Object.keys(state.districts).length).toBeGreaterThanOrEqual(2);
+    const cohorts = Object.values(state.cohorts);
+    expect(cohorts.reduce((n, c) => n + c.population, 0)).toBeGreaterThan(200);
+    expect(cohorts.some((c) => c.tier === 'comfortable' && c.population > 0)).toBe(true);
+
+    // No ghost links survive the archetype churn: every home/job id resolves.
+    for (const f of Object.values(state.facilities)) {
+      for (const id of f.residentIds) expect(state.citizens[id]).toBeTruthy();
+      for (const id of f.employees) expect(state.citizens[id]).toBeTruthy();
+    }
+    // Round-trip stability: loading a re-serialized load changes nothing.
+    const again = deserialize(serialize(state));
+    expect(serialize(again)).toBe(serialize(state));
+  });
+
+  it('the archetype city keeps running with money conserved to the cent', () => {
+    const state = deserialize(raw8);
     const supply0 = totalMoneySupply(state);
     const sim = new Simulation(state);
     expect(() => sim.run(ticksPerDay(state.config) * 5)).not.toThrow();

@@ -12,7 +12,8 @@
     "test:watch": "vitest",
     "typecheck": "tsc -b --noEmit",
     "e2e": "node e2e/smoke.mjs",
-    "e2e:deep": "node e2e/deepsmoke.mjs"
+    "e2e:deep": "node e2e/deepsmoke.mjs",
+    "e2e:city": "node e2e/citysmoke.mjs"
   },
   "dependencies": {
     "react": "^18.3.1",
