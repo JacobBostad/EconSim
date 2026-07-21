@@ -967,6 +967,104 @@ comfortable-11 basin). The founder-wage-decoupling + prosperity-sink pair is the
 one measured result that resolves the pool↔comfortable conflict; it is documented
 as the forward path rather than shipped half-finished.
 
+### City decoupling — the forward path built, measured against the real pins, and NOT shipped
+
+The follow-up pass built the two validated ingredients as real code and measured
+them across BOTH triggers × all three seeds × the ACTUAL committed guards (not just
+the probe), to answer the one question the diagnosis left open: does the decoupling
+ship at the shipped 0.65 trigger with margin restored, or does it hold all guards on
+all seeds at 0.68? **Verdict: neither. The decoupling is inseparable from the trigger
+raise — a raised-employment mechanism that BREAKS the pinned bands at 0.65 — and the
+raise itself still fails the cast-worker gap on seeds 4/7. The city stays at fill 0.65,
+$16 founder crowd wage, flat rent sink, bit-identical to today; the code was reverted.**
+
+**What was built (exactly the two ingredients).** (a) A per-preset `founderCrowdWage`
+in `SIZE_PRESETS`: City $18, Village/Metropolis $16 — the wage gate scoped to City
+alone, the honest preset-scope decision, because Metropolis's 24-30 founder / 0-insolvent
+pins are bit-identity-pinned at fill 0.80 with a 10k crowd, a regime the $18 decoupling
+was neither measured nor needed against (raising it there perturbs those pins for no gain).
+The comfortable wage bar `sub × 18/14` carries a sub-cent float tail (1800.0000000000002¢),
+so the cohort promotion bar was cent-rounded so a $18 founder wage clears it — provably
+inert to every pinned run (no pinned firm pays inside the sub-cent gap; the demotion FLOOR
+bar was left un-rounded because Metropolis $16 crowd sits a float epsilon under the $16
+floor and rounding would flip that pinned behavior). (b) A prosperity-scaled pool sink in
+`CrowdRentSystem` (`prosperityDrainFloor` / `prosperityDrainRate`, City-only, rate 0 for
+Village AND Metropolis so both stay byte-identical): above the floor a cohort sheds a
+fraction of its per-capita excess to the world each day, so the pool plateaus at any firm
+count.
+
+**The mechanism reproduces the diagnosis exactly (validation confirmed).** At 0.68 seed 11
+with the sink at floor $450 / rate 0.08, the probe measures **10 firms, 0 insolvent, worker
+0.625 / comfortable 0.351 (both in band), gap(daily15) 3.41 ✓, drift $1.35 ✓, pool plateaus
+d80 $369 → d120 $396** — the pool runaway is bounded and comfortable is held on the WAGE leg
+(the pool is drained below its savings bars, so comfortable no longer depends on it). This is
+the validated result the diagnosis recorded; the implementation is faithful.
+
+**Full guard table — 3 seeds × {0.65, 0.68} × {before, after decoupling}** (300-day probe;
+"after" = $18 wage + sink floor $450 / rate 0.08, the setting that reproduces the seed-11/0.68
+validation; band15 W/C, gap = daily-|diff| 15-day, drift = 40→120 $/cap/day; all 0 insolvent
+except where noted):
+
+| trigger | seed | before firms · W/C · gap · drift | after firms · W/C · gap · drift | after verdict |
+|---------|------|-----------------------------------|----------------------------------|---------------|
+| 0.65 | 11 | 9 · .609/.365 · 5.84 · 0.46 (PASS) | 10 · .645/.332 · **17.13** · 1.37 | gap ✗ |
+| 0.65 | 4 | 9 · .666/.310 · 7.02 · 0.39 (PASS) | 7 · **.771/.206** · 7.45 · −0.37 | band ✗ |
+| 0.65 | 7 | 8 · .655/.321 · 4.18 · 1.02 (PASS) | 9 · .651/.325 · 0.57 · 1.33 | bands ✓, plateau ✗ |
+| 0.68 | 11 | 11 · .632/.344 · 7.07 · **2.22** | 10 · .625/.351 · 3.41 · 1.35 | **PASS** |
+| 0.68 | 4 | 11 · .608/.367 · **13.33** · 0.39 (1 distressed) | 10 · **.791/.185** · **13.15** · −0.34 | band+gap ✗ |
+| 0.68 | 7 | 8 · .618/.358 · 3.91 · 1.02 | 9 · **.722/.254** · **10.13** · 1.60 | band+gap ✗ |
+
+**Against the ACTUAL committed tests (the load-bearing check).** `tierAcceptance.test.ts`
+guards seeds 4/7 with the 150-day forming band (W 0.58-0.80) and carries the tight 300-day
+band + gap≤8 on seed 11 only. Run with the decoupling live at the shipped 0.65 trigger:
+- **The $18 wage ALONE (sink inert) breaks seed-7's 150-day worker ceiling: 0.847 > 0.80** —
+  and 0.847 is not noise, it is the SAME value under wage-only and under every sink setting
+  (0.03/0.04/0.05), because the sink does not fire in the first 150 days. Worker 0.85 /
+  comfortable ~0.13 at day 150 is precisely the pre-A4-recalibration broken regime the band
+  was tightened to exclude ("seed 7 formed W 0.87 / C 0.11 at day 150" — the test's own
+  cited failure). Admitting it would widen a band to re-admit a broken regime, which this
+  calibration does not do.
+- Seed 11's 300-day pin holds under wage-only (0.655/0.322, gap 5.37) but ANY active sink
+  founds extra firms and blows its gap (17.13) or its worker ceiling (0.715).
+- At steady state (day 300) the decoupled 0.65 regime leaves **seed 4 comfortable 0.245 and
+  seed 7 comfortable 0.298 — both below the 25-40 band floor.** Broken, not slow-forming.
+
+**Root cause — sharper than the diagnosis (why it cannot ship incrementally at 0.65).** The
+decoupling shifts comfortable-band maintenance from the pool SAVINGS leg (capped at
+`SAVINGS_ROUTE_CAP` = 0.5) onto the WAGE leg, whose value is ≈ crowd `empShare`. That holds
+comfortable only when empShare ≥ ~0.5 — which happens ONLY at the raised trigger's higher firm
+count (the diagnosis's own "extra firms lift employment to ~0.51"). At the shipped 0.65 trigger
+employment runs ~0.30-0.42, AND the $18 payroll bump (+12.5%) suppresses it FURTHER through the
+`CROWD_WAGE_BUFFER_DAYS` hiring throttle — cash-constrained founders hire fewer crowd (seed 4:
+0.32 → 0.23). So the wage leg is WEAKER than the savings cap it replaced and comfortable falls
+out of the band bottom. **The decoupling is a raised-trigger-regime fix; it is inseparable from
+the trigger raise and degrades the 0.65 equilibrium it would ship into.** Firm solvency is not
+the failure mode — 0 insolvent throughout; the higher payroll bites as reduced HIRING, and the
+empShare-weighted gates translate that straight into a collapsed comfortable band.
+
+**Verdict.** Both ship paths are closed by measurement: the 0.68 raise fails the seeds-4/7 gap
+(13.15 / 10.13); the decoupling at 0.65 fails the pinned seed-7 150-day band and the seeds-4/7
+comfortable floor. The two ingredients are VALIDATED at seed-11/0.68 (pool runaway bounded,
+plateau, comfortable held on wages, 0 insolvent) but cannot seat all three seeds at either
+trigger. Blast radius confirmed inert by construction: the wage gate + sink are City-only
+(Village/Metropolis pin $16 and rate 0, byte-identical — Metropolis's 24-30/0-insolvent pins
+untouched), so nothing outside City ever moved. The pass reverts to bit-identity rather than
+ship a change that breaks a pinned band or re-pins one to admit a broken regime. The forward
+path from here is unchanged and is the whole-mechanism change the diagnosis named: give the
+trip-limited cast the cohort's URGENT_TRIPS throughput to close the cast-worker gap AND lift
+City crowd employment toward ~0.5 (so the wage leg can carry comfortable at 0.65) — e.g. a
+City founder-cash uplift to absorb the $18 payroll without shedding hires, measured jointly
+with the gap mechanism. The `founderCrowdWage` + prosperity-sink pair is the validated engine;
+it waits on that employment/gap work, not on further calibration of these two knobs alone.
+
+**Stretch (investors-on-city / C1-on-city) — untouched, as scoped.** Both remain gated off in
+the pinned City run (`investorsEnabled`/breadth catalog). They only become relevant once the
+decoupling actually ships (i.e. once the trigger can rise): an active holdco drains the firm
+sector against the public float, which would move the very crowd-tier bands this pass could not
+seat, and the C1 breadth engages the metropolis-only `BASKET_WEIGHT_BASELINE` renormalization
+on the City crowd — each is its own re-pin against a regime that does not yet exist. Not
+attempted here; noted as the next dependency after the employment/gap mechanism lands.
+
 ## Open questions
 
 - **Cast-vs-cohort shelf competition.** Within a shop-window slice,
