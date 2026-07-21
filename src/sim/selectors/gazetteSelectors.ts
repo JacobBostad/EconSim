@@ -10,6 +10,7 @@ import { CONSUMER_PRODUCT_IDS_BY_PRESET, PRODUCT_IDS_BY_PRESET, getProduct } fro
 import { ticksPerDay } from '../core/Tick';
 import { cityPrice, exportFreightFee } from '../core/Trade';
 import { TRADE_CITY_IDS, getTradeCity } from '../data/tradeCities';
+import { poolCoverDays } from '../data/tradePool';
 
 export interface GazetteStory {
   severity: GameEvent['severity'];
@@ -115,6 +116,10 @@ export interface TradeDeskRow {
   otherNet: number;
   /** Per-unit advantage of shipping to the better port, cents. */
   spread: number;
+  /** Days of cover the better port's demand pool holds (Arc E, opt-in) —
+   * thin cover means it's paying a premium, an overhang means a glut.
+   * Undefined when the pool is off (the classic pure-walk desk). */
+  bestCover?: number;
 }
 
 /**
@@ -132,6 +137,11 @@ export function tradeDesk(state: GameState, limit = 4): TradeDeskRow[] {
     const best = nets[0]!;
     const other = nets[nets.length - 1]!;
     const city = getTradeCity(best.cid);
+    // Arc E: if the better port runs a demand pool for this product, read its
+    // cover (days of stock) so the desk shows WHY the quote is where it is.
+    const stock = state.tradeCities[best.cid]?.pool?.inventory[pid];
+    const bestCover =
+      stock === undefined ? undefined : poolCoverDays(best.cid, pid, stock);
     rows.push({
       productId: pid,
       productName: getProduct(pid).name,
@@ -141,6 +151,7 @@ export function tradeDesk(state: GameState, limit = 4): TradeDeskRow[] {
       bestNet: best.net,
       otherNet: other.net,
       spread: best.net - other.net,
+      ...(bestCover === undefined ? {} : { bestCover }),
     });
   }
   rows.sort((a, b) => b.spread - a.spread);

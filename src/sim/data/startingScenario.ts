@@ -28,7 +28,8 @@ import { addStock, type Inventory } from '../entities/Inventory';
 import { makeCitizenNeeds } from '../entities/factories';
 import { getFacilityDef, facilityRecipesForPreset } from './facilityDefinitions';
 import { getProduct, PRODUCT_IDS_BY_PRESET, CONSUMER_PRODUCT_IDS_BY_PRESET } from './products';
-import { TRADE_CITY_IDS, cityBias } from './tradeCities';
+import { TRADE_CITY_IDS, cityBias, getTradeCity } from './tradeCities';
+import { poolTargetInventory } from './tradePool';
 import { FIRST_NAMES, LAST_NAMES } from './names';
 import { dollars } from './constants';
 import { defaultPersonalityFor, defaultCeoFor } from './personalities';
@@ -296,6 +297,19 @@ export function createInitialState(
       state.tradeCities[cid]!.pricesByProduct[pid] = Math.round(
         getProduct(pid).basePrice * cityBias(cid, pid),
       );
+    }
+  }
+  // Arc E (opt-in): each trade city grows a demand pool seeded AT its target
+  // buffer, so a fresh game opens in equilibrium (cover mult 1.0). Flag off ⇒
+  // no pool key is written and the book stays byte-identical to pre-Arc-E.
+  if (state.config.tradeDemandPoolsEnabled) {
+    for (const cid of TRADE_CITY_IDS) {
+      const book = state.tradeCities[cid]!;
+      book.pool = { population: getTradeCity(cid).population, inventory: {} };
+      for (const pid of PRODUCT_IDS_BY_PRESET[state.config.sizePreset]) {
+        const target = poolTargetInventory(cid, pid);
+        if (target > 0) book.pool.inventory[pid] = target;
+      }
     }
   }
 

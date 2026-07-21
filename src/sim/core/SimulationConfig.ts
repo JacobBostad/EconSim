@@ -125,6 +125,20 @@ export interface SimulationConfig {
    * probes and tests opt in explicitly. Double-gated on sizePreset === 'city' in
    * the founder row, so Village and Metropolis never found a holdco regardless. */
   investorsEnabled: boolean;
+  /**
+   * Trade-city demand pools (Arc E slice; see docs/design/region.md). Off by
+   * default at EVERY preset. When on, each trade city grows a tiny cohort-style
+   * consumption pool (population, per-product inventory that exports refill and
+   * daily consumption drains) and its export quote picks up a cover-driven
+   * premium/discount ON TOP of the seeded random walk. The pool draws no shared
+   * rng and holds no money, but it DOES write per-city inventory into the
+   * serialized state and bends the quote — so it is flag-gated rather than
+   * layered live, because the bit-identity contract hashes the whole state
+   * (village seeds 1/11/777, city seed 11) and the tierAcceptance bands read
+   * export prices. With the flag off no pool materializes and the trade book is
+   * byte-identical to pre-Arc-E; a City/Metropolis game opts in, the trade-pool
+   * probe and tests opt in explicitly. */
+  tradeDemandPoolsEnabled: boolean;
 }
 
 /**
@@ -221,6 +235,7 @@ export const DEFAULT_CONFIG: SimulationConfig = {
   servicesEnabled: false,
   realEstateEnabled: false,
   investorsEnabled: false,
+  tradeDemandPoolsEnabled: false,
 };
 
 /** Difficulty presets: starting capital, news volatility, AI aggressiveness. */

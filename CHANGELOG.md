@@ -19,6 +19,56 @@ real City or Metropolis game switches the whole stack on together (crowd +
 districts + all three specialist channels); Village stays the classic,
 bit-identical, every-resident-simulated town.
 
+- **E — the region seed** (design-forward; see docs/design/region.md): the
+  roadmap's last arc opens the next axis — several towns sharing one world,
+  trading with each other — as a *seed*, not the finished thing. The design doc
+  lays out the region container (towns share one clock/rng/money supply and a
+  freight graph; a town owns its map/cast/cohorts/firms; the trade cities are
+  just towns the player doesn't operate in yet), the honest cost of the
+  `GameState` refactor it needs (~1,300 flat-town call sites — `state.firms` etc.
+  — behind an absolute bit-identity contract, so it lands as a flag-gated
+  gradient, never a big bang), the migration path (pool → producing stub →
+  `Town` struct as a one-town region reproducing the pins → a second live town →
+  region UI), and what stays out of scope and why. The exploration's finding is
+  written down: `createInitialState` builds a *world*, not a reusable `Town`, and
+  cohorts key `districtId:tier` (an intra-town axis) — so regions are a layer
+  *above* the district machinery, and the trade cities are the honest seed to
+  grow. **The shippable slice: trade-city demand pools.** Each opt-in trade city
+  grows a TINY cohort-style consumption pool — a population and, per consumer
+  product, an inventory that exports refill and daily consumption drains, read at
+  the same needSpec spec-midpoints the crowd's cohorts grow from (staples drain
+  fast, luxuries barely; raws carry no pool). Its export quote picks up a
+  **cover-driven** premium (thin stock) or discount (an export overhang), layered
+  on top of the existing seeded walk: dumping 500 bread on Port Rosa now depresses
+  its bread price for *days* — a real inventory overhang consumption works off
+  over ~a week, deeper AND longer the bigger the dump — instead of one impact
+  tick, and a starved city pays a premium until its larder refills. The pool
+  REPLACES the one-tick `applyPriceImpact` for POOLED products (the durable
+  supply signal is cover now; splitting a dump self-penalizes because the fed
+  inventory is read live, so the anti-arbitrage guard is preserved and made more
+  persistent — and raws/intermediates the pool never stocks keep the classic
+  one-tick impact even on a pool city, a per-product guard the review demanded),
+  and a pre-announced tender throttles restock so the Gazette's
+  shock bites through real cover. It is a **price model, not a money holder** —
+  exports still settle firm↔world through `recordTransaction`, conserved to the
+  cent; it draws **zero** shared-rng (every quantity is a deterministic function
+  of population × spec × stored inventory, sorted-product iteration) and holds no
+  cash. Gated behind `tradeDemandPoolsEnabled` (default off at every preset,
+  the shipped `servicesEnabled` precedent): with the flag off **no pool key is
+  serialized and the trade book is byte-identical to pre-Arc-E** — proven by
+  diffing the full 300-day village state (the only delta anywhere is the one new
+  `false` config line). Village seeds 1/11/777 reproduce their exact 300-day
+  `rngState`; city seed 11 reproduces its `rngState` and money supply; the
+  tierAcceptance bands and metropolis founder pins pass untouched. A City world
+  opts in; the trade desk now reports the better port's cover in days (🔥 thin /
+  🧊 glutted) — the smallest honest surface. Measured (trade-pool probe, City,
+  seed 11): overhang 0.74×→0.91× over 10 days (monotonic inventory decay vs the
+  before-era's floor-slam-and-walk-bounce); size sensitivity 200u→~8d / 500u→~15d
+  / 1000u→~21d / 1500u→~24d; starvation premium ~1.25–1.39× for ~6 days; money
+  conserved; two seed-7 runs bit-identical. Suite +9 (tradePool.test.ts):
+  pinned-baseline gate (no pool key with the flag off, classic one-tick path
+  intact), pool seeding/quote parity, multi-day overhang, starvation premium,
+  conservation, determinism, save round-trip. Full suite green (507 tests).
 - **D2 — real-estate firms** (design HD4; see docs/design/real-estate.md): the
   first live specialist archetype. `ai/LandlordBehavior` runs the `landlord`
   dispatcher row — a firm whose whole business is developing and renting housing:

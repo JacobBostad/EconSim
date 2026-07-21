@@ -23,6 +23,14 @@ export interface TradeCityDef {
   biasByProduct: Partial<Record<ProductId, number>>;
   /** Which direction this city's daily price jitter leans (+1 / −1). */
   walkSign: 1 | -1;
+  /**
+   * Off-map population the demand pool consumes for (Arc E, opt-in only). A
+   * TINY figure by design — the pool is a price read, not a second town — sized
+   * so a player-scale export (hundreds of units) is a few days of the city's
+   * cover and moves the quote for days rather than one tick. Port Rosa is the
+   * larger provisioning port; Ironvale the smaller inland hub.
+   */
+  population: number;
 }
 
 export const TRADE_CITIES: Record<TradeCityId, TradeCityDef> = {
@@ -33,6 +41,7 @@ export const TRADE_CITIES: Record<TradeCityId, TradeCityDef> = {
     freightMult: 1,
     biasByProduct: {},
     walkSign: 1,
+    population: 180,
   },
   ironvale: {
     id: 'ironvale',
@@ -51,6 +60,7 @@ export const TRADE_CITIES: Record<TradeCityId, TradeCityDef> = {
       pastries: 0.9,
     },
     walkSign: -1,
+    population: 140,
   },
 };
 

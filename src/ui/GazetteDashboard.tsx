@@ -28,6 +28,12 @@ export function GazetteDashboard(): React.ReactElement {
                 {r.spread > 0 && (
                   <span className="muted"> (+{formatMoney(r.spread)} vs the other port)</span>
                 )}
+                {r.bestCover !== undefined && (
+                  <span className="muted">
+                    {' '}· {r.bestCover < 4 ? '🔥 ' : r.bestCover > 9 ? '🧊 ' : ''}
+                    {r.bestCover >= 100 ? '99+' : r.bestCover.toFixed(1)}d cover
+                  </span>
+                )}
               </span>
             </div>
           ))}

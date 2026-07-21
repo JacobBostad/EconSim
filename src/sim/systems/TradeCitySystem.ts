@@ -27,7 +27,10 @@ import {
   TRADE_WALK_STEP,
   TRADE_BOOM_MULT,
   TRADE_GLUT_MULT,
+  TRADE_POOL_REPLENISH_RATE,
+  TRADE_POOL_SHORTAGE_THROTTLE,
 } from '../data/constants';
+import { poolConsumptionPerDay, poolTargetInventory } from '../data/tradePool';
 import { clamp } from '../../utils/clamp';
 import { getQuantity } from '../entities/Inventory';
 import { performExport, pickBestCity } from '../core/Trade';
@@ -42,7 +45,37 @@ export function runTradeCitySystem(ctx: SimContext): void {
   const { state } = ctx;
   if (!isDayBoundary(state.tick, ctx.config)) return;
   updatePrices(ctx);
+  updatePools(ctx);
   runStandingOrders(ctx);
+}
+
+/**
+ * Arc E (opt-in): each trade city eats its daily ration and its own producers/
+ * importers restock toward a target buffer — the net is a gentle pull of stock
+ * back to target, so an export overhang (piled in at export time) works off over
+ * ~a week and a shortfall refills. A pre-announced TENDER (annMult > 1 — a
+ * demand crunch) throttles that restock, so the city's larder genuinely runs
+ * down and the headline shock bites through real cover, not just the walk
+ * center. The changed cover is read by cityPrice; this loop moves stock only —
+ * no money, no shared rng, sorted-product iteration. Absent the pool (flag off)
+ * it never runs — there is nothing to iterate.
+ */
+function updatePools(ctx: SimContext): void {
+  const { state } = ctx;
+  for (const cid of TRADE_CITY_IDS) {
+    const pool = state.tradeCities[cid]?.pool;
+    if (!pool) continue;
+    for (const pid of PRODUCT_IDS_BY_PRESET[state.config.sizePreset]) {
+      const inv = pool.inventory[pid];
+      if (inv === undefined) continue; // a product this city doesn't consume
+      const drain = poolConsumptionPerDay(cid, pid);
+      const target = poolTargetInventory(cid, pid);
+      const annMult = tradeAnnouncementMult(state, cid, pid, ctx.time.day);
+      const throttle = annMult > 1 ? TRADE_POOL_SHORTAGE_THROTTLE : 1;
+      const restock = (drain + (target - inv) * TRADE_POOL_REPLENISH_RATE) * throttle;
+      pool.inventory[pid] = Math.max(0, inv - drain + restock);
+    }
+  }
 }
 
 function updatePrices(ctx: SimContext): void {

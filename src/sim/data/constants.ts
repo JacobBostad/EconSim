@@ -106,6 +106,37 @@ export const TRADE_WALK_STEP = 0.12;
 export const TRADE_BOOM_MULT = 1.45;
 export const TRADE_GLUT_MULT = 0.7;
 
+// --- Trade-city demand pools (Arc E slice; opt-in tradeDemandPoolsEnabled) ---
+// A tiny cohort-style consumption model behind each trade city: the city holds
+// an inventory per consumer product that exports refill and daily consumption
+// drains, and its quote picks up a premium/discount off the resulting COVER
+// (days of stock). Pure price model — holds no money, draws no shared rng, and
+// materializes only when the flag is on, so every pinned baseline is untouched.
+/** Buffer the pool targets in days of consumption (mult 1.0 at exactly this).
+ * 6 days: a 500-unit bread dump on a ~150-soul port (see tradeCities population)
+ * lands ~3-4 extra days of cover, a clear multi-day discount without pegging the
+ * band (probe: overhang decays ~0.78×→1.0 over ~7 days). */
+export const TRADE_POOL_TARGET_COVER_DAYS = 6;
+/** Daily fraction of the gap to target the city's own producers/importers close.
+ * 0.12 sets an overhang half-life of ln2/0.12 ≈ 5.8 days — a dump depresses the
+ * quote for the better part of a week, then heals (probe overhang curve). */
+export const TRADE_POOL_REPLENISH_RATE = 0.12;
+/** Price elasticity to the cover ratio (target stock / actual stock). 1.0 is
+ * unit-elastic — a constant-expenditure demand curve, quote ∝ 1/stock — so a
+ * 500-unit bread dump on a ~180-soul port (target ~1400) lands a ~26% discount
+ * that decays as consumption works the overhang off, and a shortage pays up to
+ * the clamp (probe: overhang 0.74×→~0.87× over a week; starvation → the cap). */
+export const TRADE_POOL_COVER_ELASTICITY = 1.0;
+/** Clamp on the cover multiplier so one dump or shortage can't peg the quote
+ * past the walk's own [0.6, 1.8]× band; the pool layers within, not beyond. */
+export const TRADE_POOL_MULT_MIN = 0.65;
+export const TRADE_POOL_MULT_MAX = 1.55;
+/** During an announced tender (annMult > 1 — a pre-broadcast demand crunch) the
+ * city can only restock at this fraction: its larder actually runs down, so the
+ * headline shift bites through real cover, not just the walk center. 0.25 drains
+ * a shortage to a standing premium over the tender window (probe starvation arm). */
+export const TRADE_POOL_SHORTAGE_THROTTLE = 0.25;
+
 /** Max products one retail store can carry. */
 export const MAX_RETAIL_PRODUCTS = 3;
 

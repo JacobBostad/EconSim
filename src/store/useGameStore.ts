@@ -160,11 +160,13 @@ export const useGameStore = create<GameStore>((set, get) => {
       const sizeOverrides =
         size === 'bustling' ? { maxHomes: 80, maxCitizens: 160, mapHeight: 124 } : {};
       // World scale drives the cohort economy: 'city' turns the crowd on AND
-      // opens the B2B services channel (datacenter compute, HD3); 'village'
-      // (default) keeps the classic all-agent town bit-for-bit.
+      // opens the B2B services channel (datacenter compute, HD3), the specialist
+      // archetypes, and the Arc E trade-city demand pools (export prices read a
+      // real supply/demand); 'village' (default) keeps the classic all-agent
+      // town bit-for-bit.
       const worldOverride =
         world === 'city'
-          ? { sizePreset: 'city' as const, servicesEnabled: true, realEstateEnabled: true, investorsEnabled: true }
+          ? { sizePreset: 'city' as const, servicesEnabled: true, realEstateEnabled: true, investorsEnabled: true, tradeDemandPoolsEnabled: true }
           : {};
       get().sim.setState(
         createInitialState(seed, { ...configForDifficulty(difficulty), challengeMode: challenge, ...sizeOverrides, ...worldOverride }, scenarioId),

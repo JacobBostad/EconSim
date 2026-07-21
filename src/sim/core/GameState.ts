@@ -27,6 +27,7 @@ import type { Facility } from '../entities/Facility';
 import type { Vehicle } from '../entities/Vehicle';
 import type { Contract } from '../entities/Contract';
 import type { MarketStat } from '../entities/Market';
+import type { TradeCityPool } from '../data/tradePool';
 import type { GameEvent, EventSeverity, EventCategory } from './Events';
 import {
   type Transaction,
@@ -167,8 +168,11 @@ export interface GameState {
   achievements: UnlockedAchievement[];
   /** Completed guided missions (ordered chain; see data/missions.ts). */
   missions: CompletedMission[];
-  /** Distant trade cities' per-product export prices (see data/tradeCities). */
-  tradeCities: Record<string, { pricesByProduct: Record<ProductId, number> }>;
+  /** Distant trade cities' per-product export prices (see data/tradeCities).
+   * `pool` is the Arc E demand pool (opt-in tradeDemandPoolsEnabled) — present
+   * only when the flag was on at creation, so a pinned (flag-off) game
+   * serializes exactly the pre-Arc-E book. */
+  tradeCities: Record<string, { pricesByProduct: Record<ProductId, number>; pool?: TradeCityPool }>;
   /** Active rush order (timed bulk-export contract), if any. */
   rushOrder: RushOrder | null;
   /** Pre-announced city price shock, if one is pending or in effect. */
