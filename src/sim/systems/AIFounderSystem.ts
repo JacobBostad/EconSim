@@ -26,7 +26,7 @@ import { SIZE_PRESETS } from '../core/SimulationConfig';
 import { firmAccount, WORLD_ACCOUNT } from '../core/Transactions';
 import { isDayBoundary } from '../core/Tick';
 import { nextId } from '../core/Id';
-import type { Firm } from '../entities/Firm';
+import type { Firm, FirmArchetype } from '../entities/Firm';
 import { emptyStrategy } from '../entities/Firm';
 import { emptyAccounting } from '../entities/Accounting';
 import { getProduct } from '../data/products';
@@ -248,10 +248,44 @@ function smoothedFillRate(state: GameState, productId: string): number {
   return demand > 0 ? fulfilled / demand : 1;
 }
 
-export function runAIFounderSystem(ctx: SimContext): void {
-  if (!isDayBoundary(ctx.state.tick, ctx.config)) return;
+/**
+ * A town read shared across archetype founding attempts (Arc D1): the gated
+ * day, the whole-town population mood, the AI-firm headcount, and this preset's
+ * scale + founding cash. Assembled once per day by the shell after the shared
+ * entry gates pass; each archetype row consumes it.
+ */
+interface FounderTownRead {
+  day: number;
+  avgSat: number;
+  aiCount: number;
+  cityScale: boolean;
+  cash: number;
+}
+
+/**
+ * One archetype's founder logic (Arc D1, design HD5). Each row owns:
+ *  - `trackSignals` — update its per-day opportunity counters. Runs EVERY day,
+ *    before any gate, so streaks accrue during the pre-earliest window too.
+ *  - `tryFound` — given the day's town read (shared gates already passed),
+ *    attempt one founding. Returns true when it CLAIMS the day's single
+ *    founding slot (the world founds at most one firm per day, town-wide);
+ *    false to let the next row try.
+ *
+ * Today only the OPERATOR row is live — it carries the staple vacancy +
+ * under-supply signals verbatim. D2–D4 append landlord / investor / service
+ * rows to FOUNDER_ARCHETYPES; the shell iterates the table, so a new row is
+ * purely additive and never re-touches the operator path.
+ */
+interface FounderArchetype {
+  archetype: FirmArchetype;
+  trackSignals(ctx: SimContext): void;
+  tryFound(ctx: SimContext, town: FounderTownRead): boolean;
+}
+
+// --- operator row: the classic staple-gap + under-supply founder -----------
+
+function operatorTrackSignals(ctx: SimContext): void {
   const { state } = ctx;
-  const day = ctx.time.day;
   // Preset-gated staple set (C1): Village is the shipped three exactly, so its
   // marketGapDays keys and fixed-order scan are byte-identical to pre-C1;
   // City/Metropolis add the breadth chains.
@@ -281,28 +315,12 @@ export function runAIFounderSystem(ctx: SimContext): void {
           : 0;
     }
   }
+}
 
-  if (day < FOUNDER_EARLIEST_DAY) return;
-  // The population gate reads the WHOLE town (cast + crowd) so a small, starved
-  // cast can't stop capital from answering 300 hungry cohort-shoppers. Village:
-  // crowd is empty, so this is the cast headcount, exactly as before.
-  const { pop, avgSat } = townPopAndSat(state);
-  if (pop < FOUNDER_MIN_POPULATION) return;
-  const aiCount = Object.values(state.firms).filter((f) => f.ownerType === 'ai').length;
-  if (aiCount >= founderMaxAiFirms(state.config)) return;
-  // World-cash gate — VILLAGE ONLY (A5). The world account is the town's
-  // source/sink; at crowd scale it legitimately runs a structural deficit
-  // (subsistence to a large idle crowd), so the founder-scale probe found a
-  // Metropolis world balance sitting BELOW the $22k founding cash for ~200 of
-  // 300 days — the gate was choking the very foundings that would employ the
-  // crowd and relieve the drain, while a screaming shortage went unanswered
-  // (fill-rate 0.2-0.5). Founding is money-conserved (the firm pays land costs
-  // straight back the same tick, and export revenue keeps flowing out to the
-  // world), so a negative world balance is not insolvency — the probe confirms
-  // conservation holds to the cent throughout. Village keeps the guard exactly:
-  // its world account stays flush and its founder tests pin this path.
-  const cash = founderCash(state.config);
-  if (!cityScale && state.worldCash < cash) return;
+function operatorTryFound(ctx: SimContext, town: FounderTownRead): boolean {
+  const { state } = ctx;
+  const { day, avgSat, aiCount, cityScale, cash } = town;
+  const founderProducts = founderProductsFor(state.config);
 
   const affordable = (pid: string): boolean =>
     !!CHAIN_BLUEPRINTS[pid] && cash >= Math.round(chainCost(CHAIN_BLUEPRINTS[pid]!) * 1.2);
@@ -311,13 +329,13 @@ export function runAIFounderSystem(ctx: SimContext): void {
   // gap in fixed product order. Keeps the classic "don't chase a struggling
   // town" satisfaction CEILING — an empty shelf in an unhappy town is the
   // player's to claim first (this is the gate the Village founder tests pin).
-  // One entry per day; returns once a qualifying gap is found (whether or not
-  // it can afford to build it).
+  // One entry per day; claims the slot once a qualifying gap is found (whether
+  // or not it can afford to build it).
   if (avgSat >= IMMIGRATION_MIN_SATISFACTION && founderRoll(state.seed, day)) {
     for (const pid of founderProducts) {
       if ((state.marketGapDays[pid] ?? 0) >= FOUNDER_GAP_DAYS && CHAIN_BLUEPRINTS[pid]) {
         if (affordable(pid)) foundFirm(ctx, pid, day, 'vacancy');
-        return;
+        return true; // vacancy attempt claims the day's founding slot
       }
     }
   }
@@ -331,8 +349,8 @@ export function runAIFounderSystem(ctx: SimContext): void {
   // demand itself — the fill-rate denominator is real fulfilled+unmet sales,
   // and a truly empty town fails the population gate above. The 15-day streak
   // paces entry against noise; the cooldown paces it town-wide.
-  if (!cityScale) return;
-  if (day - state.lastUndersupplyEntryDay < founderUndersupplyCooldown(state.config)) return;
+  if (!cityScale) return false;
+  if (day - state.lastUndersupplyEntryDay < founderUndersupplyCooldown(state.config)) return false;
   // Solvency brake (A5): capital stops chasing a market whose incumbents are
   // already struggling. The under-supply signal is a SERVICE-LEVEL read (town
   // fill-rate), not a PROFITABILITY one — so on the biggest maps it keeps firing
@@ -352,7 +370,7 @@ export function runAIFounderSystem(ctx: SimContext): void {
   const unhealthy = Object.values(state.firms).filter(
     (f) => f.ownerType === 'ai' && f.bankruptcyStatus !== 'healthy',
   ).length;
-  if (aiCount > 0 && unhealthy / aiCount > 0.12) return;
+  if (aiCount > 0 && unhealthy / aiCount > 0.12) return false;
   // Enter the MOST-STARVED qualifying staple, not merely the first in product
   // order (A5). The old fixed-order scan always founded on bread whenever bread
   // qualified, so bread stacked competitors while later staples starved unseen —
@@ -376,5 +394,60 @@ export function runAIFounderSystem(ctx: SimContext): void {
   if (pick) {
     foundFirm(ctx, pick, day, 'undersupply');
     state.lastUndersupplyEntryDay = day;
+    return true;
+  }
+  return false;
+}
+
+/**
+ * The founder archetype table (Arc D1 scaffold). Operator only, for now. D2–D4
+ * append their rows here — a landlord that founds a rentals firm where housing
+ * is chronically short, an investor holdco that spins up where equity is cheap
+ * and dividends fat, a service provider where compute demand outruns capacity —
+ * each with its own trackSignals + tryFound. The shell iterates in table order,
+ * so adding a row is additive and leaves the operator row untouched.
+ */
+const FOUNDER_ARCHETYPES: FounderArchetype[] = [
+  { archetype: 'operator', trackSignals: operatorTrackSignals, tryFound: operatorTryFound },
+];
+
+export function runAIFounderSystem(ctx: SimContext): void {
+  if (!isDayBoundary(ctx.state.tick, ctx.config)) return;
+  const { state } = ctx;
+  const day = ctx.time.day;
+
+  // Every archetype refreshes its opportunity signals each day, before any
+  // gate — streaks must accrue during the pre-earliest window too.
+  for (const row of FOUNDER_ARCHETYPES) row.trackSignals(ctx);
+
+  // --- shared entry gates (apply to any archetype's founding) --------------
+  if (day < FOUNDER_EARLIEST_DAY) return;
+  // The population gate reads the WHOLE town (cast + crowd) so a small, starved
+  // cast can't stop capital from answering 300 hungry cohort-shoppers. Village:
+  // crowd is empty, so this is the cast headcount, exactly as before.
+  const { pop, avgSat } = townPopAndSat(state);
+  if (pop < FOUNDER_MIN_POPULATION) return;
+  const aiCount = Object.values(state.firms).filter((f) => f.ownerType === 'ai').length;
+  if (aiCount >= founderMaxAiFirms(state.config)) return;
+  const cityScale = state.config.sizePreset !== 'village';
+  // World-cash gate — VILLAGE ONLY (A5). The world account is the town's
+  // source/sink; at crowd scale it legitimately runs a structural deficit
+  // (subsistence to a large idle crowd), so the founder-scale probe found a
+  // Metropolis world balance sitting BELOW the $22k founding cash for ~200 of
+  // 300 days — the gate was choking the very foundings that would employ the
+  // crowd and relieve the drain, while a screaming shortage went unanswered
+  // (fill-rate 0.2-0.5). Founding is money-conserved (the firm pays land costs
+  // straight back the same tick, and export revenue keeps flowing out to the
+  // world), so a negative world balance is not insolvency — the probe confirms
+  // conservation holds to the cent throughout. Village keeps the guard exactly:
+  // its world account stays flush and its founder tests pin this path.
+  const cash = founderCash(state.config);
+  if (!cityScale && state.worldCash < cash) return;
+
+  // At most one founding per day, town-wide: the first archetype to claim the
+  // slot ends the scan. Operator is first — and, today, the only row.
+  const town: FounderTownRead = { day, avgSat, aiCount, cityScale, cash };
+  for (const row of FOUNDER_ARCHETYPES) {
+    if (row.tryFound(ctx, town)) return;
   }
 }

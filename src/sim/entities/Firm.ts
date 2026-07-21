@@ -14,6 +14,21 @@ export type FirmOwnerType = 'player' | 'ai' | 'external' | 'world';
 
 export type BankruptcyStatus = 'healthy' | 'distressed' | 'insolvent';
 
+/**
+ * The firm's operating archetype (Arc D1, design HD5) — which behavior loop the
+ * AI dispatcher routes it through each day. Every firm today is an 'operator':
+ * it runs the full shopkeeper loop (price/staff/source/expand/…). D2–D4 add the
+ * specialist archetypes — a 'landlord' that only builds and rents housing, an
+ * 'investor' holdco that only works its equity book, a 'service' provider that
+ * only runs its datacenter — each dispatching to its own behavior module.
+ *
+ * Distinct from `personalityId` (the CEO's temperament — brand builder, price
+ * fighter, …): archetype picks WHICH loop a firm runs; personality only shades
+ * the knobs WITHIN the operator loop. A landlord has no use for a price-cut
+ * multiplier; an operator does.
+ */
+export type FirmArchetype = 'operator' | 'landlord' | 'investor' | 'service';
+
 export interface WagePolicy {
   /** Default wage in cents paid per payday, per employee. */
   baseWage: number;
@@ -21,6 +36,10 @@ export interface WagePolicy {
 
 /** Lightweight AI strategy memory used by AIStrategySystem. */
 export interface FirmStrategy {
+  /** Which behavior loop the AI dispatcher runs for this firm (Arc D1). Set at
+   * founding; every firm is 'operator' today. Old saves normalize to 'operator'
+   * through the SAVE_VERSION 2 migration. */
+  archetype: FirmArchetype;
   /** The chain's anchor product id, or 'none'/'retail' for the non-product
    * roles. A `ProductId` (open string) so a new product needs no type edit —
    * this classifier is set at founding and not branched on by product. */
@@ -35,8 +54,11 @@ export interface FirmStrategy {
   startingWage?: number;
 }
 
-export function emptyStrategy(kind: FirmStrategy['kind']): FirmStrategy {
-  return { kind, selloutStreak: {}, gluttStreak: {}, lossStreak: 0 };
+export function emptyStrategy(
+  kind: FirmStrategy['kind'],
+  archetype: FirmArchetype = 'operator',
+): FirmStrategy {
+  return { archetype, kind, selloutStreak: {}, gluttStreak: {}, lossStreak: 0 };
 }
 
 export interface Firm {

@@ -42,7 +42,7 @@ import {
   type ContractIndex,
 } from './ContractIndex';
 
-export const SAVE_VERSION = 1;
+export const SAVE_VERSION = 2;
 
 /**
  * Dev/test builds fail loud on invariant violations (a settlement against a

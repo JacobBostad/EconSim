@@ -7,11 +7,37 @@ thousands via statistical cohorts plus a fully-simulated cast, districts,
 25-30 firms, a broad product catalog, and specialist firm archetypes
 (real estate, investing, business services).
 
+- **D1 — the firm archetype framework** (design HD5; see
+  docs/design/firm-archetypes.md): the scaffold for specialist firms. Every AI
+  firm today runs one loop — the shopkeeper's; landlords, holdcos, and service
+  providers need a dispatcher. `FirmStrategy` gains `archetype`
+  ('operator' | 'landlord' | 'investor' | 'service', default 'operator'), and
+  `AIStrategySystem` splits into a per-firm archetype DISPATCHER plus behavior
+  modules under `systems/ai/`: today's monolith loop becomes
+  `OperatorBehavior` VERBATIM (pricing/labor/sourcing that stays operator
+  forever), with the build behaviors (`expansion.ts` — holding the D2 landlord
+  and D4 service seams) and capital behaviors (`finance.ts` — the D3 investor
+  seam) in sibling modules the orchestrator still calls in the exact old order.
+  The B2/B3/C2 behaviors (portfolio buying, distress consolidation, datacenter
+  provisioning) stay in the operator cadence — D1 marks their seams as comments,
+  it does not reshuffle them. `AIFounderSystem` gains a per-archetype
+  opportunity-signal TABLE (a `trackSignals` + `tryFound` row per archetype)
+  with today's staple-gap / under-supply signals as the sole live operator row;
+  adding a landlord/investor/service row is additive and never re-touches the
+  operator path. `SAVE_VERSION` → 2 with the roadmap's one versioned migration:
+  old saves stamp `strategy.archetype = 'operator'` on every firm (golden
+  fixtures v1–v7 load unchanged; a migration test pins that a real v1 save —
+  which carries no `"archetype"` string — gains the field). A pure refactor,
+  and measured as one: Village seed 1 / 777 and City seed 11 reproduce their
+  exact 300-day `rngState` and total money supply, and the full suite is green
+  (471 tests, +6 for this arc: dispatcher routing by a stub non-operator
+  archetype, direct `dispatchFirmBehavior` selection, and the migration).
+
 - **C1 — product breadth**: the consumer catalog grows from the shipped 8
-  products to 18 with five complete new chains — produce→meals (a prepared-meal
-  food staple), leather→shoes (apparel), lumber→furniture and minerals→
-  appliances (comfortable+ durables), and grapes→wine (a comfortable+ luxury a
-  rung below jewelry). Each is authored in the house data style: full raw→
+  products to 18 with five complete new chains — produce→meals (prepared food),
+  leather→shoes (apparel), lumber→furniture and minerals→appliances (durables),
+  and grapes→wine (a luxury a rung below jewelry) — all comfortable+ goods
+  (worker tier mult 0, deliberate: it keeps the pinned worker budget valid). Each is authored in the house data style: full raw→
   factory→retail chain, tier-targeted needSpec (staples worker-priced, durables/
   wine comfortable-and-up, affluent luxury kept thin), a chain-wizard blueprint,
   a founder name pool, retail shelf assignments, and a natural seasonal hook

@@ -27,9 +27,22 @@ import { seedNeedBuckets } from '../entities/Cohort';
 
 type Raw = Record<string, unknown>;
 
-const MIGRATIONS: Record<number, (raw: Raw) => Raw> = {
-  // Example for the future:
-  // 1: (raw) => ({ ...raw, saveVersion: 2, newField: defaultValue }),
+export const MIGRATIONS: Record<number, (raw: Raw) => Raw> = {
+  // v1 -> v2 (Arc D1, the firm-archetype framework): every firm's strategy gains
+  // an `archetype`. Old saves predate specialist firms, so every firm was an
+  // operator — stamp `strategy.archetype = 'operator'` on each. Money, rng,
+  // facilities, contracts are untouched: the loaded world is byte-for-byte the
+  // same run it was, now carrying one new classifier field per firm.
+  1: (raw) => {
+    const firms = raw.firms as Record<string, { strategy?: { archetype?: string } }> | undefined;
+    if (firms) {
+      for (const id in firms) {
+        const strat = firms[id]?.strategy;
+        if (strat && strat.archetype === undefined) strat.archetype = 'operator';
+      }
+    }
+    return { ...raw, saveVersion: 2 };
+  },
 };
 
 export function migrate(raw: Raw): GameState {
@@ -131,6 +144,10 @@ function normalize(state: GameState): GameState {
   let aiSeen = 0;
   for (const id in state.firms) {
     const f = state.firms[id]!;
+    // Firm archetype (Arc D1): the versioned v1->v2 migration stamps this on
+    // every firm; the defensive fill covers any save that reaches here without
+    // it (e.g. a hand-rolled fixture) — every firm today is an operator.
+    f.strategy.archetype = f.strategy.archetype ?? 'operator';
     f.brandByProduct = f.brandByProduct ?? {};
     f.adBudgetByProduct = f.adBudgetByProduct ?? {};
     f.qualityByProduct = f.qualityByProduct ?? {};
