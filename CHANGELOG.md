@@ -19,6 +19,34 @@ real City or Metropolis game switches the whole stack on together (crowd +
 districts + all three specialist channels); Village stays the classic,
 bit-identical, every-resident-simulated town.
 
+- **D2 follow-up — the repossession rung + AI operator leasing** (design HD4; see
+  docs/design/real-estate.md). Closes the two holes the D2 review flagged. **(1)
+  Repossession rung.** When a tenant's insolvency would CLOSE a leased premises
+  (`landlordFirmId` set), `BankruptcySystem` now REVERTS it to the landlord
+  instead: ownership transfers on-book, the crew is released, the tenant's supply
+  lines into it are dropped, the lease fields are cleared, and NO money moves —
+  the tenant loses premises it never paid for and the landlord (which fronted the
+  build capital) recovers its asset, closing the stranded-asset hole. It is the
+  single insolvency close-point, so the player receivership path and the AI path
+  ride the same rung. **(2) AI operator lease-vs-buy.** An expanding operator
+  (`maybeExpand`) now leases its new outlet from a landlord instead of buying when
+  cash is tight (below 2× the build cost) and a landlord with spare financing
+  capacity offers — a deterministic sorted read, no rng. The landlord stays
+  rational: `landlordCanFinance` fronts capital only down to its DISTRESS floor
+  (not its full development keep-buffer), which is sound precisely because the
+  repossession rung bounds the downside — a lease is now a recoverable, yield-
+  bearing asset, not a capital sink. **Inert in every pinned run by the existing
+  flag chain — NOT a second flag:** `realEstateEnabled` gates landlords entirely,
+  so flag off there is no lessor, the lease branch is skipped, and the buy path
+  runs byte-for-byte. Verified: plain City seed 11 300-day `rngState` = 2546912297
+  / $3,169,000.00 and the whole flag-off City/Metro grid (seeds 11/4/7) unchanged
+  to the byte; the flag-ON standard City/Metro 300-day organic leases = 0 (the
+  store path is shortage-gated and the founder system backfills undersupply first),
+  so the metropolis founder pins (24-30 firms / 0 insolvent) still hold. The
+  lease-vs-buy rule and the repossession rung are pinned by driving the shortage
+  the store path targets (`probes/ai-lease.ts`: City 11/4/7 → 2 leases each,
+  landlord healthy ~$56k, repossession returns the asset, money conserved; flag
+  off → 0 landlords, 0 leases). Suite +7 (realEstate.test.ts, now 15).
 - **Metropolis becomes a New Game option** (beta): the biggest world scale — a
   390×276 map, the 30-firm founder field, and the full 18-product catalog with
   the deep C3 chains — was engine-only and soak-proven for unattended AI; it is

@@ -14,8 +14,10 @@
  * service catalog (datacenter compute + office consulting).
  */
 
-import type { SimContext } from '../../core/GameState';
+import type { SimContext, GameState } from '../../core/GameState';
+import type { Firm } from '../../entities/Firm';
 import { emitEvent, recordTransaction, addContract } from '../../core/GameState';
+import { commercialLeaseAsk, landlordCanFinance } from './LandlordBehavior';
 import { firmAccount, WORLD_ACCOUNT } from '../../core/Transactions';
 import { nextId } from '../../core/Id';
 import { getProduct } from '../../data/products';
@@ -29,6 +31,25 @@ import { MAX_RETAIL_PRODUCTS } from '../../data/constants';
 import { landCostMultiplier, landValueAt } from '../../core/LandValue';
 import { MAX_FACILITY_LEVEL, upgradeCost, upgradeFacility } from '../../core/Upgrades';
 import { getPersonality, ceoQuote } from '../../data/personalities';
+
+/**
+ * The landlord (if any) that would finance a `cost` premises for `firmId` to
+ * lease (Arc D2 / HD4 item 2). Picks the first — in sorted id order, for
+ * determinism — solvent AI landlord with the runway to front the capital
+ * (`landlordCanFinance`). Returns null when no landlord offers, which is ALWAYS
+ * the case in a pinned run: the real-estate channel gates landlords entirely
+ * (none are founded or seeded flag-off), so this read finds nobody and the
+ * lease branch that calls it is inert. A pure sorted read — draws no rng.
+ */
+function findLandlordLessor(state: GameState, firmId: string, cost: number): Firm | null {
+  for (const id of Object.keys(state.firms).sort()) {
+    if (id === firmId) continue;
+    const f = state.firms[id]!;
+    if (f.ownerType !== 'ai' || f.strategy.archetype !== 'landlord') continue;
+    if (landlordCanFinance(f, cost)) return f;
+  }
+  return null;
+}
 
 /**
  * Expand: when a sold product has strong, sustained unmet demand and the firm is
@@ -64,17 +85,33 @@ export function maybeExpand(ctx: SimContext, firmId: string): void {
   };
   const mult = landCostMultiplier(landValueAt(state, loc));
   const cost = Math.round(def.buildCost * mult);
-  // Fund: borrow if short of cash.
-  if (firm.cash < cost * 1.3) {
-    const need = Math.round(cost * 1.3 - firm.cash);
-    const limit = Math.round((firm.cash + 1) * 1.5) + 500000;
-    const draw = Math.min(need, Math.max(0, limit - firm.debt));
-    if (draw > 0) {
-      firm.debt += draw;
-      recordTransaction(state, { from: WORLD_ACCOUNT, to: firmAccount(firmId), amount: draw, firmId, category: 'loanDraw', note: 'Expansion loan' });
+
+  // Lease-vs-buy (Arc D2 / HD4 item 2). When cash is tight — below 2× the build
+  // cost — and a landlord with spare financing capacity offers, LEASE the outlet
+  // instead of buying it: the landlord fronts the build and carries the asset,
+  // the operator keeps its runway and pays rent (CommercialRentSystem). A pure
+  // sorted read, no rng, evaluated BEFORE the buy funding. INERT in every pinned
+  // run: the real-estate channel gates landlords entirely, so flag-off there is
+  // no lessor (findLandlordLessor returns null), the lease branch is skipped, and
+  // the buy path runs byte-for-byte as it did pre-D2. The lessor's downside is
+  // bounded — a tenant that goes insolvent RETURNS the premises (repossession).
+  const lessor = firm.cash < 2 * cost ? findLandlordLessor(state, firmId, cost) : null;
+
+  // Fund the BUY path: borrow if short of cash. A lease fronts nothing (the
+  // landlord carries the capital), so neither the loan nor the affordability
+  // gate applies to it.
+  if (!lessor) {
+    if (firm.cash < cost * 1.3) {
+      const need = Math.round(cost * 1.3 - firm.cash);
+      const limit = Math.round((firm.cash + 1) * 1.5) + 500000;
+      const draw = Math.min(need, Math.max(0, limit - firm.debt));
+      if (draw > 0) {
+        firm.debt += draw;
+        recordTransaction(state, { from: WORLD_ACCOUNT, to: firmAccount(firmId), amount: draw, firmId, category: 'loanDraw', note: 'Expansion loan' });
+      }
     }
+    if (firm.cash < cost) return;
   }
-  if (firm.cash < cost) return;
 
   // Find the firm's factory that produces this product (supply source).
   let sourceId: string | null = null;
@@ -89,7 +126,15 @@ export function maybeExpand(ctx: SimContext, firmId: string): void {
   fac.retailProductIds = [product];
   fac.buildCost = cost;
   fac.operatingCostPerDay = Math.round(def.maintenanceCostPerDay * mult);
-  recordTransaction(state, { from: firmAccount(firmId), to: WORLD_ACCOUNT, amount: cost, firmId, category: 'buildSpend', note: 'Built store' });
+  if (lessor) {
+    // LEASE: the landlord fronts the construction capital and carries the asset;
+    // the operator runs the outlet and pays the daily rent instead of the build.
+    fac.landlordFirmId = lessor.id;
+    fac.rentPerDay = commercialLeaseAsk(cost);
+    recordTransaction(state, { from: firmAccount(lessor.id), to: WORLD_ACCOUNT, amount: cost, firmId: lessor.id, category: 'buildSpend', note: 'Financed outlet for lease' });
+  } else {
+    recordTransaction(state, { from: firmAccount(firmId), to: WORLD_ACCOUNT, amount: cost, firmId, category: 'buildSpend', note: 'Built store' });
+  }
 
   // Staff it.
   for (let i = 0; i < 2; i++) { const c = findUnemployed(state); if (c) hireCitizen(state, fac.id, c); }
@@ -103,7 +148,10 @@ export function maybeExpand(ctx: SimContext, firmId: string): void {
     };
     addContract(ctx, contract);
   }
-  emitEvent(state, 'info', 'ai', `${firm.name} opened a new outlet to meet demand for ${getProduct(product).name}.${ceoQuote(rng, firm, 'expand')}`, fac.id);
+  const how = lessor
+    ? `leased a new outlet from ${state.firms[lessor.id]!.name}`
+    : 'opened a new outlet';
+  emitEvent(state, 'info', 'ai', `${firm.name} ${how} to meet demand for ${getProduct(product).name}.${ceoQuote(rng, firm, 'expand')}`, fac.id);
 }
 
 /**

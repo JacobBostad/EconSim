@@ -10,11 +10,17 @@ import {
   runLandlordBehavior,
   townHousingOccupancy,
   commercialLeaseAsk,
+  landlordCanFinance,
   COMMERCIAL_TARGET_YIELD,
 } from '../systems/ai/LandlordBehavior';
 import { runCommercialRentSystem } from '../systems/CommercialRentSystem';
+import { runBankruptcySystem } from '../systems/BankruptcySystem';
+import { maybeExpand } from '../systems/ai/expansion';
 import { sellRefund } from '../core/Demolition';
 import { createFacility } from '../entities/factories';
+import { hireCitizen, findUnemployed } from '../systems/LaborSystem';
+import { getFacilityDef } from '../data/facilityDefinitions';
+import { landCostMultiplier, landValueAt } from '../core/LandValue';
 
 /**
  * Arc D2 — real-estate firms (HD4). The landlord archetype, commercial leasing,
@@ -215,5 +221,234 @@ describe('Landlord founder gate', () => {
     const occ = townHousingOccupancy(state);
     expect(occ).toBeGreaterThanOrEqual(0);
     expect(occ).toBeLessThanOrEqual(1);
+  });
+});
+
+/**
+ * Repossession rung (Arc D2 / HD4 item 1). When a tenant's insolvency would
+ * CLOSE a leased premises, BankruptcySystem instead reverts it to the landlord:
+ * ownership transfers on-book, NO money moves, the tenant loses the premises it
+ * never paid for and the landlord recovers its asset. Same close-point serves
+ * the player and AI paths, so both are covered.
+ */
+describe('Repossession rung — a leased premises reverts to its landlord', () => {
+  function setupLeasedTenant(ownerType: 'ai' | 'player') {
+    const state = cityState(11);
+    const config = state.config;
+    // Landlord (an AI real-estate firm) and a separate tenant.
+    const landlord = Object.values(state.firms).find((f) => f.ownerType === 'ai')!;
+    landlord.strategy.archetype = 'landlord';
+    landlord.cash = 80000_00;
+    const tenant =
+      ownerType === 'player'
+        ? state.firms[state.playerFirmId]!
+        : Object.values(state.firms).find((f) => f.ownerType === 'ai' && f.id !== landlord.id)!;
+
+    // The tenant holds ONLY a leased premises (so the insolvency ladder reaches
+    // the repossession close-point rather than shedding an owned facility first).
+    tenant.facilities = [];
+    tenant.sharesHeld = {};
+    const leased = createFacility(state, 'retail', tenant.id, { x: 118, y: 118 });
+    leased.buildCost = 2000_00;
+    leased.operatingCostPerDay = 900;
+    leased.landlordFirmId = landlord.id;
+    leased.rentPerDay = 100_00;
+    // Staff it, to prove the crew is released on repossession.
+    const c = findUnemployed(state);
+    if (c) hireCitizen(state, leased.id, c);
+
+    // Drive the tenant to the insolvent close-point.
+    tenant.cash = -50000_00;
+    tenant.daysInsolvent = config.insolvencyCloseDays - 1;
+    state.tick = ticksPerDay(config);
+    return { state, config, landlord, tenant, leased };
+  }
+
+  it('AI tenant: the leased facility moves to the landlord, no money moves, conserved', () => {
+    const { state, landlord, tenant, leased } = setupLeasedTenant('ai');
+    const supply = totalMoneySupply(state);
+    const landlordCashBefore = landlord.cash;
+    const tenantCashBefore = tenant.cash;
+
+    runBankruptcySystem(makeContext(state));
+
+    const fac = state.facilities[leased.id]!;
+    // Ownership transferred on-book to the landlord; the lease is cleared.
+    expect(fac.ownerFirmId).toBe(landlord.id);
+    expect(landlord.facilities).toContain(leased.id);
+    expect(tenant.facilities).not.toContain(leased.id);
+    expect(fac.landlordFirmId).toBeUndefined();
+    expect(fac.rentPerDay).toBeUndefined();
+    // Not shuttered — the landlord recovered a live asset, crew released.
+    expect(fac.status).not.toBe('closed');
+    expect(fac.employees.length).toBe(0);
+    // NO money moved for the transfer itself; the landlord's cash is untouched.
+    expect(landlord.cash).toBe(landlordCashBefore);
+    // The tenant's books are clean: it holds no facilities and its cash is
+    // unchanged by the repossession (it never owned the premises to refund).
+    expect(tenant.facilities.length).toBe(0);
+    expect(tenant.cash).toBe(tenantCashBefore);
+    // Money conserved to the cent across the whole bankruptcy tick.
+    expect(totalMoneySupply(state)).toBe(supply);
+  });
+
+  it('player tenant (receivership): the same close-point reverts the lease', () => {
+    const { state, landlord, tenant, leased } = setupLeasedTenant('player');
+    const supply = totalMoneySupply(state);
+    const landlordCashBefore = landlord.cash;
+
+    runBankruptcySystem(makeContext(state));
+
+    const fac = state.facilities[leased.id]!;
+    expect(fac.ownerFirmId).toBe(landlord.id);
+    expect(landlord.facilities).toContain(leased.id);
+    expect(tenant.facilities).not.toContain(leased.id);
+    expect(fac.landlordFirmId).toBeUndefined();
+    expect(fac.status).not.toBe('closed');
+    // The player firm is never deleted; it simply loses the premises it leased.
+    expect(state.firms[state.playerFirmId]).toBeDefined();
+    expect(landlord.cash).toBe(landlordCashBefore);
+    expect(totalMoneySupply(state)).toBe(supply);
+  });
+});
+
+/**
+ * AI operator lease-vs-buy (Arc D2 / HD4 item 2). An expanding operator leases
+ * its new outlet from a landlord instead of buying when cash is tight (below 2×
+ * the build cost) and a landlord offers. The store/outlet path is shortage-gated
+ * (dormant under the founder system in the standard presets, which is why it is
+ * inert in the pinned runs), so these tests construct the shortage the rule
+ * needs and drive the decision directly.
+ */
+describe('AI operator lease-vs-buy', () => {
+  function shortageCity(seed: number) {
+    return createInitialState(seed, {
+      ...DEFAULT_CONFIG,
+      sizePreset: 'city',
+      realEstateEnabled: true,
+      aiExpandChance: 1, // the shortage day always converts, for determinism
+    });
+  }
+
+  /** Stand up a cash-tight operator under a real shortage for `product`. */
+  function tightOperatorUnderShortage(state: ReturnType<typeof shortageCity>, product: string) {
+    const op = Object.values(state.firms).find((f) => f.ownerType === 'ai')!;
+    op.strategy.archetype = 'operator';
+    op.facilities = [];
+    const store = createFacility(state, 'retail', op.id, { x: 60, y: 52 });
+    store.retailProductIds = [product];
+    store.dailyStats.lostSales = 20; // ≥ 6
+    state.marketStats[product]!.unmetDemand = 30; // ≥ 14
+    const cost = Math.round(
+      getFacilityDef('retail').buildCost * landCostMultiplier(landValueAt(state, { x: 60, y: 52 })),
+    );
+    op.cash = cost; // < 2 × cost, so leasing preserves runway
+    return { op, cost };
+  }
+
+  it('leases the new outlet from a landlord when cash is tight (flag on)', () => {
+    const state = shortageCity(11);
+    const { op } = tightOperatorUnderShortage(state, 'bread');
+    const landlord = Object.values(state.firms).find((f) => f.ownerType === 'ai' && f.id !== op.id)!;
+    landlord.strategy.archetype = 'landlord';
+    landlord.cash = 60000_00;
+
+    const supply = totalMoneySupply(state);
+    const opCashBefore = op.cash;
+    const landlordCashBefore = landlord.cash;
+    const before = new Set(op.facilities);
+
+    maybeExpand(makeContext(state), op.id);
+
+    const built = op.facilities.filter((id) => !before.has(id));
+    expect(built.length).toBe(1);
+    const outlet = state.facilities[built[0]!]!;
+    // Leased: operated by the tenant, carried on-book + financed by the landlord.
+    expect(outlet.ownerFirmId).toBe(op.id);
+    expect(outlet.landlordFirmId).toBe(landlord.id);
+    expect(outlet.rentPerDay!).toBeGreaterThan(0);
+    // The operator paid $0 upfront (runway preserved); the landlord fronted it.
+    expect(op.cash).toBe(opCashBefore);
+    expect(landlord.cash).toBe(landlordCashBefore - outlet.buildCost);
+    // The financing move (landlord cash → world buildSpend) conserves money.
+    expect(totalMoneySupply(state)).toBe(supply);
+  });
+
+  it('buys (never leases) when no landlord offers — even flag on', () => {
+    const state = shortageCity(11);
+    const { op } = tightOperatorUnderShortage(state, 'bread');
+    // No firm is a landlord: the lessor lookup finds nobody, so the operator
+    // funds and buys the outlet itself exactly as it did pre-D2.
+    for (const f of Object.values(state.firms)) {
+      if (f.strategy.archetype === 'landlord') f.strategy.archetype = 'operator';
+    }
+    const before = new Set(op.facilities);
+    const supply = totalMoneySupply(state);
+
+    maybeExpand(makeContext(state), op.id);
+
+    const built = op.facilities.filter((id) => !before.has(id));
+    expect(built.length).toBe(1);
+    expect(state.facilities[built[0]!]!.landlordFirmId).toBeUndefined();
+    expect(totalMoneySupply(state)).toBe(supply);
+  });
+
+  it('never leases with the flag off — no landlord ever exists, so no premises is leased', () => {
+    const state = createInitialState(7, { ...DEFAULT_CONFIG, sizePreset: 'city' }); // flag OFF
+    const sim = new Simulation(state);
+    sim.dispatch({ type: 'RESUME' });
+    const tpd = ticksPerDay(state.config);
+    sim.run(150 * tpd);
+
+    // The chain of inertness: flag off, the founder row never seats a landlord,
+    // so the lessor lookup can never find one and no facility is ever leased.
+    expect(Object.values(state.firms).some((f) => f.strategy.archetype === 'landlord')).toBe(false);
+    expect(Object.values(state.facilities).every((f) => f.landlordFirmId === undefined)).toBe(true);
+  });
+
+  it('leasing keeps the landlord solvent and money conserved across repeated leases', () => {
+    const state = shortageCity(4);
+    const { op } = tightOperatorUnderShortage(state, 'bread');
+    const landlord = Object.values(state.firms).find((f) => f.ownerType === 'ai' && f.id !== op.id)!;
+    landlord.strategy.archetype = 'landlord';
+    landlord.cash = 60000_00;
+
+    // Drive several expansions (the store cap is 3): each keeps the shortage hot
+    // and the operator cash-tight, so it leases again while the landlord can
+    // finance within its runway. The cash reset is test scaffolding (a direct
+    // write, which itself moves the supply), so conservation is asserted around
+    // each maybeExpand call — the lease path must neither mint nor burn a cent.
+    let leases = 0;
+    for (let i = 0; i < 3; i++) {
+      const store = op.facilities
+        .map((id) => state.facilities[id]!)
+        .find((f) => f.type === 'retail')!;
+      store.dailyStats.lostSales = 20;
+      state.marketStats['bread']!.unmetDemand = 30;
+      op.cash = store.buildCost; // stay tight (scaffolding)
+      const supplyBefore = totalMoneySupply(state);
+      maybeExpand(makeContext(state), op.id);
+      expect(totalMoneySupply(state)).toBe(supplyBefore); // lease conserved money
+    }
+    for (const id of op.facilities) {
+      if (state.facilities[id]!.landlordFirmId === landlord.id) leases += 1;
+    }
+    expect(leases).toBeGreaterThan(0); // lease count > 0
+    expect(landlord.bankruptcyStatus).not.toBe('insolvent'); // landlord stays solvent
+  });
+
+  it('landlordCanFinance gates on runway above the distress floor, and refuses insolvent landlords', () => {
+    const state = cityState(11);
+    const landlord = Object.values(state.firms).find((f) => f.ownerType === 'ai')!;
+    landlord.strategy.archetype = 'landlord';
+    landlord.bankruptcyStatus = 'healthy';
+    // Enough to cover the cost and keep the distress-floor runway.
+    landlord.cash = 20000_00;
+    expect(landlordCanFinance(landlord, 3000_00)).toBe(true);
+    // Fronting this would drop it below its distress floor — refuse.
+    expect(landlordCanFinance(landlord, 15000_00)).toBe(false);
+    // An insolvent landlord never fronts, however much cash it nominally holds.
+    landlord.bankruptcyStatus = 'insolvent';
+    expect(landlordCanFinance(landlord, 3000_00)).toBe(false);
   });
 });

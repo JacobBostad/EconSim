@@ -85,19 +85,47 @@ instead of buying the building.
   founder-scale probe measured metro seed 7 stacking 8 landlords (27% of a
   30-cap map) before this brake.
 
-- **AI leasing (operator lease-vs-buy) is a documented follow-up.** The minimal
-  complete slice is the data model + billing + a landlord financing premises +
-  the PLAYER choosing to lease via the build flow. Wiring an AI operator's
-  lease-vs-buy decision would change AI build economics and threaten the pinned
-  city trajectories, so it is deferred — the seam (`landlordFirmId`/`rentPerDay`
-  + `CommercialRentSystem`) is built to receive it. That follow-up must also
-  resolve the stranded-asset edge the D2 review flagged: a leased facility is
-  owned-on-book by the tenant while the landlord fronted the build capital, so
-  a tenant insolvency today leaves the landlord unable to reclaim or recover
-  the premises (a dormant shell — conserved, player-only, flag-on, but a real
-  hole once AI firms can hold leases). The fix wants a repossession rung in
-  BankruptcySystem: leased premises revert to the landlord instead of closing
-  with the tenant.
+- **AI leasing (operator lease-vs-buy) — SHIPPED (D2 follow-up).** An expanding
+  AI operator now leases its new outlet from a landlord instead of buying when
+  cash is tight (below 2× the build cost) and a landlord with spare financing
+  capacity offers (`maybeExpand` in `ai/expansion.ts`; the lessor lookup is a
+  deterministic sorted read, no rng). **Inert in every pinned run by the same
+  chain the whole archetype rides — NOT a second flag.** `realEstateEnabled`
+  gates landlords entirely: flag off, the founder row never seats a landlord and
+  none is hand-placed, so `findLandlordLessor` returns null, the lease branch is
+  skipped, and the buy path runs byte-for-byte. **Verified: plain City seed 11
+  300-day rngState = 2546912297 and $3,169,000.00, and the whole flag-off
+  City/Metropolis grid (seeds 11/4/7) is unchanged to the byte with all of this
+  follow-up in the tree.** The store/outlet path is additionally shortage-gated,
+  and the AIFounderSystem backfills undersupply before an operator's shortage
+  gate ever trips, so `maybeExpand` is organically dormant in the founder-driven
+  City/Metropolis presets — flag-ON City/Metro 300-day organic leases = 0
+  (measured), which is why the flag-on metropolis founder pins (24-30 firms, 0
+  insolvent) in `probes/real-estate.ts` still hold unchanged. The lease-vs-buy
+  rule and the repossession rung are measured by driving the shortage the store
+  path targets
+  (`probes/ai-lease.ts`: City seeds 11/4/7 → 2 leases each, landlord stays
+  healthy at ~$56k, repossession returns the asset, money conserved to the cent;
+  flag off → 0 landlords, 0 leases) and pinned by `realEstate.test.ts`.
+
+- **Repossession rung — SHIPPED, and the stranded-asset hole is CLOSED.** The D2
+  review flagged that a leased facility is owned-on-book by the tenant while the
+  landlord fronted the build capital, so a tenant insolvency stranded the asset.
+  The fix lands in `BankruptcySystem`: when the facility the insolvency ladder
+  would CLOSE is a leased premises (`landlordFirmId` set), it REVERTS to the
+  landlord instead of shuttering — ownership transfers on-book, the crew is
+  released, the tenant's supply lines into it are dropped, the lease fields are
+  cleared, and **NO money moves** (the tenant loses premises it never paid for;
+  the landlord recovers its asset). It is the single insolvency close-point, so
+  the player receivership path and the AI path are covered by the same rung.
+  Deterministic and conserved; inert in every pinned run (flag off, no premises
+  is ever leased, so `landlordFirmId` is never set and the rung never fires).
+  Because a tenant insolvency now RETURNS the asset, the landlord's downside on
+  financing a lease is **bounded**, which is why `landlordCanFinance` fronts
+  capital down to the landlord's DISTRESS floor (`LANDLORD_DISTRESS_CASH`, the
+  line at which it would start selling blocks) rather than its full development
+  keep-buffer: a leased premises is a recoverable, yield-bearing asset, not a
+  capital sink like an apartment it commits to operate.
 
 ## The founder signal — measured and pinned
 
@@ -112,6 +140,8 @@ is filled ÷ total home slots across every `home` facility (a regular home holds
 | `LANDLORD_FOUNDER_COOLDOWN` | 25 | town-wide, so a sustained squeeze grows the stock a firm at a time |
 | landlord sub-cap | ⌊cap/6⌋ | City 3 / Metro 5 — bounds the rentals sector under the shared founder cap |
 | `COMMERCIAL_TARGET_YIELD` | 0.15 | the commercial-lease ask = 15% annualized on premises book value — squarely in the 12-18% band |
+| AI lease-vs-buy bar | cash < 2× build cost | the operator leases its new outlet (rather than buying) when a landlord offers and cash below this bar makes leasing preserve runway; the task's literal rule, on the store/outlet path |
+| landlord finance floor | `LANDLORD_DISTRESS_CASH` ($12k) | a landlord fronts a lease down to its distress floor, not its full $30k development keep-buffer — the downside is bounded by repossession, so a lease is a recoverable asset play, not a capital sink |
 
 ## Probe verdicts
 
@@ -163,10 +193,28 @@ from tight to 69.9%) — the intended negative feedback.
 
 ## Tests
 
-`src/sim/tests/realEstate.test.ts` (8): landlord dispatch routing (never runs
+`src/sim/tests/realEstate.test.ts` (15): landlord dispatch routing (never runs
 the operator loop); the player leasing premises instead of buying + one day of
 rent billed conserved with `rentExpense`/`revenue` booked; the self-lease block
 at both the command and billing layers; the commercial ask hitting the 12-18%
 band; a distressed landlord selling its weakest block via B3, conserved; the
 founder gate firing under a chronic squeeze (flag on) and NEVER firing with the
 flag off (the streak counter doesn't even accrue); and the occupancy read.
+
+The D2 follow-up adds seven: the **repossession rung** on both paths — an AI
+tenant and a player tenant driven insolvent each hand their leased premises back
+to the landlord (facility on the landlord's book, lease cleared, crew released,
+NO money moved, conserved to the cent); the **AI operator lease-vs-buy** firing
+flag-on under a constructed shortage (a cash-tight operator leases its outlet,
+$0 upfront, landlord fronts it, conserved), BUYING when no landlord offers, and
+NEVER leasing flag-off (no landlord is ever seated, so no premises is leased —
+the inertness chain, asserted over a 150-day sim); leasing keeping the landlord
+solvent across repeated leases with money conserved per call; and
+`landlordCanFinance` gating on runway above the distress floor and refusing an
+insolvent landlord.
+
+`docs/design/probes/ai-lease.ts` — the mechanism probe (why it constructs the
+shortage rather than soaking a standard preset is documented in its header): City
+seeds 11/4/7 flag-on measure 2 leases each, landlord healthy at ~$56k, a
+repossession returning the asset, money conserved; flag-off, 0 landlords and 0
+leased premises (chain inert).

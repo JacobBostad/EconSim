@@ -37,6 +37,7 @@
  */
 
 import type { SimContext, GameState } from '../../core/GameState';
+import type { Firm } from '../../entities/Firm';
 import { emitEvent, recordTransaction } from '../../core/GameState';
 import { firmAccount, WORLD_ACCOUNT } from '../../core/Transactions';
 import { getFacilityDef } from '../../data/facilityDefinitions';
@@ -91,6 +92,24 @@ export function townHousingOccupancy(state: GameState): number {
  * bills. Exported for the lease command + tests. */
 export function commercialLeaseAsk(bookValue: number): number {
   return Math.max(100, Math.round((bookValue * COMMERCIAL_TARGET_YIELD) / 365));
+}
+
+/**
+ * Whether a landlord will front `cost` to finance a premises for a tenant to
+ * lease (Arc D2 / HD4 item 2). The landlord stays RATIONAL but the bar is its
+ * DISTRESS floor, not the full development keep-buffer: fronting a lease is a
+ * recoverable, yield-bearing asset play, NOT a capital sink like an apartment it
+ * commits to operate. The downside is bounded — a tenant that goes insolvent
+ * RETURNS the premises through the BankruptcySystem repossession rung — so the
+ * landlord fronts down to the same `LANDLORD_DISTRESS_CASH` line at which it
+ * would start selling blocks, keeping only enough that financing the lease can't
+ * by itself tip it into the sell-a-block distress band. Never fronts while
+ * insolvent. Exported for the AI operator's lease-vs-buy decision
+ * (ai/expansion.ts). A pure read: no rng.
+ */
+export function landlordCanFinance(landlord: Firm, cost: number): boolean {
+  if (landlord.bankruptcyStatus === 'insolvent') return false;
+  return landlord.cash - cost >= LANDLORD_DISTRESS_CASH;
 }
 
 /** Salted-hash daily gate keyed (seed, day, firmId) — the FireSaleSystem
