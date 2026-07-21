@@ -86,21 +86,49 @@ describe('C1 product breadth — catalog integrity', () => {
   it('every C1 consumer product is producible via a full chain AND retailed by the store', () => {
     const retail = FACILITY_DEFS.retail!;
     for (const pid of C1_CONSUMER) {
-      // Producible: a chain blueprint stands up producer -> factory -> store,
-      // and every recipe it names exists with the right shape.
+      // Producible: a chain blueprint stands up producer -> [...] -> store, and
+      // every stage's recipe exists, is allowed by its facility, and links to
+      // the next stage's input (the last stage makes the consumer product).
       const bp = CHAIN_BLUEPRINTS[pid];
       expect(bp, pid).toBeTruthy();
-      const producer = getRecipe(bp!.producerRecipeId);
-      const factory = getRecipe(bp!.factoryRecipeId);
-      expect(producer.outputs.some((o) => o.productId === bp!.inputProductId), pid).toBe(true);
-      expect(factory.inputs.some((i) => i.productId === bp!.inputProductId), pid).toBe(true);
-      expect(factory.outputs.some((o) => o.productId === pid), pid).toBe(true);
-      // The producer def actually allows the producer recipe.
-      const producerDef = FACILITY_DEFS[bp!.producerDefId]!;
-      expect(producerDef.allowedRecipes.includes(bp!.producerRecipeId), pid).toBe(true);
-      expect(FACILITY_DEFS.factory!.allowedRecipes.includes(bp!.factoryRecipeId), pid).toBe(true);
+      expect(bp!.stages.length, pid).toBeGreaterThanOrEqual(2);
+      for (let i = 0; i < bp!.stages.length; i++) {
+        const stage = bp!.stages[i]!;
+        const recipe = getRecipe(stage.recipeId);
+        expect(FACILITY_DEFS[stage.facilityDefId]!.allowedRecipes.includes(stage.recipeId), `${pid}:${stage.recipeId}`).toBe(true);
+        const out = recipe.outputs[0]!.productId;
+        if (i === 0) {
+          // First stage extracts a raw (no inputs).
+          expect(recipe.inputs.length, `${pid} stage0`).toBe(0);
+        } else {
+          // Every later stage consumes the previous stage's output.
+          const prevOut = getRecipe(bp!.stages[i - 1]!.recipeId).outputs[0]!.productId;
+          expect(recipe.inputs.some((inp) => inp.productId === prevOut), `${pid} stage${i}`).toBe(true);
+        }
+        // The last stage makes the consumer product.
+        if (i === bp!.stages.length - 1) expect(out, pid).toBe(pid);
+      }
       // Retailed: the store type can stock it.
       expect(retail.allowedProductsForSale.includes(pid), pid).toBe(true);
+    }
+  });
+
+  it('the appliances and furniture chains are 3-stage through an intermediate', () => {
+    for (const [pid, mid] of [['appliances', 'steel'], ['furniture', 'planks']] as const) {
+      const bp = CHAIN_BLUEPRINTS[pid]!;
+      expect(bp.stages.length, pid).toBe(3);
+      // Middle stage outputs the intermediate; the intermediate is a real,
+      // metropolis-only, non-consumer producer good (no needSpec, never retailed).
+      expect(getRecipe(bp.stages[1]!.recipeId).outputs[0]!.productId, pid).toBe(mid);
+      expect(PRODUCTS[mid]!.category, mid).toBe('intermediate');
+      expect(PRODUCTS[mid]!.availableIn, mid).toBe('metropolis');
+      expect(PRODUCTS[mid]!.needSpec, mid).toBeUndefined();
+      expect(PRODUCTS[mid]!.needType, mid).toBe('none');
+      expect(FACILITY_DEFS.retail!.allowedProductsForSale.includes(mid), mid).toBe(false);
+      // The intermediate is metropolis-only: absent from Village/City catalogs.
+      expect(PRODUCT_IDS_BY_PRESET.village.includes(mid), mid).toBe(false);
+      expect(PRODUCT_IDS_BY_PRESET.city.includes(mid), mid).toBe(false);
+      expect(PRODUCT_IDS_BY_PRESET.metropolis.includes(mid), mid).toBe(true);
     }
   });
 

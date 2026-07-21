@@ -181,6 +181,10 @@ export const RECIPES: Record<RecipeId, Recipe> = {
     baseEfficiency: 1,
     variableCost: dollars(1.5),
   },
+  // Arc C3 legacy alias: the ORIGINAL 2-stage furniture recipe (lumber ->
+  // furniture). No new build uses it — the furniture CHAIN_BLUEPRINT now runs
+  // the 3-stage planks path (mill_planks -> assemble_furniture). Kept for
+  // save-compat (see assemble_appliances above).
   build_furniture: {
     id: 'build_furniture',
     name: 'Build Furniture',
@@ -192,6 +196,11 @@ export const RECIPES: Record<RecipeId, Recipe> = {
     baseEfficiency: 1,
     variableCost: dollars(2.6),
   },
+  // Arc C3 legacy alias: the ORIGINAL 2-stage appliances recipe (minerals ->
+  // appliances). No new build uses it — the appliances CHAIN_BLUEPRINT now runs
+  // the 3-stage steel path (smelt_steel -> forge_appliances). Kept in the
+  // catalog (and in factory.allowedRecipes) purely so a mid-flight metropolis
+  // save whose factory is set to this recipe keeps producing after the update.
   assemble_appliances: {
     id: 'assemble_appliances',
     name: 'Assemble Appliances',
@@ -220,6 +229,56 @@ export const RECIPES: Record<RecipeId, Recipe> = {
     facilityType: 'factory',
     inputs: [{ productId: 'grapes', quantity: 3 }],
     outputs: [{ productId: 'wine', quantity: 6 }],
+    laborRequired: 2,
+    ticksRequired: 4,
+    baseEfficiency: 1,
+    variableCost: dollars(2.2),
+  },
+
+  // --- Arc C3 intermediate stages (metropolis 3-stage chains) ------------
+  // Each is the MIDDLE stage: a factory turns a raw into an intermediate, which
+  // a second factory turns into the consumer good. Yields/costs are tuned so
+  // the two stages split roughly the margin the old single factory stage held,
+  // and the deep chain lands profitable end-to-end (see docs probe c3-chains).
+  smelt_steel: {
+    id: 'smelt_steel',
+    name: 'Smelt Steel',
+    facilityType: 'factory',
+    inputs: [{ productId: 'minerals', quantity: 4 }],
+    outputs: [{ productId: 'steel', quantity: 6 }],
+    laborRequired: 2,
+    ticksRequired: 3,
+    baseEfficiency: 1,
+    variableCost: dollars(1.6),
+  },
+  forge_appliances: {
+    id: 'forge_appliances',
+    name: 'Forge Appliances',
+    facilityType: 'factory',
+    inputs: [{ productId: 'steel', quantity: 3 }],
+    outputs: [{ productId: 'appliances', quantity: 5 }],
+    laborRequired: 2,
+    ticksRequired: 4,
+    baseEfficiency: 1,
+    variableCost: dollars(2.0),
+  },
+  mill_planks: {
+    id: 'mill_planks',
+    name: 'Mill Planks',
+    facilityType: 'factory',
+    inputs: [{ productId: 'lumber', quantity: 4 }],
+    outputs: [{ productId: 'planks', quantity: 6 }],
+    laborRequired: 2,
+    ticksRequired: 3,
+    baseEfficiency: 1,
+    variableCost: dollars(1.4),
+  },
+  assemble_furniture: {
+    id: 'assemble_furniture',
+    name: 'Assemble Furniture',
+    facilityType: 'factory',
+    inputs: [{ productId: 'planks', quantity: 3 }],
+    outputs: [{ productId: 'furniture', quantity: 6 }],
     laborRequired: 2,
     ticksRequired: 4,
     baseEfficiency: 1,

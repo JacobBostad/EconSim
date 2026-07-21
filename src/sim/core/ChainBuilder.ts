@@ -17,15 +17,21 @@ import { createFacility } from '../entities/factories';
 import { getFacilityDef } from '../data/facilityDefinitions';
 import { getRecipe } from '../data/recipes';
 import { getProduct } from '../data/products';
-import { CHAIN_BLUEPRINTS } from '../data/chains';
+import { CHAIN_BLUEPRINTS, stageOutput } from '../data/chains';
 import { landCostMultiplier, landValueAt } from './LandValue';
 import { firstFreeDistrictSlot, type SlotSpec } from './DistrictSlots';
 import { findUnemployed, hireCitizen } from '../systems/LaborSystem';
 
 export interface BuiltChain {
+  /** Production-stage facilities in order (stage[0] = the raw producer, the
+   * last = the factory that makes the consumer good). Length matches the
+   * blueprint's `stages`: 2 for a classic chain, 3 for a deep C3 chain. */
+  stages: Facility[];
+  store: Facility;
+  /** Back-compat conveniences: the first stage (raw producer) and the last
+   * production stage (the factory that makes the retailed good). */
   producer: Facility;
   factory: Facility;
-  store: Facility;
 }
 
 /** Slot grids for City/Metropolis chain placement: producers/factories tile
@@ -84,20 +90,36 @@ export function buildStarterChain(
     return best;
   };
   // Village keeps the three fixed build rows EXACTLY (bit-identity contract —
-  // the founder tests and 300-day baseline pin these coordinates). City/
-  // Metropolis enumerate free slots by district: producer + factory into the
-  // industrial belt, the store into the commercial core (A4). The slots are
-  // resolved sequentially so the factory never lands on the producer.
+  // the founder tests and 300-day baseline pin these coordinates). Village
+  // chains are always 2-stage (the deep C3 chains are metropolis-only), so the
+  // three rows map to [stage0, stage1, store]. City/Metropolis enumerate free
+  // slots by district: every production stage into the industrial belt, the
+  // store into the commercial core (A4). Slots resolve sequentially (reserving
+  // the ones already taken) so no two stages land on the same spot — a 2-stage
+  // chain resolves IDENTICALLY to the pre-C3 producer/factory/store scan.
+  const nStages = bp.stages.length;
   let spots: ({ x: number; y: number } | null)[];
   if (s.config.sizePreset === 'village') {
+    // Village never builds a deep chain; the fixed rows cover producer+factory.
+    // Guard the invariant: a future Village-gated 3-stage blueprint would index
+    // past this array and throw at the store build with a useless error — fail
+    // loudly at the source instead.
+    if (nStages > 2) {
+      throw new Error(
+        `Village chain '${bp.productId}' has ${nStages} stages; the fixed Village rows support 2 (deep chains are metropolis-only)`,
+      );
+    }
     spots = [findSpot(20), findSpot(33), findSpot(51)];
   } else {
-    const producer = firstFreeDistrictSlot(s, 'industrial', INDUSTRIAL_SLOT_SPEC);
-    const factory = producer
-      ? firstFreeDistrictSlot(s, 'industrial', INDUSTRIAL_SLOT_SPEC, [producer])
-      : null;
+    const reserved: { x: number; y: number }[] = [];
+    const stageSpots: ({ x: number; y: number } | null)[] = [];
+    for (let i = 0; i < nStages; i++) {
+      const slot = firstFreeDistrictSlot(s, 'industrial', INDUSTRIAL_SLOT_SPEC, reserved);
+      stageSpots.push(slot);
+      if (slot) reserved.push(slot);
+    }
     const store = firstFreeDistrictSlot(s, 'commercial', COMMERCIAL_SLOT_SPEC);
-    spots = [producer, factory, store];
+    spots = [...stageSpots, store];
   }
   if (spots.some((p) => p === null)) return null;
 
@@ -116,12 +138,16 @@ export function buildStarterChain(
     }
     return fac;
   };
-  const producer = build(bp.producerDefId, spots[0]!);
-  const factory = build('factory', spots[1]!);
-  const store = build('retail', spots[2]!);
-
-  producer.activeRecipeId = bp.producerRecipeId;
-  factory.activeRecipeId = bp.factoryRecipeId;
+  // Build every production stage in order, then the store — same facility
+  // creation order (hence id order) the pre-C3 producer/factory/store did.
+  const stageFacilities: Facility[] = [];
+  for (let i = 0; i < nStages; i++) {
+    const stage = bp.stages[i]!;
+    const fac = build(stage.facilityDefId, spots[i]!);
+    fac.activeRecipeId = stage.recipeId;
+    stageFacilities.push(fac);
+  }
+  const store = build('retail', spots[nStages]!);
   store.retailProductIds = [bp.productId];
   if (!firm.pricesByProduct[bp.productId]) {
     firm.pricesByProduct[bp.productId] = getProduct(bp.productId).basePrice;
@@ -133,8 +159,11 @@ export function buildStarterChain(
       if (!cid || !hireCitizen(s, facilityId, cid)) break;
     }
   };
-  staff(producer.id, getRecipe(bp.producerRecipeId).laborRequired);
-  staff(factory.id, getRecipe(bp.factoryRecipeId).laborRequired);
+  // Staff every stage (by its recipe's labor), then the store — same order as
+  // the pre-C3 producer/factory/store staffing (so 2-stage hires are identical).
+  for (let i = 0; i < nStages; i++) {
+    staff(stageFacilities[i]!.id, getRecipe(bp.stages[i]!.recipeId).laborRequired);
+  }
   staff(store.id, 1);
 
   const wire = (sourceId: string, destId: string, pid: string): void => {
@@ -146,8 +175,18 @@ export function buildStarterChain(
       transportCost: 0, active: true,
     };
   };
-  wire(producer.id, factory.id, bp.inputProductId);
-  wire(factory.id, store.id, bp.productId);
+  // Wire each stage to the next (shipping that stage's output), then the last
+  // stage to the store (shipping the consumer good). For a 2-stage chain this
+  // is exactly wire(producer→factory, rawInput) then wire(factory→store, good).
+  for (let i = 0; i < nStages - 1; i++) {
+    wire(stageFacilities[i]!.id, stageFacilities[i + 1]!.id, stageOutput(bp.stages[i]!));
+  }
+  wire(stageFacilities[nStages - 1]!.id, store.id, bp.productId);
 
-  return { producer, factory, store };
+  return {
+    stages: stageFacilities,
+    store,
+    producer: stageFacilities[0]!,
+    factory: stageFacilities[nStages - 1]!,
+  };
 }

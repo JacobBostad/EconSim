@@ -23,6 +23,16 @@
  * needSpec `order`, so the Village demand loop, trade-city rng walk, founder
  * scan, and serialized state stay byte-identical (see productIdsForPreset).
  *
+ * Arc C3 deepens two of those chains from raw->consumer (2 stages) to
+ * raw->intermediate->consumer (3 stages) by inserting a metropolis-only
+ * `intermediate` producer good in the middle:
+ *   minerals -> STEEL  -> appliances
+ *   lumber   -> PLANKS -> furniture
+ * Intermediates have no needSpec (never retailed); they move firm-to-firm on
+ * the wholesale/contract machinery like a raw. The old 2-stage recipes
+ * (assemble_appliances / build_furniture) are kept as legacy aliases so a
+ * mid-flight metropolis save keeps producing (see recipes.ts / CHANGELOG C3).
+ *
  * Why metropolis-only, not city: the CITY preset carries a knife-edge,
  * seed-pinned A3/A4 tier-band calibration (see tierAcceptance) with near-zero
  * headroom. Adding these products to the city desynced its pinned rng
@@ -454,6 +464,57 @@ export const PRODUCTS: Record<ProductId, Product> = {
       tierGrowthMult: { worker: 0, comfortable: 1, affluent: 1.5 },
       tierPriceCapMult: { comfortable: 1.1, affluent: 1.3 },
     },
+  },
+
+  // ===================================================================
+  // Arc C3 — intermediate producer goods (metropolis-only). These are the
+  // MIDDLE stage of a deep (3-stage) chain: a factory smelts/mills them from a
+  // raw, then a second factory turns them into the consumer good. They carry
+  // NO needSpec (citizens never crave steel) and needType 'none', so they never
+  // reach a retail shelf — they move firm-to-firm on the existing wholesale/
+  // contract machinery exactly like a raw. `availableIn: 'metropolis'` keeps
+  // them out of the Village AND City catalogs (byte-identity + the pinned city
+  // calibration), and — like every C1 breadth product — they append AFTER the
+  // Village entries so the Village slice's iteration order never moves. The
+  // `intermediate` category is display-only (no economic branch reads it).
+  // ===================================================================
+
+  // steel: minerals -> steel -> appliances (the restructured appliances chain).
+  steel: {
+    id: 'steel',
+    name: 'Steel',
+    category: 'intermediate',
+    // Between minerals ($2.00) and the appliances it feeds ($42.00): a smelt
+    // yields 6 steel from 4 minerals ($8.00) + $1.60 utilities = ~$1.60/unit of
+    // embodied cost, so a $5.00 base leaves the steel stage a real wholesale
+    // margin to sell into (or an in-house transfer at cost).
+    basePrice: dollars(5.0),
+    perishability: 0,
+    qualityWeight: 0,
+    priceWeight: 0,
+    brandWeight: 0,
+    needType: 'none',
+    defaultQuality: 50,
+    unitSize: 2,
+    availableIn: 'metropolis',
+  },
+  // planks: lumber -> planks -> furniture (the restructured furniture chain).
+  planks: {
+    id: 'planks',
+    name: 'Planks',
+    category: 'intermediate',
+    // Between lumber ($2.20) and the furniture it feeds ($26.00): a mill yields
+    // 6 planks from 4 lumber ($8.80) + $1.40 = ~$1.70/unit embodied; a $4.00
+    // base leaves the milling stage a wholesale margin.
+    basePrice: dollars(4.0),
+    perishability: 0,
+    qualityWeight: 0,
+    priceWeight: 0,
+    brandWeight: 0,
+    needType: 'none',
+    defaultQuality: 50,
+    unitSize: 2,
+    availableIn: 'metropolis',
   },
 };
 

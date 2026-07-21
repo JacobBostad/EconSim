@@ -486,7 +486,7 @@ export class Simulation {
       emitEvent(s, 'warning', 'player', 'No clear ground for a full chain — build the stages manually.', firmId);
       return;
     }
-    const { producer, factory, store } = built;
+    const { store } = built;
 
     // Entering a market where an incumbent has brand and loyal customers takes
     // penetration pricing AND advertising — the AI's own playbook. Default
@@ -502,8 +502,11 @@ export class Simulation {
       firm.adBudgetByProduct[bp.productId] = WIZARD_AD_BUDGET;
     }
 
+    // Name every stage in order (deep C3 chains have an intermediate factory
+    // between the producer and the finishing factory), then the store.
+    const chainPath = [...built.stages.map((f) => f.name), store.name].join(' → ');
     emitEvent(s, 'success', 'player',
-      `🪄 Built a full ${getProduct(bp.productId).name} chain: ${producer.name} → ${factory.name} → ${store.name} — wired, staffed, auto-priced, and advertised. Tune any of it in the store inspector.`,
+      `🪄 Built a full ${getProduct(bp.productId).name} chain: ${chainPath} — wired, staffed, auto-priced, and advertised. Tune any of it in the store inspector.`,
       store.id);
   }
 

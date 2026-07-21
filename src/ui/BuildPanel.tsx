@@ -2,6 +2,7 @@ import React from 'react';
 import { useGameStore } from '../store/useGameStore';
 import { buildableDefs } from '../sim/data/facilityDefinitions';
 import { CHAIN_BLUEPRINTS, chainCost } from '../sim/data/chains';
+import { getFacilityDef } from '../sim/data/facilityDefinitions';
 import { getProduct, productAvailableInPreset } from '../sim/data/products';
 import { formatMoney } from '../utils/formatMoney';
 import { getPlayerFirm } from '../sim/selectors/companySelectors';
@@ -53,19 +54,26 @@ export function BuildPanel(): React.ReactElement {
         .filter((bp) => productAvailableInPreset(bp.productId, state.config.sizePreset))
         .map((bp) => {
         const cost = chainCost(bp);
+        // Full stage list: every production stage's facility, then the store —
+        // a deep C3 chain (appliances/furniture) shows its intermediate factory.
+        const stageNames = [
+          ...bp.stages.map((st) => getFacilityDef(st.facilityDefId).name),
+          'Store',
+        ];
+        const stagePath = stageNames.join(' → ');
         return (
           <button
             key={bp.productId}
             className="buildbtn"
             disabled={cash < cost}
-            title={`Builds ${bp.producerDefId} → factory → store, selects recipes, staffs every stage, and wires both supply contracts.`}
+            title={`Builds ${stagePath} (${stageNames.length} stages), selects recipes, staffs every stage, and wires every supply contract.`}
             onClick={() => {
               const dispatch = useGameStore.getState().dispatch;
               dispatch({ type: 'BUILD_CHAIN', firmId: state.playerFirmId, productId: bp.productId });
             }}
           >
             🪄 {getProduct(bp.productId).name} chain — {formatMoney(cost)}
-            <small>producer + factory + store, staffed &amp; wired</small>
+            <small>{stagePath} — staffed &amp; wired</small>
           </button>
         );
       })}

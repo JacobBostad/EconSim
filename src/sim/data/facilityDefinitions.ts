@@ -75,11 +75,17 @@ export const FACILITY_DEFS: Record<FacilityDefId, FacilityDefinition> = {
     maintenanceCostPerDay: dollars(11),
     workerCapacity: 6,
     storageCapacity: 240,
-    allowedRecipes: ['bake_bread', 'roast_coffee', 'make_tools', 'sew_clothes', 'bake_pastries', 'craft_jewelry', 'cook_meals', 'make_shoes', 'build_furniture', 'assemble_appliances', 'ferment_wine'],
+    // Arc C3 appends the intermediate/deep-chain recipes (smelt_steel,
+    // forge_appliances, mill_planks, assemble_furniture) AFTER the classic and
+    // C1 entries: their outputs are metropolis-only, so facilityRecipesForPreset
+    // filters them out of Village/City — the Village slice keeps its exact order
+    // and membership. The legacy assemble_appliances/build_furniture stay for
+    // save-compat (a mid-flight metropolis factory set to them keeps running).
+    allowedRecipes: ['bake_bread', 'roast_coffee', 'make_tools', 'sew_clothes', 'bake_pastries', 'craft_jewelry', 'cook_meals', 'make_shoes', 'build_furniture', 'assemble_appliances', 'ferment_wine', 'smelt_steel', 'forge_appliances', 'mill_planks', 'assemble_furniture'],
     allowedProductsForSale: [],
     footprint: 4,
     description:
-      'Manufactures goods from inputs: bread, tools, clothes — or luxury pastries and jewelry once your craft quality reaches 75. In a city, also meals, shoes, furniture, appliances and wine.',
+      'Manufactures goods from inputs: bread, tools, clothes — or luxury pastries and jewelry once your craft quality reaches 75. In a metropolis, also meals, shoes, wine, and the deep chains that smelt steel into appliances and mill planks into furniture.',
   },
   warehouse: {
     id: 'warehouse',

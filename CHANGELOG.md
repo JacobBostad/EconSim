@@ -107,6 +107,48 @@ thousands via statistical cohorts plus a fully-simulated cast, districts,
   25-38% of eligible AI firms at boost 1.06, subscribe/cancel churn ≤0.083/day
   (no flapping), money conserved to the cent, ~0.29-0.43 ms/tick at day 300.
 
+- **C3 — deep (3-stage) chains** (see docs/design/deep-chains.md): the
+  `intermediate` product category goes live. `ChainBlueprint` generalized from
+  the fixed producer→factory→retail triple to an ordered list of production
+  `stages` (each a facility + recipe), store appended after the last. Two
+  metropolis chains deepen from raw→consumer to raw→intermediate→consumer:
+  `minerals → STEEL → appliances` and `lumber → PLANKS → furniture`. Steel and
+  planks are producer goods — no needSpec, never retailed, `availableIn:
+  'metropolis'` — that move stage-to-stage (or firm-to-firm) on the existing
+  wholesale/contract machinery like a raw. **Bit-identity**: a 2-stage blueprint
+  builds BYTE-IDENTICALLY to the old triple (same facilities, order, coordinates,
+  contracts) — the 300-day Village exact-rngState baseline reproduces unchanged
+  (village-bitidentity-check), and chains.test.ts pins the concrete 2-stage
+  structure. **The choice** (restructure two existing C1 durables rather than add
+  a new consumer good or a shared steel→tools hub): it adds two live intermediates
+  with ZERO new consumer-demand rng (the durables' needSpec/basePrice/tiers are
+  untouched, so the metropolis basket bound and cast renorm are exactly as C1 left
+  them), and — because comfortable+ durables are rarely auto-founded (base staples
+  saturate the cap first) — the added stage's overhead lands on player/wizard
+  builds, not the pinned unattended metropolis field. A heavily-founded staple
+  (tools) turned 3-stage would have threatened the metropolis solvency guard;
+  measured and rejected. **Save-compat**: the old single-factory recipes
+  (`assemble_appliances`, `build_furniture`) stay as legacy aliases — no new build
+  picks them, but a mid-flight metropolis factory set to one keeps producing;
+  migration backfills the new intermediates' market/trade-city entries. Village
+  and City never see any of it (metropolis-gated at every product list + facility
+  recipe copy). The chain wizard shows the full stage list + total cost; the AI
+  input-sourcing loop reaches across all three stages unchanged: intra-firm
+  stage contracts are never re-sourced, so every intermediate flows on its own
+  chain's links (the importer prices intermediates only as a comparison
+  reference — it carries no import recipe for them and never stocks or ships
+  one). Measured (docs/design/probes/c3-chains.ts, 300d
+  metropolis, seeds 7/11/4): a wizard-built appliances chain runs end-to-end
+  profitably — steel flows ~29 u/day produced AND shipped, chain P&L net
+  ~$+1,567/day, firm cash +~$330k over 300d, money conserved to the cent,
+  ~0.31-0.37 ms/tick, 200-day soak still 0 insolvent. Honest limit: local
+  metropolis retail of a comfortable+ durable is thin by C1 design (the crowd that
+  fills stores never craves C1; the C1-craving named cast is trip-limited), so a
+  deep chain monetizes its durable output by exporting the surplus (the documented
+  arc) while the shelf serves the local trickle — C3 changed only PRODUCTION, so
+  retail demand is exactly as C1 left it. Pinned tests:
+  src/sim/tests/chains.test.ts, src/sim/tests/productBreadth.test.ts.
+
 - **A5 — the Metropolis fills up**: the 30-firm cap now actually happens. The
   founder-scale probe (docs/design/probes/founder-scale.ts — Metropolis + City,
   3 seeds, 300d, with an abort-reason table) diagnosed the binding constraint:
