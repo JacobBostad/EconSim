@@ -120,6 +120,11 @@ export interface TradeDeskRow {
    * thin cover means it's paying a premium, an overhang means a glut.
    * Undefined when the pool is off (the classic pure-walk desk). */
   bestCover?: number;
+  /** The OTHER port's emoji and cover, so the desk shows the supply read on
+   * both cities rather than only the one it routes to (both run pools flag-on;
+   * both undefined flag-off). */
+  otherCityEmoji: string;
+  otherCover?: number;
 }
 
 /**
@@ -142,6 +147,9 @@ export function tradeDesk(state: GameState, limit = 4): TradeDeskRow[] {
     const stock = state.tradeCities[best.cid]?.pool?.inventory[pid];
     const bestCover =
       stock === undefined ? undefined : poolCoverDays(best.cid, pid, stock);
+    const otherStock = state.tradeCities[other.cid]?.pool?.inventory[pid];
+    const otherCover =
+      otherStock === undefined ? undefined : poolCoverDays(other.cid, pid, otherStock);
     rows.push({
       productId: pid,
       productName: getProduct(pid).name,
@@ -151,7 +159,9 @@ export function tradeDesk(state: GameState, limit = 4): TradeDeskRow[] {
       bestNet: best.net,
       otherNet: other.net,
       spread: best.net - other.net,
+      otherCityEmoji: getTradeCity(other.cid).emoji,
       ...(bestCover === undefined ? {} : { bestCover }),
+      ...(otherCover === undefined ? {} : { otherCover }),
     });
   }
   rows.sort((a, b) => b.spread - a.spread);

@@ -17,11 +17,11 @@ sawtooth factories, awninged shops — on a daylight map that repaints with the
 seasons (snowfields in winter) and falls into a real night, streetlamps and
 lit windows glowing, on a proper day/night curve.
 
-![Town view on day 65 — autumn streets at dawn, a rush order ticking in the corner, and the minimap framing the viewport](docs/media/media-town.png)
+![City view at dawn on day 72 — an autumn metropolis partitioned into districts, apartments and homes filling a residential block, farms, mines and factories clustered upmap, a Cirrus datacenter on the eastern edge, and the event log narrating citizens stepping out of The Rows' crowd into named lives of their own](docs/media/media-town.png)
 
 <p align="center">
-  <img src="docs/media/media-company.png" width="49%" alt="Company dashboard: objective progress, trend charts, and the standings table with rival CEOs, their archetypes, and estimated dividends per stake" />
-  <img src="docs/media/media-population.png" width="49%" alt="Population dashboard: town trends, satisfaction anatomy, the prosperity ladder with middle-class and affluent trend charts, and the executive team card with hired managers" />
+  <img src="docs/media/media-company.png" width="49%" alt="Company dashboard: objective progress and trend charts above the Standings & Stock Market ladder — rival CEOs tagged with their archetype (Price Fighter, Brand Builder, Expansionist), a service firm (Cirrus Compute) and a landlord (Cornerstone Properties) among them, each row showing a valuation, a price per 1% stake, an estimated daily dividend, and buy / sell / buy-out controls" />
+  <img src="docs/media/media-population.png" width="49%" alt="Population dashboard for a City game: town trends and satisfaction anatomy alongside the Districts table — Civic Square, Iron Row, Midmarket, The Rows and The Yards with their land use, occupancy, land value and building counts — for a population of 40 named citizens plus a 300-strong statistical crowd" />
 </p>
 
 ---
@@ -378,13 +378,30 @@ housing — and lease commercial premises to you, so you can pick a landlord in 
 Build panel and pay daily rent instead of the build cost upfront
 (`real-estate.md`); **holdcos** that work an equity book against rivals' public
 float (`stock-market.md`); and **service firms** running the compute/consulting
-providers (`b2b-services.md`). A third, larger **Metropolis** preset exists in
-the engine (not yet a New Game option): a 390×276 map whose founder fills toward
-**25-30 firms** across a **wider catalog** — the consumer chains grow from 8 to
-18 there (prepared food, shoes, furniture, appliances, wine, plus the steel and
-planks deep chains) — it is where the scale probes and soak tests run. City is
-beta; Village stays the reference world the determinism and conservation
-guarantees are pinned against.
+providers (`b2b-services.md`). A third, larger **Metropolis** (beta) is now a New
+Game option too: a 390×276 map whose founder fills toward **25-30 firms** across
+the **full 18-product catalog** — the consumer chains grow from 8 to 18 there
+(prepared food, shoes, furniture, appliances, wine, plus the steel and planks
+**deep chains** the wizard builds raw→intermediate→consumer). It wires the same
+crowd/services/landlord/trade channels a City does (a live holdco is the one
+exception — its founder row is city-only), and the player opens with a cash
+uplift ($28k at standard, AI-founder parity) for the bigger board and pricier
+chains. City and Metropolis are beta; Village stays the reference world the
+determinism and conservation guarantees are pinned against.
+
+The first scenario authored *for* this era is **🌆 Grand Junction** — a City-only
+town (it appears in the New Game scenario picker only when City is selected, never
+in the Village flow) where the crowd, the datacenter, and a housing squeeze that
+summons a landlord within weeks are all live from the start. Two entrenched giants
+hold bread and tools and a struggling boutique clings to clothes, but the city is
+far bigger than they can serve — roughly a third of every staple goes unmet, and
+that underserved volume is the newcomer's opening while rent, seats, and stakes
+already flow. Probed 300 days × three seeds: the founder fills to the City cap
+with zero insolvencies, the crowd-tier bands sit inside the City norms, money
+conserves to the cent, and a scripted operator building into the bread market
+grows its book +$9-27k over 200 days (pinned by the viability test in `src/sim/tests/grandJunction.test.ts`; the 300-day town balance lives in `docs/design/probes/grand-junction.ts`).
+
+![The full districted city — farms, mines and factories clustered upmap, a residential district of apartments and homes below, and a Cirrus datacenter inspected on the right: a compute provider with 40 seats at 78% sold, five rival firms subscribed for their per-seat B2B compute, and its daily profit contribution](docs/media/media-worldscale.png)
 
 **Challenge mode**: tick the 🏁 box on New Game and the run ends with a final
 0–1000 score at day 200 (valuation-weighted, plus town satisfaction, peak
@@ -483,13 +500,13 @@ income, etc. Config is part of saved state.
 ## Known limitations
 
 - One town. The Village AND City consumer catalog is three staple chains
-  (bread, tools, clothes), everyday coffee, and the two luxury crafts; the
-  broadened 18-product catalog and the 25-30-firm founder live in the
-  **Metropolis** engine preset (see World scale), which is not yet a New Game
-  option — the City crowd deliberately shops the base catalog to keep its
-  calibration stable.
-- **City is beta**: the crowd, districts, and specialist archetypes are pinned by
-  probes and soak tests, but only Village carries the full bit-identity guarantee.
+  (bread, tools, clothes), everyday coffee, and the two luxury crafts — the City
+  crowd deliberately shops that base catalog to keep its calibration stable. The
+  broadened **18-product catalog** and the 25-30-firm founder live only in the
+  **Metropolis** preset (a New Game option — see World scale).
+- **City and Metropolis are beta**: the crowd, districts, specialist archetypes,
+  wider catalog, and deep chains are pinned by probes and soak tests, but only
+  Village carries the full bit-identity guarantee.
 - AI stores are deliberately single-product (running a general store is a
   player edge); operator AI expansion opens retail outlets only (capped) and
   AI-initiated M&A is limited to rescue takeovers of distressed rivals.

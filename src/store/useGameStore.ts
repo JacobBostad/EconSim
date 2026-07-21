@@ -20,7 +20,7 @@
 import { create } from 'zustand';
 import { Simulation } from '../sim/core/Simulation';
 import { createInitialState } from '../sim/data/startingScenario';
-import { configForDifficulty, type Difficulty } from '../sim/core/SimulationConfig';
+import { worldScaleConfig, type Difficulty } from '../sim/core/SimulationConfig';
 import type { GameState } from '../sim/core/GameState';
 import type { Command, Speed } from '../sim/core/Commands';
 import type { EntityId, FacilityDefId } from '../sim/core/Id';
@@ -69,7 +69,7 @@ interface GameStore {
   setSpeed: (speed: Speed) => void;
   togglePause: () => void;
 
-  newGame: (seed?: number, difficulty?: Difficulty, scenarioId?: string, challenge?: boolean, size?: 'cozy' | 'bustling', world?: 'village' | 'city') => void;
+  newGame: (seed?: number, difficulty?: Difficulty, scenarioId?: string, challenge?: boolean, size?: 'cozy' | 'bustling', world?: 'village' | 'city' | 'metropolis') => void;
   save: () => void;
   load: () => void;
   hasSave: () => boolean;
@@ -157,19 +157,14 @@ export const useGameStore = create<GameStore>((set, get) => {
       // game — stash it in the backup slot so a mis-click never costs a run.
       const old = get().sim.getState();
       if (old.tick > 0) saveGame(old, BACKUP_SLOT);
-      const sizeOverrides =
-        size === 'bustling' ? { maxHomes: 80, maxCitizens: 160, mapHeight: 124 } : {};
-      // World scale drives the cohort economy: 'city' turns the crowd on AND
-      // opens the B2B services channel (datacenter compute, HD3), the specialist
-      // archetypes, and the Arc E trade-city demand pools (export prices read a
-      // real supply/demand); 'village' (default) keeps the classic all-agent
-      // town bit-for-bit.
-      const worldOverride =
-        world === 'city'
-          ? { sizePreset: 'city' as const, servicesEnabled: true, realEstateEnabled: true, investorsEnabled: true, tradeDemandPoolsEnabled: true }
-          : {};
+      // World scale drives the cohort economy: 'city'/'metropolis' turn the crowd
+      // on AND open the archetype/services/trade channels their founder baselines
+      // are gated for; Metropolis is the biggest map + full 18-product catalog and
+      // adds the player-only cash uplift. 'village' (default) keeps the classic
+      // all-agent town bit-for-bit. worldScaleConfig owns the wiring (shared with
+      // its tests).
       get().sim.setState(
-        createInitialState(seed, { ...configForDifficulty(difficulty), challengeMode: challenge, ...sizeOverrides, ...worldOverride }, scenarioId),
+        createInitialState(seed, worldScaleConfig(difficulty, challenge, size, world), scenarioId),
       );
       recordTownFounded();
       set({ buildDefId: null, showNewGame: false });

@@ -19,6 +19,179 @@ real City or Metropolis game switches the whole stack on together (crowd +
 districts + all three specialist channels); Village stays the classic,
 bit-identical, every-resident-simulated town.
 
+- **The City cast-parity mechanism — built, measured across the full grid, NOT
+  shipped (docs-only verdict).** The forward path the City-decoupling verdict
+  named: give the trip-limited cast the crowd's throughput to close the
+  cast-worker gap AND lift City crowd employment so the wage leg can carry the
+  comfortable band at a raised founder trigger. Three City-preset-gated
+  mechanisms were built as real code, every one INERT at its default so the
+  shipped City run and Village stay bit-identical (the full 545-test suite passes
+  unchanged): an honest ACCOUNTING SPLIT for the worker catch-up
+  (`catchupSyntheticSignal` — parity baskets buy real stock and pay real revenue
+  but are excluded from the founder-visible shortage gauge), a prosperity-scaled
+  pool sink, and a NEW employment-aware immigration gate (`immigrationEmpFloor` —
+  inflow scaled by job availability so capital attracts labor only where there is
+  work). Measured jointly across the trigger × wage × sink × basket × gate grid
+  on all three seeds (`docs/design/probes/city-decoupling.ts`): the full
+  mechanism seats the pinned **seed 11 on every committed guard** (9 firms, worker
+  0.64 / comfortable 0.34, gap 3.8, drift $0.14, conserved), but **no cell seats
+  all three** — the honest split suppresses the firm count it needs (the catch-up
+  unmet had been inflating the founder signal), closing the cast gap re-triggers
+  the immigration flood (curable, and cured, by the new gate), and the residual
+  cast-worker gap on seeds 4/7 stays supply-capped and bistable (WCB 4→6→8 does
+  not close it — the cast is trip-limited, not basket-limited). No guard re-pinned,
+  no band widened; the City holds at fill 0.65 / $16 crowd wage / flat rent. The
+  ingredients land dark as measured foundations, and the three-layered root cause
+  + full grid table are recorded in docs/design/cohorts-and-districts.md ("The
+  City cast-parity mechanism"). The next attempt needs a cast-shopping model that
+  grants an extra restocked-shelf VISIT, not deeper single-visit baskets — a
+  scheduling change, not a demand constant.
+- **Grand Junction — the first scenario authored for the world-scale era.** Every
+  authored town (Meadowbrook, Port Haven, Mill Country, Boomtown Flats, Dust
+  Hollow…) is village-scale; the City era had no scenario showing it off. Grand
+  Junction is a City-only start (worldScale-tagged, so the New Game picker offers
+  it only when City is chosen and never in the Village flow — the two orthogonal
+  pickers snap together): two entrenched giants hold bread and tools, a thin
+  boutique keeps clothes barely supplied, and 16 homes peg occupancy so a landlord
+  breaks ground ~day 56 — while the datacenter hums from day 0 and a holdco shows
+  up for the yields. The plumbing already composed (createInitialState takes
+  scenario × config independently; the default Meadowbrook + City IS the pinned
+  City baseline), so this is data only — no new systems, no createInitialState
+  rework, the worldScaleConfig path untouched. Probed 300d × seeds 11/4/7 against
+  the City baseline: 16-18 firms with zero insolvencies, worker band ~.67-.71,
+  cast satisfaction 53-58, pool drift 0.3-1.0/cap/day (under the cohortRent
+  guard's 2.00 bar), money conserved to the cent — the honest first cut (14 homes
+  + a missing staple) pushed drift and satisfaction OUT of the norms and was
+  softened to 16 homes + all staples supplied until it held. A scripted 200-day
+  operator building into the underserved bread market grows its book +$9-27k with
+  every era channel (compute, landlord lease, dividend stake) firing. Suite +9
+  (scenario load/run/round-trip/gating + the viability run);
+  `docs/design/probes/grand-junction.ts` carries the balance tables.
+
+- **World-scale era missions + achievements — the guided tour of the specialist
+  economy.** Every prior era shipped its own mission chain and achievement set
+  (coffee/apartments, wholesale, the four pillars); the world-scale era had none,
+  so a City player discovered leases, compute, stakes, forwards-at-mark, and pool
+  exports only by accident. Now: **five era missions** appended to the chain —
+  *Lease, Don't Buy* (open a premises via `leaseFrom`), *Plug In* (subscribe a
+  facility-owning firm to compute), *Own a Piece* (buy a rival stake), *Read the
+  Ports* (ship a staple into a port whose larder is under the 🔥 thin bar), and
+  the *Four Streams* capstone (hold retail + a lease/rent stream + a dividend
+  stake + a live compute boost at once) — and **six era achievements**: first
+  lease signed, full compute coverage, a forward closed at the mark (any P&L), a
+  3-stake portfolio, a landlord's repossession collected, and a thin port fed
+  back to target cover. **Gating keeps Village byte-identical:** each mission
+  carries an `eligible(state)` predicate reading its channel's config flag (OFF
+  at Village preset), and `activeMission` skips an ineligible def — so an era
+  mission never becomes active in a Village game and its serialized mission list
+  is unchanged; each achievement check gates on the same flag/preset first (the
+  `town_lifted`/`mill_country` idiom) and returns false in Village even with the
+  condition forced. Four lifetime player-action tallies feed the counter-based
+  entries (the `deskTrades` idiom, never read by any sim branch): `forwardsClosed`
+  (ForwardSystem `closeForward`), `poolFeedsWhileThin` / `poolCoversRestored`
+  (Trade `performExport`, computed from pool cover before/after a player ship),
+  and `landlordRepossessions` (BankruptcySystem's repossession rung) — all inert
+  flag-off (no pool/lease exists) and none touching the shared rng, so the
+  Village seed 11/4/7 rngState pins and every pinned City/Metropolis baseline are
+  untouched to the byte. Tests: each era mission completes when its condition is
+  met and not before (driven in a City sim through the real command paths — lease,
+  subscribe, export, forward close, repossession — the playtestV8 idiom), each
+  achievement fires once and is provably inert in Village, and the golden-save +
+  determinism suites still pin Village/City serialization bit-for-bit. Suite +14
+  (missions +6, achievements +8, now 545).
+- **D2 follow-up — the repossession rung + AI operator leasing** (design HD4; see
+  docs/design/real-estate.md). Closes the two holes the D2 review flagged. **(1)
+  Repossession rung.** When a tenant's insolvency would CLOSE a leased premises
+  (`landlordFirmId` set), `BankruptcySystem` now REVERTS it to the landlord
+  instead: ownership transfers on-book, the crew is released, the tenant's supply
+  lines into it are dropped, the lease fields are cleared, and NO money moves —
+  the tenant loses premises it never paid for and the landlord (which fronted the
+  build capital) recovers its asset, closing the stranded-asset hole. It is the
+  single insolvency close-point, so the player receivership path and the AI path
+  ride the same rung. **(2) AI operator lease-vs-buy.** An expanding operator
+  (`maybeExpand`) now leases its new outlet from a landlord instead of buying when
+  cash is tight (below 2× the build cost) and a landlord with spare financing
+  capacity offers — a deterministic sorted read, no rng. The landlord stays
+  rational: `landlordCanFinance` fronts capital only down to its DISTRESS floor
+  (not its full development keep-buffer), which is sound precisely because the
+  repossession rung bounds the downside — a lease is now a recoverable, yield-
+  bearing asset, not a capital sink. **Inert in every pinned run by the existing
+  flag chain — NOT a second flag:** `realEstateEnabled` gates landlords entirely,
+  so flag off there is no lessor, the lease branch is skipped, and the buy path
+  runs byte-for-byte. Verified: plain City seed 11 300-day `rngState` = 2546912297
+  / $3,169,000.00 and the whole flag-off City/Metro grid (seeds 11/4/7) unchanged
+  to the byte; the flag-ON standard City/Metro 300-day organic leases = 0 (the
+  store path is shortage-gated and the founder system backfills undersupply first),
+  so the metropolis founder pins (24-30 firms / 0 insolvent) still hold. The
+  lease-vs-buy rule and the repossession rung are pinned by driving the shortage
+  the store path targets (`probes/ai-lease.ts`: City 11/4/7 → 2 leases each,
+  landlord healthy ~$56k, repossession returns the asset, money conserved; flag
+  off → 0 landlords, 0 leases). Suite +7 (realEstate.test.ts, now 15).
+- **E follow-up — forward settlement feeds the pool + trade-desk polish**
+  (see docs/design/region.md): closes the divergence that doc flagged. A settling
+  forward SHIPS goods into the city, so for a pooled consumer good on a pool city
+  the delivered quantity now feeds the larder through the same per-product guard a
+  spot export uses (`pool?.inventory[productId] !== undefined`) — a delivered
+  forward creates the *exact* cover overhang a spot dump of the same size does. The
+  sign/close paper impacts on the walk stay put, correctly: they hedge the city's
+  demand at paper time when no goods move, so there's no larder delta to book then
+  — only settlement puts stock on the shelf. A deliberate default (the 15% penalty
+  path) ships nothing and feeds nothing. Flag-off is untouched by construction
+  (the pool only exists with `tradeDemandPoolsEnabled` on; `feedPool` no-ops when
+  there's no pool). **Polish:** the trade desk now shows cover in days on BOTH
+  ports (🔥 thin / 🧊 glutted, each chip prefixed by its port emoji) rather than
+  only the routed one, and the morning advisor gains a pool-aware nudge — ship
+  into a thin port's premium when you hold ≥ 10 units of what it's short of (cover
+  below the `TRADE_POOL_THIN_COVER_DAYS = 4` 🔥 bar), cover-driven and inert
+  flag-off. *Skipped:* no dedicated pool panel, no cover sparkline, no stacked
+  multi-port advisor lines — the desk carries the full both-port read and one nudge
+  per briefing suffices. Measured (trade-pool probe, City seed 11): a forward
+  delivering 200 bread lands the quote at 0.874× (cover 6.9d), the exact overhang a
+  200-unit spot dump produces, vs a 1.000× baseline before; a deliberate default is
+  byte-identical to the no-forward baseline (1.000×, 6.0d); money conserved across
+  settlement (Δ = 0). Suite +7 (forwards.test.ts: delivered-vs-default overhang,
+  forward-feeds-like-spot parity, village flag-off touches no pool; advisor.test.ts:
+  thin-pool nudge fires on thin-city + stocked-player, silent on no-stock / at-target
+  / flag-off village). Village 1/11/777 and city 11 pins untouched (no sim-path
+  change flag-off). Full suite green.
+- **Metropolis becomes a New Game option** (beta): the biggest world scale — a
+  390×276 map, the 30-firm founder field, and the full 18-product catalog with
+  the deep C3 chains — was engine-only and soak-proven for unattended AI; it is
+  now playable from the New Game modal alongside Village and City.
+  `worldScaleConfig` (a pure helper the store and its tests share) wires the same
+  channels a City game does — crowd + services + landlords + trade-city demand
+  pools — with ONE deliberate omission: `investorsEnabled`, whose holdco founder
+  row is double-gated on `sizePreset === 'city'` (a live holdco reshuffles the
+  D3-measured crowd-tier bands), so the flag is a no-op at metropolis and is left
+  off rather than set to something inert. The player-facing audit
+  (docs/design/probes/metropolis-playability.ts, seeds 11/4/7, player flags on)
+  found the engine sound but the player's *foothold* thin: a standard $15k start
+  is $13k behind every one of the 25-30 AI rivals (each founds with the $28k
+  metropolis founderCash) on a map whose deep chains cost up to $11,200 to stand
+  up — one chain, no runway. Fix: a **player-only** metropolis cash uplift
+  (`METROPOLIS_PLAYER_START_CASH_BONUS`, +$13k) opening the player at $28k
+  founder-parity at standard (relaxed $38k / brutal $22k keep the gradient),
+  applied only on the store's New Game path so every probe/test/pin that builds
+  config directly stays byte-identical. Verified inert to the pinned AI
+  trajectory: rngState, the 24-30 founder count, and 0-insolvent are all
+  bit-identical across a $15k→$999k player-cash sweep (nothing in the
+  founder/strategy/finance scans reads the player firm's cash — they key off
+  profit base, marketCap, and employee/facility counts, all zero for the
+  do-nothing player firm). The other audit numbers came back healthy: **save
+  size** at day 300 is 2.7-3.2 MB, and a single autosave (default slot) SUCCEEDS
+  in real headless Chromium — verified with the actual serialized state, not a
+  quota estimate — so autosave does not silently fail; only the new-game-over-a-
+  late-metropolis case (default + backup, ~6.4 MB) trips `QuotaExceededError`,
+  which `saveGame` already catches (returns false, best-effort backup, no crash
+  or corruption of the live save). **Perf** is 0.30-0.34 ms/tick at day 300, ~3000
+  sustainable tps on one core — an order of magnitude over the 280 tps the 100×
+  speed asks for, so 100× runs at full speed. Village seeds 11/4/7 reproduce
+  their exact 300-day `rngState` (3274842624 / 2896139677 / 4253583594); the
+  metropolis founder pins pass untouched. Suite +6 (worldScaleConfig.test.ts:
+  village stays the classic difficulty config, City lights all four channels,
+  Metropolis wires services/realEstate/trade-pools with investors off and lands
+  the uplift on the real player firm at metropolis only); e2e +1 (metrosmoke.mjs,
+  the Metropolis boot smoke in the citysmoke idiom at a short horizon).
 - **E — the region seed** (design-forward; see docs/design/region.md): the
   roadmap's last arc opens the next axis — several towns sharing one world,
   trading with each other — as a *seed*, not the finished thing. The design doc
@@ -69,6 +242,36 @@ bit-identical, every-resident-simulated town.
   pinned-baseline gate (no pool key with the flag off, classic one-tick path
   intact), pool seeding/quote parity, multi-day overhang, starvation premium,
   conservation, determinism, save round-trip. Full suite green (507 tests).
+  **Step 2 — producing trade cities** (region.md migration step 2): the pool
+  gains a SUPPLY side. Each city def carries a `productionByProduct` profile —
+  per consumer product, the fraction of its own consumption it makes locally —
+  and `updatePools` adds that local output every day (unthrottled, the stub
+  town's own economy), so IMPORTS (the throttleable restock tender) now cover
+  only the remaining GAP: `imports = max(0, (drain − localProd) + gap×rate) ×
+  throttle`. Equilibrium is untouched (at target, imports exactly replace the
+  consumption production doesn't, so a seeded-at-target pool quotes the bare walk
+  day-to-day — no standing price drifts, the pins hold), but a deep overhang can
+  only work off through consumption-minus-production, so the two ports genuinely
+  SPECIALIZE: Port Rosa (🚢, food-leaning) grows 85% of its own bread and 15% of
+  its tools; Ironvale (🚂, industrial) mirrors it (20% bread / 85% tools). A city's
+  export market DEEPENS where it under-produces (chronically thin cover, a
+  standing premium — Ironvale food, Port Rosa tools) and SHRINKS where it
+  self-supplies (its output keeps the shelf full, so a dump overhangs harder AND
+  longer). Deterministic, cash-free (production books no transaction), sorted
+  iteration, inert flag-off. Measured (probe, City, seed 11): a same-fraction dump
+  lingers ~23d on the port that MAKES the good vs ~18d on the importer (both
+  d0 0.667×); under one tender the under-produced good starves to the 1.55× clamp
+  while the self-supplied one holds at 1.12×; 500-bread overhang on food-rich Port
+  Rosa now 0.737×→0.889× over 10d (size sensitivity 200u→~8d / 500u→~17d /
+  1000u→~25d, all longer than step 1). No new surface — the cover chips already
+  carry the specialization (a thin 🔥 on an under-produced good). playtestV8 (seed
+  11) re-pinned honestly: net worth $60.0k→$62.8k (+$2.8k, was +$8.2k — dumping a
+  staple on food-rich Port Rosa is now genuinely less lucrative, and the AI's
+  exports feed the same pools), floor +$1.5k, still solvent/conserved, all six
+  legs fire. Suite +6 (production determinism, equilibrium-holds, specialization
+  spread, gap-only tendering, cash-free conservation, flag-off inertness). Village
+  seeds 11/4/7 and city seeds 11/4/7 reproduce their `rngState` untouched. Full
+  suite green (551 tests).
 - **D2 — real-estate firms** (design HD4; see docs/design/real-estate.md): the
   first live specialist archetype. `ai/LandlordBehavior` runs the `landlord`
   dispatcher row — a firm whose whole business is developing and renting housing:
@@ -990,6 +1193,30 @@ hireable managers, a real commodity market, and shared daily play.
   free score.
 
 ## Infrastructure
+
+- **Playtest bot v8** guards the archetype/world-scale era: a 250-day scripted
+  City run (all era flags on — services, real estate, investors, trade pools)
+  that plays the channels only a full City has. A self-managing bread chain
+  funds a competent player who: leases a store premises from a founded landlord
+  ($0 upfront, rent billed daily — D2); subscribes to a compute provider once it
+  quotes reasonably and takes the coverage boost (C2); takes a dividend stake in
+  the fattest-yield healthy rival, player-parity with the holdco loop (B2); locks
+  a forward on a bread spike and closes it early at the mark (B3 — the round trip
+  realizes a small LOSS by design: closeForward releases the signing hedge before
+  marking, so sign-then-close nets the spread it paid; the bot asserts the ledger
+  truth, not a win);
+  exports a staple into Port Rosa's demand pool, moving its cover (Arc E); and
+  sells the warehouse back for salvage. Entry timing is polled, never hardcoded
+  (the landlord founds ~day 56, providers/pool exist from day 0 — the citysmoke
+  idiom); a leg that genuinely can't play logs a SKIP and the rest still assert.
+  Seed 11 is pinned (the canonical City bit-identity seed; probed 11/4/7, all
+  play every leg). Measured day-250 scorecard (seed 11): net worth $60.0k→$68.2k
+  (+$8.2k), solvent, lease rent $194 billed, compute $2,481 billed + 1.06× boost,
+  a 5% firm_6 stake paying $2,465 in dividends, a forward closed at −$16.85
+  realized (settlement − fee, off the ledger), 3 pool
+  exports (cover 1.00→0.91), a $1,584 salvage refund, money conserved to the
+  cent, 0.35 ms/tick. Floors pinned well under those values (the v7 convention).
+  Suite +1 (511 tests). Zero sim-source changes — a test/probe slice.
 
 - **Playtest bot v7** guards the pillar era end-to-end through the command
   surface: a 200-day scripted run whose store is never priced by hand — a

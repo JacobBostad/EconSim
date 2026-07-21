@@ -3,6 +3,10 @@ import { newSim } from './helpers';
 import { morningBriefing } from '../selectors/advisorSelectors';
 import { addStock } from '../entities/Inventory';
 import { getProduct } from '../data/products';
+import { Simulation } from '../core/Simulation';
+import { createInitialState } from '../data/startingScenario';
+import { DEFAULT_CONFIG } from '../core/SimulationConfig';
+import { poolTargetInventory } from '../data/tradePool';
 
 describe('morningBriefing', () => {
   const snap = (day: number, operatingProfit: number, cash: number) => ({
@@ -167,5 +171,60 @@ describe('morningBriefing', () => {
     // Severity ordering: dangers before infos.
     const sevRank = advice.map((a) => ({ danger: 0, warning: 1, info: 2 })[a.severity]);
     for (let i = 1; i < sevRank.length; i++) expect(sevRank[i - 1]!).toBeLessThanOrEqual(sevRank[i]!);
+  });
+});
+
+describe('morningBriefing — thin-pool export nudge (Arc E, flag on)', () => {
+  /** A pool-enabled City sim with a player warehouse; returns the pieces the
+   * pool-thin hint reads (a facility to hold stock, a city whose larder to
+   * drain). */
+  function poolCity(seed = 11) {
+    const sim = new Simulation(
+      createInitialState(seed, { ...DEFAULT_CONFIG, sizePreset: 'city', tradeDemandPoolsEnabled: true }),
+    );
+    sim.dispatch({ type: 'RESUME' });
+    const state = sim.getState();
+    const player = state.firms[state.playerFirmId]!;
+    player.cash = 500000_00;
+    sim.dispatch({ type: 'BUILD_FACILITY', firmId: player.id, defId: 'warehouse', location: { x: 100, y: 20 } });
+    const wh = state.facilities[player.facilities[player.facilities.length - 1]!]!;
+    return { sim, state, player, wh };
+  }
+
+  const THIN = 'running thin on Bread';
+
+  it('fires when a pool city is thin AND the player holds exportable stock', () => {
+    const { state, wh } = poolCity();
+    // Drain Port Rosa's bread to ~1 day of cover — well inside the 🔥 thin bar.
+    state.tradeCities['port_rosa']!.pool!.inventory['bread'] = poolTargetInventory('port_rosa', 'bread') / 6;
+    addStock(wh.inputInventory, 'bread', 50, 60);
+    const advice = morningBriefing(state);
+    expect(advice.some((a) => a.text.includes(THIN))).toBe(true);
+  });
+
+  it('stays quiet when the city is thin but the player holds nothing to ship', () => {
+    const { state } = poolCity();
+    state.tradeCities['port_rosa']!.pool!.inventory['bread'] = poolTargetInventory('port_rosa', 'bread') / 6;
+    // No stock staged anywhere — nothing to export into the premium.
+    expect(morningBriefing(state).some((a) => a.text.includes(THIN))).toBe(false);
+  });
+
+  it('stays quiet when the player holds stock but no city is thin (at target cover)', () => {
+    const { state, wh } = poolCity();
+    // Fresh pools sit at the target buffer (6 days cover) — no premium worth a nudge.
+    addStock(wh.inputInventory, 'bread', 50, 60);
+    expect(morningBriefing(state).some((a) => a.text.includes(THIN))).toBe(false);
+  });
+
+  it('is inert flag-off: a village never materializes a pool, so it never fires', () => {
+    const sim = newSim(11); // village, flag off
+    const state = sim.getState();
+    const player = state.firms[state.playerFirmId]!;
+    player.cash = 500000_00;
+    sim.dispatch({ type: 'BUILD_FACILITY', firmId: player.id, defId: 'warehouse', location: { x: 100, y: 20 } });
+    const wh = state.facilities[player.facilities[player.facilities.length - 1]!]!;
+    addStock(wh.inputInventory, 'bread', 500, 60);
+    expect(state.tradeCities['port_rosa']!.pool).toBeUndefined();
+    expect(morningBriefing(state).some((a) => a.text.includes(THIN))).toBe(false);
   });
 });

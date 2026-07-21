@@ -48,6 +48,7 @@ import type { Facility } from '../entities/Facility';
 import { districtAt } from '../entities/District';
 import { clamp } from '../../utils/clamp';
 import { APARTMENT_CAPACITY, CROWD_RENT_PER_DAY } from '../data/constants';
+import { SIZE_PRESETS } from '../core/SimulationConfig';
 
 /** Days of housing money the affordability guard preserves in a cohort's pool
  * before rent scales down (see the header). */
@@ -178,5 +179,36 @@ export function runCrowdRentSystem(ctx: SimContext): void {
       category: 'none',
       note: 'Crowd housing',
     });
+  }
+
+  // --- prosperity sink (City decoupling forward path) ---------------------
+  // The flat rent above was calibrated for the ~9-firm City's ~0.38 crowd
+  // employment; at the raised founder trigger the extra firms lift employment
+  // toward ~0.5 and the wage inflow scales with it while the flat sink does not,
+  // so the pool runs away (city-headroom drift guard). This prosperity-scaled
+  // drain bounds the pool at ANY firm count: above a per-capita floor a cohort
+  // sheds `rate` of its excess to the world each day, so the pool plateaus. Rate
+  // 0 at every shipped preset = disabled = byte-identical to the flat-rent-only
+  // regime; a City-decoupling ship turns it on for City alone. Money leaves to
+  // the world account (conserved). Same daily/anyCrowd/sorted/zero-rng contract.
+  const drainRate = SIZE_PRESETS[state.config.sizePreset].prosperityDrainRate;
+  if (drainRate > 0) {
+    const floor = SIZE_PRESETS[state.config.sizePreset].prosperityDrainFloor;
+    for (const cid of Object.keys(state.cohorts).sort()) {
+      const co = state.cohorts[cid]!;
+      if (co.population <= 0) continue;
+      const perCapita = co.cashPool / co.population;
+      if (perCapita <= floor) continue;
+      const drain = Math.floor((perCapita - floor) * drainRate * co.population);
+      if (drain <= 0) continue;
+      recordTransaction(state, {
+        from: cohortAccount(cid),
+        to: WORLD_ACCOUNT,
+        amount: Math.min(drain, co.cashPool),
+        firmId: null,
+        category: 'none',
+        note: 'Crowd prosperity drain',
+      });
+    }
   }
 }

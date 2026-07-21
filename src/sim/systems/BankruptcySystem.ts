@@ -10,7 +10,7 @@
  */
 
 import type { SimContext } from '../core/GameState';
-import { emitEvent } from '../core/GameState';
+import { emitEvent, reindexContracts } from '../core/GameState';
 import { isDayBoundary } from '../core/Tick';
 import { getProduct } from '../data/products';
 import { tradeShares } from '../core/Shares';
@@ -165,6 +165,12 @@ function closeCostliestFacility(ctx: SimContext, firmId: string): void {
     }
   }
   if (!target) return;
+  // REPOSSESSION RUNG (Arc D2 / HD4): if the facility the insolvency ladder
+  // would CLOSE is a LEASED premises, it reverts to its landlord instead of
+  // shuttering — the tenant never owned it, so the landlord (which fronted the
+  // build capital) recovers its asset. Reached identically on the player path
+  // (this same function is the only insolvency close-point for player and AI).
+  if (repossessLeasedFacility(ctx, firmId, target)) return;
   const fac = state.facilities[target]!;
   for (const cid of [...fac.employees]) fireCitizen(state, target, cid);
   fac.status = 'closed';
@@ -177,4 +183,76 @@ function closeCostliestFacility(ctx: SimContext, firmId: string): void {
     `${firm.name} closed ${fac.name} to cut losses.`,
     firm.id,
   );
+}
+
+/**
+ * Repossession rung (Arc D2 / HD4). When the facility the insolvency ladder
+ * would close is a LEASED premises (`landlordFirmId` set), the landlord takes
+ * it back rather than the tenant shuttering it. Ownership transfers ON-BOOK and
+ * NO money moves: the tenant loses premises it never paid for (the landlord
+ * fronted the build capital), and the landlord recovers its asset — the
+ * stranded-asset hole the D2 review flagged, now closed. Mirrors
+ * performAcquisition's single-facility absorb, kept minimal: release the crew,
+ * drop the tenant's supply lines into/out of the premises, move the facility to
+ * the landlord's book, and clear the lease so it is plainly landlord-owned.
+ * Returns true if the facility was repossessed (the caller then skips the close).
+ *
+ * Deterministic and conserved: a leased premises exists only when the
+ * real-estate channel is on, so this whole rung is inert in every pinned run
+ * (no leases flag-off ⇒ `landlordFirmId` is never set ⇒ this returns false).
+ */
+function repossessLeasedFacility(ctx: SimContext, tenantId: string, facilityId: string): boolean {
+  const { state } = ctx;
+  const fac = state.facilities[facilityId];
+  if (!fac) return false;
+  const landlordId = fac.landlordFirmId;
+  // Not a lease, or a self-lease shell (never billed; nothing to hand back).
+  if (landlordId === undefined || landlordId === tenantId) return false;
+  const landlord = state.firms[landlordId];
+  const tenant = state.firms[tenantId];
+  if (!landlord || !tenant) return false;
+
+  // Crew back to the labor pool (fireCitizen cleans both employee lists).
+  for (const cid of [...fac.employees]) fireCitizen(state, facilityId, cid);
+
+  // Drop the tenant's supply lines touching the lost premises. A THIRD firm's
+  // inbound contract that merely sources from here is redirected to the
+  // importer instead of severed — the sellFacility idiom (Demolition.ts), so a
+  // rival's chain never silently loses its supply line to someone else's
+  // repossession (review note: the first cut deleted them).
+  const importer = Object.values(state.facilities).find((f) => f.type === 'importer');
+  for (const ctrId of Object.keys(state.contracts).sort()) {
+    const c = state.contracts[ctrId]!;
+    if (c.destinationFacilityId === facilityId) {
+      delete state.contracts[ctrId];
+    } else if (c.sourceFacilityId === facilityId) {
+      if (c.ownerFirmId !== tenantId && importer) c.sourceFacilityId = importer.id;
+      else delete state.contracts[ctrId];
+    }
+  }
+  // The shared per-tick contract index still buckets the deleted/re-keyed ids —
+  // rebuild before any later same-tick reader walks a stale entry (the
+  // ContractIndex maintenance contract; review note).
+  reindexContracts(ctx);
+
+  // Move the asset onto the landlord's book and clear the lease: it is now a
+  // plainly landlord-owned facility (owned = operated by the engine's keying).
+  tenant.facilities = tenant.facilities.filter((id) => id !== facilityId);
+  fac.ownerFirmId = landlordId;
+  if (!landlord.facilities.includes(facilityId)) landlord.facilities.push(facilityId);
+  delete fac.landlordFirmId;
+  delete fac.rentPerDay;
+
+  emitEvent(
+    state,
+    'warning',
+    'finance',
+    `${landlord.name} repossessed ${fac.name} from ${tenant.name} after its insolvency.`,
+    landlordId,
+  );
+  // Landlord-side tally for the landlord_repossession achievement: the player
+  // fronted a premises' capital and got the asset back when its tenant folded.
+  // Only when the PLAYER is the collecting landlord; inert flag-off (no leases).
+  if (landlordId === state.playerFirmId) state.landlordRepossessions += 1;
+  return true;
 }

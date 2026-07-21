@@ -24,7 +24,7 @@ import type { FirmId, ProductId } from '../core/Id';
 import { getProduct } from '../data/products';
 import { getTradeCity } from '../data/tradeCities';
 import { getQuantity, removeStock } from '../entities/Inventory';
-import { cityPrice, exportFreightFee, applyPriceImpact, impactedFillPrice } from '../core/Trade';
+import { cityPrice, exportFreightFee, applyPriceImpact, impactedFillPrice, feedPool } from '../core/Trade';
 import { formatMoney } from '../../utils/formatMoney';
 
 export const FORWARD_MAX_OPEN = 2;
@@ -160,6 +160,14 @@ export function closeForward(state: GameState, firmId: FirmId, forwardId: string
   }
   emitEvent(state, mark >= 0 ? 'success' : 'info', 'finance',
     `${city.emoji} ${firm.name} closed its ${fwd.quantity} ${product.name} forward to ${city.name} at mark — ${formatMoney(mark)} P&L (${formatMoney(fee)} fee).`, firmId);
+  // Player-only tally for the closed_forward achievement (any P&L — the skill is
+  // closing at the mark, not the sign of the settlement). Preset-gated so the
+  // counter's Village inertness is STRUCTURAL like its three era siblings, not
+  // resting on "the pinned Village scripts happen not to close forwards"
+  // (review note); the achievement that reads it is city-scale anyway.
+  if (firmId === state.playerFirmId && state.config.sizePreset !== 'village') {
+    state.forwardsClosed += 1;
+  }
   return true;
 }
 
@@ -200,6 +208,21 @@ export function runForwardSystem(ctx: SimContext): void {
           firmId: fid, category: 'revenue', productId: fwd.productId, quantity: pulled,
           note: `Forward delivered: ${pulled} ${product.name} to ${city.name} @ ${formatMoney(net)} locked-net`,
         });
+        // Arc E: settlement SHIPS goods into the city, so a pooled consumer
+        // good feeds the larder exactly as a spot export does — the same
+        // per-product guard (pool?.inventory[productId] !== undefined), a
+        // durable cover overhang consumption works off over days. Only the
+        // DELIVERED quantity (`pulled`) moves; the deliberate-default shortfall
+        // (`missed`, below) ships nothing and feeds nothing. The sign/close
+        // paper impacts on the walk (applyPriceImpact at sellForward /
+        // closeForward) stay as they are: those hedge the city's DEMAND at
+        // paper time when no goods move, so there is no larder delta to book
+        // then — only settlement puts physical stock on the shelf. This is the
+        // divergence region.md flagged (a forward delivery used to create no
+        // cover overhang a spot export would), now resolved.
+        if (state.tradeCities[fwd.cityId]?.pool?.inventory[fwd.productId] !== undefined) {
+          feedPool(state, fwd.cityId, fwd.productId, pulled);
+        }
         if (fwd.lockedPrice >= product.basePrice * FORWARD_WIN_MULT) {
           firm.forwardWins += 1;
         }

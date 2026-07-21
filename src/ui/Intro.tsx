@@ -52,7 +52,9 @@ export function Intro(): React.ReactElement | null {
               Watch the ladder in <strong>Population</strong>. Pick your
               <strong> world scale</strong> in New Game: a 🌆 <strong>City</strong>
               grows a crowd of hundreds as <strong>district × tier cohorts</strong>
-              beyond your named cast.</p>
+              beyond your named cast, and a 🏙️ <strong>Metropolis</strong> (beta)
+              goes bigger still — the largest map, a field of up to 30 rival firms, and the full
+              18-product catalog with <strong>deep chains</strong>.</p>
           </div>
           <div>
             <h4>Trade, seasons, and the town</h4>

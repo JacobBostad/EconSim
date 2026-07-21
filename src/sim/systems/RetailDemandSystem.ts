@@ -26,18 +26,33 @@ import type { ProductId } from '../core/Id';
 import { getQuantity, getQuality, removeStock } from '../entities/Inventory';
 import { distance } from '../entities/Location';
 import { getProduct } from '../data/products';
+import { SIZE_PRESETS } from '../core/SimulationConfig';
 import { worldDemandMult, worldSpendingMult } from '../data/worldEvents';
 import { seasonDemandMult } from '../data/seasons';
 import { tierPriceCapMult, positioningAffinity, positioningPriceImage } from './TierSystem';
 import { clamp } from '../../utils/clamp';
 
 /** Extra baskets any URGENT need buys in one stop for a crowd-town cast WORKER
- * (see the catch-up in attemptPurchase). Two ≈ the throughput of the separate
- * urgent trips the after-work shop window denies the fully-jobbed cast worker,
- * the count measured to close the cast-vs-cohort worker satisfaction gap on the
- * City soak without over-clearing (which spikes promotion and destabilises the
- * cast sample). */
-const WORKER_CATCHUP_BASKETS = 2;
+ * (see the catch-up in attemptPurchase). The shipped value is 2 (all presets,
+ * SIZE_PRESETS.catchupBaskets) ≈ the throughput of the separate urgent trips the
+ * after-work shop window denies the fully-jobbed cast worker, measured to close
+ * the cast-vs-cohort worker satisfaction gap on the small-City soak without
+ * over-clearing (which spikes promotion and destabilises the cast sample).
+ *
+ * On the A4 260×184 map this flat lever is supply-capped and can't be turned up:
+ * more baskets deepen the chronic bread shortage and cast sat FALLS — AND, when
+ * the catch-up counts as market demand, filling it lifts the founder fill-rate
+ * signal above the trigger and collapses firm count (city-headroom finding). The
+ * City cast-parity pass makes the catch-up a preset knob and, under
+ * `catchupSyntheticSignal`, books it as synthetic parity demand invisible to the
+ * founder gauge (see attemptPurchase) — the mechanism the headroom verdict named.
+ * Defaults keep the shipped behaviour (baskets 2, signal off). */
+function catchupBaskets(state: GameState): number {
+  return SIZE_PRESETS[state.config.sizePreset].catchupBaskets;
+}
+function catchupSyntheticSignal(state: GameState): boolean {
+  return SIZE_PRESETS[state.config.sizePreset].catchupSyntheticSignal;
+}
 
 /** Whether any crowd cohort holds population — the gate that keeps the crowd-
  * scale backlog catch-up (see attemptPurchase) dark in a Village, so the 300-day
@@ -230,7 +245,7 @@ function attemptPurchase(
     tierPriceCapMult(cit.tier, productId) *
     positioningPriceImage(store.positioning, qual);
 
-  let wantQty = Math.max(
+  const baseWantQty = Math.max(
     1,
     Math.round(
       need.preferredQuantity *
@@ -238,6 +253,7 @@ function attemptPurchase(
         seasonDemandMult(state, productId),
     ),
   );
+  let wantQty = baseWantQty;
   // Worker backlog catch-up (crowd towns only). LaborSystem's cast priority
   // jobs the city cast at ~95-100%, so a cast WORKER shops only the narrow
   // after-work window — measured ~2 trips/day against ~4 urgent needs. It cannot
@@ -271,13 +287,25 @@ function attemptPurchase(
   // parity — measured (200d soak, seed 7: comfortable gap 0.0 vs -18.9 when
   // applied to all tiers). The crowd gate keeps this dark in a Village, so the
   // 300-day Village re-run stays bit-identical (verified).
-  if (
+  const doCatchup =
     cit.tier === 'worker' &&
     need.urgency > ctx.config.needUrgentThreshold &&
-    anyCohortPopulation(state)
-  ) {
-    wantQty += WORKER_CATCHUP_BASKETS * need.preferredQuantity;
+    anyCohortPopulation(state);
+  if (doCatchup) {
+    wantQty += catchupBaskets(state) * need.preferredQuantity;
   }
+  // The catch-up tranche is SYNTHETIC PARITY demand (city-headroom forward path):
+  // it stands in for the URGENT_TRIPS the after-work window denies the jobbed
+  // cast worker. When `catchupSyntheticSignal` is on, that tranche buys real
+  // stock and pays real revenue (below) but is EXCLUDED from the founder-visible
+  // market shortage gauge — so raising catchupBaskets closes the cast-vs-cohort
+  // worker gap without lifting fill-rate above the founder trigger. `marketWant`
+  // is the demand the founder/pricing signals see; `wantQty` is what the citizen
+  // physically buys. With the flag off (shipped) the two are equal and every stat
+  // path is byte-identical to before. City-gated via anyCohortPopulation +
+  // preset, so Village is untouched.
+  const marketWant =
+    doCatchup && catchupSyntheticSignal(state) ? baseWantQty : wantQty;
 
   if (!open || stock <= 0) {
     // Stockout / store closed -> lost sale. Both cases keep feeding
@@ -288,7 +316,7 @@ function attemptPurchase(
     // the truth instead of reporting "stockouts" at a fully stocked store.
     if (!open) store.dailyStats.closedDoorVisits = (store.dailyStats.closedDoorVisits ?? 0) + wantQty;
     store.dailyStats.lostSales += wantQty;
-    stat.unmetDemand += wantQty;
+    stat.unmetDemand += marketWant;
     stat.stockoutCount += 1;
     cit.dailyStats.unmetNeeds += 1;
     cit.satisfaction = clamp(cit.satisfaction - 2, 0, 100);
@@ -300,7 +328,7 @@ function attemptPurchase(
     // stockouts so the price controller can SEE priced-out demand — without
     // this signal, prices ride the market-power ceiling right past what the
     // town can afford and demand quietly dies.
-    stat.unmetDemand += wantQty;
+    stat.unmetDemand += marketWant;
     store.dailyStats.pricedOut += wantQty;
     cit.dailyStats.unmetNeeds += 1;
     cit.satisfaction = clamp(cit.satisfaction - 1, 0, 100);
@@ -310,7 +338,7 @@ function attemptPurchase(
   const affordableQty = Math.floor(cit.cash / price);
   const qty = Math.min(wantQty, affordableQty, stock);
   if (qty <= 0) {
-    stat.unmetDemand += wantQty;
+    stat.unmetDemand += marketWant;
     cit.dailyStats.unmetNeeds += 1;
     cit.satisfaction = clamp(cit.satisfaction - 1, 0, 100);
     return;
@@ -345,19 +373,33 @@ function attemptPurchase(
   store.dailyStats.unitsSold += qty;
   store.dailyStats.revenue += revenue;
 
-  stat.fulfilledDemand += qty;
-  stat.unitsSold += qty;
-  stat.revenueAccum += revenue;
-  stat.qualityAccum += quality * qty;
+  // Founder/pricing gauge attribution. `qty` units were physically sold and paid
+  // for (the transaction above, the firm's dailyStats, the citizen's need are all
+  // full); but only the MARKET portion — units answering real market demand, base
+  // demand first — counts toward the marketStats the founder fill-rate and AI
+  // pricing read. With the synthetic flag off, marketQty == qty and this is the
+  // shipped accounting byte-for-byte. With it on, the catch-up tranche's filled
+  // units are excluded (parity demand, not a market signal), so raising the
+  // catch-up cannot lift fill-rate past the founder trigger.
+  const marketQty = Math.min(qty, marketWant);
+  const marketRevenue = marketQty * price;
+  stat.fulfilledDemand += marketQty;
+  stat.unitsSold += marketQty;
+  stat.revenueAccum += marketRevenue;
+  stat.qualityAccum += quality * marketQty;
   stat.unitsSoldByFirm[store.ownerFirmId] =
-    (stat.unitsSoldByFirm[store.ownerFirmId] ?? 0) + qty;
+    (stat.unitsSoldByFirm[store.ownerFirmId] ?? 0) + marketQty;
   if (stat.lowestPrice === 0 || price < stat.lowestPrice) stat.lowestPrice = price;
   if (price > stat.highestPrice) stat.highestPrice = price;
 
   if (qty < wantQty) {
-    const short = wantQty - qty;
-    stat.unmetDemand += short;
-    store.dailyStats.lostSales += short;
+    // Physical shortfall (drives the firm's lost-sales display) vs MARKET shortfall
+    // (the founder gauge): with the synthetic flag on, only base demand left unfilled
+    // counts as a market shortage — an unfilled catch-up basket is not a signal to
+    // found a new seller.
+    store.dailyStats.lostSales += wantQty - qty;
+    const marketShort = Math.max(0, marketWant - qty);
+    if (marketShort > 0) stat.unmetDemand += marketShort;
   }
 }
 

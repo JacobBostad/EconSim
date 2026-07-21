@@ -64,6 +64,27 @@ export function poolConsumptionPerDay(cityId: string, pid: ProductId): number {
   return getTradeCity(cityId).population * perCapitaDailyConsumption(pid);
 }
 
+/**
+ * The fraction of a product's local consumption the city's own economy produces
+ * each day (Arc E step 2). 0 when the def lists nothing for it (fully imported —
+ * the deepest export market). A food-leaning port pins this high on its staples
+ * and low on its industry; an industrial port mirrors it. See tradeCities.ts.
+ */
+export function localProductionFraction(cityId: string, pid: ProductId): number {
+  return getTradeCity(cityId).productionByProduct[pid] ?? 0;
+}
+
+/**
+ * A city's own daily LOCAL production of a product (units/day): its production
+ * fraction × whole-population consumption. This is the supply side the demand
+ * pool gains in step 2 — the stub town produces some of what it consumes, so
+ * exports fill only the GAP its production leaves. Deterministic and cash-free
+ * (the town's own economy, same rationale as consumption): no rng, no money.
+ */
+export function poolLocalProductionPerDay(cityId: string, pid: ProductId): number {
+  return localProductionFraction(cityId, pid) * poolConsumptionPerDay(cityId, pid);
+}
+
 /** The inventory level the pool holds in equilibrium (mult 1.0): the target
  * cover buffer × daily consumption. */
 export function poolTargetInventory(cityId: string, pid: ProductId): number {

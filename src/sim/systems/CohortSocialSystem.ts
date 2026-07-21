@@ -329,7 +329,14 @@ function runTierGates(
   let promoted = false;
   if (nextTier) {
     const toAffluent = nextTier === 'affluent';
-    const wageBar = sub * (toAffluent ? AFFLUENT_WAGE_MULT : COMFORTABLE_WAGE_MULT);
+    // Cent-round the promotion wage bar: `sub * (18/14)` carries a sub-cent float
+    // tail (1800.0000000000002¢), so a founder paying exactly $18 (1800¢) would
+    // NOT clear a raw `>=` compare. Rounding to the nearest cent lets the City
+    // decoupling's $18 crowd wage clear the comfortable bar, and is provably inert
+    // to every pinned run (no pinned firm pays inside the sub-cent gap). The
+    // demotion FLOOR bar is left un-rounded on purpose (Metropolis's $16 crowd
+    // sits a float epsilon under the $16 floor — rounding would flip that pin).
+    const wageBar = Math.round(sub * (toAffluent ? AFFLUENT_WAGE_MULT : COMFORTABLE_WAGE_MULT));
     const satBar = toAffluent ? AFFLUENT_SATISFACTION : COMFORTABLE_SATISFACTION;
     const savingsBar = toAffluent ? AFFLUENT_WEALTH_CENTS : COMFORT_SAVINGS_CENTS;
     const needed = toAffluent ? AFFLUENT_PROMOTION_DAYS : PROMOTION_DAYS;
@@ -531,6 +538,15 @@ function runMigration(state: GameState, cohortIds: string[]): void {
   }
   const townAvg = headcount > 0 ? satMass / headcount : 0;
 
+  // Employment-aware immigration gate (City cast-parity pass). The satisfaction
+  // gate below never reads job supply, so a well-served town floods its worker
+  // cohort faster than founders add jobs and empShare craters — the wall the
+  // cast-parity mechanism hit (closing the cast gap raises town satisfaction and
+  // re-triggers the flood). When `immigrationEmpFloor` > 0, inflow is scaled by
+  // the worker cohort's employment headroom above the floor, so immigration halts
+  // when jobs are scarce and resumes as they fill. 0 = disabled = shipped gate.
+  const empFloor = SIZE_PRESETS[state.config.sizePreset].immigrationEmpFloor;
+
   // Inflow to worker cohorts while the town is attractive and there is room.
   if (townAvg >= IMMIGRATION_MIN_SATISFACTION) {
     for (const cid of cohortIds) {
@@ -540,6 +556,11 @@ function runMigration(state: GameState, cohortIds: string[]): void {
       if (room <= 0) break;
       const desirability = state.districts[cohort.districtId]?.desirability ?? 0;
       let inflow = Math.floor(cohort.population * INFLOW_RATE * (0.5 + desirability));
+      if (empFloor > 0) {
+        const empShare = cohort.population > 0 ? cohort.employed / cohort.population : 0;
+        const jobFactor = clamp((empShare - empFloor) / (1 - empFloor), 0, 1);
+        inflow = Math.floor(inflow * jobFactor);
+      }
       inflow = Math.min(inflow, room);
       if (inflow <= 0) continue;
       cohort.population += inflow;

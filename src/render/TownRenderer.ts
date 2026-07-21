@@ -244,6 +244,18 @@ export class TownRenderer {
 
   private effScale(): number { return this.view.scale * this.zoom; }
 
+  /**
+   * True when big-map glyph LOD is engaged: a city-scale map zoomed out far
+   * enough (effScale below LOD_GLYPH_SCALE) that buildings collapse to flat
+   * footprint glyphs. Village is exempt via lodEnabled, so this is always false
+   * there — the classic game keeps its full kit, name labels and floaters at
+   * every zoom. Shared by drawFacilities (the glyph collapse itself) and the
+   * floater pass (which declutters on the same signal).
+   */
+  private glyphLod(s: GameState): boolean {
+    return lodEnabled(s) && this.effScale() < LOD_GLYPH_SCALE;
+  }
+
   // --- camera glide to off-screen selections ----------------------------
   private lastSel: string | null = null;
   private camGlide: Vec | null = null;
@@ -1198,7 +1210,15 @@ export class TownRenderer {
       (a, b) => s.facilities[a]!.location.y - s.facilities[b]!.location.y,
     );
     const cull = this.visibleWorldRect(s, FACILITY_CULL_MARGIN);
-    const lod = lodEnabled(s) && this.effScale() < LOD_GLYPH_SCALE;
+    const lod = this.glyphLod(s);
+    // Deterministic name-label declutter (city-scale only). Committed label
+    // rects (screen space) this frame; a new label that would overlap one is
+    // dropped. `order` is sorted north→south, so for a given camera the same
+    // labels win every frame — no flicker — and the northern building keeps its
+    // name where two collide. Village (lodEnabled false) never declutters:
+    // every label draws exactly as before, and labelRects stays untouched.
+    const declutter = lodEnabled(s);
+    const labelRects: { x0: number; y0: number; x1: number; y1: number }[] = [];
     for (const id of order) {
       const f = s.facilities[id]!;
       const p = this.drawPos(id, f.location);
@@ -1303,10 +1323,26 @@ export class TownRenderer {
         ctx.font = `600 ${fpx}px system-ui, sans-serif`;
         ctx.textAlign = 'center'; ctx.textBaseline = 'top';
         const tw = ctx.measureText(f.name).width;
-        ctx.fillStyle = 'rgba(8,12,18,0.6)';
-        this.roundRectPath(sp.x - tw / 2 - 4, sp.y + size * 0.65, tw + 8, fpx + 3, 3); ctx.fill();
-        ctx.fillStyle = '#f2f6fa';
-        ctx.fillText(f.name, sp.x, sp.y + size * 0.65 + 2);
+        const lx0 = sp.x - tw / 2 - 4, ly0 = sp.y + size * 0.65;
+        const lw = tw + 8, lh = fpx + 3;
+        // City-scale declutter: skip a name that would overlap one already
+        // committed this frame (AABB test). Village keeps showName === true.
+        let showName = true;
+        if (declutter) {
+          for (const r of labelRects) {
+            if (lx0 < r.x1 && lx0 + lw > r.x0 && ly0 < r.y1 && ly0 + lh > r.y0) {
+              showName = false;
+              break;
+            }
+          }
+        }
+        if (showName) {
+          ctx.fillStyle = 'rgba(8,12,18,0.6)';
+          this.roundRectPath(lx0, ly0, lw, lh, 3); ctx.fill();
+          ctx.fillStyle = '#f2f6fa';
+          ctx.fillText(f.name, sp.x, ly0 + 2);
+          if (declutter) labelRects.push({ x0: lx0, y0: ly0, x1: lx0 + lw, y1: ly0 + lh });
+        }
       }
     }
 
@@ -1526,21 +1562,28 @@ export class TownRenderer {
 
   // floaters: detect sales / deliveries / production via stat deltas
   private updateFloaters(s: GameState, dt: number): void {
+    // City-scale declutter: while big-map glyph LOD is engaged (the zoomed-out
+    // City/Metropolis "beauty shot"), the +$ / +goods / +made popups pile into
+    // illegible noise over dense districts, so pause spawning. prevStats still
+    // advances below, so zooming back in resumes from the current day's totals
+    // instead of bursting a backlog. Village (glyphLod false) is unaffected —
+    // floaters spawn at every zoom exactly as before.
+    const quiet = this.glyphLod(s);
     for (const id in s.facilities) {
       const f = s.facilities[id]!;
       const prev = this.prevStats.get(id) ?? { revenue: 0, received: 0, produced: 0 };
       const sp = this.w2s(s, this.drawPos(id, f.location));
       // a sale happened -> money rises from the store
-      if (f.dailyStats.revenue > prev.revenue) {
+      if (!quiet && f.dailyStats.revenue > prev.revenue) {
         const delta = f.dailyStats.revenue - prev.revenue;
         this.spawnFloater(sp.x, sp.y - 16, `+${formatMoney(delta)}`, '#56d364');
       }
       // a delivery arrived -> goods badge
-      if (f.dailyStats.unitsReceived > prev.received) {
+      if (!quiet && f.dailyStats.unitsReceived > prev.received) {
         this.spawnFloater(sp.x, sp.y - 16, '+goods', '#d2a8ff');
       }
       // production completed -> small puff (only show occasionally to avoid spam)
-      if (f.dailyStats.unitsProduced > prev.produced && Math.random() < 0.6) {
+      if (!quiet && f.dailyStats.unitsProduced > prev.produced && Math.random() < 0.6) {
         this.spawnFloater(sp.x + 8, sp.y - 14, '+made', '#e0a458');
       }
       this.prevStats.set(id, {

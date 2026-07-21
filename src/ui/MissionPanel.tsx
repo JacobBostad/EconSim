@@ -1,6 +1,6 @@
 import React from 'react';
 import { useGameStore } from '../store/useGameStore';
-import { MISSION_DEFS, activeMission } from '../sim/data/missions';
+import { eligibleMissions, activeMission } from '../sim/data/missions';
 import { formatMoney } from '../utils/formatMoney';
 
 /** Left-panel card showing the current guided mission and chain progress. */
@@ -8,8 +8,10 @@ export function MissionPanel(): React.ReactElement | null {
   useGameStore((s) => s.version);
   const sim = useGameStore((s) => s.sim);
   const state = sim.getState();
-  const done = state.missions.length;
-  const total = MISSION_DEFS.length;
+  // Total counts only the missions THIS game offers (Village drops the era
+  // missions), so the progress fraction reads correctly per preset.
+  const total = eligibleMissions(state).length;
+  const done = Math.min(state.missions.length, total);
   const current = activeMission(state);
 
   return (

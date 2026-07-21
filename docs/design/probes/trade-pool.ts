@@ -20,7 +20,7 @@
 import { Simulation } from '../../../src/sim/core/Simulation';
 import { createInitialState } from '../../../src/sim/data/startingScenario';
 import { DEFAULT_CONFIG } from '../../../src/sim/core/SimulationConfig';
-import { ticksPerDay } from '../../../src/sim/core/Tick';
+import { ticksPerDay, computeTime } from '../../../src/sim/core/Tick';
 import { totalMoneySupply } from '../../../src/sim/core/GameState';
 import { cityPrice, performExport } from '../../../src/sim/core/Trade';
 import { addStock } from '../../../src/sim/entities/Inventory';
@@ -129,6 +129,42 @@ for (const pools of [false, true]) {
   }
   console.log('STARVATION (pool on)  larder drained to ~1 day of cover:');
   console.log('   ' + curve.join('  '));
+  console.log('');
+}
+
+// --- 2b. FORWARD SETTLEMENT feeds the pool (Arc E follow-up). A delivered
+// forward now creates the same cover overhang a spot export does (region.md's
+// divergence, resolved); a deliberate default (nothing staged) delivers nothing
+// and feeds nothing — its larder is identical to a no-forward baseline. --------
+{
+  console.log('FORWARD SETTLEMENT feeds the pool (200 bread to Port Rosa, walk held at center):');
+  const QTY = 200;
+  const out: Record<string, { m: number; cover: number }> = {};
+  for (const mode of ['baseline', 'deliver', 'default'] as const) {
+    const sim = warmed(11, true);
+    const tpd = ticksPerDay(sim.getState().config);
+    const state = sim.getState();
+    const player = state.firms[state.playerFirmId]!;
+    player.cash = 500000_00;
+    if (mode === 'deliver') {
+      sim.dispatch({ type: 'BUILD_FACILITY', firmId: player.id, defId: 'warehouse', location: { x: 100, y: 20 } });
+      const wh = state.facilities[player.facilities[player.facilities.length - 1]!]!;
+      addStock(wh.inputInventory, PID, QTY + 50, 60);
+    }
+    if (mode !== 'baseline') {
+      const day = computeTime(state.tick, state.config).day;
+      sim.dispatch({ type: 'SELL_FORWARD', firmId: player.id, productId: PID, quantity: QTY, cityId: CITY, deliveryDay: day + 3 });
+    }
+    // Run to just past settlement (day+3), holding the walk at center so the
+    // quote reflects the POOL's cover, not the walk wandering.
+    for (let d = 0; d < 3; d++) { sim.run(tpd); state.tradeCities[CITY]!.pricesByProduct[PID] = base; }
+    const inv = state.tradeCities[CITY]!.pool!.inventory[PID]!;
+    out[mode] = { m: mult(sim), cover: poolCoverDays(CITY, PID, inv) };
+    console.log(`   ${mode.padEnd(9)} post-settle quote ${out[mode].m.toFixed(3)}× · cover ${out[mode].cover.toFixed(1)}d`);
+  }
+  const overhang = out.baseline.m - out.deliver.m;
+  const matches = out.default.m === out.baseline.m && out.default.cover === out.baseline.cover;
+  console.log(`   → delivered overhang: quote ${overhang.toFixed(3)}× below baseline, +${(out.deliver.cover - out.baseline.cover).toFixed(1)}d cover; default == baseline (feeds nothing): ${matches}`);
   console.log('');
 }
 
