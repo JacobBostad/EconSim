@@ -33,6 +33,11 @@ import { getProduct } from '../data/products';
 import { CHAIN_BLUEPRINTS, chainCost } from '../data/chains';
 import { defaultPersonalityFor, defaultCeoFor, PERSONALITIES } from '../data/personalities';
 import { buildStarterChain } from '../core/ChainBuilder';
+import { createFacility } from '../entities/factories';
+import { getFacilityDef } from '../data/facilityDefinitions';
+import { landCostMultiplier, landValueAt } from '../core/LandValue';
+import { clamp } from '../../utils/clamp';
+import { townHousingOccupancy } from './ai/LandlordBehavior';
 import { soldSomewhere } from './SatisfactionSystem';
 import {
   IMMIGRATION_MIN_SATISFACTION,
@@ -399,16 +404,153 @@ function operatorTryFound(ctx: SimContext, town: FounderTownRead): boolean {
   return false;
 }
 
+// --- landlord row: a real-estate firm moves in when housing is chronically
+// tight (Arc D2, HD4) ---------------------------------------------------------
+
+/** Housing occupancy at or above which the town is "tight" — a landlord's
+ * opportunity. Pinned by the real-estate probe (city/metropolis 300-day soaks):
+ * a growing crowd city runs its home stock this full, and below this bar there
+ * is slack the market can absorb without new development. */
+const LANDLORD_OCCUPANCY_BAR = 0.92;
+/** Consecutive tight days before a landlord founds — long enough that a
+ * transient full week (immigration wave, a block briefly maxed) doesn't spawn a
+ * rentals firm, short enough to answer a genuine chronic squeeze. Measured
+ * against the soaks (see docs/design/real-estate.md). */
+const LANDLORD_FOUNDER_DAYS = 15;
+/** Town-wide minimum days between landlord entries, so a sustained squeeze
+ * grows the housing stock a firm at a time rather than all at once. */
+const LANDLORD_FOUNDER_COOLDOWN = 25;
+
+const LANDLORD_NAMES = ['Cornerstone Properties', 'Meridian Estates', 'Brickyard Holdings'];
+
 /**
- * The founder archetype table (Arc D1 scaffold). Operator only, for now. D2–D4
- * append their rows here — a landlord that founds a rentals firm where housing
- * is chronically short, an investor holdco that spins up where equity is cheap
- * and dividends fat, a service provider where compute demand outruns capacity —
- * each with its own trackSignals + tryFound. The shell iterates in table order,
- * so adding a row is additive and leaves the operator row untouched.
+ * Found a landlord firm: a real-estate specialist that develops and rents
+ * housing. Unlike a chain founder it builds no producer→factory→store — its
+ * founding capital funds its first apartment block, sited near the residential
+ * band, and its LandlordBehavior loop grows the stock from there. Money is
+ * conserved: founding capital in from the world, the build cost straight back
+ * out to it the same tick.
+ */
+function foundLandlordFirm(ctx: SimContext, day: number): void {
+  const { state } = ctx;
+  const aiCount = Object.values(state.firms).filter((f) => f.ownerType === 'ai').length;
+  const name = LANDLORD_NAMES[hashPick(state.seed, day, LANDLORD_NAMES.length)]!;
+  const personality = defaultPersonalityFor(aiCount);
+
+  const id = nextId(state.idCounters, 'firm');
+  const firm: Firm = {
+    id,
+    name,
+    ownerType: 'ai',
+    cash: 0,
+    facilities: [],
+    employees: [],
+    pricesByProduct: {},
+    wagePolicy: { baseWage: dollars(16) },
+    accounting: emptyAccounting(),
+    strategy: emptyStrategy('none', 'landlord'),
+    bankruptcyStatus: 'healthy',
+    daysInsolvent: 0,
+    marketShareByProduct: {},
+    createdAtTick: state.tick,
+    personalityId: personality,
+    ceoName: defaultCeoFor(personality, aiCount),
+    brandByProduct: {},
+    adBudgetByProduct: {},
+    qualityByProduct: {},
+    debt: 0,
+    interestRatePerDay: 0.0009,
+    sharesHeld: {},
+    shareCostBasis: {},
+    acquiredNames: [],
+    autoPriceByProduct: {},
+    exportRevenue: 0,
+    exportRevenueByCity: {},
+    wholesaleSpend: 0,
+    wholesaleEarned: 0,
+    managers: [],
+    forwards: [],
+    forwardWins: 0,
+  };
+  state.firms[id] = firm;
+
+  recordTransaction(state, {
+    from: WORLD_ACCOUNT, to: firmAccount(id), amount: founderCash(state.config),
+    firmId: id, category: 'none', note: 'Founding capital',
+  });
+
+  // Break ground on the firm's first block immediately, so it enters as a real
+  // landlord with an asset rather than an empty shell.
+  const loc = {
+    x: clamp(40 + (hashPick(state.seed, day + 5, 40) - 20), 8, state.config.mapWidth - 8),
+    y: clamp(64 + (hashPick(state.seed, day + 9, 12) - 6), 8, state.config.mapHeight - 8),
+  };
+  const def = getFacilityDef('apartment');
+  const mult = landCostMultiplier(landValueAt(state, loc));
+  const cost = Math.round(def.buildCost * mult);
+  const apt = createFacility(state, 'apartment', id, loc, { name: `${name.split(' ')[0]} Residences` });
+  apt.buildCost = cost;
+  apt.operatingCostPerDay = Math.round(def.maintenanceCostPerDay * mult);
+  recordTransaction(state, {
+    from: firmAccount(id), to: WORLD_ACCOUNT, amount: cost,
+    firmId: id, category: 'buildSpend', note: 'Built apartment',
+  });
+
+  const ceo = firm.ceoName ? ` ${PERSONALITIES[personality]!.icon} ${firm.ceoName} runs it.` : '';
+  emitEvent(state, 'info', 'economy',
+    `📰 New landlord: ${name} moves into town to build housing — every home is full.${ceo}`, apt.id);
+}
+
+function landlordTrackSignals(ctx: SimContext): void {
+  const { state } = ctx;
+  // City-scale and channel-gated: Village and any flag-off pinned run never
+  // touch the streak counter, so their trajectories are untouched.
+  if (state.config.sizePreset === 'village' || !state.config.realEstateEnabled) return;
+  state.housingTightDays =
+    townHousingOccupancy(state) >= LANDLORD_OCCUPANCY_BAR ? state.housingTightDays + 1 : 0;
+}
+
+function landlordTryFound(ctx: SimContext, town: FounderTownRead): boolean {
+  const { state } = ctx;
+  const { day, aiCount } = town;
+  // Channel + scale gate: the row is inert in every pinned baseline (Village
+  // always; plain city/metropolis with realEstateEnabled off), so the operator
+  // field's rng trajectory and the metropolis founder pins are untouched.
+  if (!state.config.realEstateEnabled || !town.cityScale) return false;
+  if (state.housingTightDays < LANDLORD_FOUNDER_DAYS) return false;
+  if (day - state.lastLandlordEntryDay < LANDLORD_FOUNDER_COOLDOWN) return false;
+  // Landlords share the town founder cap but must not crowd out the staple
+  // operators that feed it: hold real-estate firms to ~1/6 of the cap (City 3,
+  // Metropolis 5), so a chronic housing squeeze grows a rentals sector without
+  // starving the chains. The founder-scale probe measured metro seed 7 stacking
+  // 8 landlords (27% of a 30-cap map) without this brake.
+  const landlordCount = Object.values(state.firms).filter(
+    (f) => f.ownerType === 'ai' && f.strategy.archetype === 'landlord',
+  ).length;
+  if (landlordCount >= Math.max(2, Math.floor(founderMaxAiFirms(state.config) / 6))) return false;
+  // A5 solvency brake (shared with the operator under-supply row): capital
+  // stops entering a field whose incumbents are already distressed.
+  const unhealthy = Object.values(state.firms).filter(
+    (f) => f.ownerType === 'ai' && f.bankruptcyStatus !== 'healthy',
+  ).length;
+  if (aiCount > 0 && unhealthy / aiCount > 0.12) return false;
+
+  foundLandlordFirm(ctx, day);
+  state.lastLandlordEntryDay = day;
+  state.housingTightDays = 0; // fresh stock relieves the squeeze; re-accrue
+  return true;
+}
+
+/**
+ * The founder archetype table (Arc D1 scaffold). Operator + landlord live. D3–D4
+ * append their rows here — an investor holdco that spins up where equity is
+ * cheap and dividends fat, a service provider where compute demand outruns
+ * capacity — each with its own trackSignals + tryFound. The shell iterates in
+ * table order, so adding a row is additive and leaves earlier rows untouched.
  */
 const FOUNDER_ARCHETYPES: FounderArchetype[] = [
   { archetype: 'operator', trackSignals: operatorTrackSignals, tryFound: operatorTryFound },
+  { archetype: 'landlord', trackSignals: landlordTrackSignals, tryFound: landlordTryFound },
 ];
 
 export function runAIFounderSystem(ctx: SimContext): void {
@@ -445,7 +587,8 @@ export function runAIFounderSystem(ctx: SimContext): void {
   if (!cityScale && state.worldCash < cash) return;
 
   // At most one founding per day, town-wide: the first archetype to claim the
-  // slot ends the scan. Operator is first — and, today, the only row.
+  // slot ends the scan, and rows are tried in table order (operator first, so
+  // staple coverage always outranks specialist entries).
   const town: FounderTownRead = { day, avgSat, aiCount, cityScale, cash };
   for (const row of FOUNDER_ARCHETYPES) {
     if (row.tryFound(ctx, town)) return;

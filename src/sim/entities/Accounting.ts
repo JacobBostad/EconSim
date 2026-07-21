@@ -17,6 +17,10 @@ export interface AccountingPeriod {
    * operating expense; the money lands as the provider's revenue, not the
    * world account. Always 0 in Village towns (the channel is city-scale). */
   serviceExpense: number;
+  /** Recurring commercial-lease rent paid to a landlord firm (Arc D2, HD4). An
+   * operating expense; the money lands as the landlord's revenue, not the world
+   * account. Always 0 until a firm leases premises (city-scale, real-estate on). */
+  rentExpense: number;
   marketing: number;
   rnd: number;
   interest: number;
@@ -43,6 +47,7 @@ export function emptyPeriod(): AccountingPeriod {
     logisticsCost: 0,
     variableProductionCost: 0,
     serviceExpense: 0,
+    rentExpense: 0,
     marketing: 0,
     rnd: 0,
     interest: 0,
@@ -65,6 +70,9 @@ export interface DailySnapshot {
   /** Firm-to-firm service fees paid that day (HD3). Optional so pre-channel
    * snapshot literals stay valid; always present on live snapshots. */
   serviceExpense?: number;
+  /** Commercial-lease rent paid that day (HD4). Optional so pre-channel snapshot
+   * literals stay valid; always present on live snapshots. */
+  rentExpense?: number;
   marketing: number;
   rnd: number;
   interest: number;
@@ -113,6 +121,7 @@ export function operatingProfit(p: AccountingPeriod): number {
     p.logisticsCost -
     p.variableProductionCost -
     (p.serviceExpense ?? 0) -
+    (p.rentExpense ?? 0) -
     p.marketing -
     p.rnd
   );

@@ -172,6 +172,19 @@ export interface Facility {
   /** For homes: which citizen lives here (informational). */
   residentIds: CitizenId[];
   /**
+   * Commercial lease (Arc D2, HD4). When set, this facility is LEASED: the
+   * operating firm (`ownerFirmId`) runs its business here but does NOT own the
+   * premises — a property firm (`landlordFirmId`) fronted the build capital and
+   * collects `rentPerDay` from the operator every day (CommercialRentSystem).
+   * A firm never leases from itself (`landlordFirmId !== ownerFirmId`, enforced
+   * at creation). Absent on a normal owned facility; city-scale only, so absent
+   * from Village saves and the bit-identity baseline. See docs/design/real-estate.md.
+   */
+  landlordFirmId?: FirmId;
+  /** Daily lease rent (cents) the operator pays its landlord. Present iff
+   * `landlordFirmId` is set. */
+  rentPerDay?: number;
+  /**
    * Whether other firms may buy this facility's surplus wholesale. Defaults
    * on; a player staging stock for an export spike can switch it off so AI
    * buyers can't force a sale at the wholesale discount.

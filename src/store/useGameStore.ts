@@ -51,6 +51,9 @@ interface GameStore {
   sim: Simulation;
   version: number;
   buildDefId: FacilityDefId | null;
+  /** When set, the next placed facility is LEASED from this landlord firm (HD4)
+   * instead of bought — the landlord fronts the cost and collects daily rent. */
+  leaseFromFirmId: string | null;
   dashboard: DashboardTab;
   showIntro: boolean;
   setShowIntro: (v: boolean) => void;
@@ -76,6 +79,7 @@ interface GameStore {
 
   select: (id: EntityId | null) => void;
   setBuildDef: (defId: FacilityDefId | null) => void;
+  setLeaseFrom: (firmId: string | null) => void;
   setDashboard: (tab: DashboardTab) => void;
   /** Supply-chain flow overlay on the map (toggled with F). */
   flowOverlay: boolean;
@@ -109,6 +113,7 @@ export const useGameStore = create<GameStore>((set, get) => {
     sim,
     version: 0,
     buildDefId: null,
+    leaseFromFirmId: null,
     dashboard: 'none',
     showIntro: (() => {
       try { return localStorage.getItem('econsim.introSeen') !== '1'; } catch { return true; }
@@ -158,7 +163,9 @@ export const useGameStore = create<GameStore>((set, get) => {
       // opens the B2B services channel (datacenter compute, HD3); 'village'
       // (default) keeps the classic all-agent town bit-for-bit.
       const worldOverride =
-        world === 'city' ? { sizePreset: 'city' as const, servicesEnabled: true } : {};
+        world === 'city'
+          ? { sizePreset: 'city' as const, servicesEnabled: true, realEstateEnabled: true }
+          : {};
       get().sim.setState(
         createInitialState(seed, { ...configForDifficulty(difficulty), challengeMode: challenge, ...sizeOverrides, ...worldOverride }, scenarioId),
       );
@@ -197,7 +204,8 @@ export const useGameStore = create<GameStore>((set, get) => {
       bump(true);
     },
 
-    setBuildDef: (defId) => set({ buildDefId: defId }),
+    setBuildDef: (defId) => set(defId ? { buildDefId: defId } : { buildDefId: null, leaseFromFirmId: null }),
+    setLeaseFrom: (firmId) => set({ leaseFromFirmId: firmId }),
     setDashboard: (tab) => set({ dashboard: tab }),
     flowOverlay: false,
     toggleFlowOverlay: () => set((s) => ({ flowOverlay: !s.flowOverlay })),

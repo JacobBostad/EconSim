@@ -31,6 +31,7 @@ import {
   maybeWidenShelves,
   trimManagedAds,
 } from './ai/OperatorBehavior';
+import { runLandlordBehavior } from './ai/LandlordBehavior';
 
 // Public surface preserved for existing importers (ManagerSystem, log tests).
 export { adjustPrices, maybeWidenShelves, manageSourcing } from './ai/OperatorBehavior';
@@ -60,15 +61,15 @@ export type FirmBehavior = (
 const noopBehavior: FirmBehavior = () => {};
 
 /**
- * The archetype → behavior dispatch table (Arc D1). Only the operator row is
- * live. D2 lands `landlord` (real-estate development), D3 `investor` (a holdco
- * working its equity book), D4 `service` (a compute provider) — each swaps its
- * row here for its own module. Adding a row is purely additive: the operator
- * path is never re-touched.
+ * The archetype → behavior dispatch table (Arc D1). Operator + landlord are
+ * live. D2 landed `landlord` (real-estate development, ai/LandlordBehavior);
+ * D3 lands `investor` (a holdco working its equity book), D4 `service` (a
+ * compute provider) — each swaps its row here for its own module. Adding a row
+ * is purely additive: the operator path is never re-touched.
  */
 const BEHAVIOR_BY_ARCHETYPE: Record<FirmArchetype, FirmBehavior> = {
   operator: runOperatorBehavior,
-  landlord: noopBehavior, // D2
+  landlord: runLandlordBehavior, // D2
   investor: noopBehavior, // D3
   service: noopBehavior, // D4
 };

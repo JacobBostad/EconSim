@@ -199,6 +199,13 @@ export interface GameState {
   /** Day of the last town-wide under-supply founder entry, for the entry
    * rate-limit (0 = none yet). */
   lastUndersupplyEntryDay: number;
+  /** Consecutive days town housing occupancy has stayed above the landlord
+   * founder's "housing is tight" bar — the city-scale signal that draws a
+   * real-estate firm to town (Arc D2, HD4). Village never accumulates it. */
+  housingTightDays: number;
+  /** Day of the last landlord founder entry, for its entry cooldown (0 = none
+   * yet). */
+  lastLandlordEntryDay: number;
   /**
    * Share-price displacement per firm: recent trades push the quote away
    * from fair value (marketCap), decaying back daily. Liquidity noise only —
@@ -448,6 +455,9 @@ function applyToLedger(
       break;
     case 'serviceExpense':
       period.serviceExpense += amount;
+      break;
+    case 'rentExpense':
+      period.rentExpense += amount;
       break;
     case 'marketing':
       period.marketing += amount;

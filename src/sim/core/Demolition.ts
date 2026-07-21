@@ -48,6 +48,9 @@ export function sellRefund(state: GameState, firmId: FirmId, facilityId: Facilit
   if (!fac || !firm) return null;
   if (fac.ownerFirmId !== firmId) return null;
   if (UNSELLABLE_TYPES.has(fac.type)) return null;
+  // A leased premises isn't the operator's to sell — the landlord carries the
+  // asset (HD4). The operator can walk away, but there's no refund to it.
+  if (fac.landlordFirmId !== undefined) return null;
   return Math.floor(facilityBookValue(fac) * SELL_REFUND_RATE);
 }
 

@@ -7,6 +7,35 @@ thousands via statistical cohorts plus a fully-simulated cast, districts,
 25-30 firms, a broad product catalog, and specialist firm archetypes
 (real estate, investing, business services).
 
+- **D2 — real-estate firms** (design HD4; see docs/design/real-estate.md): the
+  first live specialist archetype. `ai/LandlordBehavior` runs the `landlord`
+  dispatcher row — a firm whose whole business is developing and renting housing:
+  it sells its weakest block through the B3 machinery under distress, then builds
+  another near the residential band when housing is tight and affordable, its
+  blocks joining the existing rent pipeline (cast pay `APARTMENT_RENT_PER_DAY`,
+  the crowd fills spare capacity at `CROWD_RENT_PER_DAY`). Operators keep calling
+  the original `maybeBuildApartment` verbatim — the seam was copied, not moved.
+  **Commercial leasing** lands the missing half of a property market: facilities
+  gain `landlordFirmId`/`rentPerDay`, an operator can LEASE its premises through
+  the build flow (`BUILD_FACILITY { leaseFrom }` — "$X/day instead of $Y
+  upfront"; the player picks a landlord in the build panel), and
+  `CommercialRentSystem` bills it daily operator → landlord as `rentExpense` →
+  `revenue`, firm-to-firm, conserved. A firm can never lease from itself (blocked
+  at the command and the billing guard). `AIFounderSystem` grows a `landlord`
+  row: when town housing occupancy holds above 92% for 15 sustained days
+  (measured; first entry day 56-67) a rentals firm founds and breaks ground,
+  respecting the founder cap (sub-capped to ⌊cap/6⌋ so it doesn't crowd out
+  staple operators) and the A5 solvency brake. The whole archetype is gated
+  behind a new `realEstateEnabled` flag (default off) — INERT in every pinned
+  run, so the servicesEnabled house rule keeps the trajectories exact: Village
+  seed 1/777 and plain City seed 11 reproduce their D1 300-day `rngState` and
+  money to the byte, and the metropolis founder pins (24-30 firms / 0 insolvent)
+  hold both with the flag off (bit-identical) AND on (28/27/30, 0 insolvent).
+  Landlords are solvent across 300-day city+metropolis soaks, conservation exact;
+  commercial-lease yield is pinned at 15% (in the 12-18% band), residential
+  apartment yield measures much higher (~530-940%, inherent to the pinned $7k /
+  50-tenant apartment) and is reported honestly. Suite +8 (realEstate.test.ts).
+
 - **D1 — the firm archetype framework** (design HD5; see
   docs/design/firm-archetypes.md): the scaffold for specialist firms. Every AI
   firm today runs one loop — the shopkeeper's; landlords, holdcos, and service

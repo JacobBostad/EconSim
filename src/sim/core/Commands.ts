@@ -35,6 +35,13 @@ export type Command =
       firmId: FirmId;
       defId: FacilityDefId;
       location: Vec2;
+      /**
+       * Lease the premises from this landlord firm instead of buying it (HD4).
+       * The landlord fronts the build cost and collects daily rent; the builder
+       * pays $0 upfront and operates it. A firm can never lease from itself
+       * (`leaseFrom !== firmId`, rejected). Omit for an ordinary owned build.
+       */
+      leaseFrom?: FirmId;
     }
   | { type: 'SELECT_RECIPE'; facilityId: FacilityId; recipeId: RecipeId | null }
   | {

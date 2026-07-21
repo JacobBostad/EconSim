@@ -101,6 +101,20 @@ export interface SimulationConfig {
    * regardless (double-gated on sizePreset).
    */
   servicesEnabled: boolean;
+  /**
+   * Real-estate firms channel (Arc D2, HD4 — landlord archetype). Off by
+   * default, including for the plain city/metropolis presets whose founder/soak
+   * baselines (tierAcceptance bands, metropolis 24-30 founder pins / 0 insolvent)
+   * are pinned to exact rng trajectories. A landlord firm founding into the town
+   * changes firm balances, which reshuffle the cash-threshold short-circuits
+   * ahead of the operators' `rng.chance` draws — so the flag keeps the landlord
+   * archetype INERT in every pinned run (Village always; plain city/metropolis
+   * with the flag off) and is opted into by a City game, the real-estate probe,
+   * and its tests. This is the servicesEnabled house rule applied one level up.
+   * Village never runs it regardless (double-gated on sizePreset in the founder
+   * row). See docs/design/real-estate.md.
+   */
+  realEstateEnabled: boolean;
 }
 
 /**
@@ -195,6 +209,7 @@ export const DEFAULT_CONFIG: SimulationConfig = {
   maxCitizens: 80,
   sizePreset: 'village',
   servicesEnabled: false,
+  realEstateEnabled: false,
 };
 
 /** Difficulty presets: starting capital, news volatility, AI aggressiveness. */

@@ -12,11 +12,18 @@ export function BuildPanel(): React.ReactElement {
   const sim = useGameStore((s) => s.sim);
   const buildDefId = useGameStore((s) => s.buildDefId);
   const setBuildDef = useGameStore((s) => s.setBuildDef);
+  const leaseFromFirmId = useGameStore((s) => s.leaseFromFirmId);
+  const setLeaseFrom = useGameStore((s) => s.setLeaseFrom);
   const state = sim.getState();
   const player = getPlayerFirm(state);
   const cash = player?.cash ?? 0;
   const festivalRunning = state.worldEvents.some((ev) => ev.defId === 'festival');
   const defs = buildableDefs(state.config);
+  // Landlord firms the player can lease premises from (HD4) — pay $X/day instead
+  // of the build cost upfront. Only when the real-estate channel is on.
+  const landlords = state.config.realEstateEnabled
+    ? Object.values(state.firms).filter((f) => f.strategy.archetype === 'landlord' && f.id !== state.playerFirmId)
+    : [];
 
   return (
     <div>
@@ -27,8 +34,31 @@ export function BuildPanel(): React.ReactElement {
       </div>
       {buildDefId && (
         <div className="card small">
-          Placing <strong>{defs.find((d) => d.id === buildDefId)?.name}</strong>. Click an
-          empty spot on the map.
+          Placing <strong>{defs.find((d) => d.id === buildDefId)?.name}</strong>
+          {leaseFromFirmId ? (
+            <> — <strong>leased</strong> from {state.firms[leaseFromFirmId]?.name ?? 'landlord'} (rent, no upfront cost)</>
+          ) : null}. Click an empty spot on the map.
+          {landlords.length > 0 && (
+            <div style={{ marginTop: 6 }}>
+              <div className="small muted">Finance it:</div>
+              <button
+                className={`buildbtn ${!leaseFromFirmId ? 'active' : ''}`}
+                onClick={() => setLeaseFrom(null)}
+              >
+                Buy outright
+              </button>
+              {landlords.map((ll) => (
+                <button
+                  key={ll.id}
+                  className={`buildbtn ${leaseFromFirmId === ll.id ? 'active' : ''}`}
+                  onClick={() => setLeaseFrom(ll.id)}
+                  title="The landlord fronts the build cost; you pay daily rent instead."
+                >
+                  Lease from {ll.name}
+                </button>
+              ))}
+            </div>
+          )}
           <div style={{ marginTop: 6 }}>
             <button onClick={() => setBuildDef(null)}>Cancel</button>
           </div>

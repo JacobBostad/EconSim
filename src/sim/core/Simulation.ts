@@ -50,6 +50,7 @@ import { upgradeFacility } from './Upgrades';
 import { sellFacility } from './Demolition';
 import { performExport, performCityPurchase, pickBestCity } from './Trade';
 import { landCostMultiplier, landValueAt } from './LandValue';
+import { commercialLeaseAsk } from '../systems/ai/LandlordBehavior';
 import { placementBlocker } from './Placement';
 import { WHOLESALE_MULT_MIN, WHOLESALE_MULT_MAX } from './Wholesale';
 import type { Contract } from '../entities/Contract';
@@ -89,6 +90,7 @@ import { runAccountingSystem } from '../systems/AccountingSystem';
 import { runPayrollSystem } from '../systems/PayrollSystem';
 import { runRentSystem } from '../systems/RentSystem';
 import { runCrowdRentSystem } from '../systems/CrowdRentSystem';
+import { runCommercialRentSystem } from '../systems/CommercialRentSystem';
 import { runServiceBillingSystem } from '../systems/ServiceBillingSystem';
 import { runTownStatsSystem } from '../systems/TownStatsSystem';
 import { runCitizenScheduleSystem } from '../systems/CitizenScheduleSystem';
@@ -133,6 +135,7 @@ const SYSTEMS: SystemFn[] = [
   runAIFounderSystem, // ...and its unserved markets attract new rivals
   runRentSystem, // apartment rent (before accounting snapshots the day)
   runCrowdRentSystem, // crowd housing cost: the pool-drift sink + crowd-scale landlording (A3)
+  runCommercialRentSystem, // commercial-lease rent: operator -> landlord, firm-to-firm (HD4; no-op until leased)
   runServiceBillingSystem, // B2B compute: firm-to-firm seat bills + coverage boost (HD3; city+ & flag)
   runAccountingSystem, // maintenance + snapshot + reset daily accumulators
   runPayrollSystem,
@@ -724,6 +727,46 @@ export class Simulation {
     // Location economics: pricier ground (and rent) near the homes.
     const mult = landCostMultiplier(landValueAt(s, command.location));
     const cost = Math.round(def.buildCost * mult);
+
+    // Lease path (HD4): a landlord firm fronts the build cost, the builder pays
+    // $0 upfront and operates the premises for a daily rent. "Lease for $X/day
+    // instead of $Y upfront."
+    if (command.leaseFrom !== undefined) {
+      // SELF-LEASE BLOCK: a firm can never lease its own premises from itself
+      // (it would pay itself rent — money to nowhere).
+      if (command.leaseFrom === firm.id) {
+        emitEvent(s, 'warning', 'player', 'A firm cannot lease premises from itself.', firm.id);
+        return;
+      }
+      const landlord = s.firms[command.leaseFrom];
+      if (!landlord || (landlord.ownerType !== 'ai' && landlord.ownerType !== 'player')) {
+        emitEvent(s, 'warning', 'player', 'No such landlord to lease from.', firm.id);
+        return;
+      }
+      if (!canAfford(s, firmAccount(landlord.id), cost)) {
+        emitEvent(s, 'warning', 'player', `${landlord.name} can't finance this premises right now.`, firm.id);
+        return;
+      }
+      const fac = createFacility(s, command.defId, firm.id, command.location);
+      fac.buildCost = cost; // book value the landlord carries (yield basis)
+      fac.operatingCostPerDay = Math.round(def.maintenanceCostPerDay * mult);
+      fac.landlordFirmId = landlord.id;
+      fac.rentPerDay = commercialLeaseAsk(cost);
+      // The LANDLORD fronts the construction capital (it carries the asset).
+      recordTransaction(s, {
+        from: firmAccount(landlord.id),
+        to: WORLD_ACCOUNT,
+        amount: cost,
+        firmId: landlord.id,
+        category: 'buildSpend',
+        note: `Financed ${fac.name} for lease`,
+      });
+      emitEvent(s, 'success', 'player',
+        `Leased ${fac.name} from ${landlord.name} — ${formatMoney(fac.rentPerDay)}/day instead of ${formatMoney(cost)} upfront.`,
+        fac.id);
+      return;
+    }
+
     if (!canAfford(s, firmAccount(firm.id), cost)) {
       emitEvent(s, 'danger', 'player', `Cannot afford to build ${def.name} here (${formatMoney(cost)} with land premium).`, firm.id);
       return;

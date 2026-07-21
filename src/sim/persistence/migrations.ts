@@ -70,6 +70,7 @@ function normPeriod(p: Partial<AccountingPeriod> | undefined): AccountingPeriod 
     logisticsCost: p?.logisticsCost ?? 0,
     variableProductionCost: p?.variableProductionCost ?? 0,
     serviceExpense: p?.serviceExpense ?? 0,
+    rentExpense: p?.rentExpense ?? 0,
     marketing: p?.marketing ?? 0,
     rnd: p?.rnd ?? 0,
     interest: p?.interest ?? 0,
@@ -115,6 +116,11 @@ function normalize(state: GameState): GameState {
   // no contracts — inert until a new City game turns it on.
   state.config.servicesEnabled = state.config.servicesEnabled ?? false;
   state.serviceContracts = state.serviceContracts ?? {};
+  // Real-estate firms channel (Arc D2, HD4): saves predating it load with the
+  // channel off — no landlord ever founds until a City game turns it on.
+  state.config.realEstateEnabled = state.config.realEstateEnabled ?? false;
+  state.housingTightDays = state.housingTightDays ?? 0;
+  state.lastLandlordEntryDay = state.lastLandlordEntryDay ?? 0;
   state.districts = state.districts ?? defaultDistrictPartition(state.config);
   state.cohorts = state.cohorts ?? {};
   // Cohorts saved before the demand engine landed carry no urgency buckets;
@@ -181,6 +187,7 @@ function normalize(state: GameState): GameState {
     f.accounting.dailyHistory = (f.accounting.dailyHistory ?? []).map((d) => ({
       ...d,
       serviceExpense: d.serviceExpense ?? 0,
+      rentExpense: d.rentExpense ?? 0,
       marketing: d.marketing ?? 0,
       rnd: d.rnd ?? 0,
       interest: d.interest ?? 0,
@@ -192,6 +199,7 @@ function normalize(state: GameState): GameState {
     f.accounting.weeklyHistory = (f.accounting.weeklyHistory ?? []).map((d) => ({
       ...d,
       serviceExpense: d.serviceExpense ?? 0,
+      rentExpense: d.rentExpense ?? 0,
       marketing: d.marketing ?? 0,
       rnd: d.rnd ?? 0,
       interest: d.interest ?? 0,
