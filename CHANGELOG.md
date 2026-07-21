@@ -19,6 +19,44 @@ real City or Metropolis game switches the whole stack on together (crowd +
 districts + all three specialist channels); Village stays the classic,
 bit-identical, every-resident-simulated town.
 
+- **Metropolis becomes a New Game option** (beta): the biggest world scale — a
+  390×276 map, the 30-firm founder field, and the full 18-product catalog with
+  the deep C3 chains — was engine-only and soak-proven for unattended AI; it is
+  now playable from the New Game modal alongside Village and City.
+  `worldScaleConfig` (a pure helper the store and its tests share) wires the same
+  channels a City game does — crowd + services + landlords + trade-city demand
+  pools — with ONE deliberate omission: `investorsEnabled`, whose holdco founder
+  row is double-gated on `sizePreset === 'city'` (a live holdco reshuffles the
+  D3-measured crowd-tier bands), so the flag is a no-op at metropolis and is left
+  off rather than set to something inert. The player-facing audit
+  (docs/design/probes/metropolis-playability.ts, seeds 11/4/7, player flags on)
+  found the engine sound but the player's *foothold* thin: a standard $15k start
+  is $13k behind every one of the 25-30 AI rivals (each founds with the $28k
+  metropolis founderCash) on a map whose deep chains cost up to $11,200 to stand
+  up — one chain, no runway. Fix: a **player-only** metropolis cash uplift
+  (`METROPOLIS_PLAYER_START_CASH_BONUS`, +$13k) opening the player at $28k
+  founder-parity at standard (relaxed $38k / brutal $22k keep the gradient),
+  applied only on the store's New Game path so every probe/test/pin that builds
+  config directly stays byte-identical. Verified inert to the pinned AI
+  trajectory: rngState, the 24-30 founder count, and 0-insolvent are all
+  bit-identical across a $15k→$999k player-cash sweep (nothing in the
+  founder/strategy/finance scans reads the player firm's cash — they key off
+  profit base, marketCap, and employee/facility counts, all zero for the
+  do-nothing player firm). The other audit numbers came back healthy: **save
+  size** at day 300 is 2.7-3.2 MB, and a single autosave (default slot) SUCCEEDS
+  in real headless Chromium — verified with the actual serialized state, not a
+  quota estimate — so autosave does not silently fail; only the new-game-over-a-
+  late-metropolis case (default + backup, ~6.4 MB) trips `QuotaExceededError`,
+  which `saveGame` already catches (returns false, best-effort backup, no crash
+  or corruption of the live save). **Perf** is 0.30-0.34 ms/tick at day 300, ~3000
+  sustainable tps on one core — an order of magnitude over the 280 tps the 100×
+  speed asks for, so 100× runs at full speed. Village seeds 11/4/7 reproduce
+  their exact 300-day `rngState` (3274842624 / 2896139677 / 4253583594); the
+  metropolis founder pins pass untouched. Suite +6 (worldScaleConfig.test.ts:
+  village stays the classic difficulty config, City lights all four channels,
+  Metropolis wires services/realEstate/trade-pools with investors off and lands
+  the uplift on the real player firm at metropolis only); e2e +1 (metrosmoke.mjs,
+  the Metropolis boot smoke in the citysmoke idiom at a short horizon).
 - **E — the region seed** (design-forward; see docs/design/region.md): the
   roadmap's last arc opens the next axis — several towns sharing one world,
   trading with each other — as a *seed*, not the finished thing. The design doc

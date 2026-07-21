@@ -261,3 +261,75 @@ export function configForDifficulty(difficulty: Difficulty): SimulationConfig {
       return { ...DEFAULT_CONFIG, difficulty: 'standard' };
   }
 }
+
+/**
+ * Player-only metropolis starting-cash uplift (cents), added on top of the
+ * difficulty cash for a Metropolis New Game. The metropolis map is ~4.5× the
+ * village's area and its metropolis-only deep C3 chains cost up to $11,200 to
+ * stand up (vs the village catalog's $7,400 cheapest) — a standard $15k player
+ * could afford exactly one chain with no runway while every one of the 25-30 AI
+ * rivals founds with the $28k metropolis founderCash. The uplift opens the
+ * player at that same $28k parity at standard difficulty; relaxed/brutal keep
+ * their gradient above/below it (relaxed $38k, brutal $22k).
+ *
+ * PLAYER-ONLY, verified inert to the pinned AI trajectory: the
+ * metropolis-playability probe holds the day-300 rngState, the 24-30 founder
+ * count, and 0-insolvent bit-identical across a $15k→$999k player-cash sweep,
+ * because no founder/strategy/finance path reads the player firm's cash — those
+ * scans key off profit base, marketCap, and employee/facility counts, all zero
+ * for the do-nothing player firm. The bonus is therefore applied only on the
+ * store's New Game path (worldScaleConfig); probes/tests that build config
+ * directly stay byte-identical. (docs/design/probes/metropolis-playability.ts)
+ */
+export const METROPOLIS_PLAYER_START_CASH_BONUS = 13000 * 100;
+
+/**
+ * Compose the full SimulationConfig for a New Game from the modal's choices:
+ * difficulty knobs + challenge flag + town-size caps (bustling) + world-scale
+ * overrides. Pure, so the store and its tests share one source of truth for the
+ * wiring. City and Metropolis both switch on the crowd economy and the
+ * archetype/trade channels their founder baselines are gated for; Metropolis
+ * additionally lands the player-only cash uplift.
+ */
+export function worldScaleConfig(
+  difficulty: Difficulty,
+  challenge: boolean,
+  size: 'cozy' | 'bustling',
+  world: 'village' | 'city' | 'metropolis',
+): SimulationConfig {
+  const sizeOverrides =
+    size === 'bustling' ? { maxHomes: 80, maxCitizens: 160, mapHeight: 124 } : {};
+  let worldOverride: Partial<SimulationConfig> = {};
+  if (world === 'city') {
+    // City turns the whole stack on together (crowd + services + landlords +
+    // holdcos + trade pools) — the founder baselines are pinned with all four on.
+    worldOverride = {
+      sizePreset: 'city',
+      servicesEnabled: true,
+      realEstateEnabled: true,
+      investorsEnabled: true,
+      tradeDemandPoolsEnabled: true,
+    };
+  } else if (world === 'metropolis') {
+    // Metropolis wires every channel City does EXCEPT investorsEnabled: the
+    // holdco founder row is double-gated on sizePreset === 'city' (a live holdco
+    // reshuffles the D3-measured crowd-tier bands), so the flag is a no-op here —
+    // omitted rather than set to something inert. services + realEstate + trade
+    // pools all activate at metropolis (their gates are sizePreset !== 'village').
+    worldOverride = {
+      sizePreset: 'metropolis',
+      servicesEnabled: true,
+      realEstateEnabled: true,
+      tradeDemandPoolsEnabled: true,
+    };
+  }
+  const config: SimulationConfig = {
+    ...configForDifficulty(difficulty),
+    challengeMode: challenge,
+    ...sizeOverrides,
+    ...worldOverride,
+  };
+  // Player-only foothold uplift, added last so difficulty still orders the start.
+  if (world === 'metropolis') config.playerStartCash += METROPOLIS_PLAYER_START_CASH_BONUS;
+  return config;
+}

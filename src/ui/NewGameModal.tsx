@@ -47,7 +47,7 @@ export function NewGameModal(): React.ReactElement | null {
   const [seedText, setSeedText] = useState('');
   const [challenge, setChallenge] = useState(false);
   const [size, setSize] = useState<'cozy' | 'bustling'>('cozy');
-  const [world, setWorld] = useState<'village' | 'city'>('village');
+  const [world, setWorld] = useState<'village' | 'city' | 'metropolis'>('village');
 
   if (!show) return null;
   const records = loadRecords();
@@ -140,6 +140,14 @@ export function NewGameModal(): React.ReactElement | null {
             <div style={{ fontSize: 20 }}>🌆</div>
             <div style={{ fontWeight: 700 }}>City <span className="muted small">(beta)</span></div>
             <div className="small" style={{ opacity: 0.85 }}>City (beta): a crowd of hundreds — cohort economy beyond your named cast.</div>
+          </button>
+          <button
+            className={`difficulty-card ${world === 'metropolis' ? 'active' : ''}`}
+            onClick={() => setWorld('metropolis')}
+          >
+            <div style={{ fontSize: 20 }}>🏙️</div>
+            <div style={{ fontWeight: 700 }}>Metropolis <span className="muted small">(beta)</span></div>
+            <div className="small" style={{ opacity: 0.85 }}>Metropolis (beta): the biggest map, a field of up to 30 rival firms, and the full 18-product catalog with deep chains. Extra starting cash for the bigger board.</div>
           </button>
         </div>
         <label className="small" style={{ display: 'block', marginTop: 10 }}>
