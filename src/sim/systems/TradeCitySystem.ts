@@ -30,7 +30,11 @@ import {
   TRADE_POOL_REPLENISH_RATE,
   TRADE_POOL_SHORTAGE_THROTTLE,
 } from '../data/constants';
-import { poolConsumptionPerDay, poolTargetInventory } from '../data/tradePool';
+import {
+  poolConsumptionPerDay,
+  poolLocalProductionPerDay,
+  poolTargetInventory,
+} from '../data/tradePool';
 import { clamp } from '../../utils/clamp';
 import { getQuantity } from '../entities/Inventory';
 import { performExport, pickBestCity } from '../core/Trade';
@@ -50,15 +54,28 @@ export function runTradeCitySystem(ctx: SimContext): void {
 }
 
 /**
- * Arc E (opt-in): each trade city eats its daily ration and its own producers/
- * importers restock toward a target buffer — the net is a gentle pull of stock
- * back to target, so an export overhang (piled in at export time) works off over
- * ~a week and a shortfall refills. A pre-announced TENDER (annMult > 1 — a
- * demand crunch) throttles that restock, so the city's larder genuinely runs
- * down and the headline shock bites through real cover, not just the walk
- * center. The changed cover is read by cityPrice; this loop moves stock only —
- * no money, no shared rng, sorted-product iteration. Absent the pool (flag off)
- * it never runs — there is nothing to iterate.
+ * Arc E (opt-in): each trade city is TWO-SIDED. Every day it eats its ration
+ * (`drain`), its OWN producers make a fraction of that consumption (`localProd`
+ * — the step-2 supply side, unthrottled: the stub town's economy), and IMPORTS
+ * (the throttleable restock tender) cover only the REMAINING gap — the
+ * consumption production doesn't meet, plus the pull back to the target buffer.
+ *
+ * Imports never go negative (a city doesn't ship its own glut away — that would
+ * erase an export overhang the same day), so a deep overhang can only work off
+ * through consumption-minus-production: a port that SELF-SUPPLIES a good keeps
+ * its shelf full and a dump there lingers hard/long, while a port that IMPORTS
+ * it absorbs the dump fast — the specialization the arc is about. Equilibrium is
+ * untouched by the supply side: at inv = target with no tender, imports =
+ * (drain − localProd) exactly replaces the consumption production doesn't, so a
+ * seeded-at-target pool still quotes mult 1.0 day to day (only SHOCKED
+ * trajectories diverge from step 1). A pre-announced TENDER (annMult > 1)
+ * throttles the imports so the larder runs down and the headline shock bites
+ * through real cover — biting HARDEST on goods the city under-produces (it can't
+ * self-supply the shortfall) and barely on those it makes itself.
+ *
+ * The changed cover is read by cityPrice; this loop moves stock only — no money
+ * (production is the town's own economy, cash-free like consumption), no shared
+ * rng, sorted-product iteration. Absent the pool (flag off) it never runs.
  */
 function updatePools(ctx: SimContext): void {
   const { state } = ctx;
@@ -69,11 +86,13 @@ function updatePools(ctx: SimContext): void {
       const inv = pool.inventory[pid];
       if (inv === undefined) continue; // a product this city doesn't consume
       const drain = poolConsumptionPerDay(cid, pid);
+      const localProd = poolLocalProductionPerDay(cid, pid);
       const target = poolTargetInventory(cid, pid);
       const annMult = tradeAnnouncementMult(state, cid, pid, ctx.time.day);
       const throttle = annMult > 1 ? TRADE_POOL_SHORTAGE_THROTTLE : 1;
-      const restock = (drain + (target - inv) * TRADE_POOL_REPLENISH_RATE) * throttle;
-      pool.inventory[pid] = Math.max(0, inv - drain + restock);
+      const imports =
+        Math.max(0, drain - localProd + (target - inv) * TRADE_POOL_REPLENISH_RATE) * throttle;
+      pool.inventory[pid] = Math.max(0, inv - drain + localProd + imports);
     }
   }
 }

@@ -117,6 +117,7 @@ has used (`servicesEnabled`, `realEstateEnabled`, `investorsEnabled`, and now
 2. **Producing trade cities.** The pool gains a supply side (the partner town
    produces some of what it consumes; exports fill the *gap*, not the whole
    larder). Still a stub economy — no map, no agents — but a two-sided one.
+   *Shipped — see "What ships now — producing trade cities (step 2)" below.*
 3. **The `Town` struct.** The single-town `GameState` becomes
    `state.towns = { home: Town }` — a **one-town region** that must reproduce
    today's pinned runs to the byte (the migration is "wrap the existing records
@@ -281,3 +282,135 @@ spike and a drained larder are different signals and can fire independently.
   300-day `rngState`; city seed 11 reproduces its `rngState` and money supply;
   the full suite is green. The only serialized delta anywhere is the new
   `tradeDemandPoolsEnabled: false` config line.
+
+## What ships now — producing trade cities (step 2)
+
+Step 1 gave each opt-in trade city a **consumption** pool; step 2 makes it
+**two-sided**: the partner town now *produces* a fraction of what it consumes,
+so **exports fill the GAP its production leaves, not the whole larder.** The
+result is genuine specialization — a port's export market DEEPENS in what it
+under-produces and SHRINKS in what it self-supplies.
+
+### The model (one daily update, in `TradeCitySystem.updatePools`)
+
+Every day, per pooled product: the city eats its ration (`drain`), its own
+producers add `localProd` (a fixed FRACTION of `drain`, **unthrottled** — the
+stub town's own economy), and **imports** (the throttleable restock tender)
+cover only the remaining gap:
+
+```
+imports = max(0, (drain − localProd) + (target − inv) × REPLENISH_RATE) × throttle
+inv'    = max(0, inv − drain + localProd + imports)
+```
+
+Two properties fall out and are load-bearing:
+
+- **Equilibrium is untouched.** At `inv = target` with no tender, `imports =
+  (drain − localProd)` exactly replaces the consumption production doesn't, so
+  `inv' = inv` and the quote stays on the bare walk (mult 1.0). A seeded-at-
+  target pool therefore quotes **identically to step 1 day-to-day** — only
+  *shocked* trajectories diverge. This is why step 2 disturbs no standing price.
+- **A deep overhang can only work off through `drain − localProd`.** When the
+  larder is far over target the gap-pull term drives `imports` to its zero floor
+  (a city doesn't ship its own glut away), so the surplus drains at
+  consumption-minus-production. A good the port SELF-SUPPLIES (high `localProd`)
+  lingers hard and long; a good it IMPORTS (low `localProd`) is absorbed fast.
+
+Production is data on each city def (`productionByProduct`), read at the same
+needSpec spec-midpoints consumption is — **deterministic, no rng, holds no
+money** (the town's own economy, same rationale as consumption). Flag-off there
+is no pool, so `updatePools` never runs and the book stays byte-identical.
+
+### Per-city production profiles (fraction of own consumption produced locally)
+
+The two ports mirror each other, respecting the existing `cityBias` flavor —
+Port Rosa (🚢) food-leaning, Ironvale (🚂) industrial:
+
+| product | category | Port Rosa | Ironvale |
+| --- | --- | --- | --- |
+| bread | food | **0.85** | 0.20 |
+| coffee | food | 0.75 | 0.25 |
+| meals | food | 0.75 | 0.25 |
+| pastries | luxury | 0.55 | 0.30 |
+| wine | luxury | 0.55 | 0.25 |
+| clothes | apparel | 0.20 | 0.75 |
+| shoes | apparel | 0.20 | 0.75 |
+| tools | durable | **0.15** | 0.85 |
+| furniture | durable | 0.20 | 0.80 |
+| appliances | durable | 0.15 | 0.80 |
+| jewelry | luxury | 0.20 | 0.75 |
+
+Fractions are held below 1.0 by design — a port is at most self-sufficient,
+never a net exporter, so a dump can always work off (just slowly where its own
+output keeps refilling). Read as: **each port is hungry for the other's
+specialty.** Port Rosa's deep import markets are tools/apparel/finery (it makes
+almost none); Ironvale's is food (bread/coffee/meals). Those are the products
+whose cover runs chronically thin and whose desk chip shows a persistent 🔥.
+
+### The specialization (measured — trade-pool-production probe, City, seed 11)
+
+Dump 50% of a port's target buffer on it and time how long the overhang holds
+(cover works back within 5% of target; walk held at center to isolate the pool):
+
+| dumped good | Port Rosa (self/import) | Ironvale (self/import) |
+| --- | --- | --- |
+| **bread** | 85% made → overhang **~23 days** | 20% made → **~18 days** |
+| **tools** | 15% made → overhang **~18 days** | 85% made → **~23 days** |
+
+Same `d0` discount (0.667× — the dump is the same fraction of target), but the
+good the port MAKES lingers ~5 days longer. Each port holds its own specialty's
+glut and absorbs the other's — the mirror.
+
+**Under a tender** (annMult 1.5, 6 days, same city Port Rosa) the gap-only
+imports let production shield the self-supplied good while the imported one
+starves: bread (85% made) drains only to **1.12×** cover-mult (inv 0.90×
+target), tools (15% made) starves to the **1.55× clamp** (inv 0.41× target).
+The headline shock bites hardest exactly where the port can't self-supply.
+
+### Overhang curves — before/after the supply side (dump 500 bread, Port Rosa)
+
+Port Rosa now grows 85% of its own bread, so a bread dump overhangs harder AND
+longer than step 1's import-only pool:
+
+- **Walk only (pre-Arc-E):** slams the 0.60× floor, then the walk bounces it
+  noisily (0.60 → 0.66 → 0.70 → 0.74 → … non-monotonic).
+- **Step 1 (import-only pool):** 0.74× → 0.91× over 10 days, monotonic.
+- **Step 2 (producing pool):** **0.737× → 0.889×** over 10 days — a shallower
+  recovery (its own bakers keep refilling), and size sensitivity stretches:
+  200u depressed **~8d**, 500u **~17d**, 1000u **~25d**, 1500u **~25d** (step 1
+  was ~8 / ~15 / ~21 / ~24 — every dump lingers longer on the food-rich port).
+
+### Surface (step 2 adds nothing new — deliberate)
+
+The specialization is already visible in step 1's cover chips: a port chronically
+thin on a good it under-produces shows a persistent 🔥, and the advisor's cover
+nudge points the player at shipping into it. Both read `poolCoverDays` off the
+same pool — with production live they simply carry a *truer* signal (Ironvale's
+food chip and Port Rosa's tools chip now sit thin structurally, not by chance).
+No new panel, no "local vs imported" share label: the honest minimal surface is
+the one already there. Verified: the desk chips and advisor hint stay sensible
+flag-on and inert flag-off (no pool ⇒ nothing to read).
+
+### Measured (flag-on drift and conservation)
+
+- **playtestV8 (seed 11) re-pinned honestly.** The bot dumps a staple onto
+  food-rich Port Rosa, which now self-supplies 85% of its bread — so each dump
+  overhangs harder and the play is genuinely less lucrative. Net worth day-250:
+  **$60.0k → $62.8k (+$2.8k)**, down from step 1's +$8.2k (the AI's exports feed
+  the same two-sided pools, so cross-firm valuations drift too); still solvent,
+  still a materially larger book, still conserved to the cent. Floor re-pinned to
+  **+$1.5k** with the measured cause documented in the test — the band tracks the
+  new regime, it is not widened to hide it. All six legs still fire (lease rent
+  $194, forward −$16.85, salvage $1,584, three pool exports moving cover — all
+  bit-identical to step 1).
+- **Equilibrium & standing prices:** a seeded-at-target City pool quotes the bare
+  walk on every product for 8 days running (test) — step 2 drifts no standing
+  price, which is why the pinned city/village baselines are untouched.
+- **Conservation:** money invariant across 20 days of pure production/consumption/
+  import churn (production books no transaction) and across a pooled export.
+- **Determinism:** two seed-7 producing-pool runs agree bit-for-bit (inventory,
+  rngState, full serialized state).
+- **Pinned baselines (flag off) hold unchanged:** village seeds 11/4/7 reproduce
+  `rngState` 3274842624 / 2896139677 / 4253583594; city seeds 11/4/7 reproduce
+  their `rngState`; the production data lives on the def but never runs without a
+  pool, so the serialized book is free of any pool key. Full suite green (551).

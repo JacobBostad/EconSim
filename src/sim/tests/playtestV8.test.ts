@@ -274,11 +274,18 @@ describe('Scripted 250-day playtest (bot v8, archetype/City era)', () => {
 
     // The absolutes hold no matter which legs played: the whole run conserves to
     // the cent, the player never entered receivership, net worth grew meaningfully
-    // ($60.0k → $68.2k, +$8.2k; floor at +$3k), and the heaviest bot (all City
+    // ($60.0k → $62.8k, +$2.8k; floor at +$1.5k), and the heaviest bot (all City
     // channels live) stays well inside the perf guard (measured 0.35 ms/tick).
+    // Re-pinned for Arc E step 2 (producing trade cities): the bot dumps a staple
+    // onto FOOD-RICH Port Rosa, which now grows 85% of its own bread, so its own
+    // output keeps the shelf full and each dump overhangs harder/longer — a
+    // genuinely less lucrative play than dumping on an importer, exactly the
+    // specialization the step is about (was +$8.2k when the port imported
+    // everything; the AI's exports feed the same two-sided pools, so cross-firm
+    // valuations drift too). Still solvent, still a materially larger book.
     expect(totalMoneySupply(state)).toBe(supply0);
     expect(player.bankruptcyStatus).toBe('healthy');
-    expect(netWorth).toBeGreaterThan(netWorth0 + 3000_00);
+    expect(netWorth).toBeGreaterThan(netWorth0 + 1500_00);
     expect(state.perf.avgTickMs).toBeLessThan(2);
 
     // Each channel's artifact is asserted only if the channel actually played;
@@ -303,7 +310,8 @@ describe('Scripted 250-day playtest (bot v8, archetype/City era)', () => {
     }
 
     // C2 — a compute subscription was opened at a reasonable price, billed
-    // ($24.81 lifetime), and the coverage boost landed (serviceBoost 1.06).
+    // ($2,481 lifetime — integer cents), and the coverage boost landed
+    // (serviceBoost 1.06).
     if (computeContractId !== null) {
       expect(serviceSpend).toBeGreaterThan(0);
       expect(player.serviceBoost).toBeGreaterThan(1);
@@ -312,7 +320,7 @@ describe('Scripted 250-day playtest (bot v8, archetype/City era)', () => {
     }
 
     // B2 — a dividend stake in the fattest-yield healthy rival (firm_6, 5%) that
-    // actually paid: $24.65 of dividend income booked (player parity with the
+    // actually paid: ~$2,465 of dividend income booked (player parity with the
     // holdco path).
     if (stakeTarget !== null) {
       expect(player.sharesHeld[stakeTarget] ?? 0).toBeGreaterThanOrEqual(5);

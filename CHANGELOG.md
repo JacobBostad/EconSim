@@ -193,6 +193,36 @@ bit-identical, every-resident-simulated town.
   pinned-baseline gate (no pool key with the flag off, classic one-tick path
   intact), pool seeding/quote parity, multi-day overhang, starvation premium,
   conservation, determinism, save round-trip. Full suite green (507 tests).
+  **Step 2 — producing trade cities** (region.md migration step 2): the pool
+  gains a SUPPLY side. Each city def carries a `productionByProduct` profile —
+  per consumer product, the fraction of its own consumption it makes locally —
+  and `updatePools` adds that local output every day (unthrottled, the stub
+  town's own economy), so IMPORTS (the throttleable restock tender) now cover
+  only the remaining GAP: `imports = max(0, (drain − localProd) + gap×rate) ×
+  throttle`. Equilibrium is untouched (at target, imports exactly replace the
+  consumption production doesn't, so a seeded-at-target pool quotes the bare walk
+  day-to-day — no standing price drifts, the pins hold), but a deep overhang can
+  only work off through consumption-minus-production, so the two ports genuinely
+  SPECIALIZE: Port Rosa (🚢, food-leaning) grows 85% of its own bread and 15% of
+  its tools; Ironvale (🚂, industrial) mirrors it (20% bread / 85% tools). A city's
+  export market DEEPENS where it under-produces (chronically thin cover, a
+  standing premium — Ironvale food, Port Rosa tools) and SHRINKS where it
+  self-supplies (its output keeps the shelf full, so a dump overhangs harder AND
+  longer). Deterministic, cash-free (production books no transaction), sorted
+  iteration, inert flag-off. Measured (probe, City, seed 11): a same-fraction dump
+  lingers ~23d on the port that MAKES the good vs ~18d on the importer (both
+  d0 0.667×); under one tender the under-produced good starves to the 1.55× clamp
+  while the self-supplied one holds at 1.12×; 500-bread overhang on food-rich Port
+  Rosa now 0.737×→0.889× over 10d (size sensitivity 200u→~8d / 500u→~17d /
+  1000u→~25d, all longer than step 1). No new surface — the cover chips already
+  carry the specialization (a thin 🔥 on an under-produced good). playtestV8 (seed
+  11) re-pinned honestly: net worth $60.0k→$62.8k (+$2.8k, was +$8.2k — dumping a
+  staple on food-rich Port Rosa is now genuinely less lucrative, and the AI's
+  exports feed the same pools), floor +$1.5k, still solvent/conserved, all six
+  legs fire. Suite +6 (production determinism, equilibrium-holds, specialization
+  spread, gap-only tendering, cash-free conservation, flag-off inertness). Village
+  seeds 11/4/7 and city seeds 11/4/7 reproduce their `rngState` untouched. Full
+  suite green (551 tests).
 - **D2 — real-estate firms** (design HD4; see docs/design/real-estate.md): the
   first live specialist archetype. `ai/LandlordBehavior` runs the `landlord`
   dispatcher row — a firm whose whole business is developing and renting housing:

@@ -117,9 +117,12 @@ export const TRADE_GLUT_MULT = 0.7;
  * lands ~3-4 extra days of cover, a clear multi-day discount without pegging the
  * band (probe: overhang decays ~0.78×→1.0 over ~7 days). */
 export const TRADE_POOL_TARGET_COVER_DAYS = 6;
-/** Daily fraction of the gap to target the city's own producers/importers close.
- * 0.12 sets an overhang half-life of ln2/0.12 ≈ 5.8 days — a dump depresses the
- * quote for the better part of a week, then heals (probe overhang curve). */
+/** Daily fraction of the gap to target the city's IMPORTS close (on top of the
+ * consumption its own production doesn't meet — Arc E step 2). 0.12 sets the
+ * near-target overhang half-life at ln2/0.12 ≈ 5.8 days; a DEEP overhang instead
+ * drains at consumption-minus-production (imports clamp to zero — no city ships
+ * its glut away), so a good the port SELF-SUPPLIES lingers far longer than one it
+ * imports. See TradeCitySystem.updatePools and the trade-pool probe overhang arm. */
 export const TRADE_POOL_REPLENISH_RATE = 0.12;
 /** Price elasticity to the cover ratio (target stock / actual stock). 1.0 is
  * unit-elastic — a constant-expenditure demand curve, quote ∝ 1/stock — so a
