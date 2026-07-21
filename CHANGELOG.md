@@ -1029,6 +1029,30 @@ hireable managers, a real commodity market, and shared daily play.
 
 ## Infrastructure
 
+- **Playtest bot v8** guards the archetype/world-scale era: a 250-day scripted
+  City run (all era flags on — services, real estate, investors, trade pools)
+  that plays the channels only a full City has. A self-managing bread chain
+  funds a competent player who: leases a store premises from a founded landlord
+  ($0 upfront, rent billed daily — D2); subscribes to a compute provider once it
+  quotes reasonably and takes the coverage boost (C2); takes a dividend stake in
+  the fattest-yield healthy rival, player-parity with the holdco loop (B2); locks
+  a forward on a bread spike and closes it early at the mark (B3 — the round trip
+  realizes a small LOSS by design: closeForward releases the signing hedge before
+  marking, so sign-then-close nets the spread it paid; the bot asserts the ledger
+  truth, not a win);
+  exports a staple into Port Rosa's demand pool, moving its cover (Arc E); and
+  sells the warehouse back for salvage. Entry timing is polled, never hardcoded
+  (the landlord founds ~day 56, providers/pool exist from day 0 — the citysmoke
+  idiom); a leg that genuinely can't play logs a SKIP and the rest still assert.
+  Seed 11 is pinned (the canonical City bit-identity seed; probed 11/4/7, all
+  play every leg). Measured day-250 scorecard (seed 11): net worth $60.0k→$68.2k
+  (+$8.2k), solvent, lease rent $194 billed, compute $2,481 billed + 1.06× boost,
+  a 5% firm_6 stake paying $2,465 in dividends, a forward closed at −$16.85
+  realized (settlement − fee, off the ledger), 3 pool
+  exports (cover 1.00→0.91), a $1,584 salvage refund, money conserved to the
+  cent, 0.35 ms/tick. Floors pinned well under those values (the v7 convention).
+  Suite +1 (511 tests). Zero sim-source changes — a test/probe slice.
+
 - **Playtest bot v7** guards the pillar era end-to-end through the command
   surface: a 200-day scripted run whose store is never priced by hand — a
   hired manager runs it — with an executive logistics desk, R&D into an
