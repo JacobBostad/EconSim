@@ -12,10 +12,16 @@ import { firmAccount, WORLD_ACCOUNT } from './Transactions';
 import type { FirmId, FacilityId, ProductId } from './Id';
 import { getProduct } from '../data/products';
 import { getQuantity, removeStock, addStock, totalUnits } from '../entities/Inventory';
-import { EXPORT_FREIGHT_FEE, TRADE_PRICE_MIN_MULT, TRADE_PRICE_MAX_MULT } from '../data/constants';
+import {
+  EXPORT_FREIGHT_FEE,
+  TRADE_PRICE_MIN_MULT,
+  TRADE_PRICE_MAX_MULT,
+  TRADE_POOL_TARGET_COVER_DAYS,
+  TRADE_POOL_THIN_COVER_DAYS,
+} from '../data/constants';
 import { worldTransportMult } from '../data/worldEvents';
 import { getTradeCity, TRADE_CITY_IDS, cityBias, type TradeCityId } from '../data/tradeCities';
-import { poolCoverMult } from '../data/tradePool';
+import { poolCoverMult, poolCoverDays } from '../data/tradePool';
 
 /**
  * Price impact: trading against a city MOVES its quote — buying pushes the
@@ -235,7 +241,23 @@ export function performExport(
   // reasoning as the purchase path (review blocker: a city-level guard
   // silently exempted raw exports from ALL impact). Either way it softens.
   if (state.tradeCities[cityId]?.pool?.inventory[productId] !== undefined) {
-    feedPool(state, cityId, productId, qty);
+    // Read the pool's cover for this product BEFORE the ship, then feed it. Only
+    // the player's own reads-the-ports action is tallied (missions/achievements):
+    // shipping into a THIN port (cover under the 🔥 bar) teaches the read, and an
+    // export that lifts a thin port back over its target buffer is the restore.
+    // AI exports never touch these counters. Structurally inert flag-off (no pool).
+    if (firmId === state.playerFirmId) {
+      const invBefore = state.tradeCities[cityId]!.pool!.inventory[productId]!;
+      const coverBefore = poolCoverDays(cityId, productId, invBefore);
+      feedPool(state, cityId, productId, qty);
+      const coverAfter = poolCoverDays(cityId, productId, state.tradeCities[cityId]!.pool!.inventory[productId]!);
+      if (coverBefore < TRADE_POOL_THIN_COVER_DAYS) state.poolFeedsWhileThin += 1;
+      if (coverBefore < TRADE_POOL_TARGET_COVER_DAYS && coverAfter >= TRADE_POOL_TARGET_COVER_DAYS) {
+        state.poolCoversRestored += 1;
+      }
+    } else {
+      feedPool(state, cityId, productId, qty);
+    }
   } else {
     applyPriceImpact(state, cityId, productId, qty, -1);
   }

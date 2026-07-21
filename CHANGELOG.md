@@ -19,6 +19,37 @@ real City or Metropolis game switches the whole stack on together (crowd +
 districts + all three specialist channels); Village stays the classic,
 bit-identical, every-resident-simulated town.
 
+- **World-scale era missions + achievements — the guided tour of the specialist
+  economy.** Every prior era shipped its own mission chain and achievement set
+  (coffee/apartments, wholesale, the four pillars); the world-scale era had none,
+  so a City player discovered leases, compute, stakes, forwards-at-mark, and pool
+  exports only by accident. Now: **five era missions** appended to the chain —
+  *Lease, Don't Buy* (open a premises via `leaseFrom`), *Plug In* (subscribe a
+  facility-owning firm to compute), *Own a Piece* (buy a rival stake), *Read the
+  Ports* (ship a staple into a port whose larder is under the 🔥 thin bar), and
+  the *Four Streams* capstone (hold retail + a lease/rent stream + a dividend
+  stake + a live compute boost at once) — and **six era achievements**: first
+  lease signed, full compute coverage, a forward closed at the mark (any P&L), a
+  3-stake portfolio, a landlord's repossession collected, and a thin port fed
+  back to target cover. **Gating keeps Village byte-identical:** each mission
+  carries an `eligible(state)` predicate reading its channel's config flag (OFF
+  at Village preset), and `activeMission` skips an ineligible def — so an era
+  mission never becomes active in a Village game and its serialized mission list
+  is unchanged; each achievement check gates on the same flag/preset first (the
+  `town_lifted`/`mill_country` idiom) and returns false in Village even with the
+  condition forced. Four lifetime player-action tallies feed the counter-based
+  entries (the `deskTrades` idiom, never read by any sim branch): `forwardsClosed`
+  (ForwardSystem `closeForward`), `poolFeedsWhileThin` / `poolCoversRestored`
+  (Trade `performExport`, computed from pool cover before/after a player ship),
+  and `landlordRepossessions` (BankruptcySystem's repossession rung) — all inert
+  flag-off (no pool/lease exists) and none touching the shared rng, so the
+  Village seed 11/4/7 rngState pins and every pinned City/Metropolis baseline are
+  untouched to the byte. Tests: each era mission completes when its condition is
+  met and not before (driven in a City sim through the real command paths — lease,
+  subscribe, export, forward close, repossession — the playtestV8 idiom), each
+  achievement fires once and is provably inert in Village, and the golden-save +
+  determinism suites still pin Village/City serialization bit-for-bit. Suite +14
+  (missions +6, achievements +8, now 545).
 - **D2 follow-up — the repossession rung + AI operator leasing** (design HD4; see
   docs/design/real-estate.md). Closes the two holes the D2 review flagged. **(1)
   Repossession rung.** When a tenant's insolvency would CLOSE a leased premises

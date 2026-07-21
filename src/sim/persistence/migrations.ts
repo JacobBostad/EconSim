@@ -105,6 +105,13 @@ function normalize(state: GameState): GameState {
   state.facilityOffer = state.facilityOffer ?? null;
   state.fireSalesBought = state.fireSalesBought ?? 0;
   state.deskTrades = state.deskTrades ?? 0;
+  // World-scale era player-action tallies (missions/achievements): saves
+  // predating them load at 0 and stay inert until a City/Metropolis game turns
+  // the underlying channels on.
+  state.forwardsClosed = state.forwardsClosed ?? 0;
+  state.poolFeedsWhileThin = state.poolFeedsWhileThin ?? 0;
+  state.poolCoversRestored = state.poolCoversRestored ?? 0;
+  state.landlordRepossessions = state.landlordRepossessions ?? 0;
   state.emigrationPressure = state.emigrationPressure ?? 0;
   state.emigrationDepartures = state.emigrationDepartures ?? 0;
   state.marketGapDays = state.marketGapDays ?? {};

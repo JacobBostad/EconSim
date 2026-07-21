@@ -250,5 +250,9 @@ function repossessLeasedFacility(ctx: SimContext, tenantId: string, facilityId: 
     `${landlord.name} repossessed ${fac.name} from ${tenant.name} after its insolvency.`,
     landlordId,
   );
+  // Landlord-side tally for the landlord_repossession achievement: the player
+  // fronted a premises' capital and got the asset back when its tenant folded.
+  // Only when the PLAYER is the collecting landlord; inert flag-off (no leases).
+  if (landlordId === state.playerFirmId) state.landlordRepossessions += 1;
   return true;
 }

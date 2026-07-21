@@ -187,6 +187,26 @@ export interface GameState {
   /** Lifetime commodity-desk purchases from the trade cities (missions). */
   deskTrades: number;
   /**
+   * World-scale era player-action tallies (missions/achievements). Each is a
+   * plain lifetime counter incremented only on the PLAYER's action, the
+   * deskTrades idiom — never read by any sim branch, so they perturb no
+   * trajectory. All four are structurally inert in Village: pools and leases
+   * only exist with their flags on (off at Village preset), and while a Village
+   * player CAN close a forward, the era achievement that reads `forwardsClosed`
+   * is itself preset-gated, so the count is never consulted there. Default 0.
+   */
+  /** Forwards the player closed early at the mark (any P&L) — closed_forward. */
+  forwardsClosed: number;
+  /** Player spot-exports shipped into a pool city whose cover was below the thin
+   * bar (TRADE_POOL_THIN_COVER_DAYS) at ship time — the read_ports mission. */
+  poolFeedsWhileThin: number;
+  /** Player spot-exports that lifted a pool product from below its target cover
+   * (TRADE_POOL_TARGET_COVER_DAYS) to at-or-above it — pool_restored. */
+  poolCoversRestored: number;
+  /** Premises the player-as-LANDLORD repossessed from an insolvent tenant (the
+   * landlord side of the repossession rung) — landlord_repossession. */
+  landlordRepossessions: number;
+  /**
    * Consecutive days the town has met the emigration misery bar (worker-heavy
    * AND deeply unsatisfied). Past the grace period families start leaving;
    * a single day above the bar resets it to zero.

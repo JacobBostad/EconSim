@@ -160,6 +160,14 @@ export function closeForward(state: GameState, firmId: FirmId, forwardId: string
   }
   emitEvent(state, mark >= 0 ? 'success' : 'info', 'finance',
     `${city.emoji} ${firm.name} closed its ${fwd.quantity} ${product.name} forward to ${city.name} at mark — ${formatMoney(mark)} P&L (${formatMoney(fee)} fee).`, firmId);
+  // Player-only tally for the closed_forward achievement (any P&L — the skill is
+  // closing at the mark, not the sign of the settlement). Preset-gated so the
+  // counter's Village inertness is STRUCTURAL like its three era siblings, not
+  // resting on "the pinned Village scripts happen not to close forwards"
+  // (review note); the achievement that reads it is city-scale anyway.
+  if (firmId === state.playerFirmId && state.config.sizePreset !== 'village') {
+    state.forwardsClosed += 1;
+  }
   return true;
 }
 
