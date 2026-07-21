@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useGameStore } from '../store/useGameStore';
 import type { Difficulty } from '../sim/core/SimulationConfig';
 import { loadRecords, dailySeed } from './records';
-import { SCENARIOS, DEFAULT_SCENARIO_ID } from '../sim/data/scenarios';
+import { SCENARIOS, DEFAULT_SCENARIO_ID, scenariosForWorld } from '../sim/data/scenarios';
 import { formatMoney } from '../utils/formatMoney';
 
 interface Preset {
@@ -60,6 +60,25 @@ export function NewGameModal(): React.ReactElement | null {
     newGame(seed, difficulty, scenarioId, challenge, size, world);
   };
 
+  // Scenarios and world scale are orthogonal pickers, but a scenario authored FOR
+  // the world-scale era (worldScale set) is only coherent at that scale — so it is
+  // shown ONLY when its world is chosen and never appears in the Village flow. A
+  // classic (untagged) scenario composes at any scale and always shows.
+  const visibleScenarios = scenariosForWorld(world);
+
+  // Selecting a world-tagged scenario snaps the world picker to match; switching
+  // the world away from a tagged scenario's scale drops back to the default town,
+  // so the two pickers can never disagree.
+  const pickScenario = (sc: (typeof SCENARIOS)[string]): void => {
+    setScenarioId(sc.id);
+    if (sc.worldScale && sc.worldScale !== world) setWorld(sc.worldScale);
+  };
+  const pickWorld = (w: 'village' | 'city' | 'metropolis'): void => {
+    setWorld(w);
+    const sc = SCENARIOS[scenarioId];
+    if (sc?.worldScale && sc.worldScale !== w) setScenarioId(DEFAULT_SCENARIO_ID);
+  };
+
   return (
     <div className="intro-backdrop" onClick={() => setShow(false)}>
       <div className="intro-card" onClick={(e) => e.stopPropagation()}>
@@ -83,11 +102,11 @@ export function NewGameModal(): React.ReactElement | null {
         </div>
         <div className="section-title">Town</div>
         <div className="row" style={{ gap: 8, alignItems: 'stretch' }}>
-          {Object.values(SCENARIOS).map((sc) => (
+          {visibleScenarios.map((sc) => (
             <button
               key={sc.id}
               className={`difficulty-card ${scenarioId === sc.id ? 'active' : ''}`}
-              onClick={() => setScenarioId(sc.id)}
+              onClick={() => pickScenario(sc)}
             >
               <div style={{ fontSize: 20 }}>{sc.icon}</div>
               <div style={{ fontWeight: 700 }}>{sc.name}</div>
@@ -127,7 +146,7 @@ export function NewGameModal(): React.ReactElement | null {
         <div className="row" style={{ gap: 8, alignItems: 'stretch' }}>
           <button
             className={`difficulty-card ${world === 'village' ? 'active' : ''}`}
-            onClick={() => setWorld('village')}
+            onClick={() => pickWorld('village')}
           >
             <div style={{ fontSize: 20 }}>🏘️</div>
             <div style={{ fontWeight: 700 }}>Village</div>
@@ -135,7 +154,7 @@ export function NewGameModal(): React.ReactElement | null {
           </button>
           <button
             className={`difficulty-card ${world === 'city' ? 'active' : ''}`}
-            onClick={() => setWorld('city')}
+            onClick={() => pickWorld('city')}
           >
             <div style={{ fontSize: 20 }}>🌆</div>
             <div style={{ fontWeight: 700 }}>City <span className="muted small">(beta)</span></div>
@@ -143,7 +162,7 @@ export function NewGameModal(): React.ReactElement | null {
           </button>
           <button
             className={`difficulty-card ${world === 'metropolis' ? 'active' : ''}`}
-            onClick={() => setWorld('metropolis')}
+            onClick={() => pickWorld('metropolis')}
           >
             <div style={{ fontSize: 20 }}>🏙️</div>
             <div style={{ fontWeight: 700 }}>Metropolis <span className="muted small">(beta)</span></div>

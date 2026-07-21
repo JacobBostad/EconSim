@@ -46,6 +46,27 @@ bit-identical, every-resident-simulated town.
   City cast-parity mechanism"). The next attempt needs a cast-shopping model that
   grants an extra restocked-shelf VISIT, not deeper single-visit baskets — a
   scheduling change, not a demand constant.
+- **Grand Junction — the first scenario authored for the world-scale era.** Every
+  authored town (Meadowbrook, Port Haven, Mill Country, Boomtown Flats, Dust
+  Hollow…) is village-scale; the City era had no scenario showing it off. Grand
+  Junction is a City-only start (worldScale-tagged, so the New Game picker offers
+  it only when City is chosen and never in the Village flow — the two orthogonal
+  pickers snap together): two entrenched giants hold bread and tools, a thin
+  boutique keeps clothes barely supplied, and 16 homes peg occupancy so a landlord
+  breaks ground ~day 56 — while the datacenter hums from day 0 and a holdco shows
+  up for the yields. The plumbing already composed (createInitialState takes
+  scenario × config independently; the default Meadowbrook + City IS the pinned
+  City baseline), so this is data only — no new systems, no createInitialState
+  rework, the worldScaleConfig path untouched. Probed 300d × seeds 11/4/7 against
+  the City baseline: 16-18 firms with zero insolvencies, worker band ~.67-.71,
+  cast satisfaction 53-58, pool drift 0.3-1.0/cap/day (under the cohortRent
+  guard's 2.00 bar), money conserved to the cent — the honest first cut (14 homes
+  + a missing staple) pushed drift and satisfaction OUT of the norms and was
+  softened to 16 homes + all staples supplied until it held. A scripted 200-day
+  operator building into the underserved bread market grows its book +$9-27k with
+  every era channel (compute, landlord lease, dividend stake) firing. Suite +9
+  (scenario load/run/round-trip/gating + the viability run);
+  `docs/design/probes/grand-junction.ts` carries the balance tables.
 
 - **World-scale era missions + achievements — the guided tour of the specialist
   economy.** Every prior era shipped its own mission chain and achievement set

@@ -389,6 +389,18 @@ uplift ($28k at standard, AI-founder parity) for the bigger board and pricier
 chains. City and Metropolis are beta; Village stays the reference world the
 determinism and conservation guarantees are pinned against.
 
+The first scenario authored *for* this era is **🌆 Grand Junction** — a City-only
+town (it appears in the New Game scenario picker only when City is selected, never
+in the Village flow) where the crowd, the datacenter, and a housing squeeze that
+summons a landlord within weeks are all live from the start. Two entrenched giants
+hold bread and tools and a struggling boutique clings to clothes, but the city is
+far bigger than they can serve — roughly a third of every staple goes unmet, and
+that underserved volume is the newcomer's opening while rent, seats, and stakes
+already flow. Probed 300 days × three seeds: the founder fills to the City cap
+with zero insolvencies, the crowd-tier bands sit inside the City norms, money
+conserves to the cent, and a scripted operator building into the bread market
+grows its book +$9-27k over 200 days (pinned by the viability test in `src/sim/tests/grandJunction.test.ts`; the 300-day town balance lives in `docs/design/probes/grand-junction.ts`).
+
 ![The full districted city — farms, mines and factories clustered upmap, a residential district of apartments and homes below, and a Cirrus datacenter inspected on the right: a compute provider with 40 seats at 78% sold, five rival firms subscribed for their per-seat B2B compute, and its daily profit contribution](docs/media/media-worldscale.png)
 
 **Challenge mode**: tick the 🏁 box on New Game and the run ends with a final

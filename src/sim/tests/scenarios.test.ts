@@ -1,10 +1,31 @@
 import { describe, it, expect } from 'vitest';
 import { Simulation } from '../core/Simulation';
 import { createInitialState } from '../data/startingScenario';
-import { SCENARIOS } from '../data/scenarios';
+import { SCENARIOS, type ScenarioDef } from '../data/scenarios';
+import { DEFAULT_CONFIG, type SimulationConfig } from '../core/SimulationConfig';
 import { ticksPerDay } from '../core/Tick';
 import { totalMoneySupply } from '../core/GameState';
 import { ACHIEVEMENT_DEFS } from '../data/achievements';
+
+/**
+ * A scenario is run at its authored world scale: a classic (untagged) town uses
+ * the default Village config; a City-tagged town gets the full worldScaleConfig
+ * City stack (crowd + the specialist archetype/trade channels), matching how the
+ * New Game picker composes the two orthogonal choices.
+ */
+function configFor(sc: ScenarioDef): SimulationConfig {
+  if (sc.worldScale === 'city') {
+    return {
+      ...DEFAULT_CONFIG,
+      sizePreset: 'city',
+      servicesEnabled: true,
+      realEstateEnabled: true,
+      investorsEnabled: true,
+      tradeDemandPoolsEnabled: true,
+    };
+  }
+  return DEFAULT_CONFIG;
+}
 
 describe('Scenario variants', () => {
   it('the default town matches the classic three chains', () => {
@@ -27,7 +48,7 @@ describe('Scenario variants', () => {
 
   it('every scenario runs 60 days with money conserved and AI alive', () => {
     for (const id of Object.keys(SCENARIOS)) {
-      const sim = new Simulation(createInitialState(5, undefined, id));
+      const sim = new Simulation(createInitialState(5, configFor(SCENARIOS[id]!), id));
       sim.dispatch({ type: 'RESUME' });
       const s0 = totalMoneySupply(sim.getState());
       sim.run(ticksPerDay(sim.getState().config) * 60 + 1);
