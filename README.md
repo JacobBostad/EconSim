@@ -17,11 +17,11 @@ sawtooth factories, awninged shops — on a daylight map that repaints with the
 seasons (snowfields in winter) and falls into a real night, streetlamps and
 lit windows glowing, on a proper day/night curve.
 
-![Town view on day 65 — autumn streets at dawn, a rush order ticking in the corner, and the minimap framing the viewport](docs/media/media-town.png)
+![City view at dawn on day 72 — an autumn metropolis partitioned into districts, apartments and homes filling a residential block, farms, mines and factories clustered upmap, a Cirrus datacenter on the eastern edge, and the event log narrating citizens stepping out of The Rows' crowd into named lives of their own](docs/media/media-town.png)
 
 <p align="center">
-  <img src="docs/media/media-company.png" width="49%" alt="Company dashboard: objective progress, trend charts, and the standings table with rival CEOs, their archetypes, and estimated dividends per stake" />
-  <img src="docs/media/media-population.png" width="49%" alt="Population dashboard: town trends, satisfaction anatomy, the prosperity ladder with middle-class and affluent trend charts, and the executive team card with hired managers" />
+  <img src="docs/media/media-company.png" width="49%" alt="Company dashboard: objective progress and trend charts above the Standings & Stock Market ladder — rival CEOs tagged with their archetype (Price Fighter, Brand Builder, Expansionist), a service firm (Cirrus Compute) and a landlord (Cornerstone Properties) among them, each row showing a valuation, a price per 1% stake, an estimated daily dividend, and buy / sell / buy-out controls" />
+  <img src="docs/media/media-population.png" width="49%" alt="Population dashboard for a City game: town trends and satisfaction anatomy alongside the Districts table — Civic Square, Iron Row, Midmarket, The Rows and The Yards with their land use, occupancy, land value and building counts — for a population of 40 named citizens plus a 300-strong statistical crowd" />
 </p>
 
 ---
@@ -388,6 +388,8 @@ exception — its founder row is city-only), and the player opens with a cash
 uplift ($28k at standard, AI-founder parity) for the bigger board and pricier
 chains. City and Metropolis are beta; Village stays the reference world the
 determinism and conservation guarantees are pinned against.
+
+![The full districted city — farms, mines and factories clustered upmap, a residential district of apartments and homes below, and a Cirrus datacenter inspected on the right: a compute provider with 40 seats at 78% sold, five rival firms subscribed for their per-seat B2B compute, and its daily profit contribution](docs/media/media-worldscale.png)
 
 **Challenge mode**: tick the 🏁 box on New Game and the run ends with a final
 0–1000 score at day 200 (valuation-weighted, plus town satisfaction, peak

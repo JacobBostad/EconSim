@@ -179,7 +179,11 @@ canvas { display: block; width: 100%; height: 100%; }
 
 .dash-overlay {
   position: absolute; inset: 0; background: rgba(13,17,23,0.97);
-  overflow-y: auto; padding: 14px; z-index: 5;
+  overflow-y: auto; padding: 14px;
+  /* Above the world-event ticker + objective banner (z-index 6): an open
+   * dashboard owns the screen, and active event chips were floating over its
+   * title strip (media-refresh live-sweep finding). */
+  z-index: 7;
 }
 .dash-tabs { display: flex; gap: 6px; margin-bottom: 12px; flex-wrap: wrap; }
 table { border-collapse: collapse; width: 100%; font-size: 12px; }
