@@ -89,6 +89,15 @@ export function founderCash(config: SimulationConfig): number {
   return SIZE_PRESETS[config.sizePreset].founderCash;
 }
 
+/** The wage a freshly-founded operator pays its crowd workers, per preset (the
+ * City cast-parity pass). $16 everywhere by default (= the historical
+ * `dollars(16)` literal), so this is inert; a City-decoupling ship would raise
+ * City to $18 so crowd workers clear the comfortable wage bar and comfortable
+ * formation rides the wage leg instead of the runaway pool. See SIZE_PRESETS. */
+export function founderCrowdWage(config: SimulationConfig): number {
+  return SIZE_PRESETS[config.sizePreset].founderCrowdWage;
+}
+
 /** Staples a founder will move in on. Coffee and the classic luxuries
  * (pastries/jewelry) stay with the existing late-game AI entries — this
  * system fills the basic gaps. Village keeps exactly the three shipped
@@ -162,7 +171,9 @@ function foundFirm(
     facilities: [],
     employees: [],
     pricesByProduct: { [productId]: getProduct(productId).basePrice },
-    wagePolicy: { baseWage: dollars(16) },
+    // Preset-keyed crowd wage: $16 at every shipped preset (bit-identical to the
+    // historical dollars(16) literal); a City-decoupling ship raises City to $18.
+    wagePolicy: { baseWage: founderCrowdWage(state.config) },
     accounting: emptyAccounting(),
     strategy: emptyStrategy(productId),
     bankruptcyStatus: 'healthy',

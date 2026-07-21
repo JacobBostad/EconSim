@@ -1065,6 +1065,103 @@ seat, and the C1 breadth engages the metropolis-only `BASKET_WEIGHT_BASELINE` re
 on the City crowd — each is its own re-pin against a regime that does not yet exist. Not
 attempted here; noted as the next dependency after the employment/gap mechanism lands.
 
+### The City cast-parity mechanism — built, measured across the full grid, and NOT shipped
+
+This pass took up the forward path the decoupling verdict named: build the cast-parity
+gap mechanism and the employment lift, measure them JOINTLY across the full grid against
+all committed guards on all three seeds. The three ingredients the diagnosis asked for were
+built as real, City-preset-gated code — every one INERT at its default, so a plain
+`{...DEFAULT_CONFIG, sizePreset:'city'}` town is bit-identical to before (verified: the full
+545-test suite passes unchanged, Village untouched by construction). They are reproducible via
+`docs/design/probes/city-decoupling.ts` (env overrides `FILLRATE/WAGE/WCB/SYNTH/SINKFLOOR/
+SINKRATE/FCASH/IMMIGFLOOR`). **Verdict: NO SHIP. The full mechanism seats the pinned seed 11 on
+EVERY committed guard, but the trip-limited-cast worker gap stays supply-capped and bistable on
+seeds 4/7 — no grid cell seats all three. The City stays at fill 0.65, $16 founder crowd wage,
+flat rent, shipped-gate immigration, bit-identical to today; the mechanism lands dark.**
+
+**The gap mechanism (built).** `RetailDemandSystem`'s worker catch-up is now a preset knob
+(`catchupBaskets`) with an honest ACCOUNTING SPLIT (`catchupSyntheticSignal`): the catch-up
+tranche buys real stock and pays real revenue (money conserved, the citizen's need and the
+firm's P&L see the full purchase) but is EXCLUDED from the founder-visible market shortage gauge
+(`marketStats` units/unmet) — worker-catch-up demand is synthetic parity demand standing in for
+the URGENT_TRIPS the after-work window denies the jobbed cast worker, not market demand. This is
+exactly the "give the cast the cohort's throughput WITHOUT feeding the founder fill-rate signal"
+the diagnosis asked for, and it works as designed — but it uncovered the FIRST sharp result.
+
+**Sharp finding 1 — the honest split REVEALS the catch-up was inflating the firm count.** With
+the catch-up counted as market demand (shipped), its persistent UNMET portion inflated the
+founder's shortage signal — so some of the raised trigger's extra firms were an artifact of
+counting parity demand as a market shortage. Making the accounting honest DROPS the firm
+equilibrium: at 0.68 the field falls from 10/10/9 firms to 7/6/7 (synthetic on, WCB 4), and even
+at 0.78 the honest signal only carries ~9-11 firms (vs 12/11/13 with the catch-up double-counted).
+The gap mechanism and the firm-count headroom pull in OPPOSITE directions through the founder
+signal — the cleaner the accounting, the fewer firms capital is told to build.
+
+**Sharp finding 2 — closing the cast gap RE-TRIGGERS the jobless-immigration flood.** Recovering
+the firms via a higher trigger, combined with a happier cast, floods the crowd: immigration gates
+on town SATISFACTION only (≥ 55), never job supply (the A4 wall), so a well-served town attracts
+worker households faster than founders add jobs and crowd empShare craters to ~0.25-0.28
+regardless of firm count OR founder cash (a $22k→$30k founder-cash uplift left empShare at 0.28 —
+the binding constraint is NOT firm cash, it is the flood). The doc's `INFLOW_RATE = 0.002` pin
+only ever held because the STARVED cast kept town satisfaction near the bar; fix the cast's mood
+and 0.002 floods again. This pass built the missing third mechanism — an EMPLOYMENT-AWARE
+immigration gate (`immigrationEmpFloor`): inflow scaled by `clamp((empShare − floor)/(1 − floor))`
+so capital attracts labor only where there is work. It works: with the gate at floor 0.5 the crowd
+holds at its 300 bootstrap on every seed (no flood), and **seed 11 then seats every committed
+guard** (0.78 trigger, $18 wage, sink, WCB 4, gate 0.5: 9 firms, W 0.64 / C 0.34, gap 3.8, drift
+$0.14, 0 insolvent, conserved).
+
+**Sharp finding 3 — the cast-worker gap itself is supply-capped and bistable; the basket lever
+cannot close it on all seeds.** With the flood fixed and seed 11 seated, the last holdout is the
+cast-vs-cohort worker gap on seeds 4/7. Raising the catch-up does NOT close it: WCB 4→6→8 leaves
+the seed-4/7 gap pinned at ~20 (cast worker sat 47-52 vs frictionless cohort 63-67), and higher
+baskets make it WORSE (seed-4 cast worker 47→44 from WCB 4→6) — the cast is TRIP-limited, not
+basket-limited, so folding more into its one after-work visit just stockouts against a depleting
+shelf, exactly the supply cap the A4 recalibration measured. Decoupling the founder signal removed
+the twitchiness but not the cap. Seed 11 falls in the "healthy" basin and seeds 4/7 in the
+"collapsed" one — the same chaotic bistability documented throughout — and no basket count,
+trigger, sink, cash, or gate-floor setting swept here seats all three.
+
+**The joint grid (300 days × seeds 11/4/7; all rows $18 wage + prosperity sink floor $450 /
+rate 0.08 except the shipped baseline; band15 W/C, gap = daily-|diff| 15-day, drift = 40→120
+$/cap/day; committed guards = W .50-.70, C .30-.40, gap ≤ 8, drift < $2.00, level < $500, conserved):**
+
+| trigger · synth · WCB · gate | firms 11/4/7 | seed 11 W/C·gap·drift | seed 4 W/C·gap·drift | seed 7 W/C·gap·drift | verdict |
+|------------------------------|--------------|-----------------------|---------------------|---------------------|---------|
+| 0.65 · off · 2 · — (SHIPPED)  | 9/9/8   | .61/.37 · 5.8 · 0.46 | .67/.31 · 7.0 · 0.39 | .65/.32 · 4.2 · 1.02 | **all PASS** |
+| 0.68 · off · 2 · —            | 10/10/9 | .63/.35 · 3.4 · 1.35 | **.79/.18 · 13.2** · −.34 | **.72/.25 · 10.1** · 1.60 | 4/7 band+gap ✗ |
+| 0.68 · on · 4 · —             | 7/6/7   | **.84/.14 · 11.7** · .03 | **.78/.20** · 7.7 · .36 | **.71/.27** · 2.7 · .27 | firms collapse ✗ |
+| 0.72 · on · 3 · —             | 9/9/7   | .64/.33 · **15.9** · .32 | **.71/.27 · 13.4** · .31 | **.68/.30 · 13.4** · −.40 | gap+band ✗ |
+| 0.72 · on · 3 · — · $30k cash | —/9/8   | (empW 0.31) | .73/.25 · 3.7 · .42 | .69/.29 · 3.0 · −.32 | band ✗ (cash ≠ employment) |
+| 0.78 · on · 3 · —             | 12/11/13| .71/.27 · 9.6 · .32 | **.73/.24 · 15.8** · .31 | **.63/.35 · 19.6** · 1.30 | gap ✗ (empW flood) |
+| 0.78 · on · 4 · floor 0.5     | 9/10/11 | **.64/.34 · 3.8 · .14 PASS** | .69/**.29** · **21.4** · 1.06 | **.73/.26 · 17.0** · 1.12 | 4/7 gap+band ✗ |
+| 0.78 · on · 6 · floor 0.5     | 9/12/7  | .61/… · ~4 · — | .62/.35 · **20.4** · .10 | **.83/.16 · 21.5** · −.19 | gap ✗ (WCB worse) |
+| 0.78 · on · 8 · floor 0.5     | 10/12/8 | .65/… · ~5 · — | .65/.35 · **20.4** · .24 | .52/**.46 · 19.3** · .34 | gap ✗ (cap confirmed) |
+
+**What shipped: nothing (mechanism / decoupling / trigger all held at baseline).** No guard was
+re-pinned; no band was widened. The employment-gated immigration is the one genuinely new,
+clean mechanism the pass produced (it does exactly what the A4 flood diagnosis wanted), but it
+delivers no user-visible win ALONE at the shipped trigger (the baseline crowd already holds ~300)
+and cannot ship without the trigger raise it exists to enable — which the cast gap still blocks.
+All four ingredients (`founderCrowdWage`, `catchupSyntheticSignal` + `catchupBaskets`,
+`prosperityDrainFloor`/`Rate`, `immigrationEmpFloor`) remain in `SIZE_PRESETS` at their inert
+defaults as measured dark foundations for the next attempt.
+
+**The root cause, now three-layered (the pass's contribution over the prior diagnosis).** The
+prior verdict named ONE wall (the cast gap is trip-limited and bistable). This pass measured that
+the three levers are mutually locked: (1) the gap mechanism's honest accounting SUPPRESSES the
+firm count it needs, because the catch-up unmet was propping the founder signal up; (2) the
+employment the wage-leg needs is capped not by firms or cash but by a satisfaction-gated
+immigration flood that a HAPPIER cast makes WORSE, curable only by a new employment-aware gate;
+and (3) even with (1) and (2) resolved and seed 11 seated, the underlying cast-worker gap is
+supply-capped — more throughput stockouts rather than satisfies — so it stays bistable across
+seeds. The forward path is no longer "close the gap"; it is a cast-shopping model that gives the
+trip-limited worker the cohort's throughput WITHOUT more single-visit basket depth — a genuine
+extra shop-window VISIT against a restocked shelf (the cohort's slice settlement), which
+`CitizenScheduleSystem` does not today grant and which prior "extra cast trips" probes found
+contention-negative. That is a scheduling/routing change, not a demand-constant one, and is where
+the next attempt must start.
+
 ## Open questions
 
 - **Cast-vs-cohort shelf competition.** Within a shop-window slice,

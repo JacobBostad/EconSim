@@ -182,10 +182,53 @@ export interface SimulationConfig {
  *    once. The extra $6k is that runway; it converts the last handful of firms
  *    from ramp-casualties into solvent competitors.
  */
+/**
+ * City-decoupling knobs (docs/design/cohorts-and-districts.md, "The City
+ * cast-parity mechanism"). Every field below carries its shipped/baseline value
+ * for ALL THREE presets, so the whole stack is INERT by construction — a plain
+ * `{...DEFAULT_CONFIG, sizePreset:'city'}` town is bit-identical to before these
+ * fields existed, and Village/Metropolis are byte-untouched. They are the sweep
+ * axes the `city-decoupling` probe overrides in-process; a value only leaves its
+ * baseline if a measured grid landing ships it (none has, as of this writing —
+ * see the verdict). The fields:
+ *
+ *  - `founderCrowdWage` (cents): the wage an operator founder pays its crowd.
+ *    $16 everywhere (= the historical `dollars(16)` literal). The decoupling
+ *    would raise City to $18 so crowd workers clear the comfortable WAGE bar
+ *    (sub × 18/14) and comfortable-band formation rides wages, not the runaway
+ *    pool — but only pays off at the raised-trigger firm count where crowd
+ *    empShare ≈ 0.5 (below that the wage leg is weaker than the savings cap it
+ *    replaces; see the verdict).
+ *  - `catchupBaskets`: extra baskets a crowd-town cast WORKER buys per urgent
+ *    stop (the A3 `WORKER_CATCHUP_BASKETS`, now preset-keyed so the gap mechanism
+ *    can raise it). 2 everywhere = the shipped value.
+ *  - `catchupSyntheticSignal`: when true, the catch-up tranche is booked as
+ *    SYNTHETIC PARITY demand — it buys real stock and pays real revenue, but is
+ *    excluded from the founder-visible market shortage gauge (marketStats
+ *    units/unmet), so raising `catchupBaskets` closes the cast-vs-cohort worker
+ *    gap WITHOUT lifting fill-rate above the founder trigger (raising the flat
+ *    WCB collapsed firm count exactly that way — city-headroom finding). false =
+ *    the shipped accounting (catch-up counts as market demand).
+ *  - `prosperityDrainFloor` (cents) / `prosperityDrainRate`: the prosperity-
+ *    scaled pool sink (CrowdRentSystem). Above the per-capita floor a cohort
+ *    sheds `rate` of its excess to the world each day, so the pool plateaus at
+ *    any firm count (the flat rent sink was calibrated for the ~9-firm
+ *    equilibrium and runs away at the raised trigger's ~0.5 employment). rate 0
+ *    everywhere = disabled = the shipped flat-rent-only regime.
+ *  - `immigrationEmpFloor`: an employment-aware immigration gate. Cohort inflow
+ *    reads town SATISFACTION only (≥ 55), never job supply — so once the cast/
+ *    crowd is well-served the worker cohort floods faster than founders add jobs
+ *    and crowd empShare craters (the A4 flood, and the wall the cast-parity pass
+ *    hit: closing the cast gap RAISES town satisfaction, re-triggering the flood).
+ *    When > 0, inflow is scaled by `clamp((empShare − floor)/(1 − floor), 0, 1)`,
+ *    so immigration halts at/below the floor and recovers as jobs fill — capital
+ *    attracts labor only where there is work. 0 everywhere = disabled = the
+ *    shipped satisfaction-only gate.
+ */
 export const SIZE_PRESETS = {
-  village: { castTarget: 80, cohortCap: 0, crowdStart: 0, founderMaxAiFirms: 6, founderUndersupplyCooldown: 20, founderUndersupplyFillRate: 0.65, founderCash: 22000_00, mapWidth: 130, mapHeight: 92 },
-  city: { castTarget: 150, cohortCap: 2000, crowdStart: 300, founderMaxAiFirms: 18, founderUndersupplyCooldown: 20, founderUndersupplyFillRate: 0.65, founderCash: 22000_00, mapWidth: 260, mapHeight: 184 },
-  metropolis: { castTarget: 150, cohortCap: 10000, crowdStart: 1500, founderMaxAiFirms: 30, founderUndersupplyCooldown: 7, founderUndersupplyFillRate: 0.80, founderCash: 28000_00, mapWidth: 390, mapHeight: 276 },
+  village: { castTarget: 80, cohortCap: 0, crowdStart: 0, founderMaxAiFirms: 6, founderUndersupplyCooldown: 20, founderUndersupplyFillRate: 0.65, founderCash: 22000_00, mapWidth: 130, mapHeight: 92, founderCrowdWage: 16_00, catchupBaskets: 2, catchupSyntheticSignal: false, prosperityDrainFloor: 0, prosperityDrainRate: 0, immigrationEmpFloor: 0 },
+  city: { castTarget: 150, cohortCap: 2000, crowdStart: 300, founderMaxAiFirms: 18, founderUndersupplyCooldown: 20, founderUndersupplyFillRate: 0.65, founderCash: 22000_00, mapWidth: 260, mapHeight: 184, founderCrowdWage: 16_00, catchupBaskets: 2, catchupSyntheticSignal: false, prosperityDrainFloor: 0, prosperityDrainRate: 0, immigrationEmpFloor: 0 },
+  metropolis: { castTarget: 150, cohortCap: 10000, crowdStart: 1500, founderMaxAiFirms: 30, founderUndersupplyCooldown: 7, founderUndersupplyFillRate: 0.80, founderCash: 28000_00, mapWidth: 390, mapHeight: 276, founderCrowdWage: 16_00, catchupBaskets: 2, catchupSyntheticSignal: false, prosperityDrainFloor: 0, prosperityDrainRate: 0, immigrationEmpFloor: 0 },
 } as const;
 
 export const DEFAULT_CONFIG: SimulationConfig = {

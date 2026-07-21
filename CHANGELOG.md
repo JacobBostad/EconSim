@@ -19,6 +19,34 @@ real City or Metropolis game switches the whole stack on together (crowd +
 districts + all three specialist channels); Village stays the classic,
 bit-identical, every-resident-simulated town.
 
+- **The City cast-parity mechanism — built, measured across the full grid, NOT
+  shipped (docs-only verdict).** The forward path the City-decoupling verdict
+  named: give the trip-limited cast the crowd's throughput to close the
+  cast-worker gap AND lift City crowd employment so the wage leg can carry the
+  comfortable band at a raised founder trigger. Three City-preset-gated
+  mechanisms were built as real code, every one INERT at its default so the
+  shipped City run and Village stay bit-identical (the full 545-test suite passes
+  unchanged): an honest ACCOUNTING SPLIT for the worker catch-up
+  (`catchupSyntheticSignal` — parity baskets buy real stock and pay real revenue
+  but are excluded from the founder-visible shortage gauge), a prosperity-scaled
+  pool sink, and a NEW employment-aware immigration gate (`immigrationEmpFloor` —
+  inflow scaled by job availability so capital attracts labor only where there is
+  work). Measured jointly across the trigger × wage × sink × basket × gate grid
+  on all three seeds (`docs/design/probes/city-decoupling.ts`): the full
+  mechanism seats the pinned **seed 11 on every committed guard** (9 firms, worker
+  0.64 / comfortable 0.34, gap 3.8, drift $0.14, conserved), but **no cell seats
+  all three** — the honest split suppresses the firm count it needs (the catch-up
+  unmet had been inflating the founder signal), closing the cast gap re-triggers
+  the immigration flood (curable, and cured, by the new gate), and the residual
+  cast-worker gap on seeds 4/7 stays supply-capped and bistable (WCB 4→6→8 does
+  not close it — the cast is trip-limited, not basket-limited). No guard re-pinned,
+  no band widened; the City holds at fill 0.65 / $16 crowd wage / flat rent. The
+  ingredients land dark as measured foundations, and the three-layered root cause
+  + full grid table are recorded in docs/design/cohorts-and-districts.md ("The
+  City cast-parity mechanism"). The next attempt needs a cast-shopping model that
+  grants an extra restocked-shelf VISIT, not deeper single-visit baskets — a
+  scheduling change, not a demand constant.
+
 - **World-scale era missions + achievements — the guided tour of the specialist
   economy.** Every prior era shipped its own mission chain and achievement set
   (coffee/apartments, wholesale, the four pillars); the world-scale era had none,
