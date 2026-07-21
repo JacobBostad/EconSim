@@ -112,10 +112,18 @@ and writes its own two methods; the operator row is never re-touched.
 - **D2 — landlord.** A behavior module that only develops and rents housing
   (lifting the `maybeBuildApartment` seam out of `expansion.ts`), and a founder
   row that moves a rentals firm to town where vacancy is chronically zero.
-- **D3 — investor.** A holdco module that only works its equity book — yield
-  hunting, laddering stakes toward the control block, harvesting dividends
-  (lifting the `maybeBuyShares` / `maybeBuyStakeCity` seam out of `finance.ts`)
-  — and a founder row that spins one up where equity is cheap and dividends fat.
+- **D3 — investor (SHIPPED).** A holdco behavior module (`systems/ai/investor.ts`)
+  that only works its equity book — deterministic yield hunting in holdco size
+  (bigger blocks, lower idle-cash floor, a cap laddering toward the 40% control
+  block), dividend harvesting, and B1 rescue consolidation where the control
+  ladder allows. It reuses the B2 `maybeBuyStakeCity` yield logic and the shared
+  `tradeShares` caps rather than moving the operator's side-buying out of
+  `finance.ts` (operators still dabble; the holdco specialises). A founder row
+  (median trailing dividend-yield spread sustained N days) spins one up where
+  dividends are fat — gated behind an opt-in `config.investorsEnabled` flag and
+  `sizePreset === 'city'`, so every pinned Village/City/Metropolis baseline
+  (flag off) is byte-identical to pre-D3. See docs/design/stock-market.md,
+  "Arc D3", for the as-built and the crowd-band constraint that forced the flag.
 - **D4 — service.** A provider module that only runs compute/logistics/ad
   services (lifting the `maybeBuildDatacenter` seam out of `expansion.ts`), and
   a founder row that enters where a service's demand outruns town capacity.
@@ -136,7 +144,8 @@ code lives*:
 | `systems/ai/digest.ts` | the routine-event batching shared by dispatcher and behaviors (`routeRoutine`, `flushRoutineDigest`, `newDigestBuffer`) |
 | `systems/ai/OperatorBehavior.ts` | the operator loop that stays operator forever — pricing/positioning/ads/quality, wages/restaff/supply-elasticity/shelf-sizing, sourcing/wholesale pricing — plus `runOperatorBehavior`, the orchestrator that calls everything in the exact old order |
 | `systems/ai/expansion.ts` | the operator's build behaviors (store/coffee/luxury/upgrade) — and the **landlord (D2)** and **service (D4)** seams (`maybeBuildApartment`, `maybeBuildDatacenter`) |
-| `systems/ai/finance.ts` | the operator's capital behaviors (deleverage, export surplus, rescue consolidation) — and the **investor (D3)** seam (`maybeBuyShares` / `maybeBuyStakeCity`) |
+| `systems/ai/finance.ts` | the operator's capital behaviors (deleverage, export surplus, rescue consolidation) — and the **investor (D3)** seam (`maybeBuyShares` / `maybeBuyStakeCity`), which the operator still uses for side-buying |
+| `systems/ai/investor.ts` | the **investor (D3)** holdco loop `runInvestorBehavior` — deterministic holdco-sized yield buying, rescue consolidation, deleveraging; the live `investor` dispatch row |
 
 `AIFounderSystem.ts` stayed one file; internally it grew the `FounderArchetype`
 table with the operator row live.

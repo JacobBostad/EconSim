@@ -35,6 +35,37 @@ thousands via statistical cohorts plus a fully-simulated cast, districts,
   commercial-lease yield is pinned at 15% (in the 12-18% band), residential
   apartment yield measures much higher (~530-940%, inherent to the pinned $7k /
   50-tenant apartment) and is reported honestly. Suite +8 (realEstate.test.ts).
+- **D3 — investor holdco archetype** (design HD5; see docs/design/stock-market.md,
+  "Arc D3"): the first specialist to fill a D1 dispatcher row. A pure holding
+  company (`systems/ai/investor.ts`) that owns no production and runs one loop —
+  its equity book: deterministic holdco-sized yield buying (bigger blocks, a
+  lower idle-cash floor, a cap laddering toward the 40% control block than the
+  operator's dabbling), dividend harvesting, B1 rescue consolidation where the
+  control ladder allows, and portfolio liquidation before insolvency. Every
+  trade routes through `tradeShares`, so MAX_STAKE_PCT, the 40% hostile blocker,
+  the 100% public-float ledger, and the fee/impact bind a holdco identically to
+  the player and the operator field; a holdco's stakes show up in the existing
+  ownership panels through the same `sharesHeld` wiring (player parity, no new
+  UI). Holdco valuation was already correct from B1 — a zero-facility firm is
+  cash + portfolio mark (stakes marked at each target's marketCap), and dividend
+  income earns the 30× multiple via `dividendIn` — verified and unit-tested, not
+  duplicated. A founder row spins a holdco up on a sustained fat-dividend-yield
+  spread (median trailing yield across listed firms above a bar, N days). Gated
+  behind an opt-in `config.investorsEnabled` flag (the shipped `servicesEnabled`
+  precedent), OFF in every pinned baseline and double-gated on
+  `sizePreset === 'city'` — because an active holdco is a large net buyer and
+  shares trade against the public float, so it drains the firm sector and
+  measurably shifts the A3 crowd-tier bands (seed-11 300-day worker 0.61→0.71
+  with it live). With the flag off, zero investors found: Village seeds 1/777
+  and City seed 11 reproduce their exact 300-day `rngState` and money supply, and
+  the tierAcceptance bands + Metropolis 24-30-firm 0-insolvent founder pins pass
+  untouched. City games opt in via the UI. Measured (d3-investor probe, City,
+  300 days): seeds 11/4/7 found 3/3/2 solvent holdcos, portfolio P&L
+  +$39.2k/+$44.9k/−$12.4k on $18.1k/$16.0k/$3.6k dividend income, turnover
+  1.5-2.1 (no wash-trading), every cap held, conserved to the cent. Full suite
+  green (+6 D3 tests: holdco valuation, the founder gate on/off, cap compliance,
+  distress liquidation; the D1 dispatcher test updated — `investor` now routes to
+  a live behavior, `service` stays the inert stub).
 
 - **D1 — the firm archetype framework** (design HD5; see
   docs/design/firm-archetypes.md): the scaffold for specialist firms. Every AI

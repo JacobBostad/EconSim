@@ -32,6 +32,7 @@ import {
   trimManagedAds,
 } from './ai/OperatorBehavior';
 import { runLandlordBehavior } from './ai/LandlordBehavior';
+import { runInvestorBehavior } from './ai/investor';
 
 // Public surface preserved for existing importers (ManagerSystem, log tests).
 export { adjustPrices, maybeWidenShelves, manageSourcing } from './ai/OperatorBehavior';
@@ -61,16 +62,18 @@ export type FirmBehavior = (
 const noopBehavior: FirmBehavior = () => {};
 
 /**
- * The archetype → behavior dispatch table (Arc D1). Operator + landlord are
- * live. D2 landed `landlord` (real-estate development, ai/LandlordBehavior);
- * D3 lands `investor` (a holdco working its equity book), D4 `service` (a
- * compute provider) — each swaps its row here for its own module. Adding a row
- * is purely additive: the operator path is never re-touched.
+ * The archetype → behavior dispatch table (Arc D1). Operator, landlord (D2 —
+ * real-estate development, ai/LandlordBehavior), and investor (D3 — a holdco
+ * working its equity book) are live; D4 lands `service` (a compute provider).
+ * Each specialist swaps its row here for its own module; adding a row is purely
+ * additive and the operator path is never re-touched. Specialist rows are only
+ * ever REACHED by firms their city-gated, flag-gated founders spin up, so every
+ * pinned baseline (which founds none) stays inert.
  */
 const BEHAVIOR_BY_ARCHETYPE: Record<FirmArchetype, FirmBehavior> = {
   operator: runOperatorBehavior,
   landlord: runLandlordBehavior, // D2
-  investor: noopBehavior, // D3
+  investor: runInvestorBehavior, // D3
   service: noopBehavior, // D4
 };
 

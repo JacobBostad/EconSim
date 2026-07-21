@@ -206,6 +206,13 @@ export interface GameState {
   /** Day of the last landlord founder entry, for its entry cooldown (0 = none
    * yet). */
   lastLandlordEntryDay: number;
+  /** Consecutive days the median trailing dividend yield across listed firms has
+   * stayed above the investor-founder bar — the city-scale signal that draws a
+   * holdco to town (Arc D3). City-only: Village/Metropolis never accumulate it. */
+  investorSignalDays: number;
+  /** Day of the last investor (holdco) founder entry, for its entry rate-limit
+   * (0 = none yet). */
+  lastInvestorEntryDay: number;
   /**
    * Share-price displacement per firm: recent trades push the quote away
    * from fair value (marketCap), decaying back daily. Liquidity noise only —

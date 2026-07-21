@@ -115,6 +115,16 @@ export interface SimulationConfig {
    * row). See docs/design/real-estate.md.
    */
   realEstateEnabled: boolean;
+  /**
+   * Investor holdco archetype (Arc D3). Off by default — including for the plain
+   * city/metropolis presets the founder/soak/tier baselines are tuned against —
+   * so those pinned trajectories are untouched (an active holdco drains the firm
+   * sector by buying stakes against the public float, which measurably shifts the
+   * A3 crowd-tier bands; with the flag off, zero investors found and the city
+   * economy is bit-identical to pre-D3). The UI turns it on for a City world;
+   * probes and tests opt in explicitly. Double-gated on sizePreset === 'city' in
+   * the founder row, so Village and Metropolis never found a holdco regardless. */
+  investorsEnabled: boolean;
 }
 
 /**
@@ -210,6 +220,7 @@ export const DEFAULT_CONFIG: SimulationConfig = {
   sizePreset: 'village',
   servicesEnabled: false,
   realEstateEnabled: false,
+  investorsEnabled: false,
 };
 
 /** Difficulty presets: starting capital, news volatility, AI aggressiveness. */

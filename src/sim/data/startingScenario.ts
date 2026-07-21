@@ -252,6 +252,8 @@ export function createInitialState(
     lastUndersupplyEntryDay: 0,
     housingTightDays: 0,
     lastLandlordEntryDay: 0,
+    investorSignalDays: 0,
+    lastInvestorEntryDay: 0,
     sharePriceShift: {},
     // Districts are built AFTER the size-preset block below (which may raise
     // the map dimensions), so the partition tiles the preset's real map.

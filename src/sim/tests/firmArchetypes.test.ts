@@ -77,8 +77,15 @@ describe('Firm archetype dispatcher', () => {
     dispatchFirmBehavior(makeContext(state), firm.id, undefined);
     expect(firm.strategy.lossStreak).not.toBe(SENTINEL);
 
-    // As an investor (stub): the behavior is inert, the sentinel survives.
+    // As an investor (D3, live): the holdco loop runs — it tracks its own loss
+    // streak at the end, so it too overwrites the sentinel.
     firm.strategy.archetype = 'investor';
+    firm.strategy.lossStreak = SENTINEL;
+    dispatchFirmBehavior(makeContext(state), firm.id, undefined);
+    expect(firm.strategy.lossStreak).not.toBe(SENTINEL);
+
+    // As a service firm (D4, still a stub): the behavior is inert, sentinel survives.
+    firm.strategy.archetype = 'service';
     firm.strategy.lossStreak = SENTINEL;
     dispatchFirmBehavior(makeContext(state), firm.id, undefined);
     expect(firm.strategy.lossStreak).toBe(SENTINEL);

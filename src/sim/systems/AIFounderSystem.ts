@@ -39,6 +39,8 @@ import { landCostMultiplier, landValueAt } from '../core/LandValue';
 import { clamp } from '../../utils/clamp';
 import { townHousingOccupancy } from './ai/LandlordBehavior';
 import { soldSomewhere } from './SatisfactionSystem';
+import { marketCap } from '../selectors/companySelectors';
+import { smoothedProfitBase } from './DividendSystem';
 import {
   IMMIGRATION_MIN_SATISFACTION,
   FOUNDER_EARLIEST_DAY,
@@ -47,6 +49,10 @@ import {
   FOUNDER_MIN_POPULATION,
   FOUNDER_UNDERSUPPLY_WINDOW,
   FOUNDER_UNDERSUPPLY_DAYS,
+  INVESTOR_YIELD_BAR,
+  INVESTOR_SIGNAL_DAYS,
+  INVESTOR_ENTRY_COOLDOWN,
+  INVESTOR_FOUNDER_CASH,
   dollars,
 } from '../data/constants';
 
@@ -113,6 +119,9 @@ const FOUNDER_NAMES: Record<string, string[]> = {
   appliances: ['Ironclad Appliance Co', 'Copperworks Home', 'Beacon Whitegoods'],
   wine: ['Hillside Vintners', 'Cellar & Vine', 'Amberfield Winery'],
 };
+
+/** Holdco name pool (Arc D3) — investment firms, picked by hash. Flavor only. */
+const INVESTOR_NAMES = ['Meridian Capital', 'Keystone Holdings', 'Anchor Equity Partners'];
 
 /** Deterministic daily entry gate — same salt family as the other bolt-on
  * rolls, distinct constant so it fires on independent days. */
@@ -210,6 +219,67 @@ function foundFirm(
       ? `📰 New competition: ${name} moves into town to sell ${product} — the shelves can't keep up with demand.${ceo}`
       : `📰 New competition: ${name} moves into town to sell ${product} — nobody else would.${ceo}`;
   emitEvent(state, 'info', 'economy', headline, built.store.id);
+}
+
+/**
+ * Found an investor holdco (Arc D3, city-scale): an AI firm with NO chain and no
+ * shelves — its whole business is the equity book. Founding capital arrives from
+ * the world account (conserved) and stays deployable, since nothing is built.
+ * The archetype is stamped 'investor', so the dispatcher routes it to
+ * runInvestorBehavior; an expansionist persona gives it the appetite to ladder
+ * stakes toward the control block.
+ */
+function foundInvestorFirm(ctx: SimContext, day: number): void {
+  const { state } = ctx;
+  const aiCount = Object.values(state.firms).filter((f) => f.ownerType === 'ai').length;
+  const name = INVESTOR_NAMES[hashPick(state.seed, day, INVESTOR_NAMES.length)]!;
+  const personality = 'expansionist'; // a holdco accumulates — high stake appetite
+
+  const id = nextId(state.idCounters, 'firm');
+  const firm: Firm = {
+    id,
+    name,
+    ownerType: 'ai',
+    cash: 0,
+    facilities: [],
+    employees: [],
+    pricesByProduct: {},
+    wagePolicy: { baseWage: dollars(16) },
+    accounting: emptyAccounting(),
+    strategy: emptyStrategy('none', 'investor'),
+    bankruptcyStatus: 'healthy',
+    daysInsolvent: 0,
+    marketShareByProduct: {},
+    createdAtTick: state.tick,
+    personalityId: personality,
+    ceoName: defaultCeoFor(personality, aiCount),
+    brandByProduct: {},
+    adBudgetByProduct: {},
+    qualityByProduct: {},
+    debt: 0,
+    interestRatePerDay: 0.0009,
+    sharesHeld: {},
+    shareCostBasis: {},
+    acquiredNames: [],
+    autoPriceByProduct: {},
+    exportRevenue: 0,
+    exportRevenueByCity: {},
+    wholesaleSpend: 0,
+    wholesaleEarned: 0,
+    managers: [],
+    forwards: [],
+    forwardWins: 0,
+  };
+  state.firms[id] = firm;
+
+  recordTransaction(state, {
+    from: WORLD_ACCOUNT, to: firmAccount(id), amount: INVESTOR_FOUNDER_CASH,
+    firmId: id, category: 'none', note: 'Holdco founding capital',
+  });
+
+  const ceo = firm.ceoName ? ` ${PERSONALITIES[personality]!.icon} ${firm.ceoName} runs the book.` : '';
+  emitEvent(state, 'info', 'economy',
+    `📰 ${name}, an investment firm, opens in town to build a portfolio of local equity — dividends are fat and stakes are cheap.${ceo}`);
 }
 
 /**
@@ -422,6 +492,69 @@ const LANDLORD_FOUNDER_DAYS = 15;
 const LANDLORD_FOUNDER_COOLDOWN = 25;
 
 const LANDLORD_NAMES = ['Cornerstone Properties', 'Meridian Estates', 'Brickyard Holdings'];
+// --- investor row: the holdco founder (Arc D3, city-scale only) -------------
+
+/**
+ * Median trailing daily dividend yield across LISTED firms — the player and AI
+ * firms that are healthy, actually earning (smoothed base > 0), and priced
+ * (marketCap > 0). This is the same base/marketCap the operator's yield-buyer
+ * and the DividendSystem read, aggregated to a town-wide spread. Returns 0 when
+ * no firm qualifies (an empty or all-distressed field is not a holdco's market).
+ * Sorted scan → deterministic; no rng.
+ */
+function medianListedYield(state: GameState): number {
+  const yields: number[] = [];
+  for (const fid of Object.keys(state.firms).sort()) {
+    const f = state.firms[fid]!;
+    if (f.ownerType !== 'player' && f.ownerType !== 'ai') continue;
+    if (f.bankruptcyStatus !== 'healthy') continue;
+    const base = smoothedProfitBase(f);
+    if (base <= 0) continue;
+    const mcap = marketCap(state, fid);
+    if (mcap <= 0) continue;
+    yields.push(base / mcap);
+  }
+  if (yields.length === 0) return 0;
+  yields.sort((a, b) => a - b);
+  const mid = Math.floor(yields.length / 2);
+  return yields.length % 2 ? yields[mid]! : (yields[mid - 1]! + yields[mid]!) / 2;
+}
+
+function investorTrackSignals(ctx: SimContext): void {
+  const { state } = ctx;
+  // OPT-IN + CITY-SCALE ONLY. Double gate (mirroring the servicesEnabled + city
+  // gate the B2B channel uses): the flag is OFF in every pinned baseline
+  // (DEFAULT_CONFIG, the tier/founder/determinism soaks), so the streak counter
+  // is never touched and no investor ever founds there — the city A3 crowd-tier
+  // bands stay bit-identical to pre-D3. A holdco drains the firm sector buying
+  // stakes against the public float, which would otherwise shift those bands.
+  // Gated on === 'city' (not !== 'village'), so Metropolis is excluded too —
+  // D3 is city-scale, and the pinned Metropolis founder soak is untouched.
+  if (!state.config.investorsEnabled || state.config.sizePreset !== 'city') return;
+  state.investorSignalDays =
+    medianListedYield(state) >= INVESTOR_YIELD_BAR ? state.investorSignalDays + 1 : 0;
+}
+
+function investorTryFound(ctx: SimContext, town: FounderTownRead): boolean {
+  const { state } = ctx;
+  const { day, aiCount } = town;
+  if (!state.config.investorsEnabled || state.config.sizePreset !== 'city') return false;
+  // Sustained fat-yield spread, town-wide rate limit, and the same solvency
+  // brake the under-supply row uses — capital doesn't spin up a holdco into a
+  // field that is already cracking (the shared cap gate in the shell handles the
+  // firm-count ceiling). The founder cap is respected by the shell before this
+  // row is ever reached.
+  if (state.investorSignalDays < INVESTOR_SIGNAL_DAYS) return false;
+  if (day - state.lastInvestorEntryDay < INVESTOR_ENTRY_COOLDOWN) return false;
+  const unhealthy = Object.values(state.firms).filter(
+    (f) => f.ownerType === 'ai' && f.bankruptcyStatus !== 'healthy',
+  ).length;
+  if (aiCount > 0 && unhealthy / aiCount > 0.12) return false;
+
+  foundInvestorFirm(ctx, day);
+  state.lastInvestorEntryDay = day;
+  return true;
+}
 
 /**
  * Found a landlord firm: a real-estate specialist that develops and rents
@@ -551,6 +684,7 @@ function landlordTryFound(ctx: SimContext, town: FounderTownRead): boolean {
 const FOUNDER_ARCHETYPES: FounderArchetype[] = [
   { archetype: 'operator', trackSignals: operatorTrackSignals, tryFound: operatorTryFound },
   { archetype: 'landlord', trackSignals: landlordTrackSignals, tryFound: landlordTryFound },
+  { archetype: 'investor', trackSignals: investorTrackSignals, tryFound: investorTryFound },
 ];
 
 export function runAIFounderSystem(ctx: SimContext): void {

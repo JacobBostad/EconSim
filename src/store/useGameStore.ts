@@ -164,7 +164,7 @@ export const useGameStore = create<GameStore>((set, get) => {
       // (default) keeps the classic all-agent town bit-for-bit.
       const worldOverride =
         world === 'city'
-          ? { sizePreset: 'city' as const, servicesEnabled: true, realEstateEnabled: true }
+          ? { sizePreset: 'city' as const, servicesEnabled: true, realEstateEnabled: true, investorsEnabled: true }
           : {};
       get().sim.setState(
         createInitialState(seed, { ...configForDifficulty(difficulty), challengeMode: challenge, ...sizeOverrides, ...worldOverride }, scenarioId),

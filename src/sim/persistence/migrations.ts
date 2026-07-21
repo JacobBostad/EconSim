@@ -110,11 +110,14 @@ function normalize(state: GameState): GameState {
   state.marketGapDays = state.marketGapDays ?? {};
   state.marketUndersupplyDays = state.marketUndersupplyDays ?? {};
   state.lastUndersupplyEntryDay = state.lastUndersupplyEntryDay ?? 0;
+  state.investorSignalDays = state.investorSignalDays ?? 0;
+  state.lastInvestorEntryDay = state.lastInvestorEntryDay ?? 0;
   state.sharePriceShift = state.sharePriceShift ?? {};
   state.config.sizePreset = state.config.sizePreset ?? 'village';
   // B2B services channel (HD3): saves predating it load with the channel off and
   // no contracts — inert until a new City game turns it on.
   state.config.servicesEnabled = state.config.servicesEnabled ?? false;
+  state.config.investorsEnabled = state.config.investorsEnabled ?? false;
   state.serviceContracts = state.serviceContracts ?? {};
   // Real-estate firms channel (Arc D2, HD4): saves predating it load with the
   // channel off — no landlord ever founds until a City game turns it on.

@@ -229,6 +229,31 @@ export const FOUNDER_MIN_POPULATION = 30;
  * chain (~$8-10k at land prices) plus working-capital runway. */
 export const FOUNDER_CASH = dollars(22000);
 
+// --- AI founders: investor holdco (Arc D3, city-scale only) ------------------
+// A third founder signal: when equity is cheap and dividends are fat, a holding
+// company moves to town to work the book (no chain, no shelves — just stakes).
+// The signal is the MEDIAN trailing dividend yield across listed firms; a broad
+// spread of well-paying, reasonably-priced equity is what a holdco enters for.
+// Structurally inert outside the City preset (Village bit-identity + the pinned
+// Metropolis founder soak both found zero investors — see AIFounderSystem).
+/** Median daily dividend yield (smoothed profit base ÷ marketCap, the base the
+ * DividendSystem actually pays from) across listed firms above which the equity
+ * market is "fat" enough to draw a holdco. Pinned by the d3-investor probe: a
+ * live City median sits at ~0.0025-0.0045 for most of a 300-day run (seeds
+ * 11/4/7), so this bar (0.002 ≈ a ~22%/yr gross yield at the 0.3 payout ratio)
+ * is a real spread, not noise, and clears with room in a healthy city. */
+export const INVESTOR_YIELD_BAR = 0.002;
+/** Consecutive days the median yield must hold above the bar before a holdco
+ * enters — a sustained spread, not a one-week blip. */
+export const INVESTOR_SIGNAL_DAYS = 30;
+/** Town-wide minimum days between investor entries, so a durable fat-yield
+ * regime seeds a holdco or two, not a swarm. */
+export const INVESTOR_ENTRY_COOLDOWN = 30;
+/** Founding capital for a holdco (from the world account, conserved). Larger
+ * than the operator's $22k: a holdco has no chain to build, so all of it is
+ * deployable into the book — this is its starting war chest. */
+export const INVESTOR_FOUNDER_CASH = dollars(30000);
+
 // --- Stock market friction (see docs/design/stock-market.md, Phase 2) -------
 /** Brokerage fee on every share trade, both directions, paid to the world —
  * with the price impact below this makes round-trip timing plays lose. */

@@ -333,6 +333,91 @@ balance-sheet distortions from the assets map get fixed here. As shipped:
   the block (no tenant displacement; symmetric with close, which never
   touches homes). Gated city-scale AI only; Village closes exactly as before.
 
+## Arc D3 — investor holdco archetype (SHIPPED, city-scale)
+
+D3 is the first specialist to fill a Firm-archetype dispatcher row
+(docs/design/firm-archetypes.md): a **pure holding company** that owns no
+production and runs one loop — its equity book. It reuses the Arc B machinery
+this document already shipped rather than inventing a second one; the only new
+code is a behavior module (`systems/ai/investor.ts`), a founder row, and an
+opt-in flag. As shipped:
+
+- **The holdco loop** (`runInvestorBehavior`). No pricing, staffing, or
+  building — the firm has nothing to run. Each day it: deleverages when flush
+  (`manageDebt`); ladders into the highest-yielding rival
+  (`maybeBuyStakeHoldco`); and, once rich enough, absorbs a dying rival at the
+  distressed discount (`maybeRescueAcquisition`). Every trade routes through
+  `tradeShares`, so **MAX_STAKE_PCT, the 40% hostile blocker
+  (`acquisitionBlocker`), the 100% public-float ledger, the 3% fee and price
+  impact** all bind a holdco exactly as they bind the player and the operator
+  field. Distress SELLING (the exit) reuses `BankruptcySystem.liquidatePortfolio`
+  — a distressed holdco sells its whole book at market before it can go
+  insolvent, the same rung an operator gets.
+
+- **Holdco-sized, not operator-dabbling.** Where the operator's B2 side-buying
+  keeps a $35k idle floor, buys 5% blocks, and caps near 25%
+  (`finance.ts`), the holdco keeps a $15k floor (its business IS the book),
+  moves 10% blocks, and ladders toward a `round(40 × stakeAppetite)` cap — an
+  expansionist holdco saturates the 49% partial cap / 40% control block; an
+  exporter stops near 24%. Persona expresses appetite through the deterministic
+  cap, never through a draw.
+
+- **RNG discipline.** The buy path is fully DETERMINISTIC (a sorted yield scan,
+  no `rng.chance`, no `ceoQuote`), so a holdco never advances the shared draw
+  stream on its buys — only its settled cash couples into the economy. The one
+  rng it can touch is the shared `maybeRescueAcquisition` cadence, and that
+  `||`-short-circuits below its $60k floor, which a fresh $30k holdco never
+  reaches early.
+
+- **Holdco valuation was already correct (B1 groundwork), verified not
+  duplicated.** A zero-facility firm flows through the same three tiers:
+  `operatingValuationOf` sums no facilities/inventory ⇒ cash − debt + the
+  earnings premium; `companyValuation` adds `holdingsValue` (stakes marked at
+  each target's `marketCap/100`). Because dividend income books as `dividendIn`
+  (part of `netProfit`, P2's fix), a holdco living on its book earns the 30×
+  multiple on that income. Portfolio mark + cash, no facility tier to value —
+  no new valuation code, a unit test pins the zero-facility case.
+
+- **The founder signal** (`AIFounderSystem` investor row). The signal is the
+  **median trailing dividend yield across listed firms** (`base/marketCap`, the
+  same base the DividendSystem pays from) sustained above `INVESTOR_YIELD_BAR`
+  (0.002 daily ≈ ~22%/yr gross at the 0.3 payout) for `INVESTOR_SIGNAL_DAYS`
+  (30) days — a broad spread of well-paying, reasonably-priced equity is what a
+  holdco enters for. It honours the shared founder cap and a
+  `unhealthy/aiCount ≤ 12%` solvency brake, and a 30-day town-wide cooldown so a
+  durable fat-yield regime seeds a holdco or two, not a swarm. The row is
+  **appended after** the operator row, so operators claim the day's single
+  founding slot first; the holdco takes days they don't.
+
+- **The pinning constraint that shaped D3 (the honesty measurement).** An active
+  holdco is a large NET BUYER, and shares trade against the public float — so
+  every stake it buys drains that cash out of the firm sector to the world
+  account. Measured, this materially shifts the A3 city crowd-tier bands: with
+  the archetype live in the tierAcceptance city soak, three seed-11 holdcos
+  drove the 300-day worker share **0.609 → 0.714** (over the 0.70 ceiling) and
+  comfortable **0.365 → 0.263** (under the 0.30 floor) — a real, non-monotonic
+  perturbation of a pinned baseline. So D3 is gated behind an **opt-in
+  `config.investorsEnabled` flag** (the shipped `servicesEnabled` precedent),
+  OFF in DEFAULT_CONFIG and every pinned soak, double-gated on
+  `sizePreset === 'city'`. With the flag off, **zero investors found and the
+  city economy is byte-identical to pre-D3** (city seed 11, 300 days:
+  `rngState` 2546912297 and total money $3,169,000.00 unchanged — the D1 pins;
+  Village seeds 1/777 `rngState` 3593176944 / 3403302807 unchanged; the
+  tierAcceptance bands, city under-supply founder, and Metropolis 24-30-firm
+  0-insolvent pins all pass untouched). The UI turns the flag on for a City
+  world; probes and tests opt in explicitly.
+
+- **beforeAfter (d3-investor probe, City, 300 days, flag ON).** *Before* (flag
+  off): 0 investors, city untouched. *After*: seeds 11/4/7 found **3 / 3 / 2**
+  holdcos (first entries day 56), all **0 insolvent** at day 300; portfolio P&L
+  (mark − basis + dividends) **+$39,190 / +$44,910 / −$12,394** with dividend
+  income **$18,056 / $15,978 / $3,592** (seed 7's holdco rides a marked
+  drawdown but stays solvent on cash — the honest losing case). Turnover
+  **1.55 / 2.08 / 1.95** (all build-up, no wash-trading), every stake ≤ 49% and
+  every target's float ≤ 100%, conserved to the cent on all three seeds. No
+  founder-pin shift lands on any pinned baseline — the flag holds them all at
+  their pre-D3 values (see the constraint above).
+
 ## Open questions / accepted quirks
 
 - **Phase 5 city valuation drift is under the re-pin trigger.** Because the
