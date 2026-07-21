@@ -112,6 +112,10 @@ function normalize(state: GameState): GameState {
   state.lastUndersupplyEntryDay = state.lastUndersupplyEntryDay ?? 0;
   state.investorSignalDays = state.investorSignalDays ?? 0;
   state.lastInvestorEntryDay = state.lastInvestorEntryDay ?? 0;
+  // Service-provider founder signal (Arc D4): saves predating it load with empty
+  // counters and no last-entry day — inert until a City game turns services on.
+  state.serviceUncoveredDays = state.serviceUncoveredDays ?? {};
+  state.lastServiceEntryDay = state.lastServiceEntryDay ?? 0;
   state.sharePriceShift = state.sharePriceShift ?? {};
   state.config.sizePreset = state.config.sizePreset ?? 'village';
   // B2B services channel (HD3): saves predating it load with the channel off and

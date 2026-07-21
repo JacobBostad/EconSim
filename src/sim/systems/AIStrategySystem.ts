@@ -33,6 +33,7 @@ import {
 } from './ai/OperatorBehavior';
 import { runLandlordBehavior } from './ai/LandlordBehavior';
 import { runInvestorBehavior } from './ai/investor';
+import { runServiceBehavior } from './ai/ServiceBehavior';
 
 // Public surface preserved for existing importers (ManagerSystem, log tests).
 export { adjustPrices, maybeWidenShelves, manageSourcing } from './ai/OperatorBehavior';
@@ -54,27 +55,22 @@ export type FirmBehavior = (
   digest: DigestBuffer | undefined,
 ) => void;
 
-/** Inert behavior for archetypes not yet shipped — no firm ever has one (every
- * preset founds 'operator' firms and the migration normalizes old saves to
- * 'operator'), so this is unreachable in every pinned baseline. It exists so
- * the dispatch table is total over `FirmArchetype` and a routing test can
- * assert a non-operator firm is NOT run through the operator loop. */
-const noopBehavior: FirmBehavior = () => {};
-
 /**
- * The archetype → behavior dispatch table (Arc D1). Operator, landlord (D2 —
- * real-estate development, ai/LandlordBehavior), and investor (D3 — a holdco
- * working its equity book) are live; D4 lands `service` (a compute provider).
- * Each specialist swaps its row here for its own module; adding a row is purely
- * additive and the operator path is never re-touched. Specialist rows are only
- * ever REACHED by firms their city-gated, flag-gated founders spin up, so every
- * pinned baseline (which founds none) stays inert.
+ * The archetype → behavior dispatch table (Arc D1). All four rows are live:
+ * operator (the shopkeeper loop), landlord (D2 — real-estate development,
+ * ai/LandlordBehavior), investor (D3 — a holdco working its equity book,
+ * ai/investor), and service (D4 — a B2B provider selling compute/advisory
+ * seats and growing capacity under tight utilization, ai/ServiceBehavior).
+ * Adding/swapping a row is purely additive: the operator path is never
+ * re-touched, and specialist rows are only ever REACHED by firms their
+ * city-gated, flag-gated founders spin up — every pinned baseline (which
+ * founds none) stays inert.
  */
 const BEHAVIOR_BY_ARCHETYPE: Record<FirmArchetype, FirmBehavior> = {
   operator: runOperatorBehavior,
   landlord: runLandlordBehavior, // D2
   investor: runInvestorBehavior, // D3
-  service: noopBehavior, // D4
+  service: runServiceBehavior, // D4
 };
 
 /** Route one firm to its archetype's behavior. Exported so a dispatcher test

@@ -120,20 +120,32 @@ export interface Firm {
   /** Lifetime forward deliveries locked at ≥1.3× base (achievement). */
   forwardWins: number;
 
-  // --- B2B services (HD3; city-scale only, all optional/undefined in Village) --
+  // --- B2B services (HD3/D4; city-scale only, all optional/undefined in Village) --
   /**
-   * This firm's listed price per service id (cents/seat/day) when it runs a
-   * datacenter — walked daily by utilization (ServiceBillingSystem). Undefined
+   * This firm's listed price per service id (cents/seat/day) for each service it
+   * provides — walked daily by utilization (ServiceBillingSystem). Undefined
    * until the firm becomes a provider; Village firms never set it. */
   servicePriceByService?: Record<string, number>;
   /**
-   * Firm-wide production multiplier from full service coverage this day
-   * (SERVICE_BOOST_MULT when covered, 1 otherwise). Set daily by
-   * ServiceBillingSystem; read by ProductionSystem. Undefined ⇒ no boost. */
+   * Firm-wide PRODUCTION multiplier from full COMPUTE coverage this day
+   * (SERVICE_BOOST_MULT when fully covered, proportional when partial, 1
+   * otherwise). Set daily by ServiceBillingSystem; read by ProductionSystem.
+   * Undefined ⇒ no boost. */
   serviceBoost?: number;
-  /** Consecutive days an AI subscriber's boost value has failed to cover its
-   * seat bill — the cancel hysteresis counter. Undefined ⇒ 0. */
-  serviceFailingDays?: number;
+  /**
+   * Firm-wide BRAND-per-ad-dollar multiplier from full CONSULTING coverage this
+   * day (CONSULTING_BRAND_MULT when fully covered, proportional when partial, 1
+   * otherwise). Set daily by ServiceBillingSystem; read by MarketingSystem (one
+   * tick later — marketing runs before billing in the day). Undefined ⇒ none. */
+  advisoryBoost?: number;
+  /** Per-service consecutive days an AI subscriber's benefit value has failed to
+   * cover its seat bill — the per-service cancel hysteresis counters. Undefined
+   * or missing key ⇒ 0. Keyed by service id so compute and consulting each
+   * cancel on their own clock. */
+  serviceFailingDaysByService?: Record<string, number>;
+  /** Per-service consecutive days a PROVIDER firm's own capacity has run full —
+   * the persistence signal the service archetype expands on. Undefined ⇒ 0. */
+  serviceFullDaysByService?: Record<string, number>;
 }
 
 /** A promise to deliver goods to a trade city by a deadline at a price

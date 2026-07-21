@@ -254,6 +254,8 @@ export function createInitialState(
     lastLandlordEntryDay: 0,
     investorSignalDays: 0,
     lastInvestorEntryDay: 0,
+    serviceUncoveredDays: {},
+    lastServiceEntryDay: 0,
     sharePriceShift: {},
     // Districts are built AFTER the size-preset block below (which may raise
     // the map dimensions), so the partition tiles the preset's real map.
@@ -460,7 +462,10 @@ const COMPUTE_PROVIDER_CASH = dollars(40000);
 function seedComputeProvider(b: Builder): void {
   const { state } = b;
   if (!state.config.servicesEnabled || state.config.sizePreset === 'village') return;
-  const firm = newFirm(b, 'Cirrus Compute', 'ai', COMPUTE_PROVIDER_CASH, emptyStrategy('none'), DEFAULT_AI_WAGE);
+  // Seeded as a 'service' archetype firm (Arc D4): the dispatcher routes it to
+  // ai/ServiceBehavior, so it grows its own capacity under load (level up / add a
+  // site) instead of running the shopkeeper loop it has no shop for.
+  const firm = newFirm(b, 'Cirrus Compute', 'ai', COMPUTE_PROVIDER_CASH, emptyStrategy('none', 'service'), DEFAULT_AI_WAGE);
   const personality = defaultPersonalityFor(1); // steady operator; no chain to run
   firm.personalityId = personality;
   firm.ceoName = defaultCeoFor(personality, 1);

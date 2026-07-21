@@ -1,16 +1,17 @@
 /**
  * ai/expansion.ts — the operator's build/grow behaviors: open a store under
- * shortage, master coffee/luxury, build housing or compute, level up a plant.
+ * shortage, master coffee/luxury, build housing, level up a plant.
  *
- * ARCHETYPE SEAMS (Arc D1, for D2–D4). Two of these behaviors are the physical
- * seeds of the specialist archetypes that D2/D4 will carve out:
- *  - `maybeBuildApartment` is the LANDLORD seam (D2): today an operator builds
- *    housing as a side venture under a squeeze; the landlord archetype will own
- *    real-estate development as its whole loop.
- *  - `maybeBuildDatacenter` is the SERVICE seam (D4): today an operator enters
- *    compute opportunistically; the service archetype will own provisioning.
- * They deliberately STAY in the operator loop's cadence for now (D1 is a pure
- * refactor) — D3/D4 lift them into their archetype modules, not this arc.
+ * ARCHETYPE SEAM (Arc D1, for D2). `maybeBuildApartment` is the LANDLORD seam:
+ * today an operator builds housing as a side venture under a squeeze; the
+ * landlord archetype will own real-estate development as its whole loop. It
+ * deliberately STAYS in the operator loop's cadence for now — D2 lifts it into
+ * its archetype module.
+ *
+ * The SERVICE seam has already been lifted (Arc D4): the operator's old
+ * `maybeBuildDatacenter` is gone from here — provisioning now lives in
+ * ai/ServiceBehavior.ts, owned by the 'service' archetype, generalized across the
+ * service catalog (datacenter compute + office consulting).
  */
 
 import type { SimContext } from '../../core/GameState';
@@ -28,7 +29,6 @@ import { MAX_RETAIL_PRODUCTS } from '../../data/constants';
 import { landCostMultiplier, landValueAt } from '../../core/LandValue';
 import { MAX_FACILITY_LEVEL, upgradeCost, upgradeFacility } from '../../core/Upgrades';
 import { getPersonality, ceoQuote } from '../../data/personalities';
-import { DATACENTER_SEATS_PER_LEVEL } from '../../data/services';
 
 /**
  * Expand: when a sold product has strong, sustained unmet demand and the firm is
@@ -315,71 +315,6 @@ export function maybeBuildApartment(ctx: SimContext, firmId: string): void {
   });
   emitEvent(state, 'info', 'ai',
     `🏢 ${firm.name} built ${apt.name} — new housing for a growing town.${ceoQuote(rng, firm, 'expand')}`, apt.id);
-}
-
-/**
- * AI compute provider (HD3; D4 seam): a very flush firm builds a datacenter to
- * enter the B2B compute market when demand is tight — total seats sold across
- * the town is running near capacity, so a new provider can win subscribers.
- * Deterministic (no rng draws): the gates are cash/utilization conditions, so
- * this never perturbs the shared stream, and it is doubly gated on the services
- * flag + non-Village scale (both false in every pinned baseline). Capped so the
- * town grows a compute market rather than exploding into datacenters. D1 leaves
- * it in the operator loop; D4's service archetype lifts provisioning out.
- */
-const DATACENTER_ENTRY_DAY = 40;
-const DATACENTER_ENTRY_CASH = 120000_00;
-const DATACENTER_KEEP_BUFFER = 60000_00;
-const DATACENTER_MAX_PROVIDERS = 4;
-const DATACENTER_TIGHT_UTIL = 0.9;
-
-export function maybeBuildDatacenter(ctx: SimContext, firmId: string): void {
-  const { state } = ctx;
-  if (!ctx.config.servicesEnabled || ctx.config.sizePreset === 'village') return;
-  const firm = state.firms[firmId]!;
-  if (ctx.time.day < DATACENTER_ENTRY_DAY || firm.cash < DATACENTER_ENTRY_CASH) return;
-
-  // Already a provider, or the market already has enough providers? Also read
-  // town-wide compute utilization to decide whether a new entrant is warranted.
-  let providers = 0;
-  let capacity = 0;
-  for (const fid in state.firms) {
-    let firmCap = 0;
-    for (const facId of state.firms[fid]!.facilities) {
-      const fac = state.facilities[facId];
-      if (fac?.type === 'datacenter' && fac.status !== 'closed') firmCap += DATACENTER_SEATS_PER_LEVEL * fac.level;
-    }
-    if (firmCap > 0) {
-      providers += 1;
-      capacity += firmCap;
-      if (fid === firmId) return; // this firm is already a provider
-    }
-  }
-  if (providers >= DATACENTER_MAX_PROVIDERS) return;
-  let sold = 0;
-  for (const cid in state.serviceContracts) sold += state.serviceContracts[cid]!.seats;
-  const util = capacity > 0 ? sold / capacity : 1; // no capacity yet ⇒ treat as tight
-  if (util < DATACENTER_TIGHT_UTIL) return;
-
-  const def = getFacilityDef('datacenter');
-  const loc = {
-    x: clamp(48 + providers * 14, 8, state.config.mapWidth - 8),
-    y: clamp(38, 8, state.config.mapHeight - 8),
-  };
-  const cost = Math.round(def.buildCost * landCostMultiplier(landValueAt(state, loc)));
-  if (firm.cash - cost < DATACENTER_KEEP_BUFFER) return;
-
-  const dc = createFacility(state, 'datacenter', firmId, loc, {
-    name: `${firm.name.split(' ')[0]} Compute`,
-  });
-  dc.buildCost = cost;
-  dc.operatingCostPerDay = Math.round(def.maintenanceCostPerDay * landCostMultiplier(landValueAt(state, loc)));
-  recordTransaction(state, {
-    from: firmAccount(firmId), to: WORLD_ACCOUNT, amount: cost,
-    firmId, category: 'buildSpend', note: 'Built datacenter',
-  });
-  emitEvent(state, 'info', 'ai',
-    `🖥️ ${firm.name} opened ${dc.name} — a new compute provider for the city's firms.`, dc.id);
 }
 
 /** Flush AI firms level up a production facility now and then. */

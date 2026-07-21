@@ -41,6 +41,9 @@ import { townHousingOccupancy } from './ai/LandlordBehavior';
 import { soldSomewhere } from './SatisfactionSystem';
 import { marketCap } from '../selectors/companySelectors';
 import { smoothedProfitBase } from './DividendSystem';
+import { SERVICE_IDS, getServiceDef, seatDemand } from '../data/services';
+import { serviceCapacity } from './ServiceBillingSystem';
+import { foundServiceFacility } from './ai/ServiceBehavior';
 import {
   IMMIGRATION_MIN_SATISFACTION,
   FOUNDER_EARLIEST_DAY,
@@ -674,17 +677,174 @@ function landlordTryFound(ctx: SimContext, town: FounderTownRead): boolean {
   return true;
 }
 
+// --- service row: a B2B service provider moves in where demand outruns supply --
+
+/** Aggregate uncovered seats (town desired − provider capacity) above which a
+ * service counts as under-provisioned for the day. ~15 seats ≈ a third of an L1
+ * datacenter / most of an L1 office — a real, provider-sized gap, not noise. */
+const SERVICE_FOUNDER_SEAT_BAR = 15;
+/** Consecutive under-provisioned days before a provider founds — long enough that
+ * a transient spike (a few new firms) doesn't summon a datacenter. */
+const SERVICE_FOUNDER_DAYS = 20;
+/** Town-wide days between service-provider entries — paces the market like the
+ * under-supply cooldown so one shock doesn't spawn four datacenters. */
+const SERVICE_FOUNDER_COOLDOWN = 25;
+
+/** Provider-name pools per service, picked by hash — flavor, not mechanics. */
+const SERVICE_FOUNDER_NAMES: Record<string, string[]> = {
+  compute: ['Nimbus Compute', 'Helix Dataworks', 'Stratus Compute'],
+  consulting: ['Vantage Advisory', 'Meridian Consulting', 'Keystone Advisory'],
+};
+
+/** Aggregate uncovered seat demand for one service across the whole town:
+ * everyone's seat demand minus every provider's capacity, floored at 0. */
+function uncoveredSeats(state: GameState, serviceId: string): number {
+  const def = getServiceDef(serviceId);
+  let desired = 0;
+  let capacity = 0;
+  for (const fid in state.firms) {
+    const firm = state.firms[fid]!;
+    if (firm.ownerType !== 'ai' && firm.ownerType !== 'player') continue;
+    // A provider's own facilities don't create consumer demand (it never
+    // subscribes), so count operator/subscriber-side demand only.
+    if (firm.strategy.archetype !== 'service') {
+      desired += seatDemand(firm.employees.length, firm.facilities.length);
+    }
+    capacity += serviceCapacity(state, firm, def);
+  }
+  return Math.max(0, desired - capacity);
+}
+
+function serviceTrackSignals(ctx: SimContext): void {
+  const { state } = ctx;
+  // City-scale + services-flag ONLY. Off-flag / Village never touches the counter
+  // map, so those states stay byte-identical (the map is never even created).
+  if (!state.config.servicesEnabled || state.config.sizePreset === 'village') return;
+  for (const serviceId of SERVICE_IDS) {
+    state.serviceUncoveredDays[serviceId] =
+      uncoveredSeats(state, serviceId) > SERVICE_FOUNDER_SEAT_BAR
+        ? (state.serviceUncoveredDays[serviceId] ?? 0) + 1
+        : 0;
+  }
+}
+
+function foundServiceFirm(ctx: SimContext, serviceId: string, day: number): boolean {
+  const { state } = ctx;
+  const aiCount = Object.values(state.firms).filter((f) => f.ownerType === 'ai').length;
+  const pool = SERVICE_FOUNDER_NAMES[serviceId] ?? [`New ${serviceId} Co`];
+  const name = pool[hashPick(state.seed, day, pool.length)]!;
+  const personality = defaultPersonalityFor(aiCount);
+
+  const id = nextId(state.idCounters, 'firm');
+  const firm: Firm = {
+    id,
+    name,
+    ownerType: 'ai',
+    cash: 0,
+    facilities: [],
+    employees: [],
+    pricesByProduct: {},
+    wagePolicy: { baseWage: dollars(16) },
+    accounting: emptyAccounting(),
+    strategy: emptyStrategy('none', 'service'),
+    bankruptcyStatus: 'healthy',
+    daysInsolvent: 0,
+    marketShareByProduct: {},
+    createdAtTick: state.tick,
+    personalityId: personality,
+    ceoName: defaultCeoFor(personality, aiCount),
+    brandByProduct: {},
+    adBudgetByProduct: {},
+    qualityByProduct: {},
+    debt: 0,
+    interestRatePerDay: 0.0009,
+    sharesHeld: {},
+    shareCostBasis: {},
+    acquiredNames: [],
+    autoPriceByProduct: {},
+    exportRevenue: 0,
+    exportRevenueByCity: {},
+    wholesaleSpend: 0,
+    wholesaleEarned: 0,
+    managers: [],
+    forwards: [],
+    forwardWins: 0,
+  };
+  state.firms[id] = firm;
+
+  // Founding capital arrives from outside the town — conserved.
+  recordTransaction(state, {
+    from: WORLD_ACCOUNT, to: firmAccount(id), amount: founderCash(state.config),
+    firmId: id, category: 'none', note: 'Founding capital',
+  });
+
+  // Build its first service facility (a pure-margin provider — deliberately
+  // unstaffed, like the seeded Cirrus, so wages never sink a thin seat margin).
+  if (!foundServiceFacility(ctx, id, serviceId)) {
+    // Couldn't afford the facility with buffer: return the capital and dissolve.
+    recordTransaction(state, {
+      from: firmAccount(id), to: WORLD_ACCOUNT, amount: firm.cash,
+      firmId: id, category: 'none', note: 'Founding abandoned',
+    });
+    delete state.firms[id];
+    return false;
+  }
+
+  state.serviceUncoveredDays[serviceId] = 0;
+  const def = getServiceDef(serviceId);
+  const ceo = firm.ceoName ? ` ${PERSONALITIES[personality]!.icon} ${firm.ceoName} arrives to run it.` : '';
+  emitEvent(state, 'info', 'economy',
+    `📰 New service: ${name} opens to sell ${def.label} seats — demand had outrun the city's providers.${ceo}`,
+    firm.id);
+  return true;
+}
+
+function serviceTryFound(ctx: SimContext, town: FounderTownRead): boolean {
+  const { state } = ctx;
+  const { day, aiCount } = town;
+  if (!state.config.servicesEnabled || state.config.sizePreset === 'village') return false;
+  if (day - state.lastServiceEntryDay < SERVICE_FOUNDER_COOLDOWN) return false;
+  // Solvency brake (mirrors the operator under-supply row): don't add a provider
+  // while a meaningful share of the field is already distressed.
+  const unhealthy = Object.values(state.firms).filter(
+    (f) => f.ownerType === 'ai' && f.bankruptcyStatus !== 'healthy',
+  ).length;
+  if (aiCount > 0 && unhealthy / aiCount > 0.12) return false;
+  // Enter the MOST under-provisioned service whose streak has cleared the bar.
+  // Deterministic: streak length, tie-broken by the fixed SERVICE_IDS order.
+  let pick: string | null = null;
+  let pickStreak = SERVICE_FOUNDER_DAYS - 1; // must reach the threshold to enter
+  for (const serviceId of SERVICE_IDS) {
+    const streak = state.serviceUncoveredDays[serviceId] ?? 0;
+    if (streak > pickStreak) {
+      pick = serviceId;
+      pickStreak = streak;
+    }
+  }
+  if (!pick) return false;
+  // An abandoned founding (couldn't afford the facility with buffer) must not
+  // consume the cooldown window or the day's founding slot — the operator row
+  // verifies affordability before claiming, and this row now matches (review
+  // finding: a failed entry silently delayed relief of a persistent shortage).
+  if (!foundServiceFirm(ctx, pick, day)) return false;
+  state.lastServiceEntryDay = day;
+  return true;
+}
+
 /**
- * The founder archetype table (Arc D1 scaffold). Operator + landlord live. D3–D4
- * append their rows here — an investor holdco that spins up where equity is
- * cheap and dividends fat, a service provider where compute demand outruns
- * capacity — each with its own trackSignals + tryFound. The shell iterates in
- * table order, so adding a row is additive and leaves earlier rows untouched.
+ * The founder archetype table (Arc D1 scaffold; Arc D4 adds the service row).
+ * Operator first (staple vacancy + under-supply), then service (a B2B provider
+ * where a service's demand outruns town capacity). D2–D3 append landlord/investor
+ * rows — each with its own trackSignals + tryFound. The shell iterates in table
+ * order (operator claims the day's single slot first), so adding a row is additive
+ * and leaves the earlier rows untouched. The service row is inert unless
+ * servicesEnabled + city-scale, so no services-off baseline can hit it.
  */
 const FOUNDER_ARCHETYPES: FounderArchetype[] = [
   { archetype: 'operator', trackSignals: operatorTrackSignals, tryFound: operatorTryFound },
   { archetype: 'landlord', trackSignals: landlordTrackSignals, tryFound: landlordTryFound },
   { archetype: 'investor', trackSignals: investorTrackSignals, tryFound: investorTryFound },
+  { archetype: 'service', trackSignals: serviceTrackSignals, tryFound: serviceTryFound },
 ];
 
 export function runAIFounderSystem(ctx: SimContext): void {

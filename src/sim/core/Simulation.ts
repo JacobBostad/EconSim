@@ -713,10 +713,12 @@ export class Simulation {
     const firm = s.firms[command.firmId];
     if (!firm) return;
     const def = getFacilityDef(command.defId);
-    // The datacenter is city-scale only and gated on the services flag — never
-    // buildable in a Village (it isn't in the Village build menu either).
-    if (def.type === 'datacenter' && (!s.config.servicesEnabled || s.config.sizePreset === 'village')) {
-      emitEvent(s, 'warning', 'player', 'Datacenters need the city-scale services channel.', firm.id);
+    // The service facilities (datacenter, office) are city-scale only and gated on
+    // the services flag — never buildable in a Village (they aren't in the Village
+    // build menu either).
+    if ((def.type === 'datacenter' || def.type === 'office')
+      && (!s.config.servicesEnabled || s.config.sizePreset === 'village')) {
+      emitEvent(s, 'warning', 'player', 'Service facilities need the city-scale services channel.', firm.id);
       return;
     }
     const blocker = placementBlocker(s, command.location);

@@ -40,7 +40,6 @@ import {
   maybeExpand,
   maybeUpgrade,
   maybeBuildApartment,
-  maybeBuildDatacenter,
   maybeEnterCoffee,
   maybeEnterLuxury,
 } from './expansion';
@@ -791,7 +790,10 @@ export function runOperatorBehavior(
     maybeExportSurplus(ctx, firm.id);
     maybeUpgrade(ctx, firm.id);
     maybeBuildApartment(ctx, firm.id);
-    maybeBuildDatacenter(ctx, firm.id);
+    // Datacenter/compute provisioning left the operator loop in Arc D4 — the
+    // 'service' archetype owns it now (ai/ServiceBehavior.ts). An operator no
+    // longer opportunistically enters the compute market; it only SUBSCRIBES
+    // (that side stays in ServiceBillingSystem, unchanged).
     maybeEnterCoffee(ctx, firm.id);
     maybeEnterLuxury(ctx, firm.id);
     if (maybeRescueAcquisition(ctx, firm.id)) return; // firm map changed

@@ -29,11 +29,12 @@ import { managerCandidates, managerDuties } from '../sim/systems/ManagerSystem';
 import { FORWARD_MAX_OPEN, FORWARD_CLOSE_FEE, forwardMark } from '../sim/systems/ForwardSystem';
 import { computeTime } from '../sim/core/Tick';
 import {
-  computeCapacity,
-  listedComputePrice,
-  computeSeatDemand,
+  serviceCapacity,
+  listedPrice,
+  serviceSeatDemand,
 } from '../sim/systems/ServiceBillingSystem';
-import { SERVICE_BOOST_MULT } from '../sim/data/services';
+import { SERVICES, COMPUTE_SERVICE_ID, getServiceDef } from '../sim/data/services';
+import type { ServiceDef } from '../sim/data/services';
 
 export function FacilityActions({ fac }: { fac: Facility }): React.ReactElement {
   const sim = useGameStore((s) => s.sim);
@@ -57,8 +58,8 @@ export function FacilityActions({ fac }: { fac: Facility }): React.ReactElement 
 
   return (
     <div>
-      {/* Datacenter — the B2B compute provider (HD3) */}
-      {fac.type === 'datacenter' && <DatacenterCard fac={fac} />}
+      {/* Service provider — the B2B compute (datacenter) / advisory (office) card */}
+      {(fac.type === 'datacenter' || fac.type === 'office') && <ServiceProviderCard fac={fac} />}
 
       {/* Recipe selection */}
       {producing && (
@@ -512,8 +513,8 @@ export function FacilityActions({ fac }: { fac: Facility }): React.ReactElement 
         {employees.length === 0 && <div className="small muted">No workers.</div>}
       </div>
 
-      {/* Supply contracts feeding this facility (datacenters hold no goods) */}
-      {fac.type !== 'datacenter' && (
+      {/* Supply contracts feeding this facility (service facilities hold no goods) */}
+      {fac.type !== 'datacenter' && fac.type !== 'office' && (
       <div className="card">
         <div className="section-title" style={{ marginTop: 0 }}>Inbound Supply Contracts</div>
         {contractsByDestination(state, fac.id).map((c) => (
@@ -658,45 +659,67 @@ export function FacilityActions({ fac }: { fac: Facility }): React.ReactElement 
   );
 }
 
+/** The catalog service a facility provides (datacenter→compute, office→advisory). */
+function serviceForFacility(fac: Facility): ServiceDef {
+  for (const id of Object.keys(SERVICES)) {
+    if (SERVICES[id]!.facilityType === fac.type) return SERVICES[id]!;
+  }
+  return getServiceDef(COMPUTE_SERVICE_ID); // datacenter fallback
+}
+
 /**
- * Datacenter inspector (HD3): the provider's compute capacity, utilization, and
- * current listed seat price, its subscriber list, and — for a player firm that
- * isn't the owner — a one-click Subscribe/Cancel for the player's own firm. This
- * is the single honest surface for the whole compute channel.
+ * Service-provider inspector (HD3 compute; Arc D4 generalized to advisory): the
+ * provider's seat capacity, utilization, and current listed seat price, its
+ * subscriber list, and — for a COMPUTE provider a player firm doesn't own — a
+ * one-click Subscribe/Cancel for the player's own firm (the player subscribe path
+ * is wired for compute today). One honest surface per service.
  */
-function DatacenterCard({ fac }: { fac: Facility }): React.ReactElement {
+function ServiceProviderCard({ fac }: { fac: Facility }): React.ReactElement {
   const sim = useGameStore((s) => s.sim);
   const dispatch = useGameStore((s) => s.dispatch);
   const state = sim.getState();
+  const def = serviceForFacility(fac);
   const provider = state.firms[fac.ownerFirmId];
-  const capacity = provider ? computeCapacity(state, provider) : 0;
-  const price = provider ? listedComputePrice(provider) : 0;
-  const customers = Object.values(state.serviceContracts).filter((c) => c.providerFirmId === fac.ownerFirmId);
+  const capacity = provider ? serviceCapacity(state, provider, def) : 0;
+  const price = provider ? listedPrice(provider, def) : 0;
+  const customers = Object.values(state.serviceContracts).filter(
+    (c) => c.providerFirmId === fac.ownerFirmId && c.serviceId === def.id,
+  );
   const sold = customers.reduce((s, c) => s + c.seats, 0);
   const util = capacity > 0 ? sold / capacity : 0;
 
   const playerFirm = state.firms[state.playerFirmId];
   const isPlayerProvider = fac.ownerFirmId === state.playerFirmId;
+  // Player subscribe/cancel is wired for compute only (SUBSCRIBE_SERVICE).
+  const playerCanSubscribe = def.id === COMPUTE_SERVICE_ID;
   const playerSub = playerFirm
-    ? Object.values(state.serviceContracts).find((c) => c.subscriberFirmId === state.playerFirmId)
+    ? Object.values(state.serviceContracts).find(
+        (c) => c.subscriberFirmId === state.playerFirmId && c.serviceId === def.id,
+      )
     : undefined;
   const playerSubbedHere = playerSub?.providerFirmId === fac.ownerFirmId;
-  const playerDemand = playerFirm ? computeSeatDemand(playerFirm) : 0;
+  const playerDemand = playerFirm ? serviceSeatDemand(playerFirm) : 0;
+  const isCompute = def.id === COMPUTE_SERVICE_ID;
+  const benefitPct = Math.round((def.boostMult - 1) * 100);
 
   return (
     <div className="card">
-      <div className="section-title" style={{ marginTop: 0 }}>🖥️ Compute provider</div>
+      <div className="section-title" style={{ marginTop: 0 }}>
+        {isCompute ? '🖥️ Compute provider' : '💼 Advisory provider'}
+      </div>
       <div className="small" style={{ lineHeight: 1.6 }}>
         Capacity <strong>{capacity}</strong> seats (L{fac.level}) · sold <strong>{sold}</strong>{' '}
         (<span className="mono">{(util * 100).toFixed(0)}%</span>) · list price{' '}
         <span className="mono">{formatMoney(price)}</span>/seat/day
       </div>
       <p className="muted small" style={{ margin: '4px 0' }}>
-        A subscriber with full seat coverage produces {Math.round((SERVICE_BOOST_MULT - 1) * 100)}% faster
-        company-wide. The price walks with utilization.
+        {isCompute
+          ? `A subscriber with full seat coverage produces ${benefitPct}% faster company-wide.`
+          : `A subscriber with full seat coverage builds brand ${benefitPct}% faster per ad dollar.`}
+        {' '}The price walks with utilization.
       </p>
 
-      {!isPlayerProvider && playerFirm && (
+      {playerCanSubscribe && !isPlayerProvider && playerFirm && (
         <div className="row" style={{ gap: 6, marginTop: 4 }}>
           {playerSubbedHere ? (
             <button onClick={() => dispatch({ type: 'CANCEL_SERVICE', firmId: state.playerFirmId })}>
@@ -709,7 +732,7 @@ function DatacenterCard({ fac }: { fac: Facility }): React.ReactElement {
                 playerSub
                   ? 'Your firm already subscribes elsewhere — cancel that first.'
                   : util >= 1
-                    ? 'This datacenter is fully subscribed.'
+                    ? 'This provider is fully subscribed.'
                     : `Reserve ${playerDemand} seats at ${formatMoney(price)}/seat/day.`
               }
               onClick={() => dispatch({ type: 'SUBSCRIBE_SERVICE', firmId: state.playerFirmId, providerFirmId: fac.ownerFirmId })}

@@ -28,7 +28,11 @@ export type FacilityType =
   | 'importer'
   /** Sells compute seats to other firms (B2B services, HD3). No physical
    * inventory; capacity = DATACENTER_SEATS_PER_LEVEL × level. City-scale only. */
-  | 'datacenter';
+  | 'datacenter'
+  /** Sells advisory (consulting) seats to other firms (B2B services second
+   * service, Arc D4). No physical inventory; capacity = OFFICE_SEATS_PER_LEVEL
+   * × level. City-scale only; a covered firm builds brand faster per ad dollar. */
+  | 'office';
 
 /** Retail market positioning — who the store courts (Phase 3 of the
  * classes-and-ascension design). */

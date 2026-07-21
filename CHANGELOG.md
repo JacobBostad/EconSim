@@ -66,6 +66,29 @@ thousands via statistical cohorts plus a fully-simulated cast, districts,
   green (+6 D3 tests: holdco valuation, the founder gate on/off, cap compliance,
   distress liquidation; the D1 dispatcher test updated — `investor` now routes to
   a live behavior, `service` stays the inert stub).
+- **D4 — service firms** (design HD3/D4; see docs/design/b2b-services.md): the
+  first specialist archetype lands, and it proves the B2B channel generalizes.
+  `ai/ServiceBehavior.ts` fills the D1 `service` dispatcher row — a provider loop
+  that enters a service under tight town utilization (the C2 datacenter-entry
+  gate, lifted verbatim out of the operator's `maybeBuildDatacenter` seam and
+  generalized to the catalog), grows its own capacity (level up, else a second
+  site) when its seats run persistently full, and holds a 120-day maintenance
+  cash buffer before any spend. Operators keep their C2 subscribe-side behavior;
+  they no longer build datacenters. A SECOND service — office CONSULTING — ships
+  to prove the channel is not compute-specific: a covered firm builds brand
+  faster per ad dollar (`advisoryBoost` × MarketingSystem's ad→brand gain,
+  `CONSULTING_BRAND_MULT` = 1.10) — a margin-side benefit that touches nothing in
+  production, valued in the ROI gate off trailing ad spend exactly as compute is
+  valued off gross. `data/services.ts` is now a 2-entry catalog and
+  `ServiceBillingSystem` iterates it generically (deterministic billing order:
+  service id, then contract id). `AIFounderSystem` gains the `service` founder
+  row — aggregate uncovered seat demand above a bar for 20 days founds a provider,
+  city-scale + `servicesEnabled` only, so plain-preset soaks (flag off) can't
+  reach it: the counter map is never touched and no `service` firm is ever
+  founded there (pinned by the plain-city inertness test). D4 probe (300d city,
+  seeds 11/4/7): both services adopted (compute ~46%, consulting 17-30%), all
+  providers solvent, zero cross-service billing bleed, per-service churn < 0.1/day,
+  money conserved to the cent, ≤ 0.37 ms/tick. Suite green (484 tests).
 
 - **D1 — the firm archetype framework** (design HD5; see
   docs/design/firm-archetypes.md): the scaffold for specialist firms. Every AI

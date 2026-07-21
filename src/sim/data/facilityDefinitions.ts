@@ -131,6 +131,24 @@ export const FACILITY_DEFS: Record<FacilityDefId, FacilityDefinition> = {
     description:
       'Sells compute seats to other firms (city-scale B2B). 40 seats per level; a firm with full seat coverage produces 6% faster company-wide.',
   },
+  office: {
+    id: 'office',
+    name: 'Consulting Office',
+    type: 'office',
+    // Cheaper than a datacenter (Arc D4): an office is a lighter capital play —
+    // advisory seats, not compute — whose return is a recurring seat bill.
+    buildCost: dollars(4000),
+    maintenanceCostPerDay: dollars(14),
+    // A small advisory crew; not required to serve seats (capacity is 24 × level),
+    // but the slots let a provider run payroll like any other employer.
+    workerCapacity: 3,
+    storageCapacity: 0,
+    allowedRecipes: [],
+    allowedProductsForSale: [],
+    footprint: 3,
+    description:
+      'Sells advisory seats to other firms (city-scale B2B). 24 seats per level; a firm with full seat coverage builds brand 10% faster per ad dollar.',
+  },
   importer: {
     id: 'importer',
     name: 'Importer / Exporter',
@@ -166,9 +184,9 @@ export function facilityRecipesForPreset(def: FacilityDefinition, preset: SizePr
   );
 }
 
-/** Definitions the player may build (excludes home/importer). The datacenter is
- * NOT here: it is city-scale only and appended by buildableDefs() below so a
- * Village build menu never shows it. */
+/** Definitions the player may build (excludes home/importer). The service
+ * facilities (datacenter, office) are NOT here: they are city-scale only and
+ * appended by buildableDefs() below so a Village build menu never shows them. */
 export const BUILDABLE_DEFS: FacilityDefinition[] = [
   FACILITY_DEFS.farm!,
   FACILITY_DEFS.apartment!,
@@ -181,15 +199,16 @@ export const BUILDABLE_DEFS: FacilityDefinition[] = [
 /**
  * Buildable set for a given world scale. Village gets exactly BUILDABLE_DEFS
  * (the classic menu, untouched). City-scale worlds with the B2B services
- * channel enabled also offer the datacenter — the one facility gated on both
- * the size preset AND the services flag, mirroring the engine's gates.
+ * channel enabled also offer the two service facilities (datacenter, office) —
+ * the facilities gated on both the size preset AND the services flag, mirroring
+ * the engine's gates.
  */
 export function buildableDefs(config: {
   sizePreset: 'village' | 'city' | 'metropolis';
   servicesEnabled: boolean;
 }): FacilityDefinition[] {
   if (config.sizePreset !== 'village' && config.servicesEnabled) {
-    return [...BUILDABLE_DEFS, FACILITY_DEFS.datacenter!];
+    return [...BUILDABLE_DEFS, FACILITY_DEFS.datacenter!, FACILITY_DEFS.office!];
   }
   return BUILDABLE_DEFS;
 }

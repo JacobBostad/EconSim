@@ -44,6 +44,7 @@ const BUILDING_FILL: Record<FacilityType, string> = {
   retail: '#74a8d8',
   importer: '#b08cc8',
   datacenter: '#5fb3a1',
+  office: '#6f9bc4',
 };
 
 const ACTIVITY_COLOR: Record<CitizenActivity, string> = {

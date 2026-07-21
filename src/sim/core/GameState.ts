@@ -213,6 +213,15 @@ export interface GameState {
   /** Day of the last investor (holdco) founder entry, for its entry rate-limit
    * (0 = none yet). */
   lastInvestorEntryDay: number;
+  /** Consecutive days each SERVICE's aggregate uncovered seat demand (desired
+   * seats across all firms minus provider capacity) has stayed above the founder
+   * bar — the city-scale + servicesEnabled signal that a service provider should
+   * move in (Arc D4). Only ever accrued at city scale with the flag on; empty
+   * everywhere else. */
+  serviceUncoveredDays: Record<string, number>;
+  /** Day of the last town-wide service-provider founder entry, for that entry's
+   * rate-limit (0 = none yet). */
+  lastServiceEntryDay: number;
   /**
    * Share-price displacement per firm: recent trades push the quote away
    * from fair value (marketCap), decaying back daily. Liquidity noise only —
