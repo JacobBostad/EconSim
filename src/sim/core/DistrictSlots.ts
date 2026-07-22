@@ -19,6 +19,7 @@
  */
 
 import type { GameState } from './GameState';
+import { townOf } from './Town';
 import type { DistrictKind } from '../entities/District';
 import type { Vec2 } from '../entities/Location';
 
@@ -62,8 +63,9 @@ export function firstFreeDistrictSlot(
     return false;
   };
 
-  for (const id of Object.keys(state.districts).sort()) {
-    const d = state.districts[id]!;
+  const districts = townOf(state).districts;
+  for (const id of Object.keys(districts).sort()) {
+    const d = districts[id]!;
     if (d.kind !== kind) continue;
     // Callers placing INTO a specific district (the cast curator promoting a
     // crowd member home) scope the scan; unscoped callers take the first free

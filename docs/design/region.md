@@ -122,7 +122,9 @@ has used (`servicesEnabled`, `realEstateEnabled`, `investorsEnabled`, and now
    `state.towns = { home: Town }` — a **one-town region** that must reproduce
    today's pinned runs to the byte (the migration is "wrap the existing records
    in a `home` town, thread the context, change nothing else"). This is the big
-   mechanical step, landed as a pure refactor and measured as one.
+   mechanical step, landed as a pure refactor and measured as one. *First slice
+   shipped as a `Town` **view** (the safe first move) — see "What ships now — the
+   Town seam (step 3, first slice)" below.*
 4. **A second simulated town.** With the struct in place, a partner trade city
    graduates from pool to a real (small) simulated town. The freight edge
    carries goods between two live economies.
@@ -414,3 +416,153 @@ flag-on and inert flag-off (no pool ⇒ nothing to read).
   `rngState` 3274842624 / 2896139677 / 4253583594; city seeds 11/4/7 reproduce
   their `rngState`; the production data lives on the def but never runs without a
   pool, so the serialized book is free of any pool key. Full suite green (551).
+
+## What ships now — the Town seam (step 3, first slice)
+
+Step 3's full move — `state.firms` → `state.towns[townId].firms` across ~1,300
+call sites under an absolute bit-identity contract — is not a slice; attempting
+it in one patch would put the pinned village at risk for a shape no one can play
+yet. So step 3 lands as its own **flag-free gradient**, and this is its first
+brick: the `Town` as a **view**, the district family routed through it, and a
+recipe the next batches grind through firm-by-firm.
+
+### The design decision — the Town is a VIEW first (option (b)), then MOVE (option (c))
+
+Three ways the flat records and the town records can coexist during the gradient
+were weighed:
+
+- **(a) Aliasing** — `state.towns.home.firms` *is* `state.firms` (same object
+  reference stored under both paths). Rejected as the FIRST step: the wrapper is
+  real serialized state, so the serializer must be taught to skip it or every
+  save **doubles** (the records write out under both `firms` and
+  `towns.home.firms`). A serializer exclusion is a sharp knife held against the
+  one invariant the orchestrator re-verifies to the byte — the wrong tool to
+  reach for on move one.
+- **(b) The Town is a VIEW** — `townOf(state,'home').districts` is a getter that
+  returns `state.districts`; the town is **computed, never stored**. No `towns`
+  key enters a save, so serialization is byte-identical and there is **zero
+  migration**. Systems adopt `townOf(...)` one call site at a time; each
+  conversion is provably behaviour-identical because the accessor returns the
+  *same object* the flat path did. **Chosen.** It is the smallest step that still
+  makes real structural progress: it introduces the town *seam* (the `townId`
+  context + the accessor every future system will call) without moving a single
+  byte of state.
+- **(c) Records genuinely MOVE** — `state.towns[townId].firms` becomes the home
+  of the records, with back-compat getters left at the old flat paths. This is
+  the *endgame* shape, but the riskiest first step: it is a real serialized-shape
+  change (a versioned migration) landed at the same time as the ~1,300-site read
+  conversion, so a drift can come from either half and the bisect is muddy.
+
+**Why (b) then (c) is the right order.** Option (b) lets every reader convert and
+be proven identical *before* any byte of state moves — the risky serialized-shape
+change (c) then lands against a codebase where every call site already routes
+through `townOf`, so it swaps only the accessor's two getters
+(`return state.districts` → `return state.towns[townId].districts`) plus a single
+versioned migration, and **no call site changes on that day**. The bit-identity
+harness bisects cleanly: read-conversion drift (b) and shape-move drift (c) never
+mix in the same patch. This is the same flag-gated-gradient discipline steps 1–2
+used, applied to a refactor instead of a feature — the referee is bit-identity,
+one file at a time, and an honest measured NO-SHIP on any batch is a complete
+result.
+
+### The seam, as landed
+
+- **`core/Town.ts`** — `TownId`, `HOME_TOWN_ID = 'home'`, the `Town` view
+  interface (`districts`, `cohorts` getters today; firms/facilities/citizens/
+  marketStats/map-dims join batch by batch), and `townOf(state, townId =
+  HOME_TOWN_ID): Town`. The getters delegate to the flat records, so
+  `townOf(state,'home').districts === state.districts` (same reference). One tiny
+  allocation per call; hoist it to a local at the top of a hot loop.
+- **`SimContext.townId`** — the town this tick's systems operate on, threaded
+  through the existing context the dispatcher already builds. `makeContext` sets
+  it to `HOME_TOWN_ID`. A system reads its town's records through
+  `townOf(ctx.state, ctx.townId)`.
+- **No serialized-state change.** No `towns` key, no `townId` field on any
+  entity, no migration. `SAVE_VERSION` is untouched. The whole seam is compile-
+  time + in-memory.
+
+### The family converted — districts (the smallest, already town-scoped)
+
+Every **district reader** in the sim layer now routes through the accessor —
+**14 call sites across 8 files** (the family's writers stay on the flat path; the
+view is read-only by design, and record creation moves in option (c)):
+
+| file | reader sites | town context |
+| --- | --- | --- |
+| `systems/DistrictSystem.ts` | 3 | `ctx.townId` (hoisted `town`) |
+| `systems/CastCuratorSystem.ts` | 5 | `ctx.townId` (4) + home default (1, bare-`state` helper) |
+| `systems/CohortDemandSystem.ts` | 3 | `ctx.townId` (2) + home default (1) |
+| `systems/CrowdRentSystem.ts` | 1 | `ctx.townId` |
+| `systems/RetailDemandSystem.ts` | 3 | `ctx.townId` (hoisted `town`) |
+| `systems/CohortSocialSystem.ts` | 1 | home default (bare-`state` helper) |
+| `core/DistrictSlots.ts` | 1 | home default (shared helper) |
+| `data/startingScenario.ts` | 1 | home default (init reader) |
+
+After conversion, the only remaining flat `state.districts` in sim code are the
+two **writers** (`startingScenario` creates the partition, `migrations` defaults
+it) and the accessor's own single flat read inside `townOf`. The district
+*helpers* (`districtAt`, `shoppingDistrictIds`) already take the districts record
+as a parameter, so a converted site just passes `town.districts` in place of
+`state.districts` — the helper bodies never changed.
+
+### The conversion recipe (for the firms/facilities/citizens batches)
+
+Grind each remaining family with the same four-move recipe:
+
+1. **Add the getter to the `Town` view** — one line in `core/Town.ts`
+   (`get firms() { return state.firms; }`) plus the field on the `Town`
+   interface.
+2. **Convert readers, family by family.** In a **ctx-scoped** system, hoist
+   `const town = townOf(ctx.state, ctx.townId)` once at the function top and read
+   `town.firms`; where the record is passed to a helper, pass `town.firms`
+   instead of `state.firms`. In a **bare-`state` helper** mid-gradient, call
+   `townOf(state).firms` (the home default is identity in a one-town region) and
+   leave a comment that it gains a `townId` param at the endgame move. **Convert
+   readers only** — leave writers (record creation) on the flat path until (c).
+3. **Prove each batch identical.** The accessor returns the same object, so the
+   whole pinned suite (village 11/4/7 `rngState`, city seed 11, full serialize)
+   is the referee. Run it after each family; an honest measured NO-SHIP (a batch
+   that *can't* stay identical) stops that batch, not the arc.
+4. **Fails-on-revert check.** Break the accessor in a scratch edit (return `{}`
+   or the wrong family's record) and confirm a pinned test goes red before
+   committing the batch — proof the harness actually guards the conversion.
+
+The endgame (c) then edits only `townOf`'s getters + one migration; every site
+converted in steps 1–4 is already correct.
+
+### Remaining families (estimated reader sites, measured `state.X` counts)
+
+| family | `state.X` refs (all) | non-test sim readers (est.) | notes |
+| --- | --- | --- | --- |
+| **districts** | — | **DONE (14 sites, 8 files)** | this slice |
+| **cohorts** | ~128 | ~50 | the district family's sibling; several helpers hold money (region-wide conservation reads all towns' cohorts — a money-scope call the endgame makes explicit) |
+| **firms** | ~500 | ~450 | the largest; `ownerFirmId` cross-refs are untyped strings, unchanged by (b) |
+| **facilities** | ~400 | ~360 | `facilityId` cross-refs likewise; placement helpers (`DistrictSlots`) read facilities + districts together |
+| **citizens** | ~240 | ~210 | cast side of the crowd |
+| **marketStats** | ~40 | ~35 | per-product town book |
+| **map dims** | small | small | `config.mapWidth/Height` → per-town |
+| **UI reads** | ~8 | (separate batch) | `PopulationDashboard`, `TownRenderer` read districts flat — a read-only projection, converted in a UI batch (touches e2e), deferred here to keep the seam sim-only |
+
+### Measured (Town seam, step 3 first slice)
+
+- **Accessor identity (test `townSeam.test.ts`):** `townOf(state,'home')
+  .districts === state.districts` and `.cohorts === state.cohorts` — same
+  reference, explicit id and default id alike; the view tracks the live record
+  after 10 days of the economy rewriting district desirability.
+- **The seam threads:** `makeContext(state).townId === HOME_TOWN_ID`.
+- **Serialization byte-unchanged:** no `towns` key in a City save at day 0 or
+  after a 20-day run; the flat `districts`/`cohorts` keys serialize exactly as
+  before. `SAVE_VERSION` untouched, no migration added.
+- **Converted family deterministic:** two City seed-11 runs agree bit-for-bit
+  through the converted district systems (`rngState`, full serialized state, and
+  every district's `desirability`/`landValue`) over 30 days.
+- **Mis-conversion is caught (fails-on-revert, demonstrated):** breaking the
+  accessor in a scratch edit (`get districts() { return {}; }` — the accessor
+  drops the town's districts) turns **8 tests red across 3 files**
+  (`townSeam` 3, `districts`, `cohortDemand`) — the accessor-identity assertion
+  and the district-dependent economy tests both flag it. Restoring the getter
+  returns the suite to green. The harness demonstrably guards the conversion.
+- **Pinned baselines hold:** village seeds 11/4/7 reproduce `rngState`
+  3274842624 / 2896139677 / 4253583594; city seed 11 reproduces its `rngState`
+  and money supply. Full suite green (**567** = 560 + 7 seam tests); `tsc`,
+  `build` clean. No UI touched (no e2e needed).

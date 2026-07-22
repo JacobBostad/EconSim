@@ -41,6 +41,7 @@
 
 import type { SimContext, GameState } from '../core/GameState';
 import { recordTransaction } from '../core/GameState';
+import { townOf } from '../core/Town';
 import { cohortAccount, firmAccount, WORLD_ACCOUNT } from '../core/Transactions';
 import { isDayBoundary } from '../core/Tick';
 import type { Cohort } from '../entities/Cohort';
@@ -99,7 +100,7 @@ export function runCrowdRentSystem(ctx: SimContext): void {
     if (fac.status === 'closed') continue;
     const owner = state.firms[fac.ownerFirmId];
     if (!owner || (owner.ownerType !== 'player' && owner.ownerType !== 'ai')) continue;
-    const d = districtAt(state.districts, fac.location.x, fac.location.y);
+    const d = districtAt(townOf(state, ctx.townId).districts, fac.location.x, fac.location.y);
     if (!d) continue;
     (aptsByDistrict[d.id] ??= []).push(fac);
   }

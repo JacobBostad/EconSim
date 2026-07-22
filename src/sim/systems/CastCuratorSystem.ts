@@ -29,6 +29,7 @@
 
 import type { SimContext, GameState } from '../core/GameState';
 import { emitEvent, recordTransaction } from '../core/GameState';
+import { townOf } from '../core/Town';
 import { cohortAccount, citizenAccount } from '../core/Transactions';
 import { isDayBoundary } from '../core/Tick';
 import type { Citizen, CitizenTier } from '../entities/Citizen';
@@ -55,9 +56,11 @@ function anyCrowd(state: GameState): boolean {
   return false;
 }
 
-/** The stratum a home location + tier belongs to, as `${districtId}:${tier}`. */
+/** The stratum a home location + tier belongs to, as `${districtId}:${tier}`.
+ * Bare-`state` helper mid-gradient: reads the home town by default (one-town
+ * region → identical reference); gains a `townId` param at the endgame move. */
 function stratumOf(state: GameState, home: Vec2, tier: CitizenTier): string {
-  const d = districtAt(state.districts, home.x, home.y);
+  const d = districtAt(townOf(state).districts, home.x, home.y);
   return `${d ? d.id : ''}:${tier}`;
 }
 
@@ -99,7 +102,7 @@ function curate(ctx: SimContext): boolean {
 
   // --- census: cast + crowd per district × tier stratum ---
   const strata: Stratum[] = [];
-  for (const did of Object.keys(state.districts).sort()) {
+  for (const did of Object.keys(townOf(state, ctx.townId).districts).sort()) {
     for (const tier of TIERS) strata.push({ key: `${did}:${tier}`, districtId: did, tier });
   }
   const castCount: Record<string, number> = {};
@@ -220,7 +223,7 @@ function pickRetiree(state: GameState, over: Stratum): Citizen | null {
 function resolvePromoteHome(ctx: SimContext, districtId: DistrictId, gone: Citizen): string | null {
   const { state } = ctx;
   const inDistrict = (loc: Vec2): boolean =>
-    districtAt(state.districts, loc.x, loc.y)?.id === districtId;
+    districtAt(townOf(state, ctx.townId).districts, loc.x, loc.y)?.id === districtId;
 
   const goneHome = state.facilities[gone.homeFacilityId];
   if (goneHome && inDistrict(goneHome.location)) return gone.homeFacilityId;
@@ -265,7 +268,7 @@ function retire(ctx: SimContext, gone: Citizen, over: Stratum): void {
     state.cohorts[over.key] = cohort;
   }
   const name = gone.name;
-  const districtName = state.districts[over.districtId]?.name ?? over.districtId;
+  const districtName = townOf(state, ctx.townId).districts[over.districtId]?.name ?? over.districtId;
   // Shared removal path — cash flows citizen -> cohort pool, conserved.
   removeCitizen(state, gone, cohortAccount(over.key), `Retired ${name} into the crowd`);
   cohort.population += 1;
@@ -315,7 +318,7 @@ function promote(
       note: `Promoted ${cit.name} from the crowd`,
     });
   }
-  const districtName = state.districts[under.districtId]?.name ?? under.districtId;
+  const districtName = townOf(state, ctx.townId).districts[under.districtId]?.name ?? under.districtId;
   emitEvent(
     state,
     'success',

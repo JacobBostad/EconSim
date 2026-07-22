@@ -35,6 +35,7 @@ import {
   type LedgerCategory,
 } from './Transactions';
 import { Rng } from './Random';
+import { HOME_TOWN_ID, type TownId } from './Town';
 import { computeTime, type GameTime } from './Tick';
 import { nextId } from './Id';
 import {
@@ -276,6 +277,14 @@ export interface SimContext {
   rng: Rng;
   time: GameTime;
   /**
+   * The town this tick's systems operate on (region.md step 3 seam). One-town
+   * region: always `HOME_TOWN_ID`. A system reads its town's records through
+   * `townOf(ctx.state, ctx.townId)` — the accessor that returns the flat records
+   * today and `state.towns[townId]` once the endgame move lands, so a converted
+   * call site needs no further edit. See core/Town.ts.
+   */
+  townId: TownId;
+  /**
    * Per-tick contract lookup tables (see ContractIndex.ts). Built once here and
    * kept current by the mid-tick mutation sites so the AI-strategy/logistics
    * paths answer "which contracts source/feed this facility / belong to this
@@ -290,6 +299,7 @@ export function makeContext(state: GameState): SimContext {
     config: state.config,
     rng: new Rng(state),
     time: computeTime(state.tick, state.config),
+    townId: HOME_TOWN_ID,
     contractIndex: buildContractIndex(state),
   };
 }

@@ -35,6 +35,7 @@
 
 import type { SimContext, GameState } from '../core/GameState';
 import { recordTransaction } from '../core/GameState';
+import { townOf } from '../core/Town';
 import { cohortAccount, firmAccount } from '../core/Transactions';
 import { isDayBoundary, isHourBoundary } from '../core/Tick';
 import type { Cohort } from '../entities/Cohort';
@@ -217,11 +218,12 @@ function runSlice(ctx: SimContext): void {
   // town here (Village exits before runSlice via anyCrowd), so every crowd town
   // is district-local by construction.
   const openStores: OpenStore[] = [];
+  const town = townOf(state, ctx.townId); // hoisted — the recipe's own rule (review nit)
   for (const fid of Object.keys(state.facilities).sort()) {
     const fac = state.facilities[fid]!;
     if (fac.retailProductIds.length === 0) continue;
     if (!storeIsOpen(ctx, fac)) continue;
-    const d = districtAt(state.districts, fac.location.x, fac.location.y);
+    const d = districtAt(town.districts, fac.location.x, fac.location.y);
     openStores.push({ facility: fac, districtId: d ? d.id : '' });
   }
   if (openStores.length === 0) return;
@@ -257,9 +259,12 @@ interface OpenStore {
   districtId: string;
 }
 
-/** Center of a cohort's home district — its representative shopper's origin. */
+/** Center of a cohort's home district — its representative shopper's origin.
+ * Bare-`state` helper mid-gradient: reads the home town by default (one-town
+ * region → identical reference). Gains a `townId` param when the endgame move
+ * lands and a second town exists — see the recipe in region.md § step 3. */
 function districtCenter(state: GameState, districtId: string): Vec2 {
-  const d = state.districts[districtId];
+  const d = townOf(state).districts[districtId];
   if (!d) return { x: 0, y: 0 };
   return { x: d.bounds.x + d.bounds.w / 2, y: d.bounds.y + d.bounds.h / 2 };
 }
@@ -334,7 +339,7 @@ function shopCohortSlice(
   // District-local shopping (A4): the cohort only reaches stores in its home
   // district plus adjacent quarters — the crowd analogue of the cast's
   // chooseBestStore restriction. Stores outside are dropped from its store split.
-  const allowed = shoppingDistrictIds(state.districts, cohort.districtId);
+  const allowed = shoppingDistrictIds(townOf(state, ctx.townId).districts, cohort.districtId);
   const reachable = openStores.filter((s) => allowed.has(s.districtId));
   if (reachable.length === 0) return;
 

@@ -19,6 +19,7 @@
  */
 
 import type { GameState, SimContext } from '../core/GameState';
+import { townOf } from '../core/Town';
 import { isDayBoundary } from '../core/Tick';
 import { districtAt, type District } from '../entities/District';
 import { buildHomeIndex, landValueFromIndex, type HomeIndex } from '../core/LandValue';
@@ -43,7 +44,8 @@ export function districtLandValue(state: GameState, d: District, index?: HomeInd
 export function runDistrictSystem(ctx: SimContext): void {
   if (!isDayBoundary(ctx.state.tick, ctx.config)) return;
   const { state } = ctx;
-  const ids = Object.keys(state.districts).sort();
+  const town = townOf(state, ctx.townId);
+  const ids = Object.keys(town.districts).sort();
   if (ids.length === 0) return;
 
   const homes = new Map<string, number>();
@@ -55,7 +57,7 @@ export function runDistrictSystem(ctx: SimContext): void {
 
   for (const fid of Object.keys(state.facilities).sort()) {
     const fac = state.facilities[fid]!;
-    const d = districtAt(state.districts, fac.location.x, fac.location.y);
+    const d = districtAt(town.districts, fac.location.x, fac.location.y);
     if (!d) continue;
     if (fac.type === 'home') {
       homes.set(d.id, (homes.get(d.id) ?? 0) + 1);
@@ -74,7 +76,7 @@ export function runDistrictSystem(ctx: SimContext): void {
   // daily aggregate is a single O(homes) sweep instead of O(districts × homes).
   const homeIndex = buildHomeIndex(state);
   for (const id of ids) {
-    const d = state.districts[id]!;
+    const d = town.districts[id]!;
     const homeShare = totalHomes > 0 ? (homes.get(id) ?? 0) / totalHomes : 0;
     const jobShare = totalJobs > 0 ? (jobs.get(id) ?? 0) / totalJobs : 0;
     const shopShare = totalShops > 0 ? (shops.get(id) ?? 0) / totalShops : 0;

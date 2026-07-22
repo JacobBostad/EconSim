@@ -14,6 +14,7 @@
 
 import type { SimContext, GameState } from '../core/GameState';
 import { recordTransaction } from '../core/GameState';
+import { townOf } from '../core/Town';
 import {
   citizenAccount,
   firmAccount,
@@ -157,13 +158,14 @@ export function chooseBestStore(
   productId: ProductId,
 ): Facility | null {
   const districtLocal = ctx.config.sizePreset !== 'village';
+  const town = townOf(ctx.state, ctx.townId);
   let allowed: Set<string> | null = null;
   if (districtLocal) {
     const home = ctx.state.facilities[citizen.homeFacilityId];
     const originDistrict = home
-      ? districtAt(ctx.state.districts, home.location.x, home.location.y)
+      ? districtAt(town.districts, home.location.x, home.location.y)
       : null;
-    if (originDistrict) allowed = shoppingDistrictIds(ctx.state.districts, originDistrict.id);
+    if (originDistrict) allowed = shoppingDistrictIds(town.districts, originDistrict.id);
   }
   let best: Facility | null = null;
   let bestScore = -Infinity;
@@ -173,7 +175,7 @@ export function chooseBestStore(
     if (fac.status === 'closed') continue;
     if (fac.employees.length === 0 && crowdCount(fac) === 0) continue;
     if (allowed) {
-      const d = districtAt(ctx.state.districts, fac.location.x, fac.location.y);
+      const d = districtAt(town.districts, fac.location.x, fac.location.y);
       if (!d || !allowed.has(d.id)) continue;
     }
     const scored = scoreStore(ctx, citizen, fac, productId);

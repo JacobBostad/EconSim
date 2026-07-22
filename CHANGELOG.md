@@ -19,6 +19,28 @@ real City or Metropolis game switches the whole stack on together (crowd +
 districts + all three specialist channels); Village stays the classic,
 bit-identical, every-resident-simulated town.
 
+- **E step 3 — the Town seam (first slice, spike).** The region's `GameState`
+  refactor (`state.firms` → `state.towns[townId].firms`, ~1,300 sites) lands its
+  first honest brick: the `Town` as a **view**, not stored state. `core/Town.ts`
+  adds `townOf(state, townId)` — getters that return the flat records, so
+  `townOf(state,'home').districts === state.districts` (same reference) — plus
+  `HOME_TOWN_ID` and a `townId` seam threaded through `SimContext` (defaulted to
+  home by `makeContext`). Because the town is **computed, never serialized**, no
+  `towns` key enters a save: byte-identical, zero migration, `SAVE_VERSION`
+  untouched. The design decision — option **(b) view first, then (c) records
+  move** — is written into region.md as the step-3 as-built plan, with the
+  conversion recipe the firms/facilities/citizens batches follow. The **districts
+  family** is fully converted as the first slice: **14 reader sites across 8
+  files** now route through the accessor (writers stay flat by design; the view
+  is read-only). Each conversion is provably behaviour-identical (the accessor
+  returns the same object), and the harness is shown to guard it — a scratch
+  mis-conversion (`get districts() { return {}; }`) turns 8 tests red across 3
+  files; restoring returns green. Pinned baselines hold: village seeds 11/4/7
+  reproduce `rngState` 3274842624 / 2896139677 / 4253583594, city seed 11 its
+  `rngState` and money supply. Suite +7 (`townSeam.test.ts`, now 567); `tsc` and
+  `build` clean; no UI touched. Remaining families (cohorts ~50, firms ~450,
+  facilities ~360, citizens ~210, marketStats ~35, map dims, UI reads) are
+  itemized with the recipe in region.md § step 3.
 - **The City cast-parity mechanism — built, measured across the full grid, NOT
   shipped (docs-only verdict).** The forward path the City-decoupling verdict
   named: give the trip-limited cast the crowd's throughput to close the

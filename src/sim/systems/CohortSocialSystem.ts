@@ -33,6 +33,7 @@
 
 import type { SimContext, GameState } from '../core/GameState';
 import { recordTransaction } from '../core/GameState';
+import { townOf } from '../core/Town';
 import { cohortAccount, WORLD_ACCOUNT } from '../core/Transactions';
 import { isDayBoundary } from '../core/Tick';
 import type { Cohort } from '../entities/Cohort';
@@ -554,7 +555,7 @@ function runMigration(state: GameState, cohortIds: string[]): void {
       if (!cohort || cohort.tier !== 'worker' || cohort.population <= 0) continue;
       const room = cap - totalCrowd;
       if (room <= 0) break;
-      const desirability = state.districts[cohort.districtId]?.desirability ?? 0;
+      const desirability = townOf(state).districts[cohort.districtId]?.desirability ?? 0;
       let inflow = Math.floor(cohort.population * INFLOW_RATE * (0.5 + desirability));
       if (empFloor > 0) {
         const empShare = cohort.population > 0 ? cohort.employed / cohort.population : 0;

@@ -36,6 +36,7 @@ import { defaultPersonalityFor, defaultCeoFor } from './personalities';
 import { getScenario, DEFAULT_SCENARIO_ID } from './scenarios';
 import { defaultDistrictPartition } from './districts';
 import { SAVE_VERSION } from '../core/GameState';
+import { townOf } from '../core/Town';
 
 const NUM_HOMES = 20;
 const CITIZENS_PER_HOME = 2;
@@ -507,7 +508,7 @@ const CROWD_START_CASH_PER_CAPITA = dollars(50);
 function seedCrowd(state: GameState): void {
   const preset = SIZE_PRESETS[state.config.sizePreset];
   if (preset.crowdStart <= 0) return;
-  const residential = Object.values(state.districts)
+  const residential = Object.values(townOf(state).districts)
     .filter((d) => d.kind === 'residential')
     .sort((a, b) => (a.id < b.id ? -1 : 1));
   if (residential.length === 0) return;
