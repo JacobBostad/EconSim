@@ -41,6 +41,41 @@ bit-identical, every-resident-simulated town.
   `build` clean; no UI touched. Remaining families (cohorts ~50, firms ~450,
   facilities ~360, citizens ~210, marketStats ~35, map dims, UI reads) are
   itemized with the recipe in region.md § step 3.
+- **Challenge mode at City scale.** The scored 200-day challenge (final score +
+  local leaderboard + share summary) predated the world-scale era and only knew
+  the Village. It is now a first-class City experience. The New Game challenge
+  toggle already composed with the world picker (a City challenge gets the City
+  era flags worldScaleConfig turns on); this pass makes the SCORING and the BOARD
+  honest at scale. What mis-scored: the score's town-satisfaction leg read only
+  the simulated cast, blind to the crowd cohorts that are most of a City — so a
+  thriving City of hundreds scored its satisfaction off ~150 named agents.
+  Fixed: `challengeScore` now weights satisfaction over the cast AND the crowd
+  (population-weighted, mirroring the cohort migration gate); in a Village the
+  crowd is empty so it reduces to the cast mean exactly (bit-identical — the
+  Village score is unchanged). The rest of the formula was already honest at
+  scale and is documented as such: valuation (600 of 1000 pts) is net-worth-based
+  (companyValuation), so City rent, service seats, dividends, and pool-export
+  revenue all flow through cash and daily net profit into the score — a City
+  income empire scores like an operator. Leaderboards are now keyed SEPARATELY
+  per world (a Village 200-day score and a City one are different games): the
+  Village board keeps the original `econsim.challenges` key untouched — every
+  pre-world-scale score survives with NO migration — and City/Metropolis get
+  their own `econsim.challenges.<world>` slots (the named-save-slot idiom).
+  Legacy Village entries with no `world` field are stamped `village` on read. The
+  share summary and the finish-line/Awards displays name the world scale, and
+  Awards renders one board per world. Balance (docs/design/probes/city-challenge.ts,
+  the same v7 bot at 200 days, seeds 11/9): the City run lands in a sane band vs
+  the Village — Village meadowbrook 124-140, City meadowbrook 216-269, City
+  grand_junction 215-224 — higher because the crowd economy grows a bigger, more
+  valuable firm ($44-57k net worth vs $18-20k), with no score component pegged
+  (valuation 150-216 of 600, well under the $150k cap; exports/share still
+  discriminate) and money conserved to the cent. Separate boards make the
+  Village-vs-City gap a feature, not an unfairness, so NO display/multiplier tune
+  was needed — sim behavior is not a challenge-mode knob. Suite +7 (567 tests).
+  The one sim-source change is the pure read-only score selector (not in the tick
+  path), so the pinned Village (seed 11 rngState 3274842624) and City trajectories
+  are untouched.
+
 - **The City cast-parity mechanism — built, measured across the full grid, NOT
   shipped (docs-only verdict).** The forward path the City-decoupling verdict
   named: give the trip-limited cast the crowd's throughput to close the

@@ -18,7 +18,7 @@ describe('Daily challenge seed', () => {
   });
 
   it('the share string brags about the daily when the seed encodes one', () => {
-    const base = { score: 700, valuation: 5000000, scenarioId: 'meadowbrook', difficulty: 'standard', at: '2026-07-18' };
+    const base = { score: 700, valuation: 5000000, scenarioId: 'meadowbrook', difficulty: 'standard', world: 'village' as const, at: '2026-07-18' };
     expect(challengeShareText({ ...base, seed: 20260718 }, 'Meadowbrook')).toContain('Daily Challenge 2026-07-18');
     expect(challengeShareText({ ...base, seed: 42 }, 'Meadowbrook')).toContain('seed 42');
   });

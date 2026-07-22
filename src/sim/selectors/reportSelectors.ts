@@ -163,14 +163,39 @@ export interface ChallengeScore {
  * The challenge-run score: deterministic, pure, and comparable across runs of
  * the same scenario/difficulty/seed. Valuation dominates (it is the game's
  * scoreboard metric), but a thriving town and trade empire pay too.
+ *
+ * The score reads the era economy honestly: `valuation` is net-worth-based
+ * (companyValuation — cash + inventory + assets + stakes − debt, plus a P/E
+ * premium on recent daily net profit), and at City scale rent, service seats,
+ * dividends, and pool-export revenue all flow through cash and daily net profit
+ * into that number, so a City empire's income streams score the same as an
+ * operator's sales. Town satisfaction is population-weighted over the whole
+ * town — the simulated cast AND the crowd cohorts — so a City score reflects
+ * the hundreds it never individually simulates. In a Village the crowd is
+ * empty, so that weighting reduces to the cast mean exactly and the score stays
+ * bit-identical.
  */
 export function challengeScore(state: GameState): ChallengeScore {
   const player = state.firms[state.playerFirmId];
   const valuation = companyValuation(state, state.playerFirmId).valuation;
+  // Town satisfaction — population-weighted over the cast plus the crowd
+  // cohorts, mirroring the cohort migration gate's townAvg (CohortSocialSystem).
+  // Village cohorts are empty, so the crowd loop is a no-op and this equals the
+  // cast mean the Village score has always used (bit-identity preserved).
   const cits = Object.values(state.citizens);
-  const satisfaction = cits.length
-    ? cits.reduce((a, c) => a + c.satisfaction, 0) / cits.length
-    : 0;
+  let satMass = 0;
+  let headcount = 0;
+  for (const c of cits) {
+    satMass += c.satisfaction;
+    headcount += 1;
+  }
+  for (const cid of Object.keys(state.cohorts).sort()) {
+    const co = state.cohorts[cid]!;
+    if (co.population <= 0) continue;
+    satMass += co.avgSatisfaction * co.population;
+    headcount += co.population;
+  }
+  const satisfaction = headcount > 0 ? satMass / headcount : 0;
   const peakShare = player
     ? Object.values(player.marketShareByProduct).reduce((a, v) => Math.max(a, v), 0)
     : 0;

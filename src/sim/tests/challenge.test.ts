@@ -76,10 +76,10 @@ describe('Challenge mode', () => {
 describe('challengeShareText', () => {
   it('formats a compact replayable dare', () => {
     const text = challengeShareText(
-      { score: 812, valuation: 12345600, scenarioId: 'port_haven', difficulty: 'brutal', seed: 42, at: '2026-07-18' },
+      { score: 812, valuation: 12345600, scenarioId: 'port_haven', difficulty: 'brutal', seed: 42, world: 'village', at: '2026-07-18' },
       'Port Haven',
     );
-    expect(text).toContain('Port Haven · brutal · seed 42');
+    expect(text).toContain('Port Haven · Village · brutal · seed 42');
     expect(text).toContain('Score 812/1000');
     expect(text).toContain('$123,456');
     expect(text.split('\n').length).toBe(3);
