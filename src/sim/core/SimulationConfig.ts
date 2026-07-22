@@ -224,11 +224,21 @@ export interface SimulationConfig {
  *    so immigration halts at/below the floor and recovers as jobs fill — capital
  *    attracts labor only where there is work. 0 everywhere = disabled = the
  *    shipped satisfaction-only gate.
+ *  - `restockRevisit`: the cast "restocked-shelf revisit" (cast-parity attempt
+ *    #3; see docs/design/cohorts-and-districts.md). When true, a cast WORKER
+ *    whose urgent need stocked out at an OPEN store earlier the same day gets
+ *    ONE extra purchase attempt at that store once it restocks (models "swung by
+ *    on the way home"), reusing the RetailDemandSystem purchase path so every
+ *    stat stays coherent. The forward path the cast-parity verdict named — give
+ *    the trip-limited worker the cohort's throughput as a genuine extra VISIT,
+ *    not deeper single-visit baskets. false everywhere = disabled = shipped
+ *    behaviour; the mechanism draws no rng and, double-gated on crowd presence,
+ *    stays dark in a Village even if forced true (no cohort ever stocks out).
  */
 export const SIZE_PRESETS = {
-  village: { castTarget: 80, cohortCap: 0, crowdStart: 0, founderMaxAiFirms: 6, founderUndersupplyCooldown: 20, founderUndersupplyFillRate: 0.65, founderCash: 22000_00, mapWidth: 130, mapHeight: 92, founderCrowdWage: 16_00, catchupBaskets: 2, catchupSyntheticSignal: false, prosperityDrainFloor: 0, prosperityDrainRate: 0, immigrationEmpFloor: 0 },
-  city: { castTarget: 150, cohortCap: 2000, crowdStart: 300, founderMaxAiFirms: 18, founderUndersupplyCooldown: 20, founderUndersupplyFillRate: 0.65, founderCash: 22000_00, mapWidth: 260, mapHeight: 184, founderCrowdWage: 16_00, catchupBaskets: 2, catchupSyntheticSignal: false, prosperityDrainFloor: 0, prosperityDrainRate: 0, immigrationEmpFloor: 0 },
-  metropolis: { castTarget: 150, cohortCap: 10000, crowdStart: 1500, founderMaxAiFirms: 30, founderUndersupplyCooldown: 7, founderUndersupplyFillRate: 0.80, founderCash: 28000_00, mapWidth: 390, mapHeight: 276, founderCrowdWage: 16_00, catchupBaskets: 2, catchupSyntheticSignal: false, prosperityDrainFloor: 0, prosperityDrainRate: 0, immigrationEmpFloor: 0 },
+  village: { castTarget: 80, cohortCap: 0, crowdStart: 0, founderMaxAiFirms: 6, founderUndersupplyCooldown: 20, founderUndersupplyFillRate: 0.65, founderCash: 22000_00, mapWidth: 130, mapHeight: 92, founderCrowdWage: 16_00, catchupBaskets: 2, catchupSyntheticSignal: false, prosperityDrainFloor: 0, prosperityDrainRate: 0, immigrationEmpFloor: 0, restockRevisit: false },
+  city: { castTarget: 150, cohortCap: 2000, crowdStart: 300, founderMaxAiFirms: 18, founderUndersupplyCooldown: 20, founderUndersupplyFillRate: 0.65, founderCash: 22000_00, mapWidth: 260, mapHeight: 184, founderCrowdWage: 16_00, catchupBaskets: 2, catchupSyntheticSignal: false, prosperityDrainFloor: 0, prosperityDrainRate: 0, immigrationEmpFloor: 0, restockRevisit: false },
+  metropolis: { castTarget: 150, cohortCap: 10000, crowdStart: 1500, founderMaxAiFirms: 30, founderUndersupplyCooldown: 7, founderUndersupplyFillRate: 0.80, founderCash: 28000_00, mapWidth: 390, mapHeight: 276, founderCrowdWage: 16_00, catchupBaskets: 2, catchupSyntheticSignal: false, prosperityDrainFloor: 0, prosperityDrainRate: 0, immigrationEmpFloor: 0, restockRevisit: false },
 } as const;
 
 export const DEFAULT_CONFIG: SimulationConfig = {

@@ -100,7 +100,7 @@ import { runCohortLaborSystem } from '../systems/CohortLaborSystem';
 import { runCohortDemandSystem } from '../systems/CohortDemandSystem';
 import { runProductionSystem } from '../systems/ProductionSystem';
 import { runLogisticsSystem } from '../systems/LogisticsSystem';
-import { runRetailDemandSystem } from '../systems/RetailDemandSystem';
+import { runRetailDemandSystem, runRestockRevisitSystem } from '../systems/RetailDemandSystem';
 
 type SystemFn = (ctx: SimContext) => void;
 
@@ -148,6 +148,7 @@ const SYSTEMS: SystemFn[] = [
   runProductionSystem,
   runLogisticsSystem,
   runRetailDemandSystem,
+  runRestockRevisitSystem, // cast restocked-shelf revisit (cast-parity #3; dark by default)
   runAchievementSystem, // hourly; sees the fully-updated tick
   runMissionSystem, // hourly; guided chain advances after achievements
 ];

@@ -19,6 +19,29 @@ real City or Metropolis game switches the whole stack on together (crowd +
 districts + all three specialist channels); Village stays the classic,
 bit-identical, every-resident-simulated town.
 
+- **A — cast-parity attempt #3: the restocked-shelf revisit (measured, NOT
+  shipped, dark foundation).** Built the forward path the prior cast-parity
+  verdict named — a cast-SHOPPING model change, not another demand constant: when
+  a City cast **worker**'s urgent need stocks out at an *open* store, that (store,
+  product) is queued, and if logistics restocks it the **same day** the worker
+  gets **one** extra purchase attempt through the SAME `RetailDemandSystem` path
+  ("swung by on the way home"). Flag-gated `SIZE_PRESETS.restockRevisit` (false
+  every preset; a new per-tick `runRestockRevisitSystem` and an optional
+  never-populated `Citizen.pendingRevisits`), so flag-off is **byte-identical** —
+  village seeds 11/4/7 and city seed 11 pins hold, and a Village stays
+  bit-identical even with the flag FORCED true (double-gated on crowd presence).
+  The 300-day × 3-seed grid (`docs/design/probes/cast-revisit.ts`): the mechanism
+  engages exactly as designed (cast worker sat **+2 to +3.6**, cast bread urgency
+  and emigration ease) but re-triggers the documented **immigration flood** —
+  seed-11 crowd empShare craters 0.36→0.25, collapsing the comfortable band
+  (0.365→**0.291**) and blowing the committed worker gap-daily guard (5.84→
+  **10.52**); seed 4 fails gap-daily (7.02→**9.22**); only seed 7 seats. Money
+  conserves to the cent on every cell. **No band widened, nothing re-pinned** —
+  the revisit is confirmed the right demand-side half of the fix but insufficient
+  alone (it needs the inert `immigrationEmpFloor` gate to land jointly), and lands
+  dark-and-inert as the fourth measured cast-parity foundation. Suite +5
+  (`castRevisit.test.ts`, now 580); `tsc` clean, full suite green. See
+  docs/design/cohorts-and-districts.md, "Cast-parity attempt #3".
 - **E step 3 — the Town seam (second slice, cohorts).** The `Town` view's second
   family converts: every **cohort reader** in the sim layer now routes through
   `townOf(...).cohorts` — **46 reader references across 9 files** (`CrowdRent`,

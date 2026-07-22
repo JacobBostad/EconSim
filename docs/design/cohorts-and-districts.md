@@ -1162,6 +1162,95 @@ extra shop-window VISIT against a restocked shelf (the cohort's slice settlement
 contention-negative. That is a scheduling/routing change, not a demand-constant one, and is where
 the next attempt must start.
 
+### Cast-parity attempt #3 — the restocked-shelf revisit, built, measured, and NOT shipped
+
+This pass took up the exact forward path the prior verdict named: the "genuine extra
+shop-window VISIT against a restocked shelf" — a **cast-shopping model** change, not another
+demand-constant. Built as `SIZE_PRESETS.restockRevisit` (false everywhere; flag-off byte-
+identical — the full 579-test suite passes and a Village stays bit-identical even with the
+flag FORCED true, double-gated on crowd presence): when a cast WORKER's *urgent* need stocks
+out at an **open** store, that (store, product) is queued on the citizen; if LogisticsSystem
+restocks it later the **same day**, a new `runRestockRevisitSystem` (right after
+`RetailDemandSystem` in the tick) grants **one** extra purchase attempt through the SAME
+`attemptPurchase` path (a plain single basket — no catch-up stacking, no re-queue, no rng, no
+movement; "swung by on the way home"). Reproducible via `docs/design/probes/cast-revisit.ts`
+(`npx tsx`, flag OFF vs ON side-by-side per seed). **Verdict: NO SHIP. The mechanism engages
+exactly as designed — the trip-limited worker catches the late restock and cast worker sat
+lifts +2 to +3.6 — but it re-triggers the same three-layered wall the prior verdict measured:
+it fails the committed seed-11/seed-4 guards, and only seed 7 (the "healthy" basin) seats. No
+band was widened; the mechanism lands dark-and-inert in-tree as the fourth measured cast-
+parity foundation.**
+
+**Context that reframes the target: the ~20-point gap the task cites is HISTORICAL.** The
+shipped baseline already closed the worker gap via the A4-geometry `RESERVE_FACTOR = 1.7`
+super-proportional cast reservation + `WORKER_CATCHUP_BASKETS` — the flag-OFF gap measured
+here is **2.6 / 8.0 / 1.7 (MoM45)**, already single-digit, so there is little gap left for a
+revisit to narrow. What the revisit changes is the *equilibrium around it*.
+
+**The grid** (300 days × seeds 11/4/7; band15 W/C against the committed .50-.70 / .30-.40;
+worker sat cast/cohort; gap MoM45 / daily-|diff|-15 against the committed ≤ 8; bread unmet/day
+and 14-day fill; conservation exact 0c on every cell):
+
+| seed | flag | firms | band15 W/C | worker sat cast/coh | gap MoM/daily | empW | bread unmet/fill | verdict |
+|------|------|-------|------------|---------------------|---------------|------|------------------|---------|
+| 11 | OFF | 9 | .609/.365 | 55.7 / 53.1 | 2.6 / **5.84** | .36 | 249 / .66 | baseline PASS |
+| 11 | ON  | 10 | **.686/.291** | 59.3 / 65.3 | 5.9 / **10.52** | .25 | 376 / .56 | C<.30, gap>8 ✗ |
+| 4  | OFF | 9 | .666/.310 | 57.2 / 65.2 | 8.0 / 7.02 | .32 | 280 / .63 | baseline PASS |
+| 4  | ON  | 8 | .677/.300 | 59.3 / 67.1 | 7.8 / **9.22** | .42 | 259 / .67 | gap daily >8 ✗ |
+| 7  | OFF | 8 | .655/.321 | 60.3 / 62.0 | 1.7 / 4.18 | .34 | 264 / .66 | baseline PASS |
+| 7  | ON  | 9 | .625/.348 | 63.0 / 62.0 | 1.0 / 1.72 | .28 | 265 / .65 | all PASS |
+
+Deltas OFF→ON: cast worker sat **+3.6 / +2.1 / +2.7**, cohort worker sat **+12.2 / +1.9 /
++0.0**, cast pop 109→132 / 123→128 / 112→108, cast mean bread urgency 1.77→2.04 / 1.88→1.65 /
+1.54→1.51.
+
+**Why it fails — the same wall, reproduced from the demand-timing side.**
+
+- **Sharp Finding 2 (the immigration flood) is the binding blocker, exactly as the prior
+  verdict predicted.** The revisit makes the cast happier, which raises town satisfaction,
+  which the satisfaction-only immigration gate (≥ 55, no job-supply term) answers by flooding
+  the worker cohort — seed-11 crowd employment share **craters 0.36 → 0.25**. That collapsed
+  empShare quadratically throttles the promotion gate (∝ empShare²), so worker promotion
+  rounds toward zero while demotion runs at 2×: comfortable **falls out of band (0.365 →
+  0.291)** and the worker share swells (0.609 → 0.686, band45 68 → 76). "Closing the cast gap
+  RAISES town satisfaction, re-triggering the flood" — measured again, now for the revisit.
+- **Contention on the supply cap is real.** The "restocked stock" the cast grabs is not free —
+  on seed 11 bread unmet **rises 249 → 376/day** and fill **falls 0.66 → 0.56**: the extra
+  cast demand deepens the chronic shortage, the contention-negative outcome prior "extra cast
+  trips" probes flagged, now confirmed for the targeted-revisit variant.
+- **Daily churn breaks the gap-daily guard even where the mean holds.** Seed 4's gap barely
+  moves by MoM (8.0 → 7.8) but the daily-|diff|-15 metric — which also captures the
+  curator↔demotion oscillation — blows **7.02 → 9.22 (> 8)** as the extra purchases inject
+  day-to-day variance into the chaotic gates.
+- **Only seed 7 seats** (gap narrows 1.7 → 1.0, bands in band) — the one seed in the "healthy"
+  basin, the same bistability documented throughout this doc.
+
+**What the mechanism does NOT break:** the cohort-side satisfaction regression watchdog (ON
+must not drop cohort worker sat > 2 vs OFF) is **not** violated — cohort worker sat *rises* on
+all three seeds. The failure is compositional (tier bands, gap-daily churn), not a cohort mood
+drop, and money conserves to the cent on every cell (revisit purchases move money only through
+`attemptPurchase`'s `recordTransaction`).
+
+**Structural conclusion (unchanged, now doubly-measured).** The demand-timing fix is
+**necessary but not sufficient**, for the same reason the catch-up (the basket-depth fix) was:
+both close the cast gap locally, and both are blocked by the immigration flood that a happier
+cast makes worse. The revisit is a *cleaner* lever than the catch-up (it adds a real extra
+visit instead of deepening one basket, and it does not touch the founder fill-rate accounting),
+but it cannot ship alone — the employment-aware immigration gate (`immigrationEmpFloor`,
+already inert in-tree from attempt #2) must land **jointly** with a demand-timing/gap fix and a
+founder trigger that holds crowd empShare ≈ 0.5, so the flood is capped while the cast is
+served. That joint landing is the same forward path attempt #2 named; this pass confirms the
+revisit is the right demand-side half of it and rules out the revisit-alone shortcut.
+
+**Judgment — kept dark-and-inert in-tree, not reverted.** Matching the precedent of the four
+prior inert cast-parity ingredients ("remain in `SIZE_PRESETS` at their inert defaults as
+measured dark foundations for the next attempt"), the revisit stays flag-gated-off in the tree
+with its determinism/inertness guards (`castRevisit.test.ts`) and its probe, so the next joint
+attempt builds on a measured, tested mechanism rather than re-deriving it. It is a heavier dark
+surface than the prior preset-number foundations (a new per-tick system that early-returns when
+off, plus an optional never-populated `Citizen.pendingRevisits` field), but it is provably
+byte-inert off and is the exact mechanism the roadmap's forward path calls for.
+
 ## Open questions
 
 - **Cast-vs-cohort shelf competition.** Within a shop-window slice,
