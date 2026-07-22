@@ -505,6 +505,42 @@ it) and the accessor's own single flat read inside `townOf`. The district
 as a parameter, so a converted site just passes `town.districts` in place of
 `state.districts` — the helper bodies never changed.
 
+### The family converted — cohorts (the district family's sibling)
+
+Every **cohort reader** in the sim layer now routes through the accessor —
+**46 reader references across 9 files** (the family's writers stay on the flat
+path; the view is read-only by design):
+
+| file | reader refs | town context |
+| --- | --- | --- |
+| `systems/CrowdRentSystem.ts` | 10 | `ctx.townId` (hoisted `town`) + home default (1, `anyCrowd`) |
+| `systems/CohortSocialSystem.ts` | 9 | `ctx.townId` (hoisted `town`) + home default (`anyCrowd`, `runMigration`) |
+| `systems/CohortLaborSystem.ts` | 7 | `ctx.townId` (hoisted `town`, presence loop) + home default (`anyCrowd`, `reconcileCrowdJobs`) |
+| `systems/CohortDemandSystem.ts` | 7 | `ctx.townId` (hoisted `town`: `growBuckets`, `runSlice`) + home default (1, `anyCrowd`) |
+| `systems/CastCuratorSystem.ts` | 4 | `ctx.townId` (hoisted `town` in `curate`) + home default (1, `anyCrowd`) |
+| `systems/PayrollSystem.ts` | 3 | `ctx.townId` (hoisted `town`, `payCrowd`) + home default (1, `releaseCrowd`) |
+| `systems/AIFounderSystem.ts` | 2 | home default (`townPopAndSat` bare-`state` helper) |
+| `systems/RetailDemandSystem.ts` | 2 | home default (`anyCohortPopulation` bare-`state` helper) |
+| `selectors/reportSelectors.ts` | 2 | home default (`challengeScore` bare-`state` helper) |
+
+After conversion, the only remaining flat `state.cohorts` in sim code are the
+**writers** (`startingScenario` creates the partition, `migrations` defaults it,
+and the two tier-promotion CREATION sites — `CohortSocialSystem.moveTier` and
+`CastCuratorSystem.retire` — that mint a new tier cohort), the accessor's own
+single flat read inside `townOf`, the `GameState.cohorts` type definition, and
+the **region-wide money primitive** in `GameState.ts`. That last group — the
+account-resolution trio (`getAccountCash` / `accountExists` / `addAccountCash`
+under `recordTransaction`) and the `totalMoneySupply` conservation sum — is a
+money-scope subtlety the districts family never hit: money moves *between* towns,
+so a cohort account is resolved by id across the WHOLE region, and the
+conservation invariant sums every town's cohort cash. Routing those through the
+home-default `townOf(state).cohorts` would misrepresent their scope, so they stay
+flat by design (at the endgame they read the flat `state.cohorts` back-compat
+getter that aggregates all towns), each marked with a comment saying so. As with
+districts, the cohort *helpers* that already take a `Cohort` by parameter
+(`rentAffordFactor`, `updateSatisfaction`, `runTierGates`) never changed — a
+converted site just reads `town.cohorts[cid]` and hands the object in.
+
 ### The conversion recipe (for the firms/facilities/citizens batches)
 
 Grind each remaining family with the same four-move recipe:
@@ -534,8 +570,8 @@ converted in steps 1–4 is already correct.
 
 | family | `state.X` refs (all) | non-test sim readers (est.) | notes |
 | --- | --- | --- | --- |
-| **districts** | — | **DONE (14 sites, 8 files)** | this slice |
-| **cohorts** | ~128 | ~50 | the district family's sibling; several helpers hold money (region-wide conservation reads all towns' cohorts — a money-scope call the endgame makes explicit) |
+| **districts** | — | **DONE (14 sites, 8 files)** | step 3 first slice |
+| **cohorts** | ~128 | **DONE (46 refs, 9 files)** | step 3 second slice; the money-scope reads (account primitive + `totalMoneySupply` conservation) stay flat by design — region-wide, they read all towns at the endgame |
 | **firms** | ~500 | ~450 | the largest; `ownerFirmId` cross-refs are untyped strings, unchanged by (b) |
 | **facilities** | ~400 | ~360 | `facilityId` cross-refs likewise; placement helpers (`DistrictSlots`) read facilities + districts together |
 | **citizens** | ~240 | ~210 | cast side of the crowd |
@@ -543,7 +579,7 @@ converted in steps 1–4 is already correct.
 | **map dims** | small | small | `config.mapWidth/Height` → per-town |
 | **UI reads** | ~8 | (separate batch) | `PopulationDashboard`, `TownRenderer` read districts flat — a read-only projection, converted in a UI batch (touches e2e), deferred here to keep the seam sim-only |
 
-### Measured (Town seam, step 3 first slice)
+### Measured (Town seam, step 3 — districts + cohorts slices)
 
 - **Accessor identity (test `townSeam.test.ts`):** `townOf(state,'home')
   .districts === state.districts` and `.cohorts === state.cohorts` — same
@@ -553,16 +589,25 @@ converted in steps 1–4 is already correct.
 - **Serialization byte-unchanged:** no `towns` key in a City save at day 0 or
   after a 20-day run; the flat `districts`/`cohorts` keys serialize exactly as
   before. `SAVE_VERSION` untouched, no migration added.
-- **Converted family deterministic:** two City seed-11 runs agree bit-for-bit
+- **Converted families deterministic:** two City seed-11 runs agree bit-for-bit
   through the converted district systems (`rngState`, full serialized state, and
-  every district's `desirability`/`landValue`) over 30 days.
+  every district's `desirability`/`landValue`) over 30 days; a second test proves
+  the same for the cohort family — two City seed-11 runs agree on `rngState`, the
+  full serialized state, and every cohort's `population`/`employed`/`cashPool`/
+  `avgSatisfaction` over 30 days (with the crowd asserted live so the cohort
+  readers actually run).
 - **Mis-conversion is caught (fails-on-revert, demonstrated):** breaking the
-  accessor in a scratch edit (`get districts() { return {}; }` — the accessor
-  drops the town's districts) turns **8 tests red across 3 files**
-  (`townSeam` 3, `districts`, `cohortDemand`) — the accessor-identity assertion
-  and the district-dependent economy tests both flag it. Restoring the getter
-  returns the suite to green. The harness demonstrably guards the conversion.
+  districts accessor in a scratch edit (`get districts() { return {}; }`) turns
+  **8 tests red across 3 files** (`townSeam` 3, `districts`, `cohortDemand`).
+  Breaking the cohorts accessor the same way (`get cohorts() { return {}; }` —
+  the view drops the town's cohorts) turns **28 tests red across 14 files**
+  (`townSeam` 2, `cohortRent` 4, `tierAcceptance` 4, `cohortDemand` 3,
+  `cohortSocial` 3, `castCurator` 3, `grandJunction` 2, and one each in
+  `cohortLabor`, `cityChallenge`, `realEstate`, `founders`, `playtestV8`,
+  `retail`, `contractIndex`) — the accessor-identity assertions and the whole
+  crowd economy flag it. Restoring the getter returns the suite to green. The
+  harness demonstrably guards the conversion.
 - **Pinned baselines hold:** village seeds 11/4/7 reproduce `rngState`
   3274842624 / 2896139677 / 4253583594; city seed 11 reproduces its `rngState`
-  and money supply. Full suite green (**567** = 560 + 7 seam tests); `tsc`,
-  `build` clean. No UI touched (no e2e needed).
+  2546912297 and money supply 316900000. Full suite green (**575** = 574 + 1 new
+  cohort-determinism seam test); `tsc` clean. No UI touched (no e2e needed).

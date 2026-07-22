@@ -9,6 +9,7 @@
 
 import type { SimContext, GameState } from '../core/GameState';
 import { recordTransaction, emitEvent, canAfford } from '../core/GameState';
+import { townOf } from '../core/Town';
 import { firmAccount, citizenAccount, cohortAccount, WORLD_ACCOUNT } from '../core/Transactions';
 import { isDayBoundary } from '../core/Tick';
 import { clamp } from '../../utils/clamp';
@@ -89,14 +90,15 @@ export function runPayrollSystem(ctx: SimContext): void {
  */
 function payCrowd(ctx: SimContext): void {
   const { state } = ctx;
-  const cohortIds = Object.keys(state.cohorts).sort();
+  const town = townOf(state, ctx.townId);
+  const cohortIds = Object.keys(town.cohorts).sort();
   if (cohortIds.length === 0) return;
   const days = ctx.config.payrollIntervalDays;
 
   // Idle-crowd stipend, one transaction per cohort.
   const stipend = ctx.config.subsistenceIncomePerDay * days;
   for (const cid of cohortIds) {
-    const cohort = state.cohorts[cid]!;
+    const cohort = town.cohorts[cid]!;
     const idle = cohort.population - cohort.employed;
     if (idle <= 0 || stipend <= 0) continue;
     recordTransaction(state, {
@@ -146,7 +148,9 @@ function payCrowd(ctx: SimContext): void {
 /** Remove every worker of one cohort from one firm's facilities. */
 function releaseCrowd(state: GameState, firmId: string, cohortId: string): void {
   const firm = state.firms[firmId];
-  const cohort = state.cohorts[cohortId];
+  // Bare-`state` helper mid-gradient: home town by default (one-town region →
+  // same reference); gains a `townId` param at the endgame move.
+  const cohort = townOf(state).cohorts[cohortId];
   if (!firm || !cohort) return;
   for (const facId of [...firm.facilities].sort()) {
     const fac = state.facilities[facId];

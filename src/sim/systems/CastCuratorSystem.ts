@@ -50,8 +50,11 @@ const REBALANCE_HYSTERESIS = 2;
 const TIERS: CitizenTier[] = ['worker', 'comfortable', 'affluent'];
 
 function anyCrowd(state: GameState): boolean {
-  for (const cid in state.cohorts) {
-    if (state.cohorts[cid]!.population > 0) return true;
+  // Bare-`state` helper mid-gradient: home town by default (one-town region →
+  // same reference); gains a `townId` param at the endgame move.
+  const cohorts = townOf(state).cohorts;
+  for (const cid in cohorts) {
+    if (cohorts[cid]!.population > 0) return true;
   }
   return false;
 }
@@ -99,10 +102,11 @@ export function runCastCuratorSystem(ctx: SimContext): void {
  * the daily loop can keep draining a backlog until the strata are balanced). */
 function curate(ctx: SimContext): boolean {
   const { state } = ctx;
+  const town = townOf(state, ctx.townId);
 
   // --- census: cast + crowd per district × tier stratum ---
   const strata: Stratum[] = [];
-  for (const did of Object.keys(townOf(state, ctx.townId).districts).sort()) {
+  for (const did of Object.keys(town.districts).sort()) {
     for (const tier of TIERS) strata.push({ key: `${did}:${tier}`, districtId: did, tier });
   }
   const castCount: Record<string, number> = {};
@@ -123,7 +127,7 @@ function curate(ctx: SimContext): boolean {
   }
   let totalPop = castTotal;
   for (const s of strata) {
-    const crowd = state.cohorts[s.key]?.population ?? 0;
+    const crowd = town.cohorts[s.key]?.population ?? 0;
     pop[s.key] = castCount[s.key]! + crowd;
     totalPop += crowd;
   }
@@ -170,7 +174,7 @@ function curate(ctx: SimContext): boolean {
   // stratum with no crowd can never have a target above its cast count), so a
   // promotion source always exists — but guard anyway; if either half of the
   // swap can't happen, we skip BOTH so the cast size stays invariant.
-  const source = state.cohorts[under.key];
+  const source = town.cohorts[under.key];
   if (!source || source.population <= 0) return false;
   const gone = pickRetiree(state, over);
   if (!gone) return false;
@@ -262,6 +266,8 @@ function resolvePromoteHome(ctx: SimContext, districtId: DistrictId, gone: Citiz
  * non-worker crowd, so a stratum's cohort may not exist yet. */
 function retire(ctx: SimContext, gone: Citizen, over: Stratum): void {
   const { state } = ctx;
+  // Cohort CREATION site — a writer, kept on the flat path until records move
+  // in option (c); the guard read + assign stay on `state.cohorts`.
   let cohort = state.cohorts[over.key];
   if (!cohort) {
     cohort = emptyCohort(over.districtId, over.tier, state.config.sizePreset);

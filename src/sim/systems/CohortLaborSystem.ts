@@ -16,6 +16,7 @@
  */
 
 import type { SimContext, GameState } from '../core/GameState';
+import { townOf } from '../core/Town';
 import { isDayBoundary } from '../core/Tick';
 import { crowdCount } from '../entities/Facility';
 import { isWorkTime } from './CitizenScheduleSystem';
@@ -25,8 +26,11 @@ import { isWorkTime } from './CitizenScheduleSystem';
 const CROWD_WAGE_BUFFER_DAYS = 7;
 
 function anyCrowd(state: GameState): boolean {
-  for (const cid in state.cohorts) {
-    if (state.cohorts[cid]!.population > 0) return true;
+  // Bare-`state` helper mid-gradient: home town by default (one-town region →
+  // same reference); gains a `townId` param at the endgame move.
+  const cohorts = townOf(state).cohorts;
+  for (const cid in cohorts) {
+    if (cohorts[cid]!.population > 0) return true;
   }
   return false;
 }
@@ -34,6 +38,7 @@ function anyCrowd(state: GameState): boolean {
 export function runCohortLaborSystem(ctx: SimContext): void {
   const { state } = ctx;
   if (!anyCrowd(state)) return;
+  const town = townOf(state, ctx.townId);
 
   if (isDayBoundary(state.tick, ctx.config)) reconcileCrowdJobs(state);
 
@@ -44,7 +49,7 @@ export function runCohortLaborSystem(ctx: SimContext): void {
       for (const cid in fac.crowdByCohort) {
         const n = fac.crowdByCohort[cid]!;
         if (n <= 0) continue;
-        const cohort = state.cohorts[cid];
+        const cohort = town.cohorts[cid];
         fac.presentWorkers += n;
         fac.presentSkill += n * (cohort?.avgSkill ?? 1);
       }
@@ -53,7 +58,10 @@ export function runCohortLaborSystem(ctx: SimContext): void {
 }
 
 function reconcileCrowdJobs(state: GameState): void {
-  const cohortIds = Object.keys(state.cohorts).sort();
+  // Bare-`state` helper mid-gradient: home town by default (one-town region →
+  // same reference); gains a `townId` param at the endgame move.
+  const cohorts = townOf(state).cohorts;
+  const cohortIds = Object.keys(cohorts).sort();
   const facilityIds = Object.keys(state.facilities).sort();
 
   // Rebuild employment counts from assignments so they can never drift.
@@ -95,7 +103,7 @@ function reconcileCrowdJobs(state: GameState): void {
   // Pass 2 — population shrank below assignments (migration, later arcs):
   // release the excess, smallest facility holdings first for stability.
   for (const cid of cohortIds) {
-    const cohort = state.cohorts[cid]!;
+    const cohort = cohorts[cid]!;
     let excess = (employedByCohort[cid] ?? 0) - cohort.population;
     if (excess <= 0) continue;
     for (const fid of facilityIds) {
@@ -132,7 +140,7 @@ function reconcileCrowdJobs(state: GameState): void {
 
     for (const cid of cohortIds) {
       if (room <= 0) break;
-      const cohort = state.cohorts[cid]!;
+      const cohort = cohorts[cid]!;
       const idle = cohort.population - (employedByCohort[cid] ?? 0);
       if (idle <= 0) continue;
       let take = Math.min(room, idle);
@@ -149,6 +157,6 @@ function reconcileCrowdJobs(state: GameState): void {
   }
 
   for (const cid of cohortIds) {
-    state.cohorts[cid]!.employed = employedByCohort[cid] ?? 0;
+    cohorts[cid]!.employed = employedByCohort[cid] ?? 0;
   }
 }

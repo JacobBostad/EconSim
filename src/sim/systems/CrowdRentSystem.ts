@@ -56,8 +56,11 @@ import { SIZE_PRESETS } from '../core/SimulationConfig';
 const RENT_BUFFER_DAYS = 30;
 
 function anyCrowd(state: GameState): boolean {
-  for (const cid in state.cohorts) {
-    if (state.cohorts[cid]!.population > 0) return true;
+  // Bare-`state` helper mid-gradient: home town by default (one-town region →
+  // same reference); gains a `townId` param at the endgame move.
+  const cohorts = townOf(state).cohorts;
+  for (const cid in cohorts) {
+    if (cohorts[cid]!.population > 0) return true;
   }
   return false;
 }
@@ -80,13 +83,14 @@ export function runCrowdRentSystem(ctx: SimContext): void {
   if (!isDayBoundary(state.tick, ctx.config)) return;
   // Village stays dark: no crowd means no new code path touches state.
   if (!anyCrowd(state)) return;
+  const town = townOf(state, ctx.townId);
 
   // Snapshot each cohort's affordability factor from the pool BEFORE any rent
   // is charged, so the apartment and informal legs use one order-independent
   // rate for the day.
   const afford: Record<string, number> = {};
-  for (const cid of Object.keys(state.cohorts).sort()) {
-    afford[cid] = rentAffordFactor(state.cohorts[cid]!);
+  for (const cid of Object.keys(town.cohorts).sort()) {
+    afford[cid] = rentAffordFactor(town.cohorts[cid]!);
   }
 
   // Landlord-owned apartments grouped by district, in sorted-id order (facility
@@ -100,15 +104,15 @@ export function runCrowdRentSystem(ctx: SimContext): void {
     if (fac.status === 'closed') continue;
     const owner = state.firms[fac.ownerFirmId];
     if (!owner || (owner.ownerType !== 'player' && owner.ownerType !== 'ai')) continue;
-    const d = districtAt(townOf(state, ctx.townId).districts, fac.location.x, fac.location.y);
+    const d = districtAt(town.districts, fac.location.x, fac.location.y);
     if (!d) continue;
     (aptsByDistrict[d.id] ??= []).push(fac);
   }
 
   // Populated cohorts grouped by district, sorted by id.
   const cohortsByDistrict: Record<string, Cohort[]> = {};
-  for (const cid of Object.keys(state.cohorts).sort()) {
-    const co = state.cohorts[cid]!;
+  for (const cid of Object.keys(town.cohorts).sort()) {
+    const co = town.cohorts[cid]!;
     if (co.population <= 0) continue;
     (cohortsByDistrict[co.districtId] ??= []).push(co);
   }
@@ -162,8 +166,8 @@ export function runCrowdRentSystem(ctx: SimContext): void {
   }
 
   // --- informal housing: the rest pay the world ---------------------------
-  for (const cid of Object.keys(state.cohorts).sort()) {
-    const co = state.cohorts[cid]!;
+  for (const cid of Object.keys(town.cohorts).sort()) {
+    const co = town.cohorts[cid]!;
     if (co.population <= 0) continue;
     const informal = co.population - (housed[cid] ?? 0);
     if (informal <= 0) continue;
@@ -195,8 +199,8 @@ export function runCrowdRentSystem(ctx: SimContext): void {
   const drainRate = SIZE_PRESETS[state.config.sizePreset].prosperityDrainRate;
   if (drainRate > 0) {
     const floor = SIZE_PRESETS[state.config.sizePreset].prosperityDrainFloor;
-    for (const cid of Object.keys(state.cohorts).sort()) {
-      const co = state.cohorts[cid]!;
+    for (const cid of Object.keys(town.cohorts).sort()) {
+      const co = town.cohorts[cid]!;
       if (co.population <= 0) continue;
       const perCapita = co.cashPool / co.population;
       if (perCapita <= floor) continue;

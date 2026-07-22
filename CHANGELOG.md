@@ -19,6 +19,30 @@ real City or Metropolis game switches the whole stack on together (crowd +
 districts + all three specialist channels); Village stays the classic,
 bit-identical, every-resident-simulated town.
 
+- **E step 3 — the Town seam (second slice, cohorts).** The `Town` view's second
+  family converts: every **cohort reader** in the sim layer now routes through
+  `townOf(...).cohorts` — **46 reader references across 9 files** (`CrowdRent`,
+  `CohortSocial`, `CohortLabor`, `CohortDemand`, `CastCurator`, `Payroll`,
+  `AIFounder`, `RetailDemand` systems + `reportSelectors`). ctx-scoped systems
+  hoist `const town = townOf(ctx.state, ctx.townId)` once and read `town.cohorts`;
+  bare-`state` helpers mid-gradient call `townOf(state).cohorts` (home default)
+  and carry a comment noting the `townId` param they gain at the endgame move.
+  Writers stay flat by design (the view is read-only): the two tier-promotion
+  CREATION sites (`CohortSocial.moveTier`, `CastCurator.retire`) plus
+  `startingScenario` and `migrations`. The **money-scope subtlety** the districts
+  family never hit is documented and left flat: the account-resolution primitive
+  (`getAccountCash`/`accountExists`/`addAccountCash` under `recordTransaction`)
+  and the `totalMoneySupply` conservation sum are **region-wide** reads — money
+  moves between towns, so at the endgame they resolve/iterate ALL towns' cohorts,
+  and routing them through a single town's view would misrepresent their scope.
+  The harness is shown to guard the conversion: a scratch mis-conversion
+  (`get cohorts() { return {}; }`) turns **28 tests red across 14 files**;
+  restoring returns green. Pinned baselines hold exactly: village seeds 11/4/7
+  reproduce `rngState` 3274842624 / 2896139677 / 4253583594, city seed 11 its
+  `rngState` 2546912297 and money supply 316900000. Suite +1 cohort-determinism
+  test in `townSeam.test.ts` (now 575); `tsc` clean; no UI touched. Remaining
+  families (firms ~450, facilities ~360, citizens ~210, marketStats ~35, map
+  dims, UI reads) follow the same recipe in region.md § step 3.
 - **E step 3 — the Town seam (first slice, spike).** The region's `GameState`
   refactor (`state.firms` → `state.towns[townId].firms`, ~1,300 sites) lands its
   first honest brick: the `Town` as a **view**, not stored state. `core/Town.ts`

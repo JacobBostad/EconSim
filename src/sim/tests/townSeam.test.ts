@@ -11,8 +11,9 @@
  *   2. the seam threads — `makeContext(state).townId === HOME_TOWN_ID`;
  *   3. serialization is unpolluted — no `towns` key leaks into a save;
  *
- * and that the district family, run through the converted systems, stays
- * deterministic (two City runs agree bit-for-bit on the districts and rngState).
+ * and that the district AND cohort families, run through the converted systems,
+ * stay deterministic (two City runs agree bit-for-bit on the districts, the
+ * cohorts, and rngState).
  * Bit-identity against the pre-refactor pinned baselines is the orchestrator's
  * job (village seeds 11/4/7 rngState pins, city seed 11) — this file guards the
  * accessor's contract, not the whole trajectory.
@@ -114,5 +115,38 @@ describe('Town seam — the converted district family stays deterministic', () =
       expect(da[id]!.desirability).toBe(db[id]!.desirability);
       expect(da[id]!.landValue).toBe(db[id]!.landValue);
     }
+  });
+});
+
+describe('Town seam — the converted cohort family stays deterministic', () => {
+  it('two City runs agree bit-for-bit through the converted cohort systems', () => {
+    const a = newCitySim(11);
+    const b = newCitySim(11);
+    const tpd = ticksPerDay(a.getState().config);
+    // 30 days is enough for the crowd path to run hard: CohortDemand grows
+    // buckets and shops, CohortLabor staffs the crowd, CohortSocial gates tiers
+    // and migrates, CrowdRent/Payroll move cohort cash. Every cohort reader in
+    // those systems now routes through townOf(...).cohorts.
+    a.run(tpd * 30);
+    b.run(tpd * 30);
+    expect(a.getState().rngState).toBe(b.getState().rngState);
+    expect(normalizedSerialize(a.getState())).toBe(normalizedSerialize(b.getState()));
+
+    // The crowd must actually be live — otherwise the cohort readers never run
+    // and this proves nothing. City seed 11 seeds cohorts; assert they carry
+    // population and that every cohort field the converted systems write agrees.
+    const ca = a.getState().cohorts;
+    const cb = b.getState().cohorts;
+    const ids = Object.keys(ca).sort();
+    expect(ids.length).toBeGreaterThan(0);
+    let totalPop = 0;
+    for (const id of ids) {
+      totalPop += ca[id]!.population;
+      expect(ca[id]!.population).toBe(cb[id]!.population);
+      expect(ca[id]!.employed).toBe(cb[id]!.employed);
+      expect(ca[id]!.cashPool).toBe(cb[id]!.cashPool);
+      expect(ca[id]!.avgSatisfaction).toBe(cb[id]!.avgSatisfaction);
+    }
+    expect(totalPop).toBeGreaterThan(0);
   });
 });

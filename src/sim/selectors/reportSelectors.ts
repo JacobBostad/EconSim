@@ -4,6 +4,7 @@
  */
 
 import type { GameState } from '../core/GameState';
+import { townOf } from '../core/Town';
 import { companyValuation } from './companySelectors';
 import { CONSUMER_PRODUCT_IDS_BY_PRESET, getProduct } from '../data/products';
 import { getAchievementDef } from '../data/achievements';
@@ -189,8 +190,11 @@ export function challengeScore(state: GameState): ChallengeScore {
     satMass += c.satisfaction;
     headcount += 1;
   }
-  for (const cid of Object.keys(state.cohorts).sort()) {
-    const co = state.cohorts[cid]!;
+  // Bare-`state` helper mid-gradient: home town by default (one-town region →
+  // same reference); gains a `townId` param at the endgame move.
+  const cohorts = townOf(state).cohorts;
+  for (const cid of Object.keys(cohorts).sort()) {
+    const co = cohorts[cid]!;
     if (co.population <= 0) continue;
     satMass += co.avgSatisfaction * co.population;
     headcount += co.population;

@@ -59,8 +59,11 @@ function catchupSyntheticSignal(state: GameState): boolean {
  * scale backlog catch-up (see attemptPurchase) dark in a Village, so the 300-day
  * Village re-run stays bit-identical. Exported for that mechanism's test. */
 export function anyCohortPopulation(state: GameState): boolean {
-  for (const cid in state.cohorts) {
-    if (state.cohorts[cid]!.population > 0) return true;
+  // Bare-`state` helper mid-gradient: home town by default (one-town region →
+  // same reference); gains a `townId` param at the endgame move.
+  const cohorts = townOf(state).cohorts;
+  for (const cid in cohorts) {
+    if (cohorts[cid]!.population > 0) return true;
   }
   return false;
 }

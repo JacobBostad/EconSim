@@ -157,8 +157,11 @@ const ATTEMPT_EPS = 0.0002;
 // an unserved product into a founder-blocking satisfaction drag. See products.ts.
 
 function anyCrowd(state: GameState): boolean {
-  for (const cid in state.cohorts) {
-    if (state.cohorts[cid]!.population > 0) return true;
+  // Bare-`state` helper mid-gradient: home town by default (one-town region →
+  // same reference); gains a `townId` param at the endgame move.
+  const cohorts = townOf(state).cohorts;
+  for (const cid in cohorts) {
+    if (cohorts[cid]!.population > 0) return true;
   }
   return false;
 }
@@ -186,9 +189,10 @@ export function runCohortDemandSystem(ctx: SimContext): void {
  * decays toward 0 (exactly SatisfactionSystem's rule, applied per bucket). */
 function growBuckets(ctx: SimContext): void {
   const { state } = ctx;
+  const town = townOf(state, ctx.townId);
   const needspecIds = COHORT_DEMAND_PRODUCT_IDS;
-  for (const cid of Object.keys(state.cohorts).sort()) {
-    const cohort = state.cohorts[cid]!;
+  for (const cid of Object.keys(town.cohorts).sort()) {
+    const cohort = town.cohorts[cid]!;
     if (cohort.population <= 0) continue;
     for (const pid of needspecIds) {
       const spec = PRODUCTS[pid]!.needSpec!;
@@ -218,7 +222,7 @@ function runSlice(ctx: SimContext): void {
   // town here (Village exits before runSlice via anyCrowd), so every crowd town
   // is district-local by construction.
   const openStores: OpenStore[] = [];
-  const town = townOf(state, ctx.townId); // hoisted — the recipe's own rule (review nit)
+  const town = townOf(state, ctx.townId);
   for (const fid of Object.keys(state.facilities).sort()) {
     const fac = state.facilities[fid]!;
     if (fac.retailProductIds.length === 0) continue;
@@ -241,12 +245,12 @@ function runSlice(ctx: SimContext): void {
   // to keep with the system's deterministic economic iteration.
   const castPop = Object.keys(state.citizens).length;
   let crowdPop = 0;
-  for (const cid of Object.keys(state.cohorts).sort()) crowdPop += state.cohorts[cid]!.population;
+  for (const cid of Object.keys(town.cohorts).sort()) crowdPop += town.cohorts[cid]!.population;
   const denom = castPop + crowdPop;
   const castShare = denom > 0 ? castPop / denom : 0;
 
-  for (const cid of Object.keys(state.cohorts).sort()) {
-    const cohort = state.cohorts[cid]!;
+  for (const cid of Object.keys(town.cohorts).sort()) {
+    const cohort = town.cohorts[cid]!;
     if (cohort.population <= 0) continue;
     shopCohortSlice(ctx, cohort, openStores, sold, castShare);
   }

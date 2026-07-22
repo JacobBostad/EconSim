@@ -21,6 +21,7 @@
 
 import type { SimContext, GameState } from '../core/GameState';
 import { recordTransaction, emitEvent, reindexContracts } from '../core/GameState';
+import { townOf } from '../core/Town';
 import type { SimulationConfig } from '../core/SimulationConfig';
 import { SIZE_PRESETS } from '../core/SimulationConfig';
 import { firmAccount, WORLD_ACCOUNT } from '../core/Transactions';
@@ -304,14 +305,17 @@ function foundInvestorFirm(ctx: SimContext, day: number): void {
  * gates stay bit-identical to before world-scale.
  */
 function townPopAndSat(state: GameState): { pop: number; avgSat: number } {
+  // Bare-`state` helper mid-gradient: home town by default (one-town region →
+  // same reference); gains a `townId` param at the endgame move.
+  const cohorts = townOf(state).cohorts;
   let satMass = 0;
   let pop = 0;
   for (const id in state.citizens) {
     satMass += state.citizens[id]!.satisfaction;
     pop += 1;
   }
-  for (const cid in state.cohorts) {
-    const co = state.cohorts[cid]!;
+  for (const cid in cohorts) {
+    const co = cohorts[cid]!;
     satMass += co.avgSatisfaction * co.population;
     pop += co.population;
   }
