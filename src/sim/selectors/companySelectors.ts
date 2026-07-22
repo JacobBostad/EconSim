@@ -9,6 +9,7 @@ import type { Firm } from '../entities/Firm';
 import type { Facility } from '../entities/Facility';
 import type { Citizen } from '../entities/Citizen';
 import type { FirmId } from '../core/Id';
+import { townOf } from '../core/Town';
 import { grossProfit, operatingProfit, netProfit } from '../entities/Accounting';
 import { getProduct } from '../data/products';
 import { OBJECTIVE_LADDER, BOARD_VISIBILITY_PCT } from '../data/constants';
@@ -58,8 +59,9 @@ export function firmFacilities(state: GameState, firmId: FirmId): Facility[] {
 export function firmEmployees(state: GameState, firmId: FirmId): Citizen[] {
   const firm = state.firms[firmId];
   if (!firm) return [];
+  const citizens = townOf(state).citizens;
   return firm.employees
-    .map((id) => state.citizens[id])
+    .map((id) => citizens[id])
     .filter((c): c is Citizen => !!c);
 }
 

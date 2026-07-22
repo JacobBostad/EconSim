@@ -194,7 +194,7 @@ function employ(
   role: string,
   wage: number,
 ): void {
-  const cit = b.state.citizens[citizenId]!;
+  const cit = townOf(b.state).citizens[citizenId]!;
   cit.employerFirmId = firmId;
   cit.workplaceFacilityId = facilityId;
   cit.role = role;
@@ -344,7 +344,7 @@ export function createInitialState(
       newCitizen(b, homeId, state.facilities[homeId]!.location);
     }
   }
-  const allCitizenIds = Object.keys(state.citizens);
+  const allCitizenIds = Object.keys(townOf(state).citizens);
   let nextWorker = 0;
   const takeWorker = (): string | null =>
     nextWorker < allCitizenIds.length ? allCitizenIds[nextWorker++]! : null;

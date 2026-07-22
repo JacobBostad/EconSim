@@ -20,6 +20,7 @@ import { poolCoverDays } from '../data/tradePool';
 import { PRODUCT_IDS_BY_PRESET } from '../data/products';
 import { FOUNDER_GAP_DAYS, TRADE_POOL_THIN_COVER_DAYS } from '../data/constants';
 import { founderMaxAiFirms } from '../systems/AIFounderSystem';
+import { townOf } from '../core/Town';
 
 export interface Advice {
   icon: string;
@@ -184,7 +185,7 @@ export function morningBriefing(state: GameState): Advice[] {
     const fac = state.facilities[facId];
     if (!fac) continue;
     let found = false;
-    for (const pid of Object.keys(state.marketStats)) {
+    for (const pid of Object.keys(townOf(state).marketStats)) {
       const best = pickBestCity(state, pid);
       const base = getProduct(pid).basePrice;
       if (best.price < base * 1.3) continue;

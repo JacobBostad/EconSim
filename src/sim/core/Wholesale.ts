@@ -14,6 +14,7 @@ import type { ContractIndex } from './ContractIndex';
 import { contractsBySource } from './ContractIndex';
 import { WHOLESALE_DISCOUNT } from '../data/constants';
 import { getProduct } from '../data/products';
+import { townOf } from './Town';
 
 export const WHOLESALE_MULT_MIN = 0.5;
 export const WHOLESALE_MULT_MAX = 1.0;
@@ -21,7 +22,9 @@ export const WHOLESALE_MULT_MAX = 1.0;
 /** Per-unit price a buyer pays this seller for this product, cents. */
 export function wholesaleUnitPrice(state: GameState, source: Facility, productId: string): number {
   const product = getProduct(productId);
-  const stat = state.marketStats[productId];
+  // Bare-`state` helper mid-gradient: home town by default (one-town region →
+  // same reference); gains a `townId` param at the endgame move.
+  const stat = townOf(state).marketStats[productId];
   const base = stat && stat.averagePrice > 0 ? stat.averagePrice : product.basePrice;
   const mult = source.wholesalePriceMult ?? WHOLESALE_DISCOUNT;
   return Math.round(base * mult);

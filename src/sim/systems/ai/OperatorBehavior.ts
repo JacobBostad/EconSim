@@ -15,6 +15,7 @@
 
 import type { SimContext } from '../../core/GameState';
 import { emitEvent, canAfford, recordTransaction, addContract, reindexContracts } from '../../core/GameState';
+import { townOf } from '../../core/Town';
 import { contractsBySource, contractsByDest, contractsByOwner } from '../../core/ContractIndex';
 import { firmAccount, WORLD_ACCOUNT } from '../../core/Transactions';
 import { formatMoney } from '../../../utils/formatMoney';
@@ -301,6 +302,7 @@ const AI_WAGE_DECAY = 0.98; // per slack day above the floor
 
 function manageWages(ctx: SimContext, firmId: string, digest?: DigestBuffer): void {
   const { state } = ctx;
+  const town = townOf(state, ctx.townId);
   const firm = state.firms[firmId]!;
   const floor = firm.strategy.startingWage ?? firm.wagePolicy.baseWage;
   if (!firm.strategy.startingWage) firm.strategy.startingWage = floor;
@@ -317,8 +319,8 @@ function manageWages(ctx: SimContext, firmId: string, digest?: DigestBuffer): vo
     unfilled += Math.max(0, desired - fac.employees.length);
   }
   let unemployed = 0;
-  for (const cid in state.citizens) {
-    if (state.citizens[cid]!.employmentStatus === 'unemployed') unemployed += 1;
+  for (const cid in town.citizens) {
+    if (town.citizens[cid]!.employmentStatus === 'unemployed') unemployed += 1;
   }
 
   const wage = firm.wagePolicy.baseWage;
@@ -332,7 +334,7 @@ function manageWages(ctx: SimContext, firmId: string, digest?: DigestBuffer): vo
     firm.wagePolicy.baseWage = next;
     // Current staff ride the same wage — retention parity with SET_WAGE.
     for (const cid of firm.employees) {
-      const cit = state.citizens[cid];
+      const cit = town.citizens[cid];
       if (cit) cit.wage = next;
     }
     if (next > wage) {
@@ -351,6 +353,7 @@ function manageWages(ctx: SimContext, firmId: string, digest?: DigestBuffer): vo
  */
 function maybeBoostProduction(ctx: SimContext, firmId: string): void {
   const { state } = ctx;
+  const town = townOf(state, ctx.townId);
   const firm = state.firms[firmId]!;
   // Expansion only while the business is actually working: without the
   // loss-streak brake, chronic-shortage hiring bloats payroll past revenue
@@ -364,8 +367,8 @@ function maybeBoostProduction(ctx: SimContext, firmId: string): void {
     if (!fac || fac.status === 'closed' || !fac.activeRecipeId) continue;
     const outPid = getRecipe(fac.activeRecipeId).outputs[0]?.productId;
     if (!outPid) continue;
-    const yesterday = state.marketStats[outPid]?.history.slice(-1)[0];
-    const finished = state.marketStats[
+    const yesterday = town.marketStats[outPid]?.history.slice(-1)[0];
+    const finished = town.marketStats[
       getFinishedProductFor(state, fac, outPid, ctx.contractIndex)
     ]?.history.slice(-1)[0];
     const signal = finished ?? yesterday;

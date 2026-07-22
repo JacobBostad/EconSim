@@ -116,8 +116,8 @@ function curate(ctx: SimContext): boolean {
     pop[s.key] = 0;
   }
   let castTotal = 0;
-  for (const cid of Object.keys(state.citizens).sort()) {
-    const c = state.citizens[cid]!;
+  for (const cid of Object.keys(town.citizens).sort()) {
+    const c = town.citizens[cid]!;
     const home = state.facilities[c.homeFacilityId];
     if (!home) continue;
     const key = stratumOf(state, home.location, c.tier);
@@ -195,8 +195,9 @@ function curate(ctx: SimContext): boolean {
  */
 function pickRetiree(state: GameState, over: Stratum): Citizen | null {
   let pick: Citizen | null = null;
-  for (const cid of Object.keys(state.citizens).sort()) {
-    const c = state.citizens[cid]!;
+  const citizens = townOf(state).citizens;
+  for (const cid of Object.keys(citizens).sort()) {
+    const c = citizens[cid]!;
     const home = state.facilities[c.homeFacilityId];
     if (!home) continue;
     if (stratumOf(state, home.location, c.tier) !== over.key) continue;

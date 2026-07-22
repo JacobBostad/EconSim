@@ -23,6 +23,7 @@
  */
 
 import type { SimContext, GameState } from '../core/GameState';
+import { townOf } from '../core/Town';
 import { emitEvent } from '../core/GameState';
 import { isDayBoundary } from '../core/Tick';
 import type { Citizen, CitizenTier } from '../entities/Citizen';
@@ -190,8 +191,9 @@ export function runTierSystem(ctx: SimContext): void {
   const { state } = ctx;
   if (!isDayBoundary(state.tick, ctx.config)) return;
 
-  for (const cid in state.citizens) {
-    const cit = state.citizens[cid]!;
+  const town = townOf(state, ctx.townId);
+  for (const cid in town.citizens) {
+    const cit = town.citizens[cid]!;
     const idx = ORDER.indexOf(cit.tier);
     const next = ORDER[idx + 1];
 

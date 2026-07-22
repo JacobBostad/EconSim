@@ -75,8 +75,9 @@ export function quarterReport(state: GameState, quarter: number): QuarterReport 
   const netProfitTotal = hist.reduce((a, d) => a + d.netProfit, 0);
   const revenueTotal = hist.reduce((a, d) => a + d.revenue, 0);
 
+  const marketStats = townOf(state).marketStats;
   const shares: ShareLine[] = CONSUMER_PRODUCT_IDS_BY_PRESET[state.config.sizePreset].map((pid) => {
-    const h = state.marketStats[pid]?.history ?? [];
+    const h = marketStats[pid]?.history ?? [];
     const at = (day: number): number => {
       // Latest snapshot at or before `day` (0 when none).
       let share = 0;
@@ -183,7 +184,7 @@ export function challengeScore(state: GameState): ChallengeScore {
   // cohorts, mirroring the cohort migration gate's townAvg (CohortSocialSystem).
   // Village cohorts are empty, so the crowd loop is a no-op and this equals the
   // cast mean the Village score has always used (bit-identity preserved).
-  const cits = Object.values(state.citizens);
+  const cits = Object.values(townOf(state).citizens);
   let satMass = 0;
   let headcount = 0;
   for (const c of cits) {

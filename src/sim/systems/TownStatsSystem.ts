@@ -6,6 +6,7 @@
  */
 
 import type { SimContext } from '../core/GameState';
+import { townOf } from '../core/Town';
 import { isDayBoundary } from '../core/Tick';
 
 export interface TownDay {
@@ -31,8 +32,9 @@ export function runTownStatsSystem(ctx: SimContext): void {
   let workers = 0;
   let comfortable = 0;
   let affluent = 0;
-  for (const cid in state.citizens) {
-    const c = state.citizens[cid]!;
+  const town = townOf(state, ctx.townId);
+  for (const cid in town.citizens) {
+    const c = town.citizens[cid]!;
     population += 1;
     satisfaction += c.satisfaction;
     cash += c.cash;

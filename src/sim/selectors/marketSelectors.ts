@@ -7,6 +7,7 @@ import type { MarketStat } from '../entities/Market';
 import type { ProductId } from '../core/Id';
 import { PRODUCT_IDS_BY_PRESET, CONSUMER_PRODUCT_IDS_BY_PRESET, getProduct } from '../data/products';
 import { crowdCount } from '../entities/Facility';
+import { townOf } from '../core/Town';
 
 export interface MarketRow {
   productId: ProductId;
@@ -25,15 +26,18 @@ export interface MarketRow {
 }
 
 export function marketStat(state: GameState, productId: ProductId): MarketStat | undefined {
-  return state.marketStats[productId];
+  // Bare-`state` selector mid-gradient: home town by default (one-town region →
+  // same reference); gains a `townId` param at the endgame move.
+  return townOf(state).marketStats[productId];
 }
 
 export function marketRows(state: GameState, consumerOnly = true): MarketRow[] {
   const ids = consumerOnly
     ? CONSUMER_PRODUCT_IDS_BY_PRESET[state.config.sizePreset]
     : PRODUCT_IDS_BY_PRESET[state.config.sizePreset];
+  const marketStats = townOf(state).marketStats;
   return ids.map((pid) => {
-    const stat = state.marketStats[pid]!;
+    const stat = marketStats[pid]!;
     const product = getProduct(pid);
     let topFirm = '';
     let topShare = 0;
@@ -100,8 +104,9 @@ export function pricingInsight(
   // read the live range from the population for honesty.
   let lo = Infinity;
   let hi = 0;
-  for (const cid in state.citizens) {
-    const need = state.citizens[cid]!.needs.find((n) => n.productId === productId);
+  const citizens = townOf(state).citizens;
+  for (const cid in citizens) {
+    const need = citizens[cid]!.needs.find((n) => n.productId === productId);
     if (!need) continue;
     lo = Math.min(lo, need.maxAffordablePriceMultiplier);
     hi = Math.max(hi, need.maxAffordablePriceMultiplier);
@@ -119,7 +124,7 @@ export function pricingInsight(
 
   return {
     yourPrice: firm?.pricesByProduct[productId] ?? product.basePrice,
-    marketAvgPrice: state.marketStats[productId]?.averagePrice ?? 0,
+    marketAvgPrice: townOf(state).marketStats[productId]?.averagePrice ?? 0,
     basePrice: product.basePrice,
     wtpLow: Math.round(product.basePrice * lo * premium),
     wtpHigh: Math.round(product.basePrice * hi * premium),

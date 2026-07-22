@@ -8,6 +8,7 @@ import type { Transaction } from '../core/Transactions';
 import { computeTime } from '../core/Tick';
 import { PRODUCT_IDS_BY_PRESET, CONSUMER_PRODUCT_IDS_BY_PRESET, getProduct } from '../data/products';
 import { getQuantity } from '../entities/Inventory';
+import { townOf } from '../core/Town';
 
 export interface DebugSnapshot {
   tick: number;
@@ -49,7 +50,7 @@ export function debugSnapshot(state: GameState): DebugSnapshot {
     rngState: state.rngState,
     totalMoneySupply: totalMoneySupply(state),
     worldCash: state.worldCash,
-    citizenCount: Object.keys(state.citizens).length,
+    citizenCount: Object.keys(townOf(state).citizens).length,
     firmCount: Object.keys(state.firms).length,
     facilityCount: Object.keys(state.facilities).length,
     activeShipments: active,
@@ -82,8 +83,9 @@ export interface MacroIndicators {
 /** Live, transparent macro indicators derived from current state. */
 export function macroIndicators(state: GameState): MacroIndicators {
   let idxSum = 0, idxN = 0, spend = 0, sold = 0, unmet = 0, inv = 0;
+  const marketStats = townOf(state).marketStats;
   for (const pid of CONSUMER_PRODUCT_IDS_BY_PRESET[state.config.sizePreset]) {
-    const stat = state.marketStats[pid];
+    const stat = marketStats[pid];
     if (!stat) continue;
     const base = getProduct(pid).basePrice;
     if (stat.averagePrice > 0 && base > 0) { idxSum += stat.averagePrice / base; idxN++; }

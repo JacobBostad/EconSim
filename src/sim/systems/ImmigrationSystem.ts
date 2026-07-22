@@ -16,7 +16,9 @@
  */
 
 import type { SimContext, GameState } from '../core/GameState';
+import type { Citizen } from '../entities/Citizen';
 import { recordTransaction, emitEvent } from '../core/GameState';
+import { townOf } from '../core/Town';
 import { citizenAccount, WORLD_ACCOUNT } from '../core/Transactions';
 import { isDayBoundary } from '../core/Tick';
 import { createFacility, createCitizen } from '../entities/factories';
@@ -115,9 +117,12 @@ function runEmigration(
 
   // Unemployed leave first; among peers, the most miserable. Insertion
   // order breaks ties, so the pick is deterministic.
-  let pick = null as (typeof state.citizens)[string] | null;
-  for (const cid in state.citizens) {
-    const c = state.citizens[cid]!;
+  // Bare-`state` helper mid-gradient: home town by default (one-town region →
+  // same reference); gains a `townId` param at the endgame move.
+  const citizens = townOf(state).citizens;
+  let pick: Citizen | null = null;
+  for (const cid in citizens) {
+    const c = citizens[cid]!;
     if (pick === null) { pick = c; continue; }
     const cJobless = c.employmentStatus === 'unemployed';
     const pickJobless = pick.employmentStatus === 'unemployed';
@@ -144,14 +149,15 @@ function runEmigration(
 export function runImmigrationSystem(ctx: SimContext): void {
   if (!isDayBoundary(ctx.state.tick, ctx.config)) return;
   const { state, rng } = ctx;
+  const town = townOf(state, ctx.townId);
 
   // Conditions: prosperous and labor-tight.
   let total = 0;
   let satisfactionSum = 0;
   let unemployed = 0;
   let workers = 0;
-  for (const cid in state.citizens) {
-    const c = state.citizens[cid]!;
+  for (const cid in town.citizens) {
+    const c = town.citizens[cid]!;
     total += 1;
     satisfactionSum += c.satisfaction;
     if (c.employmentStatus === 'unemployed') unemployed += 1;
@@ -220,8 +226,8 @@ export function runImmigrationSystem(ctx: SimContext): void {
   // of the good life reaches skilled tradespeople. Applied AFTER creation
   // so the shared rng stream is untouched (no new draws, same sequence).
   let climbed = 0;
-  for (const cid in state.citizens) {
-    if (state.citizens[cid]!.tier !== 'worker') climbed += 1;
+  for (const cid in town.citizens) {
+    if (town.citizens[cid]!.tier !== 'worker') climbed += 1;
   }
   const prosperous = total > 0 && climbed / total > PROSPEROUS_SHARE;
   if (prosperous) {

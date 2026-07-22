@@ -17,6 +17,7 @@
 import type { SimContext, GameState } from '../../core/GameState';
 import type { Firm } from '../../entities/Firm';
 import { emitEvent, recordTransaction, addContract } from '../../core/GameState';
+import { townOf } from '../../core/Town';
 import { commercialLeaseAsk, landlordCanFinance } from './LandlordBehavior';
 import { firmAccount, WORLD_ACCOUNT } from '../../core/Transactions';
 import { nextId } from '../../core/Id';
@@ -72,7 +73,7 @@ export function maybeExpand(ctx: SimContext, firmId: string): void {
     lost += fac.dailyStats.lostSales;
   }
   if (!product) return;
-  const stat = state.marketStats[product]!;
+  const stat = townOf(state, ctx.townId).marketStats[product]!;
   if (stat.unmetDemand < 14 || lost < 6) return; // only under real shortage
   const expandChance = Math.min(1, ctx.config.aiExpandChance * getPersonality(firm.personalityId).expandChanceMult);
   if (!rng.chance(expandChance)) return; // not every eligible day

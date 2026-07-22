@@ -333,10 +333,10 @@ export function addContract(ctx: SimContext, contract: Contract): void {
 // The account-resolution primitive under recordTransaction (getAccountCash /
 // accountExists / addAccountCash). A money account is resolved by id, and money
 // moves between towns, so these are REGION-WIDE reads: at the endgame move they
-// resolve against every town's cohorts (the flat `state.cohorts` back-compat
-// getter left at the old path), NOT a single town's view. Routing them through
-// the home-default `townOf(state).cohorts` would misrepresent that scope, so
-// they stay flat by design.
+// resolve against every town's cohorts AND citizens (the flat `state.cohorts` /
+// `state.citizens` back-compat getters left at the old paths), NOT a single
+// town's view. Routing them through the home-default `townOf(state).cohorts` /
+// `.citizens` would misrepresent that scope, so they stay flat by design.
 function getAccountCash(state: GameState, ref: AccountRef): number {
   if (ref.kind === 'world') return state.worldCash;
   if (ref.kind === 'firm') return state.firms[ref.id!]?.cash ?? 0;
@@ -587,10 +587,11 @@ export function emitEvent(
 export function totalMoneySupply(state: GameState): number {
   let sum = state.worldCash;
   for (const id in state.firms) sum += state.firms[id]!.cash;
+  // Region-wide money reads: conservation sums the WHOLE region's citizen and
+  // cohort cash, so these iterate every town's citizens/cohorts at the endgame
+  // (via the flat `state.citizens` / `state.cohorts` back-compat getters), not one
+  // town's view — they stay flat by design.
   for (const id in state.citizens) sum += state.citizens[id]!.cash;
-  // Region-wide money read: conservation sums the WHOLE region's cohort cash, so
-  // this iterates every town's cohorts at the endgame (via the flat `state.cohorts`
-  // back-compat getter), not one town's view — it stays flat by design.
   for (const id in state.cohorts) sum += state.cohorts[id]!.cashPool;
   return sum;
 }

@@ -23,6 +23,7 @@
 import type { GameState } from './GameState';
 import { formatMoney } from '../../utils/formatMoney';
 import { canAfford, emitEvent, recordTransaction } from './GameState';
+import { townOf } from './Town';
 import { firmAccount, WORLD_ACCOUNT } from './Transactions';
 import type { FirmId } from './Id';
 import {
@@ -198,8 +199,9 @@ export function performAcquisition(
     fac.ownerFirmId = buyer.id;
     buyer.facilities.push(facId);
   }
+  const citizens = townOf(s).citizens;
   for (const cid of target.employees) {
-    const cit = s.citizens[cid];
+    const cit = citizens[cid];
     if (!cit) continue;
     cit.employerFirmId = buyer.id;
     buyer.employees.push(cid);

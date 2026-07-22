@@ -25,6 +25,7 @@ import { computeTime } from './Tick';
 import { createInitialState } from '../data/startingScenario';
 import { createFacility, createCitizen } from '../entities/factories';
 import { Rng } from './Random';
+import { townOf } from './Town';
 import { getFacilityDef } from '../data/facilityDefinitions';
 import { getRecipe } from '../data/recipes';
 import { getProduct, productAvailableInPreset } from '../data/products';
@@ -563,7 +564,7 @@ export class Simulation {
     }
 
     // fund_home
-    const citizens = Object.keys(s.citizens).length;
+    const citizens = Object.keys(townOf(s).citizens).length;
     const homes = Object.values(s.facilities).filter((f) => f.type === 'home').length;
     if (citizens >= s.config.maxCitizens || homes >= s.config.maxHomes) {
       emitEvent(s, 'warning', 'player', 'The town is at capacity — no room for another home.', firmId);
@@ -596,7 +597,7 @@ export class Simulation {
     });
     const home = createFacility(s, 'home', s.worldFirmId, loc, { name: `Home ${homes + 1}` });
     const rng = new Rng(s);
-    for (let i = 0; i < 2 && Object.keys(s.citizens).length < s.config.maxCitizens; i++) {
+    for (let i = 0; i < 2 && Object.keys(townOf(s).citizens).length < s.config.maxCitizens; i++) {
       const cit = createCitizen(s, rng, home.id);
       recordTransaction(s, {
         from: WORLD_ACCOUNT, to: { kind: 'citizen', id: cit.id }, amount: IMMIGRANT_START_CASH,
@@ -867,7 +868,7 @@ export class Simulation {
     if (!firm || command.wage < 0) return;
     firm.wagePolicy.baseWage = Math.round(command.wage);
     for (const cid of firm.employees) {
-      const cit = this.state.citizens[cid];
+      const cit = townOf(this.state).citizens[cid];
       if (cit) cit.wage = firm.wagePolicy.baseWage;
     }
   }
@@ -882,7 +883,7 @@ export class Simulation {
     const ok = hireCitizen(s, command.facilityId, citizenId);
     const fac = s.facilities[command.facilityId];
     if (ok && fac) {
-      const cit = s.citizens[citizenId];
+      const cit = townOf(s).citizens[citizenId];
       emitEvent(s, 'success', 'player', `Hired ${cit?.name ?? citizenId} at ${fac.name}.`, fac.id);
     } else if (fac) {
       emitEvent(s, 'warning', 'player', `Could not hire at ${fac.name} (full or invalid).`, fac.id);

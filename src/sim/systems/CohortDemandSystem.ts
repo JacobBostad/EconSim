@@ -243,7 +243,7 @@ function runSlice(ctx: SimContext): void {
   // population-proportional proxy for each side's claim on a contended shelf —
   // see RESERVE_FACTOR. Integer sums are order-independent, but iterate sorted
   // to keep with the system's deterministic economic iteration.
-  const castPop = Object.keys(state.citizens).length;
+  const castPop = Object.keys(town.citizens).length;
   let crowdPop = 0;
   for (const cid of Object.keys(town.cohorts).sort()) crowdPop += town.cohorts[cid]!.population;
   const denom = castPop + crowdPop;
@@ -310,7 +310,7 @@ function cohortStoreScore(
   const affinity = positioningAffinity(facility.positioning, cohort.tier, {
     avgQuality: quality,
     price,
-    marketAvgPrice: state.marketStats[productId]?.averagePrice || product.basePrice,
+    marketAvgPrice: townOf(state, ctx.townId).marketStats[productId]?.averagePrice || product.basePrice,
   });
 
   return (
@@ -454,7 +454,7 @@ function attemptCohortPurchase(
   const { state } = ctx;
   const product = getProduct(productId);
   const spec = product.needSpec!;
-  const stat = state.marketStats[productId]!;
+  const stat = townOf(state, ctx.townId).marketStats[productId]!;
   const price = storePrice(state, store, productId);
   const stock = getQuantity(store.inputInventory, productId);
   const quality = getQuality(store.inputInventory, productId);

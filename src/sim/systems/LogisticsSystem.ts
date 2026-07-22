@@ -12,6 +12,7 @@
 
 import type { SimContext } from '../core/GameState';
 import { recordTransaction } from '../core/GameState';
+import { townOf } from '../core/Town';
 import { contractsBySource } from '../core/ContractIndex';
 import { firmAccount, WORLD_ACCOUNT } from '../core/Transactions';
 import { nextId } from '../core/Id';
@@ -36,7 +37,9 @@ import { seasonTransportMult, seasonOf } from '../data/seasons';
 
 /** Value of an internal shipment at today's market price (base as fallback). */
 function transferValue(state: SimContext['state'], productId: string, qty: number): number {
-  const avg = state.marketStats[productId]?.averagePrice ?? 0;
+  // Bare-`state` helper mid-gradient: home town by default (one-town region →
+  // same reference); gains a `townId` param at the endgame move.
+  const avg = townOf(state).marketStats[productId]?.averagePrice ?? 0;
   const price = avg > 0 ? avg : getProduct(productId).basePrice;
   return Math.round(qty * price);
 }

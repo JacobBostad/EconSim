@@ -308,10 +308,11 @@ function townPopAndSat(state: GameState): { pop: number; avgSat: number } {
   // Bare-`state` helper mid-gradient: home town by default (one-town region →
   // same reference); gains a `townId` param at the endgame move.
   const cohorts = townOf(state).cohorts;
+  const citizens = townOf(state).citizens;
   let satMass = 0;
   let pop = 0;
-  for (const id in state.citizens) {
-    satMass += state.citizens[id]!.satisfaction;
+  for (const id in citizens) {
+    satMass += citizens[id]!.satisfaction;
     pop += 1;
   }
   for (const cid in cohorts) {
@@ -330,7 +331,9 @@ function townPopAndSat(state: GameState): { pop: number; avgSat: number } {
  * the under-supply signal's.
  */
 function smoothedFillRate(state: GameState, productId: string): number {
-  const hist = state.marketStats[productId]?.history ?? [];
+  // Bare-`state` helper mid-gradient: home town by default (one-town region →
+  // same reference); gains a `townId` param at the endgame move.
+  const hist = townOf(state).marketStats[productId]?.history ?? [];
   let fulfilled = 0;
   let unmet = 0;
   for (let i = Math.max(0, hist.length - FOUNDER_UNDERSUPPLY_WINDOW); i < hist.length; i++) {

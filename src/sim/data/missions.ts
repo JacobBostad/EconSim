@@ -12,6 +12,7 @@
 
 import type { GameState } from '../core/GameState';
 import { companyValuation } from '../selectors/companySelectors';
+import { townOf } from '../core/Town';
 import { dollars } from './constants';
 
 export interface MissionDef {
@@ -196,7 +197,7 @@ export const MISSION_DEFS: MissionDef[] = [
       const p = player(s);
       if (!p) return false;
       const carries = p.facilities.some((fid) => s.facilities[fid]?.retailProductIds.includes('coffee'));
-      return carries && (s.marketStats['coffee']?.unitsSoldByFirm[p.id] ?? 0) > 0;
+      return carries && (townOf(s).marketStats['coffee']?.unitsSoldByFirm[p.id] ?? 0) > 0;
     },
   },
   {

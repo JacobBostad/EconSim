@@ -27,6 +27,8 @@
 import type { GameState } from './GameState';
 import type { District } from '../entities/District';
 import type { Cohort } from '../entities/Cohort';
+import type { Citizen } from '../entities/Citizen';
+import type { MarketStat } from '../entities/Market';
 
 /** A town's identity within the region. One-town region: only `home` exists. */
 export type TownId = string;
@@ -44,10 +46,10 @@ export const HOME_TOWN_ID: TownId = 'home';
  * fields: reading `.districts` returns the live `state.districts` object, so a
  * converted call site is provably identical to the flat access it replaced.
  *
- * Only the district/cohort family is exposed today (region.md step 3's first
- * slice — the smallest family, already town-scoped by design). The remaining
- * families (firms, facilities, citizens, marketStats, map dims) join this view
- * batch by batch as their readers convert; the recipe is in region.md.
+ * The district, cohort, citizen, and marketStats families are exposed today
+ * (region.md step 3's first three slices). The remaining families (firms,
+ * facilities, map dims) join this view batch by batch as their readers convert;
+ * the recipe is in region.md.
  */
 export interface Town {
   readonly id: TownId;
@@ -55,6 +57,10 @@ export interface Town {
   readonly districts: Record<string, District>;
   /** The crowd's cohorts, keyed `districtId:tier` (town-scoped). */
   readonly cohorts: Record<string, Cohort>;
+  /** The simulated cast — individual citizens by id (town-scoped). */
+  readonly citizens: Record<string, Citizen>;
+  /** Per-product market book — prices, shares, daily history (town-scoped). */
+  readonly marketStats: Record<string, MarketStat>;
 }
 
 /**
@@ -72,6 +78,12 @@ export function townOf(state: GameState, _townId: TownId = HOME_TOWN_ID): Town {
     },
     get cohorts(): Record<string, Cohort> {
       return state.cohorts;
+    },
+    get citizens(): Record<string, Citizen> {
+      return state.citizens;
+    },
+    get marketStats(): Record<string, MarketStat> {
+      return state.marketStats;
     },
   };
 }

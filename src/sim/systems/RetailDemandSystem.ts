@@ -139,7 +139,7 @@ export function scoreStore(
   const affinity = positioningAffinity(facility.positioning, citizen.tier, {
     avgQuality: getQuality(facility.inputInventory, productId),
     price,
-    marketAvgPrice: ctx.state.marketStats[productId]?.averagePrice || refPrice,
+    marketAvgPrice: townOf(ctx.state, ctx.townId).marketStats[productId]?.averagePrice || refPrice,
   });
 
   const score =
@@ -203,8 +203,9 @@ export function chooseBestStore(
 
 export function runRetailDemandSystem(ctx: SimContext): void {
   const { state } = ctx;
-  for (const id in state.citizens) {
-    const cit = state.citizens[id]!;
+  const town = townOf(state, ctx.townId);
+  for (const id in town.citizens) {
+    const cit = town.citizens[id]!;
     if (cit.activity !== 'shopping' || cit.movementState !== 'idle') continue;
     const store = cit.targetFacilityId ? state.facilities[cit.targetFacilityId] : null;
     // Whatever happens, after a shopping visit the citizen heads home.
@@ -237,7 +238,7 @@ function attemptPurchase(
 ): void {
   const { state } = ctx;
   const product = getProduct(productId);
-  const stat = state.marketStats[productId]!;
+  const stat = townOf(state, ctx.townId).marketStats[productId]!;
   stat.demandAttempts += 1;
 
   const open = storeIsOpen(ctx, store);
@@ -493,8 +494,9 @@ export function runRestockRevisitSystem(ctx: SimContext): void {
   const isWorkHour =
     ctx.time.hour >= ctx.config.workStartHour && ctx.time.hour < ctx.config.workEndHour;
 
-  for (const id of Object.keys(state.citizens).sort()) {
-    const cit = state.citizens[id]!;
+  const town = townOf(state, ctx.townId);
+  for (const id of Object.keys(town.citizens).sort()) {
+    const cit = town.citizens[id]!;
     const q = cit.pendingRevisits;
     if (!q || q.length === 0) continue;
     // Same-day only: a new day wipes yesterday's queue (nothing is queued on the

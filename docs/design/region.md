@@ -468,8 +468,8 @@ result.
 ### The seam, as landed
 
 - **`core/Town.ts`** — `TownId`, `HOME_TOWN_ID = 'home'`, the `Town` view
-  interface (`districts`, `cohorts` getters today; firms/facilities/citizens/
-  marketStats/map-dims join batch by batch), and `townOf(state, townId =
+  interface (`districts`, `cohorts`, `citizens`, `marketStats` getters today;
+  firms/facilities/map-dims join batch by batch), and `townOf(state, townId =
   HOME_TOWN_ID): Town`. The getters delegate to the flat records, so
   `townOf(state,'home').districts === state.districts` (same reference). One tiny
   allocation per call; hoist it to a local at the top of a hot loop.
@@ -541,6 +541,93 @@ districts, the cohort *helpers* that already take a `Cohort` by parameter
 (`rentAffordFactor`, `updateSatisfaction`, `runTierGates`) never changed — a
 converted site just reads `town.cohorts[cid]` and hands the object in.
 
+### The family converted — marketStats (the per-product town book)
+
+Every **marketStats reader** in the sim layer now routes through the accessor —
+**22 reader sites across 16 files** (the family's writers stay flat: the
+`emptyMarketStat` partition in `startingScenario`, and the migration defaulter
+in `migrations`, which also runs pre-context on raw loaded state):
+
+| file | reader sites | town context |
+| --- | --- | --- |
+| `systems/MarketStatsSystem.ts` | 2 | `ctx.townId` (hoisted `town`) — the daily rebuild reads the existing book via the view and mutates each entry in place (reads-then-mutate, same object) |
+| `systems/RetailDemandSystem.ts` | 2 | `ctx.townId` (`scoreStore`, `attemptPurchase`) |
+| `systems/CohortDemandSystem.ts` | 2 | `ctx.townId` (`cohortStoreScore`, `attemptCohortPurchase`) |
+| `systems/ai/OperatorBehavior.ts` | 2 | `ctx.townId` (hoisted `town`, `maybeBoostProduction`) |
+| `systems/ai/expansion.ts` | 1 | `ctx.townId` (`maybeExpand`) |
+| `systems/EventLogSystem.ts` | 1 | `ctx.townId` (hoisted `town`) |
+| `systems/LogisticsSystem.ts` | 1 | home default (`transferValue` bare-`state` helper) |
+| `systems/AIFounderSystem.ts` | 1 | home default (`smoothedFillRate` bare-`state` helper) |
+| `selectors/marketSelectors.ts` | 3 | home default (`marketStat`, `marketRows`, `pricingInsight`) |
+| `selectors/gazetteSelectors.ts` | 1 | home default (ticker) |
+| `selectors/reportSelectors.ts` | 1 | home default (`quarterReport`) |
+| `selectors/debugSelectors.ts` | 1 | home default (`macroIndicators`) |
+| `selectors/advisorSelectors.ts` | 1 | home default (`morningBriefing`) |
+| `selectors/citizenSelectors.ts` | 1 | home default (`spendingPower`) |
+| `core/Wholesale.ts` | 1 | home default (`wholesaleUnitPrice` bare-`state` helper) |
+| `data/missions.ts` | 1 | home default (`morning_rush` check callback) |
+
+The daily `MarketStatsSystem` rebuild deserved a second look under step 3's
+writer rule: it never REPLACES `state.marketStats` wholesale — it reads each
+existing per-product entry through the view and mutates it in place (finalize
+average price/quality/share, then reset the day's accumulators). That is a
+reads-then-mutate on the same object reference the flat path held, so it routes
+through `town.marketStats` like any reader; only the `emptyMarketStat` creation
+(startingScenario, migrations) is a genuine writer and stays flat.
+
+### The family converted — citizens (the cast side of the crowd)
+
+Every **citizen reader** in the sim layer now routes through the accessor —
+**70 reader sites across 28 files**:
+
+| file | reader sites | town context |
+| --- | --- | --- |
+| `systems/LaborSystem.ts` | 9 | `ctx.townId` (hoisted `town`: `runLaborSystem`, `runJobMarket`) + home default (`trainCrew`, `hireCitizen`, `fireCitizen`, `findUnemployed`, `growSkills`) |
+| `systems/ImmigrationSystem.ts` | 5 | `ctx.townId` (hoisted `town`, `runImmigrationSystem`) + home default (`runEmigration` pick loop) |
+| `systems/RetailDemandSystem.ts` | 4 | `ctx.townId` (hoisted `town`: `runRetailDemandSystem`, `runRestockRevisitSystem`) |
+| `systems/PayrollSystem.ts` | 4 | `ctx.townId` (hoisted `town`, `runPayrollSystem`) + `ctx.townId` (`quit`) |
+| `systems/CastCuratorSystem.ts` | 3 | `ctx.townId` (hoisted `town`, `curate`) + home default (`pickRetiree`) |
+| `systems/ai/OperatorBehavior.ts` | 3 | `ctx.townId` (hoisted `town`, `manageWages`) |
+| `systems/AccountingSystem.ts` | 2 | `ctx.townId` (hoisted `town`) |
+| `systems/CitizenScheduleSystem.ts` | 2 | `ctx.townId` (hoisted `town`) |
+| `systems/CohortSocialSystem.ts` | 2 | home default (`runMigration`, reuses its hoisted `town`) |
+| `systems/MovementSystem.ts` | 2 | `ctx.townId` (hoisted `town`) |
+| `systems/SatisfactionSystem.ts` | 2 | `ctx.townId` (hoisted `town`) |
+| `systems/TierSystem.ts` | 2 | `ctx.townId` (hoisted `town`) |
+| `systems/TownStatsSystem.ts` | 2 | `ctx.townId` (hoisted `town`) |
+| `systems/AIFounderSystem.ts` | 1 | home default (`townPopAndSat` bare-`state` helper) |
+| `systems/CohortDemandSystem.ts` | 1 | `ctx.townId` (reuses the slice-2 hoisted `town`, `castPop`) |
+| `systems/RentSystem.ts` | 1 | `ctx.townId` (hoisted `town`) |
+| `core/Simulation.ts` | 4 | home default (command handlers: `fund_home`, `setWage`, `hire`) |
+| `core/Acquisition.ts` | 1 | home default (crew transfer) |
+| `core/FireSale.ts` | 1 | home default (crew transfer) |
+| `data/achievements.ts` | 6 | home default (check callbacks) |
+| `data/startingScenario.ts` | 2 | home default (`employ` init reader, cast id roster) |
+| `selectors/citizenSelectors.ts` | 4 | home default (`getCitizen`, `allCitizens`, `laborMarketStats`, `employerBreakdown`) |
+| `selectors/facilitySelectors.ts` | 2 | home default (`facilityEmployees`, `facilityProfitContribution`) |
+| `selectors/marketSelectors.ts` | 1 | home default (`pricingInsight` WTP loop) |
+| `selectors/reportSelectors.ts` | 1 | home default (`challengeScore`) |
+| `selectors/debugSelectors.ts` | 1 | home default (`citizenCount`) |
+| `selectors/companySelectors.ts` | 1 | home default (`firmEmployees`) |
+| `selectors/satisfactionSelectors.ts` | 1 | home default (`satisfactionAnatomy`) |
+
+After conversion, the only remaining flat `state.citizens` in sim code are the
+**writers** (the `createCitizen` sinks in `factories` and `startingScenario`;
+the `delete state.citizens[...]` in `LaborSystem.removeCitizen`, the one removal
+path emigration and cast retirement share), the accessor's own flat read inside
+`townOf`, the `GameState.citizens` type definition, `migrations` (which runs
+pre-context on raw loaded state), and the **region-wide money primitive** in
+`GameState.ts`. That last group — the account-resolution trio (`getAccountCash`
+/ `accountExists` / `addAccountCash` under `recordTransaction`) and the
+`totalMoneySupply` conservation sum — is the same money-scope subtlety the
+cohorts family hit: money moves *between* towns, so a citizen account is
+resolved by id across the WHOLE region, and conservation sums every town's
+citizen cash. Routing those through the home-default `townOf(state).citizens`
+would misrepresent their scope, so they stay flat by design (at the endgame they
+read the flat `state.citizens` back-compat getter that aggregates all towns),
+each marked with a comment saying so. Note `saveLoad`'s `raw.citizens` count is
+over the parsed JSON, not `state`, so it is not a seam site at all.
+
 ### The conversion recipe (for the firms/facilities/citizens batches)
 
 Grind each remaining family with the same four-move recipe:
@@ -574,17 +661,18 @@ converted in steps 1–4 is already correct.
 | **cohorts** | ~128 | **DONE (46 refs, 9 files)** | step 3 second slice; the money-scope reads (account primitive + `totalMoneySupply` conservation) stay flat by design — region-wide, they read all towns at the endgame |
 | **firms** | ~500 | ~450 | the largest; `ownerFirmId` cross-refs are untyped strings, unchanged by (b) |
 | **facilities** | ~400 | ~360 | `facilityId` cross-refs likewise; placement helpers (`DistrictSlots`) read facilities + districts together |
-| **citizens** | ~240 | ~210 | cast side of the crowd |
-| **marketStats** | ~40 | ~35 | per-product town book |
+| **citizens** | ~240 | **DONE (70 sites, 28 files)** | step 3 third slice; the money-scope reads (account primitive + `totalMoneySupply` conservation) stay flat by design — region-wide, they read all towns at the endgame |
+| **marketStats** | ~40 | **DONE (22 sites, 16 files)** | step 3 third slice; per-product town book |
 | **map dims** | small | small | `config.mapWidth/Height` → per-town |
 | **UI reads** | ~8 | (separate batch) | `PopulationDashboard`, `TownRenderer` read districts flat — a read-only projection, converted in a UI batch (touches e2e), deferred here to keep the seam sim-only |
 
-### Measured (Town seam, step 3 — districts + cohorts slices)
+### Measured (Town seam, step 3 — districts + cohorts + citizens + marketStats slices)
 
 - **Accessor identity (test `townSeam.test.ts`):** `townOf(state,'home')
-  .districts === state.districts` and `.cohorts === state.cohorts` — same
-  reference, explicit id and default id alike; the view tracks the live record
-  after 10 days of the economy rewriting district desirability.
+  .districts === state.districts`, `.cohorts === state.cohorts`, `.citizens ===
+  state.citizens`, and `.marketStats === state.marketStats` — same reference,
+  explicit id and default id alike; the view tracks the live record after 10 days
+  of the economy rewriting district desirability.
 - **The seam threads:** `makeContext(state).townId === HOME_TOWN_ID`.
 - **Serialization byte-unchanged:** no `towns` key in a City save at day 0 or
   after a 20-day run; the flat `districts`/`cohorts` keys serialize exactly as
@@ -595,7 +683,12 @@ converted in steps 1–4 is already correct.
   the same for the cohort family — two City seed-11 runs agree on `rngState`, the
   full serialized state, and every cohort's `population`/`employed`/`cashPool`/
   `avgSatisfaction` over 30 days (with the crowd asserted live so the cohort
-  readers actually run).
+  readers actually run). A third test proves the same for the citizen AND
+  marketStats families together — two City seed-11 runs agree on `rngState`, the
+  full serialized state, every citizen's `cash`/`skill`/`satisfaction`/
+  `employmentStatus`/`tier`, and every product's `averagePrice`/`unitsSold`/
+  `totalInventory`/`history.length` over 30 days (cast asserted non-empty and the
+  market book asserted to carry real sales history, so the readers actually run).
 - **Mis-conversion is caught (fails-on-revert, demonstrated):** breaking the
   districts accessor in a scratch edit (`get districts() { return {}; }`) turns
   **8 tests red across 3 files** (`townSeam` 3, `districts`, `cohortDemand`).
@@ -605,9 +698,18 @@ converted in steps 1–4 is already correct.
   `cohortSocial` 3, `castCurator` 3, `grandJunction` 2, and one each in
   `cohortLabor`, `cityChallenge`, `realEstate`, `founders`, `playtestV8`,
   `retail`, `contractIndex`) — the accessor-identity assertions and the whole
-  crowd economy flag it. Restoring the getter returns the suite to green. The
+  crowd economy flag it. Breaking the citizens accessor (`get citizens() {
+  return {}; }` — the view drops the town's cast) turns **91 tests red across 52
+  files**: the cast drives labor, payroll, satisfaction, tiers, immigration, and
+  retail demand, so nearly every economy test flags it. Breaking the marketStats
+  accessor (`get marketStats() { return {}; }`) turns **266 tests red across 90
+  files** — the widest blast radius of any family: the per-product book is read
+  with `!` non-null assertions (`town.marketStats[pid]!`) throughout pricing,
+  demand, and the daily rebuild, so an empty view throws the moment any product
+  is priced or sold. Restoring each getter returns the suite to green. The
   harness demonstrably guards the conversion.
 - **Pinned baselines hold:** village seeds 11/4/7 reproduce `rngState`
   3274842624 / 2896139677 / 4253583594; city seed 11 reproduces its `rngState`
-  2546912297 and money supply 316900000. Full suite green (**575** = 574 + 1 new
-  cohort-determinism seam test); `tsc` clean. No UI touched (no e2e needed).
+  2546912297 and money supply 316900000. Full suite green (**581** = 580 + 1 new
+  citizen/marketStats-determinism seam test); `tsc` clean. No UI touched (no e2e
+  needed).

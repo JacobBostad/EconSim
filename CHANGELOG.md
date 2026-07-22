@@ -42,6 +42,36 @@ bit-identical, every-resident-simulated town.
   dark-and-inert as the fourth measured cast-parity foundation. Suite +5
   (`castRevisit.test.ts`, now 580); `tsc` clean, full suite green. See
   docs/design/cohorts-and-districts.md, "Cast-parity attempt #3".
+- **E step 3 — the Town seam (third slice, citizens + marketStats).** The `Town`
+  view's third and fourth families convert together: every **citizen reader**
+  (**70 sites across 28 files**) and every **marketStats reader** (**22 sites
+  across 16 files**) in the sim layer now routes through `townOf(...).citizens` /
+  `.marketStats`. ctx-scoped systems (`Labor`, `Payroll`, `Satisfaction`, `Tier`,
+  `Movement`, `CitizenSchedule`, `Accounting`, `TownStats`, `Rent`, `Immigration`,
+  `CastCurator`, `RetailDemand`, `MarketStats`, `CohortDemand`, `EventLog`,
+  `OperatorBehavior`, `expansion`) hoist `const town = townOf(ctx.state,
+  ctx.townId)` once; bare-`state` helpers, selectors, achievement/mission checks,
+  and `Simulation` command handlers call `townOf(state)` (home default) with the
+  endgame-param comment where the surrounding converted families carry one. The
+  daily `MarketStatsSystem` rebuild was inspected under the writer rule: it
+  reads-then-mutates each existing per-product entry in place (same object
+  reference), so it routes through the view like any reader — only
+  `emptyMarketStat` creation is a writer. Writers stay flat by design: the
+  `createCitizen` sinks (`factories`, `startingScenario`), the one removal path
+  (`LaborSystem.removeCitizen`'s `delete`), the `marketStats` partition creators,
+  and `migrations`. The **money-scope reads** — the account-resolution trio and
+  `totalMoneySupply` conservation, now for citizen cash as well as cohort — stay
+  flat by design (region-wide; they resolve/iterate ALL towns at the endgame),
+  each commented. The harness is shown to guard the conversion: a scratch
+  mis-conversion `get citizens() { return {}; }` turns **91 tests red across 52
+  files**, and `get marketStats() { return {}; }` turns **266 tests red across 90
+  files** (the widest blast radius — the book is read with `!` non-null
+  assertions throughout); restoring each returns green. Pinned baselines hold
+  exactly: village seeds 11/4/7 reproduce `rngState` 3274842624 / 2896139677 /
+  4253583594, city seed 11 its `rngState` 2546912297 and money supply 316900000.
+  Suite +1 citizen/marketStats-determinism test in `townSeam.test.ts` (now 581);
+  `tsc` clean; no UI touched. Remaining families (firms ~450, facilities ~360,
+  map dims, UI reads) follow the same recipe in region.md § step 3.
 - **E step 3 — the Town seam (second slice, cohorts).** The `Town` view's second
   family converts: every **cohort reader** in the sim layer now routes through
   `townOf(...).cohorts` — **46 reader references across 9 files** (`CrowdRent`,

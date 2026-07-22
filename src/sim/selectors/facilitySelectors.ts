@@ -6,6 +6,7 @@ import type { GameState } from '../core/GameState';
 import type { Facility } from '../entities/Facility';
 import type { Citizen } from '../entities/Citizen';
 import type { FacilityId, FirmId, ProductId } from '../core/Id';
+import { townOf } from '../core/Town';
 
 export function getFacility(state: GameState, id: FacilityId): Facility | undefined {
   return state.facilities[id];
@@ -32,14 +33,15 @@ export function facilitiesSellingProduct(state: GameState, productId: ProductId)
 export function facilityEmployees(state: GameState, id: FacilityId): Citizen[] {
   const fac = state.facilities[id];
   if (!fac) return [];
-  return fac.employees.map((c) => state.citizens[c]).filter((c): c is Citizen => !!c);
+  const citizens = townOf(state).citizens;
+  return fac.employees.map((c) => citizens[c]).filter((c): c is Citizen => !!c);
 }
 
 /** Approximate daily profit contribution of a facility (revenue - direct costs). */
 export function facilityProfitContribution(state: GameState, id: FacilityId): number {
   const fac = state.facilities[id];
   if (!fac) return 0;
-  const wages = fac.employees.reduce((s, cid) => s + (state.citizens[cid]?.wage ?? 0), 0);
+  const wages = fac.employees.reduce((s, cid) => s + (townOf(state).citizens[cid]?.wage ?? 0), 0);
   return fac.dailyStats.revenue - fac.dailyStats.variableCost - fac.operatingCostPerDay - wages;
 }
 

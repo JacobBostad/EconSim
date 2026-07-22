@@ -11,6 +11,7 @@
  */
 
 import type { SimContext } from '../core/GameState';
+import { townOf } from '../core/Town';
 import { recordTransaction } from '../core/GameState';
 import { firmAccount, WORLD_ACCOUNT } from '../core/Transactions';
 import { isDayBoundary } from '../core/Tick';
@@ -28,6 +29,7 @@ import { companyValuation } from '../selectors/companySelectors';
 export function runAccountingSystem(ctx: SimContext): void {
   if (!isDayBoundary(ctx.state.tick, ctx.config)) return;
   const { state } = ctx;
+  const town = townOf(state, ctx.townId);
   const completedDay = ctx.time.day - 1;
 
   for (const fid in state.firms) {
@@ -107,8 +109,8 @@ export function runAccountingSystem(ctx: SimContext): void {
     fac.pnlEma.cost += (cost - fac.pnlEma.cost) * EMA_ALPHA;
     fac.pnlEma.net = fac.pnlEma.revenue - fac.pnlEma.cost;
   }
-  for (const cid in state.citizens) {
-    const cit = state.citizens[cid]!;
+  for (const cid in town.citizens) {
+    const cit = town.citizens[cid]!;
     cit.dailyStats = {
       day: ctx.time.day,
       wagesEarned: 0,

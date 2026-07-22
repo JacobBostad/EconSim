@@ -11,6 +11,7 @@
 
 import type { GameState } from '../core/GameState';
 import { companyValuation } from '../selectors/companySelectors';
+import { townOf } from '../core/Town';
 import { activeWorldEvents } from './worldEvents';
 import { seasonOf, seasonOfDay } from './seasons';
 import { ticksPerDay } from '../core/Tick';
@@ -294,7 +295,7 @@ export const ACHIEVEMENT_DEFS: AchievementDef[] = [
       for (const fid of p.facilities) {
         const fac = s.facilities[fid];
         if (!fac || fac.employees.length < 2) continue;
-        const avg = fac.employees.reduce((sum, cid) => sum + (s.citizens[cid]?.skill ?? 0), 0) / fac.employees.length;
+        const avg = fac.employees.reduce((sum, cid) => sum + (townOf(s).citizens[cid]?.skill ?? 0), 0) / fac.employees.length;
         if (avg >= 1.25) return true;
       }
       return false;
@@ -333,7 +334,7 @@ export const ACHIEVEMENT_DEFS: AchievementDef[] = [
     icon: '🏘️',
     description: 'The town grew to 60 citizens.',
     hint: 'Keep satisfaction and jobs high so 20 new citizens move in.',
-    check: (s) => Object.keys(s.citizens).length >= 60,
+    check: (s) => Object.keys(townOf(s).citizens).length >= 60,
   },
   {
     id: 'landlord_baron',
@@ -403,7 +404,7 @@ export const ACHIEVEMENT_DEFS: AchievementDef[] = [
     icon: '🥂',
     description: 'The town has its first affluent citizen.',
     hint: 'Prosperity takes weeks of steady income, high satisfaction, and savings or fine housing — pay above market and build apartments to hurry it along.',
-    check: (s) => Object.values(s.citizens).some((c) => c.tier === 'affluent'),
+    check: (s) => Object.values(townOf(s).citizens).some((c) => c.tier === 'affluent'),
   },
   {
     id: 'rising_tide',
@@ -412,7 +413,7 @@ export const ACHIEVEMENT_DEFS: AchievementDef[] = [
     description: 'Most of the town lives comfortably (or better).',
     hint: 'When comfortable + affluent citizens outnumber workers, your economy is genuinely lifting people — wages, satisfaction, and full shelves all feed the climb.',
     check: (s) => {
-      const cits = Object.values(s.citizens);
+      const cits = Object.values(townOf(s).citizens);
       if (cits.length < 10) return false;
       const up = cits.filter((c) => c.tier !== 'worker').length;
       return up > cits.length / 2;
@@ -426,7 +427,7 @@ export const ACHIEVEMENT_DEFS: AchievementDef[] = [
     hint: 'When emigration starts, the fix is jobs and full shelves: build supply for the town, employ people, and hold satisfaction until nobody wants to leave anymore.',
     check: (s) => {
       if (s.emigrationDepartures < 1 || s.emigrationPressure !== 0) return false;
-      const cits = Object.values(s.citizens);
+      const cits = Object.values(townOf(s).citizens);
       if (cits.length === 0) return false;
       const avg = cits.reduce((a, c) => a + c.satisfaction, 0) / cits.length;
       return avg >= 50;
@@ -520,7 +521,7 @@ export const ACHIEVEMENT_DEFS: AchievementDef[] = [
     hint: 'Mill Country stays a worker town on its own: import prices eat every paycheck. Build local farms and mines, cut the cost of living, and raise wages until most citizens climb out of the worker tier.',
     check: (s) => {
       if (s.scenarioId !== 'mill_country') return false;
-      const cits = Object.values(s.citizens);
+      const cits = Object.values(townOf(s).citizens);
       if (cits.length < 10) return false;
       const up = cits.filter((c) => c.tier !== 'worker').length;
       return up > cits.length / 2;

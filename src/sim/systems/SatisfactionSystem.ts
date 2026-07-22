@@ -8,6 +8,7 @@
  */
 
 import type { SimContext } from '../core/GameState';
+import { townOf } from '../core/Town';
 import { isDayBoundary } from '../core/Tick';
 import { getProduct } from '../data/products';
 import { clamp } from '../../utils/clamp';
@@ -98,8 +99,9 @@ export function runSatisfactionSystem(ctx: SimContext): void {
   if (!isDayBoundary(ctx.state.tick, ctx.config)) return;
   const { state, config } = ctx;
 
-  for (const cid in state.citizens) {
-    const cit = state.citizens[cid]!;
+  const town = townOf(state, ctx.townId);
+  for (const cid in town.citizens) {
+    const cit = town.citizens[cid]!;
     let unmetPressure = 0;
     for (const need of cit.needs) {
       // Tiered demand: the prosperity ladder scales each tier's appetite.

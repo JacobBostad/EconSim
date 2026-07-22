@@ -20,12 +20,13 @@ export function runPayrollSystem(ctx: SimContext): void {
   if (!isDayBoundary(ctx.state.tick, ctx.config)) return;
   if (ctx.time.day % ctx.config.payrollIntervalDays !== 0) return;
   const { state } = ctx;
+  const town = townOf(state, ctx.townId);
 
   // Subsistence income for the unemployed (keeps consumer demand alive).
   const stipend = ctx.config.subsistenceIncomePerDay * ctx.config.payrollIntervalDays;
   if (stipend > 0) {
-    for (const cid in state.citizens) {
-      const cit = state.citizens[cid]!;
+    for (const cid in town.citizens) {
+      const cit = town.citizens[cid]!;
       if (cit.employmentStatus !== 'unemployed') continue;
       recordTransaction(state, {
         from: WORLD_ACCOUNT,
@@ -45,7 +46,7 @@ export function runPayrollSystem(ctx: SimContext): void {
 
     const quitters: string[] = [];
     for (const cid of firm.employees) {
-      const cit = state.citizens[cid];
+      const cit = town.citizens[cid];
       if (!cit) continue;
       const wage = cit.wage;
       if (wage > 0 && canAfford(state, firmAccount(firm.id), wage)) {
@@ -165,7 +166,7 @@ function releaseCrowd(state: GameState, firmId: string, cohortId: string): void 
 function quit(ctx: SimContext, firmId: string, citizenId: string): void {
   const { state } = ctx;
   const firm = state.firms[firmId]!;
-  const cit = state.citizens[citizenId];
+  const cit = townOf(state, ctx.townId).citizens[citizenId];
   if (!cit) return;
   firm.employees = firm.employees.filter((id) => id !== citizenId);
   if (cit.workplaceFacilityId) {

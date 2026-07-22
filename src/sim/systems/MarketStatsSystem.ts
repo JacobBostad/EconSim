@@ -11,6 +11,7 @@
  */
 
 import type { SimContext } from '../core/GameState';
+import { townOf } from '../core/Town';
 import { isDayBoundary, isHourBoundary } from '../core/Tick';
 import { PRODUCT_IDS_BY_PRESET } from '../data/products';
 import { safeDiv } from '../../utils/math';
@@ -24,6 +25,7 @@ export function runMarketStatsSystem(ctx: SimContext): void {
 
 function computeInventoryTotals(ctx: SimContext): void {
   const { state } = ctx;
+  const town = townOf(state, ctx.townId);
   // Preset-gated (C1): only products present at this preset have a marketStats
   // entry, so Village iterates its classic catalog exactly (no missing-key hit).
   const ids = PRODUCT_IDS_BY_PRESET[state.config.sizePreset];
@@ -38,14 +40,15 @@ function computeInventoryTotals(ctx: SimContext): void {
     }
   }
   for (const pid of ids) {
-    state.marketStats[pid]!.totalInventory = totals[pid]!;
+    town.marketStats[pid]!.totalInventory = totals[pid]!;
   }
 }
 
 function finalizeAndReset(ctx: SimContext): void {
   const { state } = ctx;
+  const town = townOf(state, ctx.townId);
   for (const pid of PRODUCT_IDS_BY_PRESET[state.config.sizePreset]) {
-    const stat = state.marketStats[pid]!;
+    const stat = town.marketStats[pid]!;
     stat.averagePrice = Math.round(safeDiv(stat.revenueAccum, stat.unitsSold, 0));
     stat.averageQuality = safeDiv(stat.qualityAccum, stat.unitsSold, 0);
 

@@ -12,6 +12,7 @@ import { pressureOf, basketNormalization } from '../systems/SatisfactionSystem';
 import { getProduct } from '../data/products';
 import { clamp } from '../../utils/clamp';
 import { APARTMENT_SATISFACTION_BONUS } from '../data/constants';
+import { townOf } from '../core/Town';
 
 export interface ProductDrag {
   productId: string;
@@ -31,7 +32,7 @@ export interface SatisfactionAnatomy {
 }
 
 export function satisfactionAnatomy(state: GameState): SatisfactionAnatomy {
-  const citizens = Object.values(state.citizens);
+  const citizens = Object.values(townOf(state).citizens);
   if (citizens.length === 0) {
     return { average: 0, equilibrium: 0, base: 50, employmentTerm: 0, housingTerm: 0, provisioningTerm: 0, productDrag: [] };
   }

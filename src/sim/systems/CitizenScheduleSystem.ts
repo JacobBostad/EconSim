@@ -15,6 +15,7 @@
 
 import type { SimContext } from '../core/GameState';
 import type { Citizen } from '../entities/Citizen';
+import { townOf } from '../core/Town';
 import { chooseBestStore } from './RetailDemandSystem';
 
 export function isWorkTime(ctx: SimContext): boolean {
@@ -45,8 +46,9 @@ function shoppableNeeds(ctx: SimContext, cit: Citizen): Citizen['needs'] {
 
 export function runCitizenScheduleSystem(ctx: SimContext): void {
   const { state } = ctx;
-  for (const id in state.citizens) {
-    const cit = state.citizens[id]!;
+  const town = townOf(state, ctx.townId);
+  for (const id in town.citizens) {
+    const cit = town.citizens[id]!;
     // Only re-plan from settled states; commuting/shopping are mid-action.
     if (
       cit.activity === 'commuting-to-work' ||

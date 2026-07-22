@@ -13,6 +13,7 @@
 
 import type { GameState } from './GameState';
 import { canAfford, emitEvent, recordTransaction } from './GameState';
+import { townOf } from './Town';
 import { firmAccount } from './Transactions';
 import { formatMoney } from '../../utils/formatMoney';
 
@@ -51,8 +52,9 @@ export function acceptFacilityOffer(state: GameState): boolean {
   fac.ownerFirmId = buyer.id;
   seller.facilities = seller.facilities.filter((id) => id !== fac.id);
   buyer.facilities.push(fac.id);
+  const citizens = townOf(state).citizens;
   for (const cid of fac.employees) {
-    const cit = state.citizens[cid];
+    const cit = citizens[cid];
     if (!cit) continue;
     seller.employees = seller.employees.filter((id) => id !== cid);
     if (!buyer.employees.includes(cid)) buyer.employees.push(cid);

@@ -535,8 +535,8 @@ function runMigration(state: GameState, cohortIds: string[]): void {
   // reads a population-weighted mean over the cast AND the cohorts.
   let satMass = 0;
   let headcount = 0;
-  for (const id in state.citizens) {
-    satMass += state.citizens[id]!.satisfaction;
+  for (const id in town.citizens) {
+    satMass += town.citizens[id]!.satisfaction;
     headcount += 1;
   }
   let totalCrowd = 0;

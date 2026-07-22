@@ -11,6 +11,7 @@ import { ticksPerDay } from '../core/Tick';
 import { cityPrice, exportFreightFee } from '../core/Trade';
 import { TRADE_CITY_IDS, getTradeCity } from '../data/tradeCities';
 import { poolCoverDays } from '../data/tradePool';
+import { townOf } from '../core/Town';
 
 export interface GazetteStory {
   severity: GameEvent['severity'];
@@ -84,7 +85,7 @@ export function gazetteEditions(state: GameState, days: number): GazetteEdition[
 
     const ticker: string[] = [];
     for (const pid of CONSUMER_PRODUCT_IDS_BY_PRESET[state.config.sizePreset]) {
-      const hist = state.marketStats[pid]?.history ?? [];
+      const hist = townOf(state).marketStats[pid]?.history ?? [];
       const snap = hist.find((h) => h.day === day) ?? (day === today ? null : undefined);
       if (snap) {
         const price = snap.averagePrice > 0 ? `${(snap.averagePrice / 100).toFixed(2)}` : '—';
