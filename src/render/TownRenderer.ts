@@ -14,6 +14,7 @@
  */
 
 import type { GameState } from '../sim/core/GameState';
+import { townOf } from '../sim/core/Town';
 import type { FacilityType } from '../sim/entities/Facility';
 import type { CitizenActivity } from '../sim/entities/Citizen';
 import { computeTime } from '../sim/core/Tick';
@@ -1139,14 +1140,17 @@ export class TownRenderer {
   private drawAmbientCrowd(s: GameState): void {
     const sc = this.effScale();
     if (lodEnabled(s) && sc < LOD_CITIZEN_SKIP_SCALE) return; // dots would be sub-pixel — skip
-    const cohortIds = Object.keys(s.cohorts);
+    // The renderer draws the home town (one-town region → identical reference);
+    // it gains a town selector at the endgame move.
+    const town = townOf(s);
+    const cohortIds = Object.keys(town.cohorts);
     if (cohortIds.length === 0) return;
 
     // Cohort population per district (summed across tiers).
     const popByDistrict: Record<string, number> = {};
     let anyPop = 0;
     for (const cid of cohortIds) {
-      const co = s.cohorts[cid]!;
+      const co = town.cohorts[cid]!;
       if (co.population <= 0) continue;
       popByDistrict[co.districtId] = (popByDistrict[co.districtId] ?? 0) + co.population;
       anyPop += co.population;
@@ -1158,7 +1162,7 @@ export class TownRenderer {
     const ctx = this.ctx;
     ctx.save();
     for (const did of Object.keys(popByDistrict).sort()) {
-      const d = s.districts[did];
+      const d = town.districts[did];
       if (!d) continue;
       const pop = popByDistrict[did]!;
       const b = d.bounds;

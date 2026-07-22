@@ -664,7 +664,7 @@ converted in steps 1–4 is already correct.
 | **citizens** | ~240 | **DONE (70 sites, 28 files)** | step 3 third slice; the money-scope reads (account primitive + `totalMoneySupply` conservation) stay flat by design — region-wide, they read all towns at the endgame |
 | **marketStats** | ~40 | **DONE (22 sites, 16 files)** | step 3 third slice; per-product town book |
 | **map dims** | small | small | `config.mapWidth/Height` → per-town |
-| **UI reads** | ~8 | (separate batch) | `PopulationDashboard`, `TownRenderer` read districts flat — a read-only projection, converted in a UI batch (touches e2e), deferred here to keep the seam sim-only |
+| **UI reads** | — | **DONE (7 refs, 2 files)** | `PopulationDashboard` (4: districts, cohorts, districtAt) + `TownRenderer.drawAmbientCrowd` (3: cohorts, districtAt-free district lookup) route through `townOf(state)` (home default — the UI renders the home town, gains a town selector at the endgame); read-only projection, referential behaviour identical (accessor returns the same objects, so React memo/deps unchanged); e2e gauntlet green. the remaining ~81 UI reads (citizens/marketStats — getters now landed — plus firms/facilities) convert in a later UI batch |
 
 ### Measured (Town seam, step 3 — districts + cohorts + citizens + marketStats slices)
 

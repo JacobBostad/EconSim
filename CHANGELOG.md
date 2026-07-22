@@ -42,6 +42,25 @@ bit-identical, every-resident-simulated town.
   dark-and-inert as the fourth measured cast-parity foundation. Suite +5
   (`castRevisit.test.ts`, now 580); `tsc` clean, full suite green. See
   docs/design/cohorts-and-districts.md, "Cast-parity attempt #3".
+- **E step 3 — the Town seam (UI batch, district/cohort reads).** The last
+  deferred slice of the district/cohort families lands: the UI's flat reads now
+  route through the seam. **7 reader references across 2 files** —
+  `PopulationDashboard` (the district roster, the crowd-per-district cohort loop,
+  and the `districtAt` building tally) and `TownRenderer.drawAmbientCrowd` (the
+  cohort-population scan and the per-district lookup) — read `townOf(state)`
+  (home default, since the UI renders the home town; each carries a one-line
+  comment noting the town selector it gains at the endgame). A pure read-path
+  change: no component, memoization, or prop restructure, and because the
+  accessor returns the SAME objects the flat path did, React memo/deps behaviour
+  is unchanged. The remaining UI families (citizens, firms, facilities,
+  marketStats — ~81 flat reads audited) stay flat for a later UI batch: each
+  converts once its family's `Town` getter has landed (citizens and marketStats
+  landed in this batch's sim slice; firms and facilities are still to come).
+  Verified end to end: the full e2e gauntlet is green (smoke, deepsmoke,
+  citysmoke `reachedDay` 66, metrosmoke, fpsguard p95 33.4ms under the 80ms
+  bound), `tsc` clean, the full suite green, and the fails-on-revert probe
+  (`get cohorts() { return {}; }`) turns pinned cohort tests red. Pinned
+  baselines untouched (no sim path changed).
 - **E step 3 — the Town seam (third slice, citizens + marketStats).** The `Town`
   view's third and fourth families convert together: every **citizen reader**
   (**70 sites across 28 files**) and every **marketStats reader** (**22 sites
