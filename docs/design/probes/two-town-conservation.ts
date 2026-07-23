@@ -35,6 +35,10 @@ import type { GameState } from '../../../src/sim/core/GameState';
 import type { SimulationConfig } from '../../../src/sim/core/SimulationConfig';
 import { HOME_TOWN_ID } from '../../../src/sim/core/Town';
 import { PARTNER_TOWN_ID } from '../../../src/sim/data/seedTown';
+import { computeTime } from '../../../src/sim/core/Tick';
+import { addStock } from '../../../src/sim/entities/Inventory';
+import { performExport, exportFreightFee } from '../../../src/sim/core/Trade';
+import { FREIGHT_LEAD_DAYS } from '../../../src/sim/data/constants';
 
 function cityConfig(): SimulationConfig {
   return {
@@ -131,6 +135,47 @@ const DAYS = 60;
     '(c) a partner shock leaves home byte-identical (no home leakage on)',
     JSON.stringify(shocked.towns[HOME_TOWN_ID]) === homeOff && shocked.rngState === off.rngState,
   );
+}
+
+// --- (d) THE FREIGHT LEG (slice 4): a lead-timed inter-town shipment ---------
+// A home export to the LIVE partner rides a freight edge: goods leave now, land
+// in the partner larder FREIGHT_LEAD_DAYS later, and pay out THEN at the locked
+// price. Money is conserved to the cent every day across the in-flight window
+// (in-flight goods are inventory, not money), and the arrival's single world->
+// firm transfer nets to zero region-wide.
+{
+  const on = createInitialState(11, regionConfig());
+  const sim = new Simulation(on);
+  sim.dispatch({ type: 'RESUME' });
+  // Stage a player warehouse and dispatch 300 bread toward the partner.
+  const player = on.firms[on.playerFirmId]!;
+  player.cash = 500000_00;
+  sim.dispatch({ type: 'BUILD_FACILITY', firmId: player.id, defId: 'warehouse', location: { x: 100, y: 20 } });
+  const wh = on.facilities[player.facilities[player.facilities.length - 1]!]!;
+  addStock(wh.inputInventory, 'bread', 300, 60);
+
+  const money0 = totalMoneySupply(on);
+  performExport(on, player.id, wh.id, 'bread', 300, 'Exported', PARTNER_TOWN_ID);
+  const ship = { ...on.freight[0]! };
+  check('(d) a home->partner export is DISPATCHED, not settled (in flight, no money moved)',
+    on.freight.length === 1 && totalMoneySupply(on) === money0,
+    `arrivalDay=${ship.arrivalDay} (dispatch+${FREIGHT_LEAD_DAYS})`);
+
+  let conserved = true;
+  let landedDay = -1;
+  const tpd = ticksPerDay(on.config);
+  for (let d = 0; d < FREIGHT_LEAD_DAYS + 3; d++) {
+    sim.run(tpd);
+    if (totalMoneySupply(on) !== money0) conserved = false;
+    if (landedDay < 0 && !on.freight.some((s) => s.id === ship.id)) {
+      landedDay = computeTime(on.tick, on.config).day;
+    }
+  }
+  check('(d) region money conserved to the cent every day across the in-flight window', conserved, `money=${money0}`);
+  check('(d) the shipment lands on its scheduled arrival day', landedDay === ship.arrivalDay, `landed day ${landedDay}, expected ${ship.arrivalDay}`);
+  const net = Math.round(ship.priceLocked * (1 - exportFreightFee(on, PARTNER_TOWN_ID)));
+  const paid = on.transactions.filter((t) => t.note.startsWith('Freight delivered to') && t.amount === net * 300);
+  check('(d) settled at the LOCKED price on arrival (world -> firm, freight netted)', paid.length === 1, `net=${net}/unit x300 = ${net * 300}`);
 }
 
 // --- DETERMINISM: two flag-on runs agree -----------------------------------

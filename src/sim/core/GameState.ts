@@ -28,6 +28,7 @@ import type { Vehicle } from '../entities/Vehicle';
 import type { Contract } from '../entities/Contract';
 import type { MarketStat } from '../entities/Market';
 import type { TradeCityPool } from '../data/tradePool';
+import type { FreightShipment } from '../entities/Freight';
 import type { GameEvent, EventSeverity, EventCategory } from './Events';
 import {
   type Transaction,
@@ -188,6 +189,16 @@ export interface GameState {
    * only when the flag was on at creation, so a pinned (flag-off) game
    * serializes exactly the pre-Arc-E book. */
   tradeCities: Record<string, { pricesByProduct: Record<ProductId, number>; pool?: TradeCityPool }>;
+  /**
+   * In-flight inter-town freight (region.md step 4, slice 4). Each entry is a
+   * dated shipment dispatched from home toward a LIVE partner city, settled by
+   * `FreightSystem` on its `arrivalDay` (goods land in the partner larder, the
+   * locked-price payment settles then). WORLD-scoped (a shipment can cross
+   * towns). A SAVE-SHAPE addition kept at SAVE_VERSION 3 (normalize-only): the
+   * empty-array default is derivable, so an old save loads with `[]` and is
+   * byte-identical — the map-dims precedent. Flag off (or no partner) ⇒ always
+   * `[]`, and FreightSystem is a no-op, so every pinned baseline is untouched. */
+  freight: FreightShipment[];
   /** Active rush order (timed bulk-export contract), if any. */
   rushOrder: RushOrder | null;
   /** Pre-announced city price shock, if one is pending or in effect. */

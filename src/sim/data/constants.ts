@@ -98,6 +98,14 @@ export const ACQUISITION_PREMIUM_DISTRESSED = 0.9;
 // --- Inter-city trade (Port Rosa) -------------------------------------------
 /** Fraction of export revenue lost to freight/handling. */
 export const EXPORT_FREIGHT_FEE = 0.08;
+/**
+ * Lead time (days) on the inter-town freight edge (region.md step 4, slice 4):
+ * goods dispatched from home toward a LIVE partner city arrive — and pay out —
+ * this many days later. Sits inside the ForwardSystem delivery window
+ * (FORWARD_MIN/MAX_DAYS = 3..10) so the freight edge and a hedging forward span
+ * comparable horizons. Only ever consulted with the region flag on; a stub
+ * (non-simulated) trade city keeps the instant pool path. */
+export const FREIGHT_LEAD_DAYS = 3;
 /** Port Rosa price random-walk bounds and daily step (× base price). */
 export const TRADE_PRICE_MIN_MULT = 0.6;
 export const TRADE_PRICE_MAX_MULT = 1.8;

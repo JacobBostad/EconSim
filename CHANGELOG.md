@@ -19,6 +19,35 @@ real City or Metropolis game switches the whole stack on together (crowd +
 districts + all three specialist channels); Village stays the classic,
 bit-identical, every-resident-simulated town.
 
+- **Region step 4, slice 4 — the freight edge with a lead time.** Home's export
+  to the LIVE partner (`port_rosa`) is no longer instant: it becomes a dated
+  inter-town shipment (the `ForwardSystem` shape for physical goods). A new
+  WORLD-scoped `state.freight: FreightShipment[]` carries in-flight goods;
+  `Trade.dispatchFreight` (reached from `performExport` when `isFreightDest` — the
+  region flag on AND the destination is a real simulated town) pulls the goods and
+  locks the day's quote with **no money moving**, and the new `FreightSystem`
+  lands + settles it `FREIGHT_LEAD_DAYS` (3) later — goods feed the partner's
+  larder (the shared `settleExportLanding` tail the instant path uses) and the
+  payment settles THEN, `WORLD → firm` at the locked price with that day's freight
+  netted (freight risk live, price locked). In-flight goods are inventory, not
+  money, so region money is conserved to the cent every day across the whole
+  window. Stub cities (`ironvale`, non-simulated) and every flag-off game keep the
+  instant pool path byte-for-byte. `state.freight` is a SAVE-SHAPE addition kept at
+  SAVE_VERSION 3 (normalize-only, `?? []` — the map-dims precedent); a save taken
+  mid-flight round-trips and still lands on schedule (`arrivalDay` is absolute).
+  Measured (City seed 11, region on): a 300-bread leg dispatches day 0, lands 300
+  units in the larder day 3 and pays $249/unit net × 300 = $74,700; region money
+  invariant to the cent every day. No pinned band moved — measured, the AI routes
+  home's passive exports to `ironvale` (0 to `port_rosa`), so the freight edge only
+  engages on explicit `port_rosa` exports: village 11/4/7 reproduce
+  `3274842624/2896139677/4253583594`, plain City seed 11 reproduces `rngState
+  2546912297` money `316900000`, and the flag-on slice-3 bands stay green (no
+  re-pin). The pool's quote-cover is deliberately NOT re-sourced from the partner's
+  real stock this slice — measured degeneracy (warehouse-scale seeded shelves,
+  376k–400k units, peg the cover at min) defers that to slice 5, which retires the
+  pool. `tsc` clean; full `vitest run` green (615 = 606 + 9 new
+  `regionFreight.test.ts`); `two-town-conservation.ts` (now with a freight leg) and
+  `second-town-isolation.ts` both exit 0.
 - **Region step 4, slice 3 — the TownScheduler + the ticking partner.** The
   partner trade city `port_rosa` graduates from an inert record to a **live
   economy**. `Simulation.tick()` now runs a `TownScheduler`: for each town in

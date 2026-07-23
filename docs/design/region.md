@@ -1189,12 +1189,20 @@ concern per slice, an honest measured NO-SHIP is a complete result):
    conservation probe is green; `perfGuard` extended to two-town City stays under
    budget. *See "What ships now — the TownScheduler + the ticking partner (step
    4, slice 3)" below.*
-4. **The freight edge with a lead time.** `FreightSystem` settling dated
-   inter-town shipments (the `ForwardSystem` shape for physical goods); the pool
-   interface's numbers now sourced from the live partner. Acceptance: an export
-   dispatched from home arrives at `port_rosa` `leadDays` later, lands in its real
-   larder, and pays out then — money conserved across the delayed settlement;
-   City baseline re-pinned honestly with the measured cause documented.
+4. **The freight edge with a lead time. — SHIPPED.** `FreightSystem` settles
+   dated inter-town shipments (the `ForwardSystem` shape for physical goods): a
+   home export to the LIVE partner (`port_rosa`) is DISPATCHED — goods leave the
+   warehouse now, no money moves — and lands + pays out `FREIGHT_LEAD_DAYS` (3)
+   later at the price locked at dispatch, the goods feeding the partner's larder
+   (the pool interface the design keeps as the freight-facing surface, now moved
+   by a real dated shipment). Money conserved to the cent every day across the
+   in-flight window. Stub cities (ironvale, non-simulated) keep the instant pool
+   path; flag off keeps every export instant and `state.freight` empty. No pinned
+   band moved: measured, the AI routes home's passive exports to ironvale, so the
+   freight edge only engages on `port_rosa`-destined exports (exercised in tests),
+   and the flag-on slice-3 bands (conservation, home isolation, determinism) stay
+   byte-green — no re-pin needed. *See "What ships now — the freight edge with a
+   lead time (step 4, slice 4)" below.*
 5. **Retire the pool table (optional, gradient's end).** Once the freight quote
    reads the partner's real `marketStats`/cohort demand directly, the
    `TradeCityPool` interface is deleted. Acceptance: the desk/advisor read the
@@ -1413,6 +1421,89 @@ headroom — a real bound, not a hopeful one).
 new `regionScheduler.test.ts` + 1 new `perfGuard` two-town case; `regionSeed.test.ts`
 slice-1 assertions updated in place to the slice-3 shape, no count change);
 `two-town-conservation.ts` and `second-town-isolation.ts` both exit 0.
+
+### What ships now — the freight edge with a lead time (step 4, slice 4)
+
+Slice 4 lands the **freight edge**: home's export to the LIVE partner is no longer
+an instant cash-and-carry — it becomes a dated inter-town shipment that lands and
+pays out `FREIGHT_LEAD_DAYS` later, the `ForwardSystem` shape reused for physical
+goods.
+
+**The FreightSystem shape.** A new WORLD-scoped `state.freight: FreightShipment[]`
+carries in-flight goods. A `FreightShipment` is
+`{ id, firmId, facilityId, originTownId, destTownId, productId, qty, quality,
+priceLocked, dispatchDay, arrivalDay }` (`src/sim/entities/Freight.ts`). `firmId`/
+`facilityId` extend the design's named tuple so the settlement knows who to pay and
+which warehouse to attribute — a documented, minimal addition.
+
+- **Dispatch** (`Trade.dispatchFreight`, reached from `performExport` when
+  `isFreightDest`): the goods leave the warehouse NOW (input-then-output, the
+  instant path's order), the day's impacted GROSS quote is locked into
+  `priceLocked`, and a shipment is pushed with `arrivalDay = dispatchDay +
+  FREIGHT_LEAD_DAYS`. **No money moves at dispatch** — in-flight goods are
+  inventory, not money.
+- **Settlement** (`systems/FreightSystem.ts`, in home's full `SYSTEMS` list right
+  after `runForwardSystem`, world-scoped, day-boundary, zero rng): on `arrivalDay`
+  the goods LAND in the partner larder via the shared `settleExportLanding` (the
+  same larder-feed + player-cover-counter tail the instant export uses, so both
+  paths move the city's stock/quote identically — only the timing differs), and the
+  payment settles THEN: `WORLD → firm` at `priceLocked` with THAT arrival day's
+  freight netted off (price locked, freight risk live — the `ForwardSystem` idiom).
+  If the shipper vanished mid-flight (bankruptcy/acquisition) the goods still land
+  but the payment is skipped, so money is neither minted nor burned.
+- **Save shape:** `state.freight` is a SAVE-SHAPE addition kept at **SAVE_VERSION 3**
+  (normalize-only, `?? []`): the empty-array default is derivable, so an old save
+  loads with `[]` byte-identically — the map-dims precedent. A save taken MID-FLIGHT
+  carries its shipments; `arrivalDay` is absolute, so each lands on schedule after a
+  reload (pinned in `regionFreight.test.ts`).
+
+**The partner-vs-stub-city split (GATING).** `isFreightDest(state, cityId)` is true
+only when the region flag is live AND the destination is a real SIMULATED town in
+`state.towns` (`port_rosa`). A stub trade city (`ironvale`, absent from
+`state.towns`) and every flag-off game are false, so they keep the instant pool path
+byte-for-byte. This is the design's mapping: pools stay the freight-facing interface
+for stub cities, while a graduated partner rides the live freight edge.
+
+**The pool-numbers-from-the-live-partner decision (honest reconciliation).** The
+binding TRADE decision keeps the pool as the interface with the live town behind it.
+Slice 4's concrete "live" wire is that a home→partner export now feeds the partner's
+larder via a REAL, DATED, lead-timed shipment from the live home economy, rather than
+an instant abstract feed. A literal adapter deriving the quote's COVER from the
+partner's real facility stock proved **unworkable at this slice, measured**: slice 3
+seeds the partner's retail shelves warehouse-scale (376k–400k units per store, vs the
+pool's population-180 target of a few hundred), so a cover read off real stock pegs
+every quote at `TRADE_POOL_MULT_MIN` — a degenerate discount. Reading the partner's
+real `marketStats`/cohort-demand directly is therefore correctly **slice 5's job**
+(the slice that RETIRES the pool, which also re-seeds the partner at realistic
+scale). This is the same honest reconciliation slice 3 used for `PARTNER_SYSTEMS`:
+ship the workable edge, defer the degenerate sub-goal with measurements, no hidden
+gap.
+
+**Measured (City seed 11, region on).**
+
+- **The freight leg** (player warehouse, 300 bread → `port_rosa`): dispatched day 0,
+  `arrivalDay = 3` (`FREIGHT_LEAD_DAYS`); at dispatch the goods leave and **no money
+  moves**; on day 3 the shipment lands **300 units** in the partner larder (isolated
+  control-vs-treatment: Δlarder = exactly 300) and pays the exporter **$249/unit net
+  × 300 = $74,700** (`WORLD → firm`, freight netted, price locked). Region money is
+  **invariant to the cent every day** across the in-flight window
+  (`totalMoneySupply = 406,900,000` unchanged; `two-town-conservation.ts` leg (d)).
+- **No pinned band moved.** Flag off ⇒ `state.freight` stays `[]` and
+  `FreightSystem` is an early-return no-op, so **village 11/4/7 reproduce
+  `3274842624 / 2896139677 / 4253583594`** and **plain City seed 11 reproduces
+  `rngState 2546912297`, money `316900000`** (byte-exact, re-measured). The flag-ON
+  slice-3 bands (conservation, home byte-isolation, determinism) stay green too —
+  measured cause: the passive AI routes home's exports to **ironvale** (0 to
+  `port_rosa` over 60 days), so the freight edge only engages on explicit
+  `port_rosa`-destined exports. **No re-pin needed**, honestly measured.
+- **Determinism / round-trip:** two flag-on runs with an identical dispatched export
+  agree bit-for-bit; a shipment saved mid-flight round-trips and still lands + pays
+  on its scheduled day at the locked price.
+
+**Verification.** `tsc` clean; full `vitest run` green (**615** = 606 baseline + 9
+new `regionFreight.test.ts` covering dispatch/arrival/conservation/round-trip/gating/
+identity/determinism); `two-town-conservation.ts` (now with a freight leg (d)) and
+`second-town-isolation.ts` both exit 0.
 
 ### What stays OUT of step 4 (and why)
 

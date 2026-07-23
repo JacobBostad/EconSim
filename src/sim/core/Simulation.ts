@@ -75,6 +75,7 @@ import { runMarketStatsSystem } from '../systems/MarketStatsSystem';
 import { runAIStrategySystem } from '../systems/AIStrategySystem';
 import { runManagerSystem, managerCandidates } from '../systems/ManagerSystem';
 import { runForwardSystem, sellForward, closeForward } from '../systems/ForwardSystem';
+import { runFreightSystem } from '../systems/FreightSystem';
 import { runTradeAnnouncementSystem } from '../systems/TradeAnnouncementSystem';
 import { runEventLogSystem } from '../systems/EventLogSystem';
 import { runBankruptcySystem } from '../systems/BankruptcySystem';
@@ -116,6 +117,7 @@ const SYSTEMS: SystemFn[] = [
   runTradeAnnouncementSystem, // roll/expire announced shocks (own rng stream)
   runTradeCitySystem, // Port Rosa price walk (daily; reads announcement mult)
   runForwardSystem, // settle due forwards right after prices land (no rng)
+  runFreightSystem, // land + pay arrived inter-town freight (region.md s4/slice4; no rng; no-op flag-off)
   runRushOrderSystem, // rush offers/expiry after prices land (own rng stream)
   runFireSaleSystem, // rival fire-sale offers/expiry (own rng stream)
   runMarketStatsSystem, // finalize previous day's stats; hourly inventory totals

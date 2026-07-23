@@ -262,6 +262,7 @@ export function createInitialState(
     achievements: [],
     missions: [],
     tradeCities: {},
+    freight: [],
     rushOrder: null,
     tradeAnnouncement: null,
     rushOrdersCompleted: 0,

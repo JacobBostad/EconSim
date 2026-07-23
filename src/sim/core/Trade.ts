@@ -9,11 +9,13 @@ import type { GameState } from './GameState';
 import { formatMoney } from '../../utils/formatMoney';
 import { emitEvent, recordTransaction } from './GameState';
 import { firmAccount, WORLD_ACCOUNT } from './Transactions';
+import { nextId } from './Id';
 import type { FirmId, FacilityId, ProductId } from './Id';
 import { getProduct } from '../data/products';
-import { getQuantity, removeStock, addStock, totalUnits } from '../entities/Inventory';
+import { getQuantity, getQuality, removeStock, addStock, totalUnits } from '../entities/Inventory';
 import {
   EXPORT_FREIGHT_FEE,
+  FREIGHT_LEAD_DAYS,
   TRADE_PRICE_MIN_MULT,
   TRADE_PRICE_MAX_MULT,
   TRADE_POOL_TARGET_COVER_DAYS,
@@ -22,7 +24,9 @@ import {
 import { worldTransportMult } from '../data/worldEvents';
 import { getTradeCity, TRADE_CITY_IDS, cityBias, type TradeCityId } from '../data/tradeCities';
 import { poolCoverMult, poolCoverDays } from '../data/tradePool';
-import { townOf } from './Town';
+import { townOf, HOME_TOWN_ID } from './Town';
+import { computeTime } from './Tick';
+import type { FreightShipment } from '../entities/Freight';
 
 /**
  * Price impact: trading against a city MOVES its quote — buying pushes the
@@ -190,6 +194,80 @@ export function pickBestCity(state: GameState, productId: ProductId): ExportQuot
 }
 
 /**
+ * Whether an export to `cityId` rides the region FREIGHT edge (region.md step 4,
+ * slice 4) instead of settling instantly. True only when the region flag is live
+ * AND the destination is a real SIMULATED partner town (present in `state.towns`)
+ * — i.e. the trade city has graduated from a stub pool to a live economy. A stub
+ * city (ironvale, absent from `state.towns`), the home town itself, and every
+ * flag-off game are all false, so they keep the instant pool path unchanged.
+ */
+export function isFreightDest(state: GameState, cityId: string): boolean {
+  return (
+    state.config.regionEnabled && cityId !== HOME_TOWN_ID && state.towns[cityId] !== undefined
+  );
+}
+
+/**
+ * Dispatch a lead-timed freight shipment toward a live partner city (region.md
+ * step 4, slice 4). The goods leave the home warehouse NOW (they are in flight —
+ * inventory, not money) at TODAY's locked quote; FreightSystem lands them in the
+ * partner's larder and settles the payment `FREIGHT_LEAD_DAYS` later. No cash
+ * moves at dispatch, so region money is conserved to the cent every day across
+ * the whole in-flight window. Returns the expected net revenue on delivery
+ * (informational — nothing is booked yet).
+ */
+function dispatchFreight(
+  state: GameState,
+  firm: import('../entities/Firm').Firm,
+  fac: import('../entities/Facility').Facility,
+  productId: ProductId,
+  qty: number,
+  cityId: string,
+  note: string,
+): number {
+  const product = getProduct(productId);
+  const city = getTradeCity(cityId);
+  const inInput = getQuantity(fac.inputInventory, productId);
+  // Lock TODAY's impacted quote (gross); settlement nets THAT arrival day's
+  // freight off it — the price is locked, freight risk stays live (the
+  // ForwardSystem idiom). Large orders slide down the impact curve as they fill.
+  const priceLocked = Math.round(impactedFillPrice(cityPrice(state, cityId, productId), qty, -1));
+  // Blended quality of the shipped stack (rides along for a faithful round-trip).
+  const quality =
+    inInput > 0 ? getQuality(fac.inputInventory, productId) : getQuality(fac.outputInventory, productId);
+
+  // Pull the goods now (in flight). Input first, then output — the instant path's
+  // order, so a partial pull matches byte-for-byte.
+  const fromInput = Math.min(qty, inInput);
+  if (fromInput > 0) removeStock(fac.inputInventory, productId, fromInput);
+  if (qty - fromInput > 0) removeStock(fac.outputInventory, productId, qty - fromInput);
+
+  const dispatchDay = computeTime(state.tick, state.config).day;
+  const arrivalDay = dispatchDay + FREIGHT_LEAD_DAYS;
+  const shipment: FreightShipment = {
+    id: nextId(state.idCounters, 'freight'),
+    firmId: firm.id,
+    facilityId: fac.id,
+    originTownId: HOME_TOWN_ID,
+    destTownId: cityId,
+    productId,
+    qty,
+    quality,
+    priceLocked,
+    dispatchDay,
+    arrivalDay,
+  };
+  state.freight.push(shipment);
+  // Goods physically left the warehouse now, so the shipped tally lands at
+  // dispatch (revenue lands at arrival, in FreightSystem).
+  fac.dailyStats.unitsShipped += qty;
+  const netEstimate = Math.round(priceLocked * (1 - exportFreightFee(state, cityId))) * qty;
+  emitEvent(state, 'info', 'logistics',
+    `${city.emoji} ${note} dispatched to ${city.name}: ${qty} ${product.name} — arriving day ${arrivalDay}, ~${formatMoney(netEstimate)} on delivery (price locked).`, fac.id);
+  return netEstimate;
+}
+
+/**
  * Export up to `quantity` of a product staged in a warehouse to a trade city
  * at its current price minus freight. Returns the revenue (0 = nothing
  * shipped). Revenue arrives from the world account; money stays conserved.
@@ -214,6 +292,16 @@ export function performExport(
   const qty = Math.min(Math.max(0, Math.round(quantity)), inInput + inOutput);
   if (qty <= 0) return 0;
 
+  // Region freight edge (region.md step 4, slice 4): an export to a LIVE partner
+  // city does NOT settle instantly — the goods leave the warehouse now but ride a
+  // lead-timed freight edge, landing in the partner's larder and paying out
+  // `FREIGHT_LEAD_DAYS` later at the locked price (FreightSystem). A stub trade
+  // city (ironvale, not simulated) and every flag-off game keep the instant path
+  // below, byte-identical.
+  if (isFreightDest(state, cityId)) {
+    return dispatchFreight(state, firm, fac, productId, qty, cityId, note);
+  }
+
   // Fuel spikes hit freight too — the fee scales with transport conditions;
   // large orders slide down the impact curve as they fill.
   const price = impactedFillPrice(cityPrice(state, cityId, productId), qty, -1);
@@ -237,17 +325,38 @@ export function performExport(
   fac.dailyStats.revenue += revenue; // exports are the warehouse's earnings
   firm.exportRevenue += revenue;
   firm.exportRevenueByCity[cityId] = (firm.exportRevenueByCity[cityId] ?? 0) + revenue;
-  // A POOLED product is absorbed into the city's larder — a durable overhang
-  // that depresses the quote for days as consumption works it off; anything
-  // else — a plain city, or a raw/intermediate the pool never stocks — takes
-  // the classic one-tick glut the walk heals. Product-level guard, same
-  // reasoning as the purchase path (review blocker: a city-level guard
-  // silently exempted raw exports from ALL impact). Either way it softens.
+  settleExportLanding(state, firmId, cityId, productId, qty);
+  emitEvent(state, 'success', 'logistics',
+    `${city.emoji} ${note} to ${city.name}: ${qty} ${product.name} for ${formatMoney(revenue)} (after freight).`, fac.id);
+  creditRushOrder(state, firmId, productId, qty);
+  return revenue;
+}
+
+/**
+ * Land exported goods into the destination city's larder and tally the player's
+ * pool-cover missions. Shared by the INSTANT export path and the freight ARRIVAL
+ * path (slice 4), so both move the city's stock and quote identically — only the
+ * TIMING differs (instant vs `FREIGHT_LEAD_DAYS` later). No money moves here (the
+ * cash settled through recordTransaction); this is pure stock/quote bookkeeping.
+ *
+ * A POOLED product is absorbed into the city's larder — a durable overhang that
+ * depresses the quote for days as consumption works it off; anything else — a
+ * plain city, or a raw/intermediate the pool never stocks — takes the classic
+ * one-tick glut the walk heals. Product-level guard (a city-level guard silently
+ * exempted raw exports from ALL impact — review blocker). Either way it softens.
+ */
+export function settleExportLanding(
+  state: GameState,
+  firmId: FirmId,
+  cityId: string,
+  productId: ProductId,
+  qty: number,
+): void {
   if (state.tradeCities[cityId]?.pool?.inventory[productId] !== undefined) {
-    // Read the pool's cover for this product BEFORE the ship, then feed it. Only
+    // Read the pool's cover for this product BEFORE the feed, then feed it. Only
     // the player's own reads-the-ports action is tallied (missions/achievements):
-    // shipping into a THIN port (cover under the 🔥 bar) teaches the read, and an
-    // export that lifts a thin port back over its target buffer is the restore.
+    // shipping into a THIN port (cover under the 🔥 bar) teaches the read, and a
+    // shipment that lifts a thin port back over its target buffer is the restore.
     // AI exports never touch these counters. Structurally inert flag-off (no pool).
     if (firmId === state.playerFirmId) {
       const invBefore = state.tradeCities[cityId]!.pool!.inventory[productId]!;
@@ -264,10 +373,6 @@ export function performExport(
   } else {
     applyPriceImpact(state, cityId, productId, qty, -1);
   }
-  emitEvent(state, 'success', 'logistics',
-    `${city.emoji} ${note} to ${city.name}: ${qty} ${product.name} for ${formatMoney(revenue)} (after freight).`, fac.id);
-  creditRushOrder(state, firmId, productId, qty);
-  return revenue;
 }
 
 /**
@@ -275,7 +380,7 @@ export function performExport(
  * the buyer charters freight from wherever the goods land) and pay the
  * locked-in bonus the moment the order fills.
  */
-function creditRushOrder(
+export function creditRushOrder(
   state: GameState,
   firmId: FirmId,
   productId: ProductId,

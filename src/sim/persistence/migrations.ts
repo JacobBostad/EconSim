@@ -121,6 +121,12 @@ function normalize(state: GameState): GameState {
     d.affluent = d.affluent ?? 0;
   }
   state.rushOrder = state.rushOrder ?? null;
+  // In-flight freight (Arc E step 4, slice 4): a SAVE-SHAPE addition kept at
+  // SAVE_VERSION 3 (normalize-only). Saves predating it — and every flag-off game
+  // — load with an empty array (the derivable default) and are byte-identical; a
+  // save taken MID-FLIGHT carries its shipments and they still land on schedule
+  // (arrivalDay is an absolute day). Mirrors the map-dims default above.
+  state.freight = state.freight ?? [];
   state.tradeAnnouncement = state.tradeAnnouncement ?? null;
   state.rushOrdersCompleted = state.rushOrdersCompleted ?? 0;
   state.rushOrdersMissed = state.rushOrdersMissed ?? 0;
