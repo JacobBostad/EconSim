@@ -444,8 +444,8 @@ function buildSiblingChain(ctx: SimContext, firmId: string, factoryId: string): 
 
   const jit = () => rng.jitter(4);
   const facLoc = {
-    x: clamp(factory.location.x + (rng.chance(0.5) ? 12 : -12) + jit(), 8, state.config.mapWidth - 8),
-    y: clamp(factory.location.y + jit(), 8, state.config.mapHeight - 8),
+    x: clamp(factory.location.x + (rng.chance(0.5) ? 12 : -12) + jit(), 8, town.mapWidth - 8),
+    y: clamp(factory.location.y + jit(), 8, town.mapHeight - 8),
   };
   const facDef = getFacilityDef(factory.defId);
   const facCost = Math.round(facDef.buildCost * landCostMultiplier(landValueAt(state, facLoc)));
@@ -453,8 +453,8 @@ function buildSiblingChain(ctx: SimContext, firmId: string, factoryId: string): 
   let prodLoc: { x: number; y: number } | null = null;
   if (producer) {
     prodLoc = {
-      x: clamp(producer.location.x + (rng.chance(0.5) ? 12 : -12) + jit(), 8, state.config.mapWidth - 8),
-      y: clamp(producer.location.y + jit(), 8, state.config.mapHeight - 8),
+      x: clamp(producer.location.x + (rng.chance(0.5) ? 12 : -12) + jit(), 8, town.mapWidth - 8),
+      y: clamp(producer.location.y + jit(), 8, town.mapHeight - 8),
     };
     prodCost = Math.round(getFacilityDef(producer.defId).buildCost * landCostMultiplier(landValueAt(state, prodLoc)));
   }

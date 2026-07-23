@@ -663,8 +663,8 @@ converted in steps 1–4 is already correct.
 | **facilities** | ~400 | **DONE (226 refs, 55 files)** | step 3 fifth slice, harvested as two file partitions (systems/ 137 refs / 33 files; core+selectors+data 89 refs / 22 files); `facilityId` cross-refs are reads and converted; writers flat: `startingScenario`'s facility creation and `Demolition`'s delete (the only two in sim code — creation runs through the `createFacility` factory, whose sink is the scenario, and every other path mutates existing records through the view); zero facilities refs in the money primitive |
 | **citizens** | ~240 | **DONE (70 sites, 28 files)** | step 3 third slice; the money-scope reads (account primitive + `totalMoneySupply` conservation) stay flat by design — region-wide, they read all towns at the endgame |
 | **marketStats** | ~40 | **DONE (22 sites, 16 files)** | step 3 third slice; per-product town book |
-| **map dims** | small | small | `config.mapWidth/Height` → per-town |
-| **UI reads** | — | **DONE (7 refs, 2 files)** | `PopulationDashboard` (4: districts, cohorts, districtAt) + `TownRenderer.drawAmbientCrowd` (3: cohorts, districtAt-free district lookup) route through `townOf(state)` (home default — the UI renders the home town, gains a town selector at the endgame); read-only projection, referential behaviour identical (accessor returns the same objects, so React memo/deps unchanged); e2e gauntlet green. the remaining ~81 UI reads (citizens/marketStats — getters now landed — plus firms/facilities) convert in a later UI batch |
+| **map dims** | small | **DONE (11 sites, 10 files + 3 renderer reads)** | `mapWidth`/`mapHeight` getters on the Town view delegate to `state.config` today and become per-town fields at the endgame; town-scoped readers (placement, slot enumeration, movement bounds, renderer world size) convert; config-construction/serialization/migration/NewGame readers stay on `config`, classified |
+| **UI reads** | — | **DONE (7 refs, 2 files)** | `PopulationDashboard` (4: districts, cohorts, districtAt) + `TownRenderer.drawAmbientCrowd` (3: cohorts, districtAt-free district lookup) route through `townOf(state)` (home default — the UI renders the home town, gains a town selector at the endgame); read-only projection, referential behaviour identical (accessor returns the same objects, so React memo/deps unchanged); e2e gauntlet green. UI batch 2 converted the remaining ~80 family reads (14 UI files + ~30 TownRenderer sites); residual flat family reads in src/ui + src/render are ZERO |
 
 ### The firms family (fourth slice, two harvest partitions)
 
@@ -746,7 +746,11 @@ so nothing needed the region-wide-flat treatment.
   acquisitions, dividends, and every selector that resolves an owner all flag
   it. Breaking the facilities accessor (`get facilities() { return {}; }`)
   turns **160 tests red across 71 files** — production, logistics, labor,
-  retail, and rent all read the building stock. Restoring each getter returns
+  retail, and rent all read the building stock. Breaking the map-dims getters
+  (`return 0`) turns the two accessor-identity assertions red — the
+  determinism double-runs stay green because both runs read the same broken
+  value, so for a scalar family the identity tests are the load-bearing
+  guards. Restoring each getter returns
   the suite to green. The harness demonstrably guards the conversion.
 - **Pinned baselines hold:** village seeds 11/4/7 reproduce `rngState`
   3274842624 / 2896139677 / 4253583594; city seed 11 reproduces its `rngState`

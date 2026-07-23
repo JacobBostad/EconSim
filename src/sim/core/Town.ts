@@ -49,9 +49,9 @@ export const HOME_TOWN_ID: TownId = 'home';
  * converted call site is provably identical to the flat access it replaced.
  *
  * All six record families are exposed today (districts, cohorts, citizens,
- * marketStats, firms, facilities). The firms/facilities getters landed ahead of
- * their reader conversions so those batches need no edit here; map dims join
- * later. The recipe is in region.md.
+ * marketStats, firms, facilities), plus the town's map dimensions (mapWidth,
+ * mapHeight). The firms/facilities getters landed ahead of their reader
+ * conversions so those batches needed no edit here. The recipe is in region.md.
  */
 export interface Town {
   readonly id: TownId;
@@ -67,6 +67,22 @@ export interface Town {
   readonly firms: Record<string, Firm>;
   /** The town's buildings — production, retail, homes — by id (town-scoped). */
   readonly facilities: Record<string, Facility>;
+  /**
+   * The town's map width — the world-space extent that placement, movement
+   * bounds, slot enumeration, and the renderer all key off (town-scoped). Today
+   * it delegates to `state.config.mapWidth` (preset-derived); at the endgame move
+   * a town OWNS its map, so this becomes a per-town field (region.md: "config.
+   * mapWidth/Height → per-town"). Config-construction/serialization/migration/
+   * NewGame-setup readers stay on `config` — only town-scoped readers route here.
+   */
+  readonly mapWidth: number;
+  /**
+   * The town's map height — the world-space extent that placement, movement
+   * bounds, slot enumeration, and the renderer all key off (town-scoped). Today
+   * it delegates to `state.config.mapHeight` (preset-derived); becomes a per-town
+   * field at the endgame move, alongside `mapWidth`.
+   */
+  readonly mapHeight: number;
 }
 
 /**
@@ -96,6 +112,12 @@ export function townOf(state: GameState, _townId: TownId = HOME_TOWN_ID): Town {
     },
     get facilities(): Record<string, Facility> {
       return state.facilities;
+    },
+    get mapWidth(): number {
+      return state.config.mapWidth;
+    },
+    get mapHeight(): number {
+      return state.config.mapHeight;
     },
   };
 }

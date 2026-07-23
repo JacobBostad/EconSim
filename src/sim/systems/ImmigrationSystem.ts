@@ -204,7 +204,7 @@ export function runImmigrationSystem(ctx: SimContext): void {
     // commercial core instead of marching off the south edge (A4).
     const slot =
       ctx.config.sizePreset === 'village'
-        ? homeSlotFor(Math.max(0, homes - 20), ctx.config.mapHeight)
+        ? homeSlotFor(Math.max(0, homes - 20), town.mapHeight)
         : firstFreeDistrictSlot(state, 'residential', HOME_SLOT_SPEC);
     if (!slot) return; // geographically full
     const home = createFacility(state, 'home', state.worldFirmId, slot, { name: `Home ${homes + 1}` });

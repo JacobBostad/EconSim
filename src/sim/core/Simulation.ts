@@ -580,9 +580,12 @@ export class Simulation {
       return;
     }
     // Deterministic placement: scan the residential band for clear ground.
+    // Map bounds are town-scoped, hoisted out of the scan loop (home-town view,
+    // identity in a one-town region); gains a real per-town map at the endgame.
+    const town = townOf(s);
     let loc: { x: number; y: number } | null = null;
-    for (let y = 60; y <= s.config.mapHeight - 4 && !loc; y += 8) {
-      for (let x = 14; x <= s.config.mapWidth - 8; x += 6) {
+    for (let y = 60; y <= town.mapHeight - 4 && !loc; y += 8) {
+      for (let x = 14; x <= town.mapWidth - 8; x += 6) {
         let clear = true;
         for (const fid in facilities) {
           const l = facilities[fid]!.location;

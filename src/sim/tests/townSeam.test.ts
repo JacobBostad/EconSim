@@ -51,6 +51,10 @@ describe('Town seam — accessor is a view over the flat records (region.md step
     expect(town.marketStats).toBe(state.marketStats);
     expect(town.firms).toBe(state.firms);
     expect(town.facilities).toBe(state.facilities);
+    // Map dimensions are scalars, not records: the getter returns the same value
+    // the flat config holds, so a converted placement/renderer read is identical.
+    expect(town.mapWidth).toBe(state.config.mapWidth);
+    expect(town.mapHeight).toBe(state.config.mapHeight);
     expect(town.id).toBe('home');
   });
 
@@ -64,6 +68,10 @@ describe('Town seam — accessor is a view over the flat records (region.md step
     expect(townOf(state).marketStats).toBe(state.marketStats);
     expect(townOf(state).firms).toBe(state.firms);
     expect(townOf(state).facilities).toBe(state.facilities);
+    expect(townOf(state).mapWidth).toBe(state.config.mapWidth);
+    expect(townOf(state).mapHeight).toBe(state.config.mapHeight);
+    expect(townOf(state, HOME_TOWN_ID).mapWidth).toBe(townOf(state).mapWidth);
+    expect(townOf(state, HOME_TOWN_ID).mapHeight).toBe(townOf(state).mapHeight);
     expect(townOf(state).id).toBe('home');
     expect(townOf(state, HOME_TOWN_ID).districts).toBe(townOf(state).districts);
     expect(townOf(state, HOME_TOWN_ID).citizens).toBe(townOf(state).citizens);

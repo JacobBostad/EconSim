@@ -490,9 +490,11 @@ function seedComputeProvider(b: Builder): void {
   firm.personalityId = personality;
   firm.ceoName = defaultCeoFor(personality, 1);
   // Place it in the commercial-ish middle of the map, clear of the homes band.
+  // Placement is town-scoped, so it reads the town's dims through the view.
+  const town = townOf(state);
   const loc: Vec2 = {
-    x: Math.round(state.config.mapWidth * 0.5),
-    y: Math.round(state.config.mapHeight * 0.35),
+    x: Math.round(town.mapWidth * 0.5),
+    y: Math.round(town.mapHeight * 0.35),
   };
   newFacility(b, 'datacenter', firm.id, loc, { name: 'Cirrus Datacenter' });
 }

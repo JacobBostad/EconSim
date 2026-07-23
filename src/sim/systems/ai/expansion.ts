@@ -85,8 +85,8 @@ export function maybeExpand(ctx: SimContext, firmId: string): void {
   const def = getFacilityDef('retail');
   // Location + land premium: AI pays market rates like everyone else.
   const loc = {
-    x: clamp(54 + stores.length * 12 + rng.jitter(5), 8, state.config.mapWidth - 8),
-    y: clamp(50 + rng.jitter(6), 8, state.config.mapHeight - 8),
+    x: clamp(54 + stores.length * 12 + rng.jitter(5), 8, town.mapWidth - 8),
+    y: clamp(50 + rng.jitter(6), 8, town.mapHeight - 8),
   };
   const mult = landCostMultiplier(landValueAt(state, loc));
   const cost = Math.round(def.buildCost * mult);
@@ -198,8 +198,8 @@ export function maybeEnterLuxury(ctx: SimContext, firmId: string): void {
   const recipe = luxury === 'jewelry' ? 'craft_jewelry' : 'bake_pastries';
 
   // Costs: R&D to mastery + workshop + boutique (land-adjusted).
-  const wsLoc = { x: clamp(70 + rng.jitter(10), 8, state.config.mapWidth - 8), y: clamp(30 + rng.jitter(4), 8, state.config.mapHeight - 8) };
-  const shopLoc = { x: clamp(60 + rng.jitter(12), 8, state.config.mapWidth - 8), y: clamp(49 + rng.jitter(5), 8, state.config.mapHeight - 8) };
+  const wsLoc = { x: clamp(70 + rng.jitter(10), 8, town.mapWidth - 8), y: clamp(30 + rng.jitter(4), 8, town.mapHeight - 8) };
+  const shopLoc = { x: clamp(60 + rng.jitter(12), 8, town.mapWidth - 8), y: clamp(49 + rng.jitter(5), 8, town.mapHeight - 8) };
   const wsCost = Math.round(getFacilityDef('factory').buildCost * landCostMultiplier(landValueAt(state, wsLoc)));
   const shopCost = Math.round(getFacilityDef('retail').buildCost * landCostMultiplier(landValueAt(state, shopLoc)));
   const total = LUXURY_RND_COST + wsCost + shopCost;
@@ -282,8 +282,8 @@ export function maybeEnterCoffee(ctx: SimContext, firmId: string): void {
   if (!rng.chance(COFFEE_ENTRY_CHANCE)) return;
 
   const loc = {
-    x: clamp(52 + rng.jitter(10), 8, state.config.mapWidth - 8),
-    y: clamp(33 + rng.jitter(4), 8, state.config.mapHeight - 8),
+    x: clamp(52 + rng.jitter(10), 8, town.mapWidth - 8),
+    y: clamp(33 + rng.jitter(4), 8, town.mapHeight - 8),
   };
   const cost = Math.round(getFacilityDef('factory').buildCost * landCostMultiplier(landValueAt(state, loc)));
   if (firm.cash - cost < 15000_00) return;
@@ -353,8 +353,8 @@ export function maybeBuildApartment(ctx: SimContext, firmId: string): void {
   if (!rng.chance(LANDLORD_CHANCE)) return;
 
   const loc = {
-    x: clamp(40 + rng.jitter(24), 8, state.config.mapWidth - 8),
-    y: clamp(64 + rng.jitter(6), 8, state.config.mapHeight - 8),
+    x: clamp(40 + rng.jitter(24), 8, town.mapWidth - 8),
+    y: clamp(64 + rng.jitter(6), 8, town.mapHeight - 8),
   };
   const def = getFacilityDef('apartment');
   const cost = Math.round(def.buildCost * landCostMultiplier(landValueAt(state, loc)));

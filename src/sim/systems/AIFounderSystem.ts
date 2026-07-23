@@ -638,9 +638,12 @@ function foundLandlordFirm(ctx: SimContext, day: number): void {
 
   // Break ground on the firm's first block immediately, so it enters as a real
   // landlord with an asset rather than an empty shell.
+  // Placement bounds are town-scoped (home-town view, identity in a one-town
+  // region); gains a real per-town map at the endgame move.
+  const town = townOf(state, ctx.townId);
   const loc = {
-    x: clamp(40 + (hashPick(state.seed, day + 5, 40) - 20), 8, state.config.mapWidth - 8),
-    y: clamp(64 + (hashPick(state.seed, day + 9, 12) - 6), 8, state.config.mapHeight - 8),
+    x: clamp(40 + (hashPick(state.seed, day + 5, 40) - 20), 8, town.mapWidth - 8),
+    y: clamp(64 + (hashPick(state.seed, day + 9, 12) - 6), 8, town.mapHeight - 8),
   };
   const def = getFacilityDef('apartment');
   const mult = landCostMultiplier(landValueAt(state, loc));

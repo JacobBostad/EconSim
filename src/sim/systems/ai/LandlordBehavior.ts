@@ -183,8 +183,8 @@ function developBlock(ctx: SimContext, firmId: string): void {
   if (!landlordRoll(state.seed, ctx.time.day, firmId, LANDLORD_BUILD_CHANCE)) return;
 
   const loc = {
-    x: clamp(40 + ((ctx.time.day * 37 + firm.facilities.length * 13) % 49) - 24, 8, state.config.mapWidth - 8),
-    y: clamp(64 + ((ctx.time.day * 17) % 13) - 6, 8, state.config.mapHeight - 8),
+    x: clamp(40 + ((ctx.time.day * 37 + firm.facilities.length * 13) % 49) - 24, 8, town.mapWidth - 8),
+    y: clamp(64 + ((ctx.time.day * 17) % 13) - 6, 8, town.mapHeight - 8),
   };
   const def = getFacilityDef('apartment');
   const mult = landCostMultiplier(landValueAt(state, loc));

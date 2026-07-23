@@ -111,10 +111,13 @@ function firmSold(state: GameState, firmId: string, def: ServiceDef): number {
  */
 function buildServiceFacility(ctx: SimContext, firm: Firm, def: ServiceDef, index: number): boolean {
   const { state } = ctx;
+  // Home-town view (identity in a one-town region); gains a real per-town map at
+  // the endgame move. Placement bounds are town-scoped, so they route here.
+  const town = townOf(state, ctx.townId);
   const facDef = getFacilityDef(def.facilityDefId);
   const loc = {
-    x: clamp(46 + index * 12, 8, state.config.mapWidth - 8),
-    y: clamp(def.facilityType === 'datacenter' ? 38 : 44, 8, state.config.mapHeight - 8),
+    x: clamp(46 + index * 12, 8, town.mapWidth - 8),
+    y: clamp(def.facilityType === 'datacenter' ? 38 : 44, 8, town.mapHeight - 8),
   };
   const cost = Math.round(facDef.buildCost * landCostMultiplier(landValueAt(state, loc)));
   if (firm.cash - cost < cashBuffer(state, firm)) return false;

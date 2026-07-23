@@ -233,7 +233,7 @@ export class TownRenderer {
       if (f.location.x > maxX) maxX = f.location.x;
       if (f.location.y > maxY) maxY = f.location.y;
     }
-    if (!isFinite(minX)) { minX = 0; minY = 0; maxX = s.config.mapWidth; maxY = s.config.mapHeight; }
+    if (!isFinite(minX)) { const town = townOf(s); minX = 0; minY = 0; maxX = town.mapWidth; maxY = town.mapHeight; }
     const padW = 14, padH = 12;
     minX -= padW; maxX += padW; minY -= padH; maxY += padH;
     const w = Math.max(1, maxX - minX), h = Math.max(1, maxY - minY);
@@ -649,7 +649,7 @@ export class TownRenderer {
       const isPlayer = f.ownerFirmId === s.playerFirmId;
       route(
         f.location,
-        { x: s.config.mapWidth + 6, y: Math.min(f.location.y, 20) },
+        { x: town.mapWidth + 6, y: Math.min(f.location.y, 20) },
         1.8,
         isPlayer ? 'rgba(120,220,180,0.7)' : 'rgba(150,190,170,0.35)',
         true,
@@ -671,8 +671,9 @@ export class TownRenderer {
     const key = `${homes}:${residents}:${s.seed}`;
     if (this.landGrid && this.landGrid.key === key) return this.landGrid;
     const step = 4;
-    const cols = Math.ceil(s.config.mapWidth / step) + 1;
-    const rows = Math.ceil(s.config.mapHeight / step) + 1;
+    // Grid spans the town's map (town-scoped world size).
+    const cols = Math.ceil(town.mapWidth / step) + 1;
+    const rows = Math.ceil(town.mapHeight / step) + 1;
     const v = new Float32Array(cols * rows);
     // Snapshot the homes once and sample every cell against it (A4): the grid is
     // thousands of queries over one unchanged home set, so building the index once

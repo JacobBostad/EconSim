@@ -255,7 +255,7 @@ function resolvePromoteHome(ctx: SimContext, districtId: DistrictId, gone: Citiz
     // die (A4 review finding).
     const slot =
       ctx.config.sizePreset === 'village'
-        ? homeSlotFor(Math.max(0, homes - 20), ctx.config.mapHeight)
+        ? homeSlotFor(Math.max(0, homes - 20), town.mapHeight)
         : firstFreeDistrictSlot(ctx.state, 'residential', HOME_SLOT_SPEC, [], districtId);
     if (slot && inDistrict(slot)) {
       const home = createFacility(state, 'home', state.worldFirmId, slot, { name: `Home ${homes + 1}` });

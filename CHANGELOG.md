@@ -42,6 +42,27 @@ bit-identical, every-resident-simulated town.
   dark-and-inert as the fourth measured cast-parity foundation. Suite +5
   (`castRevisit.test.ts`, now 580); `tsc` clean, full suite green. See
   docs/design/cohorts-and-districts.md, "Cast-parity attempt #3".
+- **E step 3 — the Town seam (closing batch: UI batch 2 + map dims).** The last
+  two rows of the remaining-families table land. **UI batch 2**: the ~80
+  remaining flat family reads across src/ui and src/render convert — 14 UI
+  files (EntityInspector 11, FacilityModal 11, SupplyChainDashboard 5, and
+  smaller) plus ~30 TownRenderer sites, each through one hoisted
+  `townOf(state)` home-default local; a pure read-path change (same object
+  references, so React behaviour is unchanged), leaving the residual flat
+  family reads in UI/render at **zero**. **Map dims**: the Town view gains
+  `mapWidth`/`mapHeight` getters (delegating to `state.config` today, becoming
+  per-town fields at the endgame); the 11 town-scoped readers (placement, slot
+  enumeration, movement bounds, renderer world size) convert, while config
+  construction/serialization/migration readers stay on `config`, classified.
+  For a scalar family the accessor-identity tests are the load-bearing
+  fails-on-revert guards (a broken getter agrees with itself run-to-run, so
+  the determinism double-runs can't see it — the identity assertions do). With
+  this, **every row of the step-3 conversion table is DONE**: all six record
+  families, the map dims, and every UI read route through the seam. What
+  remains of step 3 is the endgame itself — the records genuinely move to
+  `state.towns[townId]` behind one versioned migration, with `townOf` swapping
+  its getters and no call site changing. Suite 583/583; pinned baselines
+  exact; full e2e gauntlet green.
 - **E step 3 — the Town seam (fifth slice, facilities).** The last big family
   converts: every **facility reader** in the sim layer routes through
   `townOf(...).facilities` — **226 reader refs across 55 files**, harvested as
