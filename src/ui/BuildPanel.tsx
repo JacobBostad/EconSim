@@ -7,6 +7,7 @@ import { getProduct, productAvailableInPreset } from '../sim/data/products';
 import { formatMoney } from '../utils/formatMoney';
 import { getPlayerFirm } from '../sim/selectors/companySelectors';
 import { FESTIVAL_COST, FUND_HOME_COST } from '../sim/data/constants';
+import { townOf } from '../sim/core/Town';
 
 export function BuildPanel(): React.ReactElement {
   const sim = useGameStore((s) => s.sim);
@@ -15,6 +16,9 @@ export function BuildPanel(): React.ReactElement {
   const leaseFromFirmId = useGameStore((s) => s.leaseFromFirmId);
   const setLeaseFrom = useGameStore((s) => s.setLeaseFrom);
   const state = sim.getState();
+  // The panel renders the home town (one-town region → identical reference);
+  // it gains a town selector at the endgame move.
+  const town = townOf(state);
   const player = getPlayerFirm(state);
   const cash = player?.cash ?? 0;
   const festivalRunning = state.worldEvents.some((ev) => ev.defId === 'festival');
@@ -22,7 +26,7 @@ export function BuildPanel(): React.ReactElement {
   // Landlord firms the player can lease premises from (HD4) — pay $X/day instead
   // of the build cost upfront. Only when the real-estate channel is on.
   const landlords = state.config.realEstateEnabled
-    ? Object.values(state.firms).filter((f) => f.strategy.archetype === 'landlord' && f.id !== state.playerFirmId)
+    ? Object.values(town.firms).filter((f) => f.strategy.archetype === 'landlord' && f.id !== state.playerFirmId)
     : [];
 
   return (
@@ -36,7 +40,7 @@ export function BuildPanel(): React.ReactElement {
         <div className="card small">
           Placing <strong>{defs.find((d) => d.id === buildDefId)?.name}</strong>
           {leaseFromFirmId ? (
-            <> — <strong>leased</strong> from {state.firms[leaseFromFirmId]?.name ?? 'landlord'} (rent, no upfront cost)</>
+            <> — <strong>leased</strong> from {town.firms[leaseFromFirmId]?.name ?? 'landlord'} (rent, no upfront cost)</>
           ) : null}. Click an empty spot on the map.
           {landlords.length > 0 && (
             <div style={{ marginTop: 6 }}>

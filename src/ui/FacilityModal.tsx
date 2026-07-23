@@ -35,13 +35,17 @@ import {
 } from '../sim/systems/ServiceBillingSystem';
 import { SERVICES, COMPUTE_SERVICE_ID, getServiceDef } from '../sim/data/services';
 import type { ServiceDef } from '../sim/data/services';
+import { townOf } from '../sim/core/Town';
 
 export function FacilityActions({ fac }: { fac: Facility }): React.ReactElement {
   const sim = useGameStore((s) => s.sim);
   const dispatch = useGameStore((s) => s.dispatch);
   const state = sim.getState();
+  // The modal renders the home town (one-town region → identical reference);
+  // it gains a town selector at the endgame move.
+  const town = townOf(state);
   const isPlayer = fac.ownerFirmId === state.playerFirmId;
-  const firm = state.firms[fac.ownerFirmId];
+  const firm = town.firms[fac.ownerFirmId];
   const def = getFacilityDef(fac.defId);
   const employees = facilityEmployees(state, fac.id);
 
@@ -129,7 +133,7 @@ export function FacilityActions({ fac }: { fac: Facility }): React.ReactElement 
           {(() => {
             const customers = Object.values(state.contracts).filter(
               (c) => c.active && c.sourceFacilityId === fac.id
-                && state.facilities[c.destinationFacilityId]?.ownerFirmId !== fac.ownerFirmId,
+                && town.facilities[c.destinationFacilityId]?.ownerFirmId !== fac.ownerFirmId,
             );
             if (customers.length === 0) {
               return (
@@ -145,7 +149,7 @@ export function FacilityActions({ fac }: { fac: Facility }): React.ReactElement 
                 {customers.map((c) => (
                   <div key={c.id} className="row between">
                     <span>
-                      {state.firms[state.facilities[c.destinationFacilityId]?.ownerFirmId ?? '']?.name ?? '?'}
+                      {town.firms[town.facilities[c.destinationFacilityId]?.ownerFirmId ?? '']?.name ?? '?'}
                       {' buys '}{getProduct(c.productId).name}
                     </span>
                     <span className="mono muted">target {c.targetQuantity}</span>
@@ -520,7 +524,7 @@ export function FacilityActions({ fac }: { fac: Facility }): React.ReactElement 
         {contractsByDestination(state, fac.id).map((c) => (
           <div className="row between small" key={c.id} style={{ opacity: c.active ? 1 : 0.55 }}>
             <span>
-              {state.facilities[c.sourceFacilityId]?.name} → {getProduct(c.productId).name}
+              {town.facilities[c.sourceFacilityId]?.name} → {getProduct(c.productId).name}
               {!c.active && ' (paused)'}
             </span>
             {isPlayer ? (
@@ -571,15 +575,15 @@ export function FacilityActions({ fac }: { fac: Facility }): React.ReactElement 
             <div className="row">
               <select value={src} onChange={(e) => setSrc(e.target.value)}>
                 <option value="">source facility…</option>
-                {Object.values(state.facilities)
+                {Object.values(town.facilities)
                   .filter((f) => f.id !== fac.id && f.type !== 'home')
                   .sort((a, b) =>
                     Number(b.ownerFirmId === fac.ownerFirmId) - Number(a.ownerFirmId === fac.ownerFirmId))
                   .map((f) => (
                     <option key={f.id} value={f.id}>
-                      {f.ownerFirmId === fac.ownerFirmId || state.firms[f.ownerFirmId]?.ownerType === 'external'
+                      {f.ownerFirmId === fac.ownerFirmId || town.firms[f.ownerFirmId]?.ownerType === 'external'
                         ? f.name
-                        : `${f.name} — ${state.firms[f.ownerFirmId]?.name ?? '?'} (wholesale)`}
+                        : `${f.name} — ${town.firms[f.ownerFirmId]?.name ?? '?'} (wholesale)`}
                     </option>
                   ))}
               </select>
@@ -678,8 +682,9 @@ function ServiceProviderCard({ fac }: { fac: Facility }): React.ReactElement {
   const sim = useGameStore((s) => s.sim);
   const dispatch = useGameStore((s) => s.dispatch);
   const state = sim.getState();
+  const town = townOf(state);
   const def = serviceForFacility(fac);
-  const provider = state.firms[fac.ownerFirmId];
+  const provider = town.firms[fac.ownerFirmId];
   const capacity = provider ? serviceCapacity(state, provider, def) : 0;
   const price = provider ? listedPrice(provider, def) : 0;
   const customers = Object.values(state.serviceContracts).filter(
@@ -688,7 +693,7 @@ function ServiceProviderCard({ fac }: { fac: Facility }): React.ReactElement {
   const sold = customers.reduce((s, c) => s + c.seats, 0);
   const util = capacity > 0 ? sold / capacity : 0;
 
-  const playerFirm = state.firms[state.playerFirmId];
+  const playerFirm = town.firms[state.playerFirmId];
   const isPlayerProvider = fac.ownerFirmId === state.playerFirmId;
   // Player subscribe/cancel is wired for compute only (SUBSCRIBE_SERVICE).
   const playerCanSubscribe = def.id === COMPUTE_SERVICE_ID;
@@ -751,7 +756,7 @@ function ServiceProviderCard({ fac }: { fac: Facility }): React.ReactElement {
           .sort((a, b) => (a.subscriberFirmId < b.subscriberFirmId ? -1 : 1))
           .map((c) => (
             <div className="row between" key={c.id}>
-              <span>{state.firms[c.subscriberFirmId]?.name ?? c.subscriberFirmId}</span>
+              <span>{town.firms[c.subscriberFirmId]?.name ?? c.subscriberFirmId}</span>
               <span className="mono muted">{c.seats} seats · {formatMoney(c.pricePerSeatDay * c.seats)}/day</span>
             </div>
           ))}
@@ -815,6 +820,7 @@ function CommodityDesk({ fac }: { fac: Facility }): React.ReactElement {
   const sim = useGameStore((s) => s.sim);
   const dispatch = useGameStore((s) => s.dispatch);
   const state = sim.getState();
+  const town = townOf(state);
   const [buyPid, setBuyPid] = useState('grain');
   const [buyQty, setBuyQty] = useState(50);
   const base = getProduct(buyPid).basePrice;
@@ -857,7 +863,7 @@ function CommodityDesk({ fac }: { fac: Facility }): React.ReactElement {
         );
       })}
       {(() => {
-        const firm = state.firms[fac.ownerFirmId];
+        const firm = town.firms[fac.ownerFirmId];
         if (!firm) return null;
         const day = computeTime(state.tick, state.config).day;
         const canLock = firm.forwards.length < FORWARD_MAX_OPEN;

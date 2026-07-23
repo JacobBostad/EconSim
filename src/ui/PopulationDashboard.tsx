@@ -57,8 +57,8 @@ export function PopulationDashboard(): React.ReactElement {
   for (const did in crowdByDistrict) totalCrowd += crowdByDistrict[did]!;
   const anyCrowd = totalCrowd > 0;
   const buildingsByDistrict: Record<string, number> = {};
-  for (const id in state.facilities) {
-    const loc = state.facilities[id]!.location;
+  for (const id in town.facilities) {
+    const loc = town.facilities[id]!.location;
     const d = districtAt(town.districts, loc.x, loc.y);
     if (d) buildingsByDistrict[d.id] = (buildingsByDistrict[d.id] ?? 0) + 1;
   }

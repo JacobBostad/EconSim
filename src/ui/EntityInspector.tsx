@@ -25,13 +25,17 @@ import { computeTime } from '../sim/core/Tick';
 import { APARTMENT_RENT_PER_DAY } from '../sim/data/constants';
 import { facilityProfitContribution } from '../sim/selectors/facilitySelectors';
 import { clamp } from '../utils/clamp';
+import { townOf } from '../sim/core/Town';
 
 export function EntityInspector({ id }: { id: string }): React.ReactElement {
   const sim = useGameStore((s) => s.sim);
   const state = sim.getState();
-  if (state.facilities[id]) return <FacilityView fac={state.facilities[id]!} state={state} />;
-  if (state.citizens[id]) return <CitizenView c={state.citizens[id]!} state={state} />;
-  if (state.firms[id]) return <FirmView firm={state.firms[id]!} state={state} />;
+  // The inspector renders the home town (one-town region → identical reference);
+  // it gains a town selector at the endgame move.
+  const town = townOf(state);
+  if (town.facilities[id]) return <FacilityView fac={town.facilities[id]!} state={state} />;
+  if (town.citizens[id]) return <CitizenView c={town.citizens[id]!} state={state} />;
+  if (town.firms[id]) return <FirmView firm={town.firms[id]!} state={state} />;
   if (state.vehicles[id]) return <VehicleView v={state.vehicles[id]!} state={state} />;
   return <div className="muted small">Selected entity no longer exists.</div>;
 }
@@ -55,7 +59,8 @@ function Inv({ title, inv }: { title: string; inv: Record<string, { quantity: nu
 }
 
 function FacilityView({ fac, state }: { fac: Facility; state: GameState }): React.ReactElement {
-  const firm = state.firms[fac.ownerFirmId];
+  const town = townOf(state);
+  const firm = town.firms[fac.ownerFirmId];
   const contribution = facilityProfitContribution(state, fac.id);
   return (
     <div>
@@ -152,7 +157,8 @@ function FacilityView({ fac, state }: { fac: Facility; state: GameState }): Reac
 }
 
 function CitizenView({ c, state }: { c: Citizen; state: GameState }): React.ReactElement {
-  const employer = c.employerFirmId ? state.firms[c.employerFirmId] : null;
+  const town = townOf(state);
+  const employer = c.employerFirmId ? town.firms[c.employerFirmId] : null;
   const followedId = useGameStore((s) => s.followedCitizenId);
   const setFollow = useGameStore((s) => s.setFollow);
   const following = followedId === c.id;
@@ -179,8 +185,8 @@ function CitizenView({ c, state }: { c: Citizen; state: GameState }): React.Reac
       <div className="kv small">
         <span className="k">Home</span>
         <span>
-          {state.facilities[c.homeFacilityId]?.name ?? '—'}
-          {state.facilities[c.homeFacilityId]?.defId === 'apartment' && (
+          {town.facilities[c.homeFacilityId]?.name ?? '—'}
+          {town.facilities[c.homeFacilityId]?.defId === 'apartment' && (
             <span className="muted"> · pays {formatMoney(APARTMENT_RENT_PER_DAY)}/day rent</span>
           )}
         </span>
@@ -215,7 +221,7 @@ function CitizenView({ c, state }: { c: Citizen; state: GameState }): React.Reac
       <div className="section-title">Recent purchases (preferred stores)</div>
       {Object.entries(c.lastPurchasedFromByProduct).map(([pid, fid]) => (
         <div className="small" key={pid}>
-          {getProduct(pid).name} ← {state.facilities[fid]?.name ?? fid}
+          {getProduct(pid).name} ← {town.facilities[fid]?.name ?? fid}
         </div>
       ))}
       {Object.keys(c.lastPurchasedFromByProduct).length === 0 && <div className="small muted">none yet</div>}
@@ -476,16 +482,17 @@ function PnL({ p }: { p: ReturnType<typeof firmPnLToday> }): React.ReactElement 
 }
 
 function VehicleView({ v, state }: { v: Vehicle; state: GameState }): React.ReactElement {
+  const town = townOf(state);
   return (
     <div>
       <h3 style={{ margin: '0 0 2px' }}>Shipment</h3>
-      <div className="small muted">{state.firms[v.ownerFirmId]?.name}</div>
+      <div className="small muted">{town.firms[v.ownerFirmId]?.name}</div>
       <div className="kv small" style={{ marginTop: 6 }}>
         <span className="k">Cargo</span>
         <span className="mono">{Math.floor(v.cargo.quantity)} {getProduct(v.cargo.productId).name}</span>
       </div>
-      <div className="kv small"><span className="k">From</span><span>{state.facilities[v.originFacilityId]?.name}</span></div>
-      <div className="kv small"><span className="k">To</span><span>{state.facilities[v.destinationFacilityId]?.name}</span></div>
+      <div className="kv small"><span className="k">From</span><span>{town.facilities[v.originFacilityId]?.name}</span></div>
+      <div className="kv small"><span className="k">To</span><span>{town.facilities[v.destinationFacilityId]?.name}</span></div>
       <div className="kv small"><span className="k">Arrives in</span><span className="mono">{v.ticksUntilArrival} ticks</span></div>
       <div className="kv small"><span className="k">Transport cost</span><span className="mono">{formatMoney(v.transportCost)}</span></div>
     </div>

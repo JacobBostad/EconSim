@@ -4,6 +4,7 @@ import { dailyInsight, companyValuation } from '../sim/selectors/companySelector
 import { formatMoney } from '../utils/formatMoney';
 import { computeTime } from '../sim/core/Tick';
 import { LOAN_CREDIT_LIMIT_MULTIPLE, LOAN_MIN_CREDIT } from '../sim/data/constants';
+import { townOf } from '../sim/core/Town';
 
 /**
  * The defeat moment. When the player firm first turns 'insolvent' the sim
@@ -17,7 +18,10 @@ export function ReceivershipModal(): React.ReactElement | null {
   const dispatch = useGameStore((s) => s.dispatch);
   const setShowNewGame = useGameStore((s) => s.setShowNewGame);
   const state = sim.getState();
-  const player = state.firms[state.playerFirmId];
+  // The modal renders the home town (one-town region → identical reference);
+  // it gains a town selector at the endgame move.
+  const town = townOf(state);
+  const player = town.firms[state.playerFirmId];
   const insolvent = player?.bankruptcyStatus === 'insolvent';
   const handled = useRef(false);
   const [show, setShow] = useState(false);

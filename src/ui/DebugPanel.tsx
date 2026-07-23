@@ -3,11 +3,15 @@ import { useGameStore } from '../store/useGameStore';
 import { debugSnapshot, recentTransactions } from '../sim/selectors/debugSelectors';
 import { getProduct } from '../sim/data/products';
 import { formatMoney } from '../utils/formatMoney';
+import { townOf } from '../sim/core/Town';
 
 export function DebugPanel(): React.ReactElement {
   const sim = useGameStore((s) => s.sim);
   const tickOnce = useGameStore((s) => s.tickOnce);
   const state = sim.getState();
+  // The panel renders the home town (one-town region → identical reference);
+  // it gains a town selector at the endgame move.
+  const town = townOf(state);
   const d = debugSnapshot(state);
   const txns = recentTransactions(state, 40);
 
@@ -49,7 +53,7 @@ export function DebugPanel(): React.ReactElement {
               <td className="mono">{t.tick}</td>
               <td>{t.category}</td>
               <td className="mono">{formatMoney(t.amount)}</td>
-              <td>{t.firmId ? state.firms[t.firmId]?.name ?? t.firmId : '—'}</td>
+              <td>{t.firmId ? town.firms[t.firmId]?.name ?? t.firmId : '—'}</td>
               <td style={{ textAlign: 'left' }}>{t.note}</td>
             </tr>
           ))}

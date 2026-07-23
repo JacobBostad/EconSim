@@ -3,6 +3,7 @@ import { useGameStore } from '../store/useGameStore';
 import { gazetteEditions, tradeDesk } from '../sim/selectors/gazetteSelectors';
 import { formatMoney } from '../utils/formatMoney';
 import { TRADE_POOL_THIN_COVER_DAYS, TRADE_POOL_GLUT_COVER_DAYS } from '../sim/data/constants';
+import { townOf } from '../sim/core/Town';
 
 /** A cover reading as a compact chip: 🔥 thin (premium) / 🧊 glutted, then days. */
 function coverChip(emoji: string, cover: number): string {
@@ -16,6 +17,9 @@ export function GazetteDashboard(): React.ReactElement {
   useGameStore((s) => s.version);
   const sim = useGameStore((s) => s.sim);
   const state = sim.getState();
+  // The gazette renders the home town (one-town region → identical reference);
+  // it gains a town selector at the endgame move.
+  const town = townOf(state);
   const editions = gazetteEditions(state, 7);
   const desk = tradeDesk(state);
 
@@ -51,7 +55,7 @@ export function GazetteDashboard(): React.ReactElement {
         </div>
       )}
       {(() => {
-        const cits = Object.values(state.citizens);
+        const cits = Object.values(town.citizens);
         if (cits.length === 0) return null;
         const counts = { worker: 0, comfortable: 0, affluent: 0 };
         let climber: (typeof cits)[number] | null = null;

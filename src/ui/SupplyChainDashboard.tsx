@@ -8,11 +8,15 @@ import {
   bottlenecks,
 } from '../sim/selectors/supplyChainSelectors';
 import { formatMoney } from '../utils/formatMoney';
+import { townOf } from '../sim/core/Town';
 
 export function SupplyChainDashboard(): React.ReactElement {
   const sim = useGameStore((s) => s.sim);
   const select = useGameStore((s) => s.select);
   const state = sim.getState();
+  // The dashboard renders the home town (one-town region → identical reference);
+  // it gains a town selector at the endgame move.
+  const town = townOf(state);
   const shipments = activeShipments(state);
   const contracts = allContracts(state);
   const necks = bottlenecks(state);
@@ -49,8 +53,8 @@ export function SupplyChainDashboard(): React.ReactElement {
           {shipments.map((v) => (
             <tr key={v.id} style={{ cursor: 'pointer' }} onClick={() => select(v.id)}>
               <td>{Math.floor(v.cargo.quantity)} {getProduct(v.cargo.productId).name}</td>
-              <td>{state.facilities[v.originFacilityId]?.name}</td>
-              <td>{state.facilities[v.destinationFacilityId]?.name}</td>
+              <td>{town.facilities[v.originFacilityId]?.name}</td>
+              <td>{town.facilities[v.destinationFacilityId]?.name}</td>
               <td className="mono">{v.ticksUntilArrival}</td>
               <td className="mono">{formatMoney(v.transportCost)}</td>
             </tr>
@@ -65,9 +69,9 @@ export function SupplyChainDashboard(): React.ReactElement {
         <tbody>
           {contracts.map((c) => (
             <tr key={c.id}>
-              <td>{state.firms[c.ownerFirmId]?.name}</td>
+              <td>{town.firms[c.ownerFirmId]?.name}</td>
               <td>{getProduct(c.productId).name}</td>
-              <td>{state.facilities[c.sourceFacilityId]?.name} → {state.facilities[c.destinationFacilityId]?.name}</td>
+              <td>{town.facilities[c.sourceFacilityId]?.name} → {town.facilities[c.destinationFacilityId]?.name}</td>
               <td className="mono">{c.reorderPoint}</td>
               <td className="mono">{c.targetQuantity}</td>
               <td className="mono">{c.maxInventory}</td>

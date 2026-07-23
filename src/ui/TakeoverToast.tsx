@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useGameStore } from '../store/useGameStore';
+import { townOf } from '../sim/core/Town';
 
 const TOAST_MS = 7000;
 
@@ -14,7 +15,10 @@ export function TakeoverToast(): React.ReactElement | null {
   useGameStore((s) => s.version);
   const sim = useGameStore((s) => s.sim);
   const state = sim.getState();
-  const names = state.firms[state.playerFirmId]?.acquiredNames ?? [];
+  // This watcher observes the home town (one-town region → identical reference);
+  // it gains a town selector at the endgame move.
+  const town = townOf(state);
+  const names = town.firms[state.playerFirmId]?.acquiredNames ?? [];
   const seenCount = useRef<number | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 

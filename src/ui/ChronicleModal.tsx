@@ -7,6 +7,7 @@ import { OBJECTIVE_LADDER } from '../sim/data/constants';
 import { CONSUMER_PRODUCT_IDS_BY_PRESET, getProduct } from '../sim/data/products';
 import { Sparkline } from './Sparkline';
 import { formatMoney } from '../utils/formatMoney';
+import { townOf } from '../sim/core/Town';
 
 /** Fired by the Company dashboard's Chronicle button after completion. */
 export const SHOW_CHRONICLE_EVENT = 'econsim:show-chronicle';
@@ -45,7 +46,10 @@ export function ChronicleModal(): React.ReactElement | null {
 
   if (!show) return null;
 
-  const player = state.firms[state.playerFirmId];
+  // The chronicle renders the home town (one-town region → identical reference);
+  // it gains a town selector at the endgame move.
+  const town = townOf(state);
+  const player = town.firms[state.playerFirmId];
   const day = currentDay(state);
   const hist = player?.accounting.dailyHistory ?? [];
   const exportRev = player?.exportRevenue ?? 0;

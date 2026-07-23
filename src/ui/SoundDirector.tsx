@@ -4,6 +4,7 @@ import { getWorldEventDef } from '../sim/data/worldEvents';
 import { playAchievement, playMission, playNews, playReceivership, playFanfare, playBuildChime, playPoachAlert, playDeparture } from './sound';
 import { CHALLENGE_END_DAY } from '../sim/selectors/reportSelectors';
 import { computeTime } from '../sim/core/Tick';
+import { townOf } from '../sim/core/Town';
 
 /**
  * Watches simulation state and fires sound stings on notable moments:
@@ -15,10 +16,13 @@ export function SoundDirector(): React.ReactElement | null {
   useGameStore((s) => s.version);
   const sim = useGameStore((s) => s.sim);
   const state = sim.getState();
+  // This watcher observes the home town (one-town region → identical reference);
+  // it gains a town selector at the endgame move.
+  const town = townOf(state);
 
   const seen = useRef<{ ach: number; mis: number; world: string; lastEventId: string; insolvent: boolean; challengeDone: boolean } | null>(null);
   const worldKey = state.worldEvents.map((e) => `${e.defId}:${e.startDay}`).join(',');
-  const player = state.firms[state.playerFirmId];
+  const player = town.firms[state.playerFirmId];
   const insolvent = player?.bankruptcyStatus === 'insolvent';
   const challengeDone = state.config.challengeMode && computeTime(state.tick, state.config).day >= CHALLENGE_END_DAY;
   const lastEventId = state.events.length > 0 ? state.events[state.events.length - 1]!.id : '';

@@ -28,6 +28,7 @@ import { clamp } from '../utils/clamp';
 import { TrendCard } from './Sparkline';
 import { SHOW_CHRONICLE_EVENT } from './ChronicleModal';
 import { getPersonality } from '../sim/data/personalities';
+import { townOf } from '../sim/core/Town';
 
 /** Rows shown in the standings table before the "show all" reveal. A Village
  * (≤7 firms) never trips this; it exists for City/Metropolis (18/30 firms),
@@ -39,6 +40,9 @@ export function CompanyDashboard(): React.ReactElement {
   const select = useGameStore((s) => s.select);
   const dispatch = useGameStore((s) => s.dispatch);
   const state = sim.getState();
+  // The dashboard renders the home town (one-town region → identical reference);
+  // it gains a town selector at the endgame move.
+  const town = townOf(state);
   const [showAllStandings, setShowAllStandings] = useState(false);
   // Rankings valuations move slowly and cost a full-roster sort + per-firm
   // valuation; recompute once a day (React re-renders ~7×/s), not per render.
@@ -134,7 +138,7 @@ export function CompanyDashboard(): React.ReactElement {
             if (!showAllStandings && i >= STANDINGS_TOP_N && !e.isPlayer) return null;
             const pricePerPct = Math.max(1, Math.round(e.valuation / 100));
             const owned = firm.sharesHeld[e.firmId] ?? 0;
-            const targetFirm = state.firms[e.firmId];
+            const targetFirm = town.firms[e.firmId];
             const premium =
               targetFirm?.bankruptcyStatus === 'healthy'
                 ? ACQUISITION_PREMIUM_HEALTHY
@@ -226,7 +230,7 @@ export function CompanyDashboard(): React.ReactElement {
               const basis = firm.shareCostBasis[tid] ?? 0;
               const mark = Math.round((pct * marketCap(state, tid)) / 100);
               const gain = mark - basis;
-              const target = state.firms[tid];
+              const target = town.firms[tid];
               // Same estimate as the standings rows: 7-day average of the
               // target's positive net profit at the 30% payout ratio, pro-rata.
               const recent = (target?.accounting.dailyHistory ?? []).slice(-7);
