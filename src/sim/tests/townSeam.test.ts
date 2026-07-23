@@ -47,6 +47,8 @@ describe('Town seam — accessor is a view over the flat records (region.md step
     expect(town.cohorts).toBe(state.cohorts);
     expect(town.citizens).toBe(state.citizens);
     expect(town.marketStats).toBe(state.marketStats);
+    expect(town.firms).toBe(state.firms);
+    expect(town.facilities).toBe(state.facilities);
     expect(town.id).toBe('home');
   });
 
@@ -58,6 +60,8 @@ describe('Town seam — accessor is a view over the flat records (region.md step
     expect(townOf(state).cohorts).toBe(state.cohorts);
     expect(townOf(state).citizens).toBe(state.citizens);
     expect(townOf(state).marketStats).toBe(state.marketStats);
+    expect(townOf(state).firms).toBe(state.firms);
+    expect(townOf(state).facilities).toBe(state.facilities);
     expect(townOf(state).id).toBe('home');
     expect(townOf(state, HOME_TOWN_ID).districts).toBe(townOf(state).districts);
     expect(townOf(state, HOME_TOWN_ID).citizens).toBe(townOf(state).citizens);

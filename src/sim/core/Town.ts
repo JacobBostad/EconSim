@@ -29,6 +29,8 @@ import type { District } from '../entities/District';
 import type { Cohort } from '../entities/Cohort';
 import type { Citizen } from '../entities/Citizen';
 import type { MarketStat } from '../entities/Market';
+import type { Firm } from '../entities/Firm';
+import type { Facility } from '../entities/Facility';
 
 /** A town's identity within the region. One-town region: only `home` exists. */
 export type TownId = string;
@@ -46,10 +48,10 @@ export const HOME_TOWN_ID: TownId = 'home';
  * fields: reading `.districts` returns the live `state.districts` object, so a
  * converted call site is provably identical to the flat access it replaced.
  *
- * The district, cohort, citizen, and marketStats families are exposed today
- * (region.md step 3's first three slices). The remaining families (firms,
- * facilities, map dims) join this view batch by batch as their readers convert;
- * the recipe is in region.md.
+ * All six record families are exposed today (districts, cohorts, citizens,
+ * marketStats, firms, facilities). The firms/facilities getters landed ahead of
+ * their reader conversions so those batches need no edit here; map dims join
+ * later. The recipe is in region.md.
  */
 export interface Town {
   readonly id: TownId;
@@ -61,6 +63,10 @@ export interface Town {
   readonly citizens: Record<string, Citizen>;
   /** Per-product market book — prices, shares, daily history (town-scoped). */
   readonly marketStats: Record<string, MarketStat>;
+  /** Firms headquartered in the town, by id (town-scoped). */
+  readonly firms: Record<string, Firm>;
+  /** The town's buildings — production, retail, homes — by id (town-scoped). */
+  readonly facilities: Record<string, Facility>;
 }
 
 /**
@@ -84,6 +90,12 @@ export function townOf(state: GameState, _townId: TownId = HOME_TOWN_ID): Town {
     },
     get marketStats(): Record<string, MarketStat> {
       return state.marketStats;
+    },
+    get firms(): Record<string, Firm> {
+      return state.firms;
+    },
+    get facilities(): Record<string, Facility> {
+      return state.facilities;
     },
   };
 }
