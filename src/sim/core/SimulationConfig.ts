@@ -139,6 +139,21 @@ export interface SimulationConfig {
    * byte-identical to pre-Arc-E; a City/Metropolis game opts in, the trade-pool
    * probe and tests opt in explicitly. */
   tradeDemandPoolsEnabled: boolean;
+  /**
+   * The region (Arc E step 4; see docs/design/region.md § "What step 4 will
+   * take"). Off by default at EVERY preset, and NO preset turns it on yet (slice
+   * 1). When on at state construction, `createInitialState` seeds ONE partner
+   * town (`port_rosa`) into `state.towns` alongside home via `seedTown`, minting
+   * only that town's six record families off the region's SHARED `idCounters`
+   * (town-namespaced id prefixes, so home's runtime id stream is untouched) and a
+   * LOCAL rng (so the shared rng stream is untouched). In slice 1 the partner is
+   * INERT: no system ticks it and no home tick reads it, so a flag-on City game's
+   * home is byte-identical to flag-off (rngState, serialized home records, money)
+   * — proven in regionSeed.test.ts and the isolation probe. Village never seeds a
+   * partner regardless (double-gated on sizePreset — a Village is definitionally
+   * one town). Dispatch, the region-wide money primitive, and the freight edge
+   * are later slices. */
+  regionEnabled: boolean;
 }
 
 /**
@@ -289,6 +304,7 @@ export const DEFAULT_CONFIG: SimulationConfig = {
   realEstateEnabled: false,
   investorsEnabled: false,
   tradeDemandPoolsEnabled: false,
+  regionEnabled: false,
 };
 
 /** Difficulty presets: starting capital, news volatility, AI aggressiveness. */

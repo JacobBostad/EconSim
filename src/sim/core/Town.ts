@@ -54,6 +54,17 @@ export interface TownRecords {
   marketStats: Record<string, MarketStat>;
   firms: Record<string, Firm>;
   facilities: Record<string, Facility>;
+  /**
+   * The town's own map dimensions (region.md step 4, slice 1). A town OWNS its
+   * map now — two towns need two maps — so map size is a per-town record field,
+   * NOT a `state.config` delegate. Home's are set = `config.mapWidth`/`.mapHeight`
+   * at construction (after the size-preset block finalizes them) and defaulted
+   * from config on load/migration, so the getter swap is provably identity for
+   * home (every existing game reads exactly `config.mapWidth`). A partner town
+   * (`seedTown`) carries its own preset-derived dims. See `townOf` below.
+   */
+  mapWidth: number;
+  mapHeight: number;
 }
 
 /** The record-family keys, in a fixed order — the alias set installers loop. */
@@ -74,8 +85,10 @@ export const TOWN_RECORD_KEYS = [
  *
  * All six record families are exposed (districts, cohorts, citizens,
  * marketStats, firms, facilities), plus the town's map dimensions (mapWidth,
- * mapHeight). Map dims still delegate to `state.config` — they join the per-town
- * move with multi-town, not this slice. The recipe is in region.md.
+ * mapHeight). Map dims now read the town's OWN record fields (region.md step 4,
+ * slice 1) — a town owns its map, so two towns carry two maps. For home the
+ * field is set = `config.mapWidth`/`.mapHeight`, so the getter is a provable
+ * identity with the pre-slice `config` delegate. The recipe is in region.md.
  */
 export interface Town {
   readonly id: TownId;
@@ -93,18 +106,19 @@ export interface Town {
   readonly facilities: Record<string, Facility>;
   /**
    * The town's map width — the world-space extent that placement, movement
-   * bounds, slot enumeration, and the renderer all key off (town-scoped). Today
-   * it delegates to `state.config.mapWidth` (preset-derived); at the endgame move
-   * a town OWNS its map, so this becomes a per-town field (region.md: "config.
-   * mapWidth/Height → per-town"). Config-construction/serialization/migration/
-   * NewGame-setup readers stay on `config` — only town-scoped readers route here.
+   * bounds, slot enumeration, and the renderer all key off (town-scoped). Reads
+   * the town's OWN `mapWidth` record field now (region.md step 4, slice 1): a
+   * town owns its map, so two towns can carry two different maps. For home the
+   * field is set = `config.mapWidth` at construction and on load, so this is a
+   * provable identity with the pre-slice `config.mapWidth` delegate. Config-
+   * construction/serialization/migration/NewGame-setup readers stay on `config`.
    */
   readonly mapWidth: number;
   /**
    * The town's map height — the world-space extent that placement, movement
-   * bounds, slot enumeration, and the renderer all key off (town-scoped). Today
-   * it delegates to `state.config.mapHeight` (preset-derived); becomes a per-town
-   * field at the endgame move, alongside `mapWidth`.
+   * bounds, slot enumeration, and the renderer all key off (town-scoped). Reads
+   * the town's OWN `mapHeight` record field now, alongside `mapWidth`; for home
+   * it is set = `config.mapHeight`, an identity with the old delegate.
    */
   readonly mapHeight: number;
 }
@@ -142,10 +156,10 @@ export function townOf(state: GameState, _townId: TownId = HOME_TOWN_ID): Town {
       return records.facilities;
     },
     get mapWidth(): number {
-      return state.config.mapWidth;
+      return records.mapWidth;
     },
     get mapHeight(): number {
-      return state.config.mapHeight;
+      return records.mapHeight;
     },
   };
 }

@@ -19,6 +19,27 @@ real City or Metropolis game switches the whole stack on together (crowd +
 districts + all three specialist channels); Village stays the classic,
 bit-identical, every-resident-simulated town.
 
+- **The region — step 4, slice 1: the town factory + the flag (Arc E).** The
+  seam that grows the world from one town to a region. `seedTown(region, townId,
+  spec)` (`src/sim/data/seedTown.ts`), carved from `startingScenario`, mints ONLY
+  a partner town's six record families off the region's SHARED `idCounters`
+  (town-namespaced ids, so they are region-unique AND home's own counters never
+  advance) and a LOCAL rng (so the shared rng stream is untouched) — it subsumes
+  the isolation probe's hand-rolled `buildPartnerRecords`. A new `regionEnabled`
+  config flag (default OFF everywhere; no preset turns it on yet) seeds one INERT
+  `port_rosa` partner alongside home at construction, double-gated off Village.
+  `TownRecords` gains per-town `mapWidth`/`mapHeight`; `townOf`'s map getters read
+  the town's own fields, with home's set = `config` at construction and on load —
+  a provable value-identity, so SAVE_VERSION stays 3 (normalize-only default, no
+  new migration; golden v9 still round-trips). No dispatch, no money-primitive, no
+  freight edge yet — the partner is unticked. Measured: pinned village 11
+  (`3274842624`) and city 11 (`2546912297` / money `316900000`) byte-identical
+  flag-off; a 30-day flag-on City run has home's rngState, serialized `towns.home`,
+  and flat money identical to flag-off (the partner inert); the flat money
+  primitive omits exactly the partner's `19,500,000`-cent holder cash (the slice-2
+  debt, quantified). Full suite green (598 = 587 + 11 `regionSeed.test.ts`); the
+  updated `second-town-isolation.ts` probe passes. See docs/design/region.md
+  § "What ships now — the town factory + the flag (step 4, slice 1)".
 - **Perf assertions made contention-robust (grandJunction / playtestV8).** The
   two heavy-bot playtests asserted `state.perf.avgTickMs < 2`, but avgTickMs is
   an EWMA *mean* that absorbs the long right tail a loaded machine adds to

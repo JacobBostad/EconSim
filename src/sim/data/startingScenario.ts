@@ -37,6 +37,7 @@ import { getScenario, DEFAULT_SCENARIO_ID } from './scenarios';
 import { defaultDistrictPartition } from './districts';
 import { SAVE_VERSION } from '../core/GameState';
 import { townOf, HOME_TOWN_ID, installTownAliases, type TownRecords } from '../core/Town';
+import { seedTown, PARTNER_TOWN_ID, PORT_ROSA_SPEC } from './seedTown';
 
 const NUM_HOMES = 20;
 const CITIZENS_PER_HOME = 2;
@@ -228,6 +229,12 @@ export function createInitialState(
     marketStats: {},
     firms: {},
     facilities: {},
+    // Per-town map dims (region.md step 4, slice 1). Seeded from the passed
+    // config here and RE-SET to the final config below, after the size-preset
+    // block may raise them — so home.mapWidth === config.mapWidth exactly (the
+    // getter swap in townOf is a value-identity for every existing game).
+    mapWidth: config.mapWidth,
+    mapHeight: config.mapHeight,
   };
   const state: GameState = {
     saveVersion: SAVE_VERSION,
@@ -309,6 +316,10 @@ export function createInitialState(
     state.config.mapWidth = Math.max(state.config.mapWidth, preset.mapWidth);
     state.config.mapHeight = Math.max(state.config.mapHeight, preset.mapHeight);
   }
+  // Map dims are final: record the home town's OWN copy (= config, exactly), so
+  // townOf(...).mapWidth reads the town field and stays value-identical.
+  homeRecords.mapWidth = state.config.mapWidth;
+  homeRecords.mapHeight = state.config.mapHeight;
   // Now that map dimensions are final, tile the authored district partition.
   state.districts = defaultDistrictPartition(state.config);
 
@@ -480,6 +491,17 @@ export function createInitialState(
 
   seedCrowd(state);
   seedComputeProvider(b);
+
+  // Region (Arc E step 4, slice 1): with the flag on at a non-Village preset,
+  // seed ONE inert partner town (`port_rosa`) into state.towns alongside home.
+  // Built LAST, off the region's SHARED idCounters (town-namespaced prefixes)
+  // and a LOCAL rng, so it shifts NONE of home's ids and draws NOTHING from the
+  // shared rng — a flag-off game (default) is byte-identical, and a flag-on
+  // game's home is byte-identical to flag-off (the partner is unticked in this
+  // slice). Village never seeds a partner (definitionally one town).
+  if (state.config.regionEnabled && state.config.sizePreset !== 'village') {
+    seedTown(state, PARTNER_TOWN_ID, PORT_ROSA_SPEC);
+  }
 
   return state;
 }

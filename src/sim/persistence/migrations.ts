@@ -155,6 +155,20 @@ function normalize(state: GameState): GameState {
   // Real-estate firms channel (Arc D2, HD4): saves predating it load with the
   // channel off — no landlord ever founds until a City game turns it on.
   state.config.realEstateEnabled = state.config.realEstateEnabled ?? false;
+  // The region (Arc E step 4): saves predating it load with the flag off and no
+  // partner town — a one-town region, byte-identical to a pre-region game.
+  state.config.regionEnabled = state.config.regionEnabled ?? false;
+  // Per-town map dims (Arc E step 4, slice 1): the six-family town record now
+  // carries its own mapWidth/mapHeight. A v3 save written before this slice (and
+  // every wrapped v2 save) has them absent under `towns.*`; default each town's
+  // from config. For HOME this is exactly `config.mapWidth`/`.mapHeight`, so the
+  // getter swap is value-identical — every old save loads unchanged. A partner
+  // town serialized WITH its own dims keeps them (the `??` is a no-op there).
+  for (const tid of Object.keys(state.towns)) {
+    const t = state.towns[tid]!;
+    t.mapWidth = t.mapWidth ?? state.config.mapWidth;
+    t.mapHeight = t.mapHeight ?? state.config.mapHeight;
+  }
   state.housingTightDays = state.housingTightDays ?? 0;
   state.lastLandlordEntryDay = state.lastLandlordEntryDay ?? 0;
   state.districts = state.districts ?? defaultDistrictPartition(state.config);

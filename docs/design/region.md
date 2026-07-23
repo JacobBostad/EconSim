@@ -1160,7 +1160,8 @@ concern per slice, an honest measured NO-SHIP is a complete result):
    `mapHeight` fields. Acceptance: flag off ⇒ pinned village 11 / city 11
    byte-identical (no second town, no per-town map delta); flag on ⇒ a partner
    town materializes in state but is INERT (unticked) and the isolation probe's
-   properties hold; `tsc` + full suite green.
+   properties hold; `tsc` + full suite green. *SHIPPED — see "What ships now —
+   the town factory + the flag (step 4, slice 1)" below.*
 2. **The region-wide money primitive.** Account resolution + `totalMoneySupply`
    iterate all towns (with the `firmTownIndex` if resolution perf needs it).
    Acceptance: `totalMoneySupply` equals today's value when only `home` exists
@@ -1183,6 +1184,72 @@ concern per slice, an honest measured NO-SHIP is a complete result):
    `TradeCityPool` interface is deleted. Acceptance: the desk/advisor read the
    town's real book; NO-SHIP-honest if the live economy can't reproduce a sane
    quote — that stops this slice, not the arc.
+
+### What ships now — the town factory + the flag (step 4, slice 1)
+
+Slice 1 lands the two seams the rest of step 4 builds on, with the pinned world
+provably untouched:
+
+- **`seedTown(region, townId, spec)`** (`src/sim/data/seedTown.ts`) — carved from
+  `startingScenario`, it mints ONLY the six town-scoped families (a `TownRecords`)
+  plus the town's map dims, and writes them at `region.towns[townId]`. It subsumes
+  the isolation probe's hand-rolled `buildPartnerRecords` (the probe now calls the
+  real factory). A `PartnerTownSpec` sizes a LIGHT partner: crowd-only (empty cast),
+  a handful of producer firms drawn from the trade city's `productionByProduct`
+  specialty order, its own district partition + market book. The shipped spec is
+  `PORT_ROSA_SPEC` (city preset, 300-strong crowd, 6 producer firms).
+  - **Shared counters, town-namespaced ids.** The factory mints off the region's
+    SHARED `idCounters` (honoring the probe's `firm_3`-collision finding) under
+    town-namespaced keys (`port_rosa:firm_1`, ...). This makes the partner's ids
+    region-unique (they collide with nothing in home) AND leaves home's own
+    `firm`/`fac` counters unadvanced — so home's runtime id stream never shifts,
+    which is what makes a flag-on home byte-identical to flag-off.
+  - **Local rng, no shared draw.** Any layout randomness comes from a LOCAL `Rng`
+    seeded from `region.seed` + a hash of the town id, so a flag-off game's rng
+    stream is untouched and two flag-on runs of a seed agree bit-for-bit.
+  - **World-scoped state untouched.** The factory writes no `rngState`, `worldCash`,
+    ledger, or trade-graph field; the partner's holder cash is direct-assigned
+    initial supply (the `seedCrowd` idiom), not drawn from `worldCash`.
+- **`regionEnabled` flag** (default OFF at every preset; no preset turns it on
+  yet). When on at construction, `createInitialState` seeds one inert `port_rosa`
+  partner alongside home. Double-gated on `sizePreset !== 'village'` (a Village is
+  definitionally one town).
+- **Per-town map dims.** `TownRecords` gains `mapWidth`/`mapHeight`; `townOf`'s
+  map getters read the town's OWN fields now. Home's are set = `config.mapWidth`/
+  `.mapHeight` at construction (after the size-preset block) AND defaulted from
+  config on load/migration, so the getter swap is a provable value-identity for
+  home — every existing game reads exactly `config.mapWidth`. **SAVE_VERSION stays
+  3** (normalize-only default, no new migration): the fields are derivable from
+  config, so an old save (v1–v8 flat, or a v3 minted before this slice) gets them
+  defaulted in `normalize`, and golden v9 still round-trips —
+  `serialize(deserialize(serialize(state))) === serialize(state)` holds because
+  the two dims are added deterministically on the loaded state (the round-trip the
+  golden test actually pins is of the LOADED state, not fixture-byte identity; the
+  immutable v9 fixture keeps its six-key `towns.home` and its raw-shape assertion
+  reads the fixture directly, so it is unaffected).
+
+**Measured (slice 1).**
+
+- **Pinned baselines (flag off) hold byte-identical:** village seed 11 reproduces
+  `rngState 3274842624` (300 days); city seed 11 reproduces `rngState 2546912297`
+  and money supply `316900000` (300 days). The only serialized deltas anywhere are
+  the new `regionEnabled: false` config line and the two `mapWidth`/`mapHeight`
+  fields on `towns.home` (value-identical to `config`).
+- **Flag-on isolation (City, seed 11, 30 days):** home's `rngState` (`1334085939`),
+  its serialized `towns.home`, and its flat money supply (`320900000`) are
+  IDENTICAL to a flag-off run; the partner's records are byte-unchanged across the
+  home-only tick loop (INERT). Two flag-on runs agree bit-for-bit.
+- **The money debt, quantified (slice-2 oracle):** the flat `totalMoneySupply`
+  omits the partner's holder cash to the cent — `region (340,400,000) − flat
+  (320,900,000) = 19,500,000`, exactly `port_rosa`'s cohort + firm cash. The
+  region-aware sum recovers it (the reference implementation slice 2 pins).
+- **Id-uniqueness:** the factory's partner firm ids (`port_rosa:firm_*`) resolve in
+  the partner town and correctly do NOT resolve through the flat account primitive
+  — the constraint that forces resolution region-wide in slice 2.
+- **Verification:** `tsc` clean; full `npx vitest run` green (**598** = 587 + 11
+  new `regionSeed.test.ts` assertions across the flag/factory/isolation/money-debt
+  properties); the updated probe `second-town-isolation.ts` passes all checks
+  (exit 0).
 
 ### What stays OUT of step 4 (and why)
 
