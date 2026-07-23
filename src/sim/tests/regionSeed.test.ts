@@ -22,7 +22,7 @@ import { Simulation } from '../core/Simulation';
 import { createInitialState } from '../data/startingScenario';
 import { DEFAULT_CONFIG, SIZE_PRESETS } from '../core/SimulationConfig';
 import type { SimulationConfig } from '../core/SimulationConfig';
-import { totalMoneySupply } from '../core/GameState';
+import { totalMoneySupply, type GameState } from '../core/GameState';
 import { townOf, HOME_TOWN_ID } from '../core/Town';
 import type { TownRecords } from '../core/Town';
 import { seedTown, PARTNER_TOWN_ID, PORT_ROSA_SPEC } from '../data/seedTown';
@@ -171,8 +171,13 @@ describe('Region slice 1 — the partner is INERT (flag-on home == flag-off)', (
     // Isolation: home is byte-identical with the partner present (no read-leak).
     expect(on.rngState).toBe(off.rngState);
     expect(JSON.stringify(on.towns[HOME_TOWN_ID])).toBe(JSON.stringify(off.towns[HOME_TOWN_ID]));
-    // The flat money primitive omits the partner, so flag-on == flag-off exactly.
-    expect(totalMoneySupply(on)).toBe(totalMoneySupply(off));
+    // Home-scoped money is identical with the partner attached. (Slice 2 made
+    // totalMoneySupply region-wide, so the WHOLE sum rightly includes the
+    // partner's cash and differs by exactly that; the isolation property is
+    // home + world.)
+    const homeMoney = (st: GameState) => townCash(st.towns[HOME_TOWN_ID]!) + st.worldCash;
+    expect(homeMoney(on)).toBe(homeMoney(off));
+    expect(totalMoneySupply(on) - totalMoneySupply(off)).toBe(townCash(on.towns[PARTNER_TOWN_ID]!));
     // The partner is untouched by the home-only tick loop (no write-leak).
     expect(JSON.stringify(on.towns[PARTNER_TOWN_ID])).toBe(partnerBefore);
   });
@@ -192,15 +197,15 @@ describe('Region slice 1 — the partner is INERT (flag-on home == flag-off)', (
   });
 });
 
-describe('Region slice 1 — the money debt is real (slice-2 oracle)', () => {
-  it('the flat primitive omits exactly the partner town holder cash', () => {
+describe('Region slice 1+2 — the money debt is PAID (region-wide primitive)', () => {
+  it('totalMoneySupply covers every town: it equals the independent region sum', () => {
     const s = createInitialState(11, regionConfig());
     const partner = s.towns[PARTNER_TOWN_ID]!;
-    // The flat totalMoneySupply reads towns.home only, so it omits the partner.
-    const flat = totalMoneySupply(s);
+    // Slice 2 made the primitive iterate every town: the debt this test once
+    // measured (the flat sum omitting the partner) is now zero by construction.
     let region = s.worldCash;
     for (const tid of Object.keys(s.towns)) region += townCash(s.towns[tid]!);
-    expect(region - flat).toBe(townCash(partner));
-    expect(townCash(partner)).toBeGreaterThan(0);
+    expect(totalMoneySupply(s)).toBe(region);
+    expect(townCash(partner)).toBeGreaterThan(0); // the partner's cash is real, and inside
   });
 });

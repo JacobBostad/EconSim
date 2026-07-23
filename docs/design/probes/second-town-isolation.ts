@@ -19,15 +19,12 @@
  *      across a home-only run). We detect both by diffing a flag-off control run
  *      against a flag-on treatment run, byte for byte.
  *
- *  (2) THE MONEY DEBT — the deliberately-flat region-wide money primitive
- *      (`totalMoneySupply`, and the account-resolution trio under
- *      `recordTransaction`) reads the FLAT `state.firms`/`.citizens`/`.cohorts`
- *      aliases, which point at `towns.home` ONLY. With the partner holding money,
- *      that primitive silently omits it — conservation would break and a partner
- *      account would not resolve. We measure the omission exactly (it equals the
- *      partner town's holder cash) and show a region-aware aggregator that closes
- *      it. Slice 2 makes the primitive region-wide; this probe is the evidence it
- *      must, and the region-sum reference implementation the test oracle uses.
+ *  (2) THE MONEY DEBT, PAID — this probe originally measured the flat money
+ *      primitive (`totalMoneySupply` + the account-resolution trio) silently
+ *      omitting the partner's holder cash (the region-money debt slice 2 was
+ *      designed against). Slice 2 landed: the primitive iterates every town in
+ *      sorted order, so the check flipped — it now asserts the primitive EQUALS
+ *      this probe's independent region-wide reference with zero omission.
  *
  *  (3) THE ID-COLLISION HAZARD, AVOIDED — the finding that constrained the
  *      factory: a partner minted from a SEPARATE createInitialState gets its OWN
@@ -143,7 +140,9 @@ const DAYS = 30;
   ctrlSim.run(ticksPerDay(ctrl.config) * DAYS);
   const ctrlRng = ctrl.rngState;
   const ctrlHome = hashTown(ctrl.towns[HOME_TOWN_ID]!);
-  const ctrlMoney = totalMoneySupply(ctrl);
+  // Home-scoped (one-town control: identical to totalMoneySupply, but stated
+  // in the same home+world terms the flag-on comparison below must use).
+  const ctrlMoney = townCash(ctrl.towns[HOME_TOWN_ID]!) + ctrl.worldCash;
 
   // Treatment: flag ON — createInitialState seeds the inert partner (seedTown).
   const trt = createInitialState(11, regionConfig());
@@ -161,33 +160,43 @@ const DAYS = 30;
     `${hashTown(trt.towns[HOME_TOWN_ID]!)} vs ${ctrlHome}`);
   check('serialized towns.port_rosa unchanged across home-only run (no write-leak)',
     partnerAfter === partnerBefore, `${partnerAfter} vs ${partnerBefore}`);
-  check('flat home money supply identical with/without partner (partner omitted)',
-    totalMoneySupply(trt) === ctrlMoney, `${totalMoneySupply(trt)} vs ${ctrlMoney}`);
+  // Slice 2 made totalMoneySupply region-wide, so the flag-on sum rightly
+  // includes the partner's cash and is NOT comparable across the two runs.
+  // The isolation property is HOME-scoped: home's holder cash + the world
+  // account must match with and without the partner attached.
+  const trtHomeMoney = townCash(trt.towns[HOME_TOWN_ID]!) + trt.worldCash;
+  check('home-scoped money (home holders + world) identical with/without partner',
+    trtHomeMoney === ctrlMoney, `${trtHomeMoney} vs ${ctrlMoney}`);
 }
 
 // ---------------------------------------------------------------------------
-// (2) THE MONEY DEBT — the flat primitive omits the partner town's cash, and a
+// (2) THE MONEY DEBT, PAID — slice 2 made the primitive region-wide; assert a
 // region-aware sum recovers it. This is the account-resolution + totalMoneySupply
 // change step 4 slice 2 § "The seam's debts" specifies.
 // ---------------------------------------------------------------------------
-console.log('\n(2) Money debt — flat totalMoneySupply omits the partner; region sum recovers it');
+console.log('\n(2) Money debt — PAID (slice 2): totalMoneySupply is region-wide');
 {
   const s = createInitialState(11, regionConfig());
   const partner = s.towns[PARTNER_TOWN_ID]!;
 
-  const flat = totalMoneySupply(s);          // today: home firms/citizens/cohorts + world
-  const region = regionMoneySupply(s);       // slice 2: every town + world
-  const omitted = region - flat;
+  // Slice 2 flipped this check's invariant: totalMoneySupply once read only
+  // towns.home (this probe measured the partner's cash silently omitted — the
+  // debt that justified the slice); it now iterates every town, so it must
+  // EQUAL the probe's independent region-wide reference with zero omission,
+  // and the partner's holder cash must be non-trivially inside the sum.
+  const primitive = totalMoneySupply(s);     // slice 2: every town + world
+  const region = regionMoneySupply(s);       // this probe's independent reference
   const partnerHolders = townCash(partner);
 
-  check('flat totalMoneySupply omits the partner town (debt is real)',
-    omitted > 0, `omitted ${omitted} cents`);
-  check('the omission equals exactly the partner town\'s holder cash',
-    omitted === partnerHolders, `omitted ${omitted} vs partner ${partnerHolders}`);
+  check('totalMoneySupply equals the independent region-wide reference (debt paid)',
+    primitive === region, `primitive ${primitive} vs reference ${region}`);
+  check('the partner town\'s holder cash is real and inside the sum',
+    partnerHolders > 0 && primitive >= partnerHolders,
+    `partner holds ${partnerHolders} cents`);
 
-  console.log(`     [measured] home+world (flat) = ${flat} cents`);
-  console.log(`     [measured] region (home+partner+world) = ${region} cents`);
-  console.log(`     [measured] partner town holder cash omitted by flat primitive = ${omitted} cents`);
+  console.log(`     [measured] totalMoneySupply (region-wide) = ${primitive} cents`);
+  console.log(`     [measured] independent region reference   = ${region} cents`);
+  console.log(`     [measured] partner town holder cash inside the sum = ${partnerHolders} cents`);
 }
 
 // ---------------------------------------------------------------------------

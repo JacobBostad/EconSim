@@ -35,7 +35,7 @@ import {
   type LedgerCategory,
 } from './Transactions';
 import { Rng } from './Random';
-import { HOME_TOWN_ID, type TownId, type TownRecords } from './Town';
+import { HOME_TOWN_ID, sortedTownIds, type TownId, type TownRecords } from './Town';
 import { computeTime, type GameTime } from './Tick';
 import { nextId } from './Id';
 import {
@@ -346,32 +346,56 @@ export function addContract(ctx: SimContext, contract: Contract): void {
 
 // The account-resolution primitive under recordTransaction (getAccountCash /
 // accountExists / addAccountCash). A money account is resolved by id, and money
-// moves between towns, so these are REGION-WIDE reads: at the endgame move they
-// resolve against every town's firms, cohorts AND citizens (the flat
-// `state.firms` / `state.cohorts` / `state.citizens` back-compat getters left at
-// the old paths), NOT a single town's view. Routing them through the home-default
-// `townOf(state).firms` / `.cohorts` / `.citizens` would misrepresent that scope,
-// so they stay flat by design (the firm-ledger reads inside recordTransaction
-// resolve the same region-wide firm ids and stay flat with them).
+// moves between towns, so these are REGION-WIDE reads: they resolve against
+// EVERY town's firms, cohorts AND citizens (`state.towns[townId]`, in sorted town
+// order), NOT a single town's view. Because entity ids are region-unique (the
+// town factory shares the region's `idCounters`), an id lives in at most one
+// town, so the scan returns the same holder whatever the town order — sorted only
+// pins a deterministic order. One-town region: `sortedTownIds` is `['home']` and
+// `towns.home.firms` IS the flat `state.firms` alias, so the outer loop is a
+// no-op wrapper and resolution is byte-identical to the pre-region flat read (the
+// firm-ledger reads inside recordTransaction resolve the same region-unique firm
+// ids). A ref that no town holds reads 0 / does not exist, exactly as the flat
+// `?? 0` / `!!` did.
 function getAccountCash(state: GameState, ref: AccountRef): number {
   if (ref.kind === 'world') return state.worldCash;
-  if (ref.kind === 'firm') return state.firms[ref.id!]?.cash ?? 0;
-  if (ref.kind === 'cohort') return state.cohorts[ref.id!]?.cashPool ?? 0;
-  return state.citizens[ref.id!]?.cash ?? 0;
+  for (const tid of sortedTownIds(state)) {
+    const t = state.towns[tid]!;
+    if (ref.kind === 'firm') {
+      const f = t.firms[ref.id!];
+      if (f) return f.cash;
+    } else if (ref.kind === 'cohort') {
+      const co = t.cohorts[ref.id!];
+      if (co) return co.cashPool;
+    } else {
+      const c = t.citizens[ref.id!];
+      if (c) return c.cash;
+    }
+  }
+  return 0;
 }
 
 /**
  * Whether an account reference resolves to a live holder. The world account
  * always exists; a firm/cohort/citizen ref is valid only while that entity is
- * still in state. A settlement against a vanished counterparty (a firm deleted
- * mid-day by an acquisition, a citizen who emigrated) must not move money on
- * only one side — see the guard in recordTransaction.
+ * still in state (in ANY town — region-wide, see the primitive's note above). A
+ * settlement against a vanished counterparty (a firm deleted mid-day by an
+ * acquisition, a citizen who emigrated) must not move money on only one side —
+ * see the guard in recordTransaction.
  */
 function accountExists(state: GameState, ref: AccountRef): boolean {
   if (ref.kind === 'world') return true;
-  if (ref.kind === 'firm') return !!state.firms[ref.id!];
-  if (ref.kind === 'cohort') return !!state.cohorts[ref.id!];
-  return !!state.citizens[ref.id!];
+  for (const tid of sortedTownIds(state)) {
+    const t = state.towns[tid]!;
+    if (ref.kind === 'firm') {
+      if (t.firms[ref.id!]) return true;
+    } else if (ref.kind === 'cohort') {
+      if (t.cohorts[ref.id!]) return true;
+    } else {
+      if (t.citizens[ref.id!]) return true;
+    }
+  }
+  return false;
 }
 
 function describeAccount(ref: AccountRef): string {
@@ -383,18 +407,31 @@ function addAccountCash(state: GameState, ref: AccountRef, delta: number): void 
     state.worldCash += delta;
     return;
   }
-  if (ref.kind === 'firm') {
-    const f = state.firms[ref.id!];
-    if (f) f.cash += delta;
-    return;
+  // Region-wide: credit/debit the holder in whichever town holds this id (ids are
+  // region-unique, so at most one). One-town region: only `home` is scanned, and
+  // a missing id is a silent no-op — identical to the flat guarded write.
+  for (const tid of sortedTownIds(state)) {
+    const t = state.towns[tid]!;
+    if (ref.kind === 'firm') {
+      const f = t.firms[ref.id!];
+      if (f) {
+        f.cash += delta;
+        return;
+      }
+    } else if (ref.kind === 'cohort') {
+      const co = t.cohorts[ref.id!];
+      if (co) {
+        co.cashPool += delta;
+        return;
+      }
+    } else {
+      const c = t.citizens[ref.id!];
+      if (c) {
+        c.cash += delta;
+        return;
+      }
+    }
   }
-  if (ref.kind === 'cohort') {
-    const co = state.cohorts[ref.id!];
-    if (co) co.cashPool += delta;
-    return;
-  }
-  const c = state.citizens[ref.id!];
-  if (c) c.cash += delta;
 }
 
 // ---------------------------------------------------------------------------
@@ -602,12 +639,18 @@ export function emitEvent(
 /** Total money across citizens + firms + cohorts + world (constant). */
 export function totalMoneySupply(state: GameState): number {
   let sum = state.worldCash;
-  // Region-wide money reads: conservation sums the WHOLE region's firm, citizen
-  // and cohort cash, so these iterate every town's firms/citizens/cohorts at the
-  // endgame (via the flat `state.firms` / `state.citizens` / `state.cohorts`
-  // back-compat getters), not one town's view — they stay flat by design.
-  for (const id in state.firms) sum += state.firms[id]!.cash;
-  for (const id in state.citizens) sum += state.citizens[id]!.cash;
-  for (const id in state.cohorts) sum += state.cohorts[id]!.cashPool;
+  // Region-wide money read: conservation sums the WHOLE region's firm, citizen
+  // and cohort cash, so it iterates EVERY town's holders (`state.towns[townId]`,
+  // in sorted town order) plus the one shared world account — this is the probe's
+  // `regionMoneySupply` oracle. Cash is integer cents, so the sum is exact and
+  // order-independent; the per-town `for..in` matches the pre-region flat read
+  // exactly. One-town region: the outer loop is just `home`, whose records ARE
+  // the flat `state.firms` / `.citizens` / `.cohorts` aliases — byte-identical.
+  for (const tid of sortedTownIds(state)) {
+    const t = state.towns[tid]!;
+    for (const id in t.firms) sum += t.firms[id]!.cash;
+    for (const id in t.citizens) sum += t.citizens[id]!.cash;
+    for (const id in t.cohorts) sum += t.cohorts[id]!.cashPool;
+  }
   return sum;
 }

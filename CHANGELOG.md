@@ -19,6 +19,23 @@ real City or Metropolis game switches the whole stack on together (crowd +
 districts + all three specialist channels); Village stays the classic,
 bit-identical, every-resident-simulated town.
 
+- **Region step 4, slice 2 — the region-wide money primitive.** The
+  account-resolution trio (`getAccountCash`/`accountExists`/`addAccountCash` under
+  `recordTransaction`) and the `totalMoneySupply` conservation sum in
+  `core/GameState.ts` now iterate `state.towns` in sorted town order (new
+  `sortedTownIds(state)` helper in `core/Town.ts`), then each town's records —
+  paying the region-money debt the step-3 seam documented. Landed as a proven
+  IDENTITY refactor while `towns` holds only `home`: the outer town loop is a
+  no-op wrapper (`towns.home`'s records ARE the flat aliases), so resolution
+  results, per-town iteration, and every pin are byte-identical (village 11/4/7
+  rngState 3274842624/2896139677/4253583594; plain City 11 rngState 2546912297
+  money 316900000). The optional `firmTownIndex` was measured-away, not built: the
+  one-town outer loop is perf noise (full-flag City seed 11, 5-sample median 0.976
+  ms/tick after vs 0.981 before). The shipped isolation probe's `regionMoneySupply`
+  is now the test oracle (`tests/regionMoney.test.ts`): `totalMoneySupply` equals
+  it on a live City state, and the primitive resolves/sums across a hand-attached
+  second town while conservation holds through an inter-town settlement. `tsc`
+  clean; full suite 589 green (587 + 2 new); goldenSave corpus green unmodified.
 - **The region — step 4, slice 1: the town factory + the flag (Arc E).** The
   seam that grows the world from one town to a region. `seedTown(region, townId,
   spec)` (`src/sim/data/seedTown.ts`), carved from `startingScenario`, mints ONLY

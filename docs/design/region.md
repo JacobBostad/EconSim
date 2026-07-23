@@ -1162,8 +1162,22 @@ concern per slice, an honest measured NO-SHIP is a complete result):
    town materializes in state but is INERT (unticked) and the isolation probe's
    properties hold; `tsc` + full suite green. *SHIPPED — see "What ships now —
    the town factory + the flag (step 4, slice 1)" below.*
-2. **The region-wide money primitive.** Account resolution + `totalMoneySupply`
-   iterate all towns (with the `firmTownIndex` if resolution perf needs it).
+2. **The region-wide money primitive. — SHIPPED.** Account resolution
+   (`getAccountCash`/`accountExists`/`addAccountCash` under `recordTransaction`) +
+   `totalMoneySupply` iterate `state.towns` in sorted town order (then each town's
+   records, preserving the per-town `for..in`), via the `sortedTownIds(state)`
+   helper in `core/Town.ts`. Landed as a proven IDENTITY refactor (towns holds
+   only `home`): pins byte-identical — village 11/4/7 rngState
+   3274842624/2896139677/4253583594, plain city 11 rngState 2546912297 money
+   316900000. The optional `firmTownIndex` was NOT needed — measured, not assumed:
+   the one-town outer loop is noise (full-flag City seed 11, warmed 250d then 50d
+   timed, 5 samples: baseline min 0.9174 / median 0.9809 ms/tick vs after min
+   0.9341 / median 0.9763 ms/tick — statistically indistinguishable). The shipped
+   probe's `regionMoneySupply` is the test oracle (`tests/regionMoney.test.ts`):
+   `totalMoneySupply` equals it on a live City state, and resolves/sums across a
+   hand-attached second town while conservation holds through an inter-town
+   settlement. Conservation re-proven across the golden corpus (goldenSave green,
+   unmodified). `tsc` clean; full suite 589 green (587 + 2 new).
    Acceptance: `totalMoneySupply` equals today's value when only `home` exists
    (the one-town identity); the shipped probe's region sum becomes the test
    oracle; conservation invariant re-proven across the golden corpus.

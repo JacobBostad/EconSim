@@ -124,6 +124,20 @@ export interface Town {
 }
 
 /**
+ * The region's town ids in a fixed, sorted order — the canonical iteration order
+ * for REGION-WIDE reads (the money-account primitive and the `totalMoneySupply`
+ * conservation sum in GameState.ts, which resolve/aggregate across every town's
+ * holders, not one town's view). One-town region: this is always `['home']`, so
+ * a region-wide read is a single-town read wrapped in a no-op outer loop —
+ * byte-identical to the pre-region flat read. Sorted (not insertion order) so the
+ * region sum and account resolution are deterministic regardless of the order
+ * towns were attached; it matches the probe's `regionMoneySupply` oracle.
+ */
+export function sortedTownIds(state: GameState): TownId[] {
+  return Object.keys(state.towns).sort();
+}
+
+/**
  * The town a system is operating on, as a view over the flat records. In the
  * one-town region every `townId` resolves to the home town's flat records; the
  * argument exists so call sites already carry the town context the endgame
