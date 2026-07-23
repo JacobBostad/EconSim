@@ -19,6 +19,22 @@ real City or Metropolis game switches the whole stack on together (crowd +
 districts + all three specialist channels); Village stays the classic,
 bit-identical, every-resident-simulated town.
 
+- **Perf assertions made contention-robust (grandJunction / playtestV8).** The
+  two heavy-bot playtests asserted `state.perf.avgTickMs < 2`, but avgTickMs is
+  an EWMA *mean* that absorbs the long right tail a loaded machine adds to
+  individual ticks — so a full parallel vitest run flaked (measured EWMA up to
+  6.14 under CPU saturation) while ALWAYS passing in isolation; the sim was
+  never slower, the wall clock was contended, and every full-suite run paid a
+  re-run-in-isolation tax. Replaced with a bound on the *median* per-tick wall
+  time, which is contention-invariant (contention lands in p90+/max, not the
+  middle): across 3 back-to-back full runs under 6 busy processes pinned to 4
+  cores the medians held at 0.238–0.253 ms (grandJunction) and 0.213–0.222 ms
+  (playtestV8) — a <5% wobble — while the old mean swung 1.65→6.14, crossing the
+  `< 2` bound. New bound `median < 1.5 ms` (~6x over the worst observed median,
+  tolerant of a ~6x-slower CI runner) still catches the per-tick regression
+  class it guards: injecting a 2 ms/tick busy-loop drives the median to ~2.3 ms
+  → RED (fails-on-revert verified). Test-only + this note; sim core untouched,
+  all pins hold, full suite green three times back-to-back.
 - **Golden save v9 — the towns-era fixture (first `SAVE_VERSION` 3 save in the
   corpus).** The step-3 endgame moved the six record families under
   `state.towns.home` (flat paths now non-enumerable aliases); v9 freezes that

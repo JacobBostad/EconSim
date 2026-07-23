@@ -69,6 +69,7 @@ describe('Scripted 250-day playtest (bot v8, archetype/City era)', () => {
     const netWorth0 = companyValuation(state, player.id).valuation;
 
     const facs = () => player.facilities.map((i) => state.facilities[i]!).filter(Boolean);
+    const tickMsSamples: number[] = [];
     const warehouse = () => facs().find((f) => f.type === 'warehouse');
     const factory = () => facs().find((f) => f.type === 'factory');
 
@@ -262,7 +263,12 @@ describe('Scripted 250-day playtest (bot v8, archetype/City era)', () => {
         if (fac.employees.length < target) sim.dispatch({ type: 'HIRE_WORKER', facilityId: fac.id, citizenId: null });
       }
 
-      sim.run(tpd);
+      // Run the day tick-by-tick so we can sample per-tick wall time for the
+      // contention-robust perf guard below (sim.run() would hide lastTickMs).
+      for (let t = 0; t < tpd; t++) {
+        sim.tick();
+        tickMsSamples.push(state.perf.lastTickMs);
+      }
     }
 
     // --- day-250 scorecard (seed 11, measured) --------------------------------
@@ -275,7 +281,8 @@ describe('Scripted 250-day playtest (bot v8, archetype/City era)', () => {
     // The absolutes hold no matter which legs played: the whole run conserves to
     // the cent, the player never entered receivership, net worth grew meaningfully
     // ($60.0k → $62.8k, +$2.8k; floor at +$1.5k), and the heaviest bot (all City
-    // channels live) stays well inside the perf guard (measured 0.35 ms/tick).
+    // channels live) stays well inside the perf guard (median tick cost; see the
+    // contention-robust assertion below).
     // Re-pinned for Arc E step 2 (producing trade cities): the bot dumps a staple
     // onto FOOD-RICH Port Rosa, which now grows 85% of its own bread, so its own
     // output keeps the shelf full and each dump overhangs harder/longer — a
@@ -286,7 +293,30 @@ describe('Scripted 250-day playtest (bot v8, archetype/City era)', () => {
     expect(totalMoneySupply(state)).toBe(supply0);
     expect(player.bankruptcyStatus).toBe('healthy');
     expect(netWorth).toBeGreaterThan(netWorth0 + 1500_00);
-    expect(state.perf.avgTickMs).toBeLessThan(2);
+    // Perf guard — contention-robust (measured re-design, not a widening). The
+    // old assertion read state.perf.avgTickMs, an EWMA *mean*, and flaked under
+    // a full parallel vitest run: a loaded machine adds a long right tail to
+    // individual ticks and the mean absorbs it, even though the sim itself is
+    // never slower. The *median* per-tick wall time is contention-invariant —
+    // contention lands in p90+/max, not the middle of the distribution.
+    // Measured here (seed 11, 250 days, ~12000 ticks), median vs the old EWMA:
+    //   isolated (2-file):        median 0.218 ms   ewma 1.65
+    //   full suite + 6 busy procs pinned to 4 cores (3 back-to-back runs):
+    //     run 1  median 0.222 ms   ewma 2.34   (old <2 bound → RED)
+    //     run 2  median 0.217 ms   ewma 2.19   (old <2 bound → RED)
+    //     run 3  median 0.213 ms   ewma 2.87   (old <2 bound → RED)
+    // The median wobbles <3% across the mean's swing past the old bound. Bound
+    // 1.5 ms is ~6.7x over the worst observed median: it tolerates a ~6x-slower
+    // CI runner at true typical cost yet still trips on the per-tick regression
+    // class this guards (an O(n²) hot loop, an unbounded log scanned every tick,
+    // a daily system firing every tick) — each pushes the *median* far past
+    // 1.5 ms (verified fails-on-revert: injecting a ~2ms busy-loop into a
+    // per-tick system drives the median to ~2.2 ms → RED). perfGuard.test.ts is
+    // the catastrophic-blowup companion.
+    const tickMsMedian = [...tickMsSamples].sort((a, b) => a - b)[
+      Math.floor(tickMsSamples.length / 2)
+    ]!;
+    expect(tickMsMedian).toBeLessThan(1.5);
 
     // Each channel's artifact is asserted only if the channel actually played;
     // a leg that genuinely couldn't play (e.g. no landlord ever founds) records
