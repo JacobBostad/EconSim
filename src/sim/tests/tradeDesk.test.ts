@@ -57,7 +57,8 @@ describe('Trade desk & arbitrage content', () => {
   it('old saves default exportRevenueByCity to empty', () => {
     const sim = newSim(1);
     const raw = JSON.parse(serialize(sim.getState()));
-    for (const fid in raw.firms) delete raw.firms[fid].exportRevenueByCity;
+    const home = raw.towns.home; // the six families live under towns.home now
+    for (const fid in home.firms) delete home.firms[fid].exportRevenueByCity;
     const loaded = deserialize(JSON.stringify(raw));
     for (const fid in loaded.firms) {
       expect(loaded.firms[fid]!.exportRevenueByCity).toEqual({});

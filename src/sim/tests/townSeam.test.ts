@@ -1,15 +1,19 @@
 /**
- * townSeam.test.ts — the region's town seam (region.md step 3, first slice).
+ * townSeam.test.ts — the region's town seam (region.md step 3, ENDGAME).
  *
- * The seam lands the Town as a VIEW over the flat GameState (option (b)): the
- * accessor `townOf(state, townId)` returns the same record objects the flat
- * paths hold, so every converted call site is provably behaviour-identical, and
- * because the view is computed (never serialized) no `towns` key enters a save —
- * zero migration, byte-unchanged. These tests pin those three guarantees:
+ * The six town-scoped record families now LIVE at `state.towns[HOME_TOWN_ID]`
+ * (option (c), "records genuinely MOVE"). The flat paths (`state.firms`, ...)
+ * survive as non-enumerable accessor aliases onto the home town, so every
+ * converted reader and every un-converted writer keeps working against the same
+ * live objects, while a save serializes ONLY the `towns` key. These tests pin:
  *
- *   1. accessor identity — `townOf(...).districts === state.districts` (same ref);
+ *   1. accessor identity — `townOf(...).firms === state.firms
+ *      === state.towns.home.firms` (all the same reference);
  *   2. the seam threads — `makeContext(state).townId === HOME_TOWN_ID`;
- *   3. serialization is unpolluted — no `towns` key leaks into a save;
+ *   3. the INVARIANT FLIP (was: "no towns key in a save") — a save now HAS the
+ *      `towns` key, does NOT carry the six flat keys, and is SAVE_VERSION 3;
+ *   4. an OLD-shape save (flat records, no towns key) migrates into
+ *      `towns.home` on load and round-trips.
  *
  * and that the district, cohort, citizen, marketStats, firms, AND facilities
  * families, run through the converted systems, stay deterministic (two City runs
@@ -25,10 +29,10 @@ import { normalizedSerialize } from './helpers';
 import { Simulation } from '../core/Simulation';
 import { createInitialState } from '../data/startingScenario';
 import { DEFAULT_CONFIG } from '../core/SimulationConfig';
-import { makeContext } from '../core/GameState';
-import { townOf, HOME_TOWN_ID } from '../core/Town';
+import { makeContext, SAVE_VERSION } from '../core/GameState';
+import { townOf, HOME_TOWN_ID, TOWN_RECORD_KEYS } from '../core/Town';
 import { ticksPerDay } from '../core/Tick';
-import { serialize } from '../persistence/saveLoad';
+import { serialize, deserialize } from '../persistence/saveLoad';
 import { companyValuation } from '../selectors/companySelectors';
 
 /** A running City-preset sim (crowd cohorts + districts live), resumed. */
@@ -44,13 +48,21 @@ describe('Town seam — accessor is a view over the flat records (region.md step
   it('townOf(state,"home") returns the SAME record objects as the flat paths', () => {
     const state = newCitySim(11).getState();
     const town = townOf(state, HOME_TOWN_ID);
-    // The whole point of option (b): the accessor aliases, it does not copy.
+    // The endgame identity chain: the view, the flat alias, and the stored home
+    // town record are all the SAME object — a converted call site is identical.
+    const home = state.towns[HOME_TOWN_ID]!;
     expect(town.districts).toBe(state.districts);
     expect(town.cohorts).toBe(state.cohorts);
     expect(town.citizens).toBe(state.citizens);
     expect(town.marketStats).toBe(state.marketStats);
     expect(town.firms).toBe(state.firms);
     expect(town.facilities).toBe(state.facilities);
+    expect(state.firms).toBe(home.firms);
+    expect(state.citizens).toBe(home.citizens);
+    expect(state.districts).toBe(home.districts);
+    expect(state.cohorts).toBe(home.cohorts);
+    expect(state.marketStats).toBe(home.marketStats);
+    expect(state.facilities).toBe(home.facilities);
     // Map dimensions are scalars, not records: the getter returns the same value
     // the flat config holds, so a converted placement/renderer read is identical.
     expect(town.mapWidth).toBe(state.config.mapWidth);
@@ -99,21 +111,63 @@ describe('Town seam — the context carries the town', () => {
   });
 });
 
-describe('Town seam — the view is never serialized (no migration, byte-unchanged)', () => {
-  it('a save carries no "towns" key — the view is computed, not stored', () => {
+describe('Town seam — the records MOVED into towns (invariant flip, SAVE_VERSION 3)', () => {
+  it('a save carries the "towns" key and NOT the six flat family keys', () => {
     const state = newCitySim(11).getState();
     const raw = JSON.parse(serialize(state)) as Record<string, unknown>;
-    expect('towns' in raw).toBe(false);
-    // The flat records still serialize exactly as before the seam.
-    expect(raw.districts).toBeTruthy();
-    expect('cohorts' in raw).toBe(true);
+    // The flip: what used to be forbidden is now the invariant.
+    expect('towns' in raw).toBe(true);
+    expect(raw.saveVersion).toBe(SAVE_VERSION);
+    expect(SAVE_VERSION).toBe(3);
+    const home = (raw.towns as Record<string, Record<string, unknown>>).home!;
+    expect(home).toBeTruthy();
+    // The six families serialize UNDER towns.home, and the flat aliases (being
+    // non-enumerable) never leak — so no doubling.
+    for (const key of TOWN_RECORD_KEYS) {
+      expect(key in raw).toBe(false);
+      expect(home[key]).toBeTruthy();
+      // The absence above is downstream of non-enumerability; assert the
+      // property descriptor directly so a refactor that keeps serialization
+      // clean by other means but re-exposes the keys to enumeration is caught.
+      const desc = Object.getOwnPropertyDescriptor(state, key);
+      expect(desc?.enumerable).toBe(false);
+      expect(typeof desc?.get).toBe('function');
+    }
   });
 
-  it('a "towns" key never appears after a City run either', () => {
+  it('the towns key persists (and the flat keys stay absent) after a City run', () => {
     const sim = newCitySim(11);
     sim.run(ticksPerDay(sim.getState().config) * 20);
     const raw = JSON.parse(serialize(sim.getState())) as Record<string, unknown>;
-    expect('towns' in raw).toBe(false);
+    expect('towns' in raw).toBe(true);
+    for (const key of TOWN_RECORD_KEYS) expect(key in raw).toBe(false);
+  });
+
+  it('an OLD-shape save (flat records, no towns key) migrates into towns.home', () => {
+    // Build a pre-move save from a current one: unwrap towns.home to the top
+    // level and stamp the pre-endgame SAVE_VERSION (2). This is exactly the byte
+    // shape every save written before this slice carries.
+    const state = newCitySim(11).getState();
+    const raw = JSON.parse(serialize(state)) as Record<string, unknown>;
+    const home = (raw.towns as Record<string, Record<string, unknown>>).home!;
+    delete raw.towns;
+    for (const key of TOWN_RECORD_KEYS) raw[key] = home[key];
+    raw.saveVersion = 2;
+
+    const migrated = deserialize(JSON.stringify(raw));
+    // The migration wrapped the flat records into the home town...
+    expect(migrated.saveVersion).toBe(SAVE_VERSION);
+    expect(migrated.towns[HOME_TOWN_ID]).toBeTruthy();
+    // ...the aliases are reinstalled (readers/writers work)...
+    expect(migrated.firms).toBe(migrated.towns[HOME_TOWN_ID]!.firms);
+    expect(Object.keys(migrated.citizens).length).toBeGreaterThan(0);
+    expect(townOf(migrated).firms).toBe(migrated.firms);
+    // ...and the re-serialized save is back in the new shape (towns, no flat keys).
+    const reraw = JSON.parse(serialize(migrated)) as Record<string, unknown>;
+    expect('towns' in reraw).toBe(true);
+    for (const key of TOWN_RECORD_KEYS) expect(key in reraw).toBe(false);
+    // Round-trip stable: loading the re-serialized save changes nothing.
+    expect(serialize(deserialize(serialize(migrated)))).toBe(serialize(migrated));
   });
 });
 

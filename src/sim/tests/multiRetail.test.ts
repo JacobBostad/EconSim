@@ -53,8 +53,9 @@ describe('Multi-product retail', () => {
   it('old saves wrap legacy retailProductId into the array', () => {
     const sim = newSim(1);
     const raw = JSON.parse(serialize(sim.getState()));
-    for (const fid in raw.facilities) {
-      const f = raw.facilities[fid];
+    const homeTown = raw.towns.home; // the six families live under towns.home now
+    for (const fid in homeTown.facilities) {
+      const f = homeTown.facilities[fid];
       const first = Array.isArray(f.retailProductIds) ? f.retailProductIds[0] : null;
       delete f.retailProductIds;
       f.retailProductId = first ?? null; // simulate a pre-migration save

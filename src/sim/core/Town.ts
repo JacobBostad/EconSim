@@ -1,27 +1,25 @@
 /**
  * Town.ts — the region's town seam (Arc E, region.md step 3).
  *
- * Today the simulation is a single flat town: the entity records live at the
- * top of GameState (`state.districts`, `state.cohorts`, and eventually
- * `state.firms/.facilities/.citizens/.marketStats`). The region arc moves those
- * records down one level, to `state.towns[townId]`, and teaches every system
- * which town it operates on. That is a ~1,300-site move under an absolute
- * bit-identity contract, so it cannot land in one patch.
+ * The simulation's six town-scoped record families — districts, cohorts,
+ * citizens, marketStats, firms, facilities — now LIVE at `state.towns[townId]`
+ * (the endgame shape, option (c) in region.md). `townOf(state, townId)` returns
+ * a lightweight view whose getters read `state.towns[townId]`; in the one-town
+ * region every id resolves to the home town, so `townOf(state,'home').firms IS
+ * state.towns.home.firms`, the same reference every converted call site already
+ * routes through — no call site changed on the endgame move.
  *
- * This file lands the SAFEST first step of that gradient: the Town as a **view**,
- * not stored state. `townOf(state, townId)` returns a lightweight object whose
- * accessors delegate straight back to the flat records — `townOf(state,'home')
- * .districts` IS `state.districts`, the same reference. Because the view is
- * computed, not serialized, NO `towns` key ever enters a save: the serialized
- * bytes are unchanged and there is zero migration. Systems adopt the accessor
- * one call site at a time, and the bit-identity harness proves each conversion
- * behaviour-identical (the accessor returns the same objects the flat path did).
- *
- * The endgame (region.md step 3's "records genuinely MOVE") swaps only the two
- * getters in `townOf` to read `state.towns[townId]` and leaves flat back-compat
- * getters at the old paths. Every call site already routed through `townOf` is
- * correct on that day without a further edit — which is the whole point of
- * landing the accessor first. See docs/design/region.md § "Step 3 as-built".
+ * The old flat paths (`state.firms`, `state.districts`, ...) survive as
+ * **non-enumerable accessor aliases** onto `towns[HOME_TOWN_ID]` (installed by
+ * `installTownAliases`, called from every state-construction path: fresh game,
+ * deserialize, migration). A writer that still does `state.firms[id] = ...` or
+ * `delete state.facilities[x]` mutates the live home-town record through the
+ * alias; a wholesale `state.districts = {...}` replaces the record inside
+ * `towns.home`. Because the aliases are non-enumerable, `JSON.stringify` skips
+ * them — a save serializes ONLY the `towns` key, never the six flat keys, so
+ * there is no doubling (this is what makes option (c) sound where the naive
+ * aliasing option (a) was rejected). See docs/design/region.md § "Step 3
+ * as-built" → "endgame, as landed".
  */
 
 import type { GameState } from './GameState';
@@ -44,14 +42,40 @@ export type TownId = string;
 export const HOME_TOWN_ID: TownId = 'home';
 
 /**
- * A town's town-scoped records, as a VIEW over the flat GameState. Getters, not
- * fields: reading `.districts` returns the live `state.districts` object, so a
- * converted call site is provably identical to the flat access it replaced.
+ * The six town-scoped record families, stored together as `state.towns[townId]`.
+ * This is the home of the records at the endgame move (region.md step 3 option
+ * (c)); the flat `state.firms`/`state.districts`/... paths are non-enumerable
+ * accessor aliases onto `towns[HOME_TOWN_ID]` (see `installTownAliases`).
+ */
+export interface TownRecords {
+  districts: Record<string, District>;
+  cohorts: Record<string, Cohort>;
+  citizens: Record<string, Citizen>;
+  marketStats: Record<string, MarketStat>;
+  firms: Record<string, Firm>;
+  facilities: Record<string, Facility>;
+}
+
+/** The record-family keys, in a fixed order — the alias set installers loop. */
+export const TOWN_RECORD_KEYS = [
+  'districts',
+  'cohorts',
+  'citizens',
+  'marketStats',
+  'firms',
+  'facilities',
+] as const;
+
+/**
+ * A town's town-scoped records, as a VIEW over `state.towns[townId]`. Getters,
+ * not fields: reading `.districts` returns the live `towns[townId].districts`
+ * object, so a converted call site is provably identical to the flat access it
+ * replaced (in the one-town region the home town's records ARE the flat aliases).
  *
- * All six record families are exposed today (districts, cohorts, citizens,
+ * All six record families are exposed (districts, cohorts, citizens,
  * marketStats, firms, facilities), plus the town's map dimensions (mapWidth,
- * mapHeight). The firms/facilities getters landed ahead of their reader
- * conversions so those batches needed no edit here. The recipe is in region.md.
+ * mapHeight). Map dims still delegate to `state.config` — they join the per-town
+ * move with multi-town, not this slice. The recipe is in region.md.
  */
 export interface Town {
   readonly id: TownId;
@@ -93,25 +117,29 @@ export interface Town {
  * local at the top of a hot loop rather than calling per-iteration.
  */
 export function townOf(state: GameState, _townId: TownId = HOME_TOWN_ID): Town {
+  // The records genuinely live here now. One-town region: every id resolves to
+  // the home town, so an unknown id (a bare-`state` helper's default, a partner
+  // id that does not exist yet) falls back to home — identity is preserved.
+  const records = state.towns[_townId] ?? state.towns[HOME_TOWN_ID]!;
   return {
     id: _townId,
     get districts(): Record<string, District> {
-      return state.districts;
+      return records.districts;
     },
     get cohorts(): Record<string, Cohort> {
-      return state.cohorts;
+      return records.cohorts;
     },
     get citizens(): Record<string, Citizen> {
-      return state.citizens;
+      return records.citizens;
     },
     get marketStats(): Record<string, MarketStat> {
-      return state.marketStats;
+      return records.marketStats;
     },
     get firms(): Record<string, Firm> {
-      return state.firms;
+      return records.firms;
     },
     get facilities(): Record<string, Facility> {
-      return state.facilities;
+      return records.facilities;
     },
     get mapWidth(): number {
       return state.config.mapWidth;
@@ -120,4 +148,43 @@ export function townOf(state: GameState, _townId: TownId = HOME_TOWN_ID): Town {
       return state.config.mapHeight;
     },
   };
+}
+
+/**
+ * Install the flat back-compat aliases (`state.firms`, `state.districts`, ...)
+ * as NON-ENUMERABLE accessor properties onto `state`, each aliasing the matching
+ * field of `state.towns[HOME_TOWN_ID]`. Every state-construction path calls this
+ * (fresh game, deserialize, migration) so that:
+ *
+ *  - existing writers keep working — `state.firms[id] = x` and
+ *    `delete state.facilities[x]` mutate the live home-town record through the
+ *    getter; a wholesale `state.districts = {...}` replaces the record inside
+ *    `towns.home` through the setter (so any wholesale-replacement writer, e.g.
+ *    the migration defaulter, still lands in the right place);
+ *  - JSON serialization sees ONLY the `towns` key — the aliases are
+ *    non-enumerable, so `JSON.stringify` skips them and no record doubles.
+ *
+ * Idempotent and defensive: it creates `towns`/`towns.home` if a raw load is
+ * missing them, and redefines the six keys (configurable) if they already exist
+ * as own properties (e.g. the fresh-game literal builds them enumerable, then
+ * this call demotes them to the non-enumerable aliases).
+ */
+export function installTownAliases(state: GameState): void {
+  const s = state as unknown as {
+    towns?: Record<TownId, TownRecords>;
+  } & Record<string, unknown>;
+  if (!s.towns) s.towns = {};
+  if (!s.towns[HOME_TOWN_ID]) s.towns[HOME_TOWN_ID] = {} as TownRecords;
+  for (const key of TOWN_RECORD_KEYS) {
+    Object.defineProperty(state, key, {
+      get(): unknown {
+        return (state.towns[HOME_TOWN_ID] as unknown as Record<string, unknown>)[key];
+      },
+      set(v: unknown): void {
+        (state.towns[HOME_TOWN_ID] as unknown as Record<string, unknown>)[key] = v;
+      },
+      enumerable: false,
+      configurable: true,
+    });
+  }
 }

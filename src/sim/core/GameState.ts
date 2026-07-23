@@ -35,7 +35,7 @@ import {
   type LedgerCategory,
 } from './Transactions';
 import { Rng } from './Random';
-import { HOME_TOWN_ID, type TownId } from './Town';
+import { HOME_TOWN_ID, type TownId, type TownRecords } from './Town';
 import { computeTime, type GameTime } from './Tick';
 import { nextId } from './Id';
 import {
@@ -44,7 +44,7 @@ import {
   type ContractIndex,
 } from './ContractIndex';
 
-export const SAVE_VERSION = 2;
+export const SAVE_VERSION = 3;
 
 /**
  * Dev/test builds fail loud on invariant violations (a settlement against a
@@ -144,8 +144,22 @@ export interface GameState {
   paused: boolean;
   config: SimulationConfig;
 
+  /**
+   * The region's towns, each holding the six town-scoped record families
+   * (districts, cohorts, citizens, marketStats, firms, facilities). This is the
+   * SERIALIZED home of those records (region.md step 3 endgame). One-town region:
+   * only `towns[HOME_TOWN_ID]` exists. The flat `citizens`/`firms`/... fields
+   * below are non-enumerable accessor ALIASES onto `towns[HOME_TOWN_ID]`
+   * (installed by `installTownAliases`), so writers keep working and only `towns`
+   * is written to a save. See core/Town.ts.
+   */
+  towns: Record<TownId, TownRecords>;
+
+  /** Alias onto `towns[HOME_TOWN_ID].citizens` (non-enumerable; see Town.ts). */
   citizens: Record<CitizenId, Citizen>;
+  /** Alias onto `towns[HOME_TOWN_ID].firms` (non-enumerable; see Town.ts). */
   firms: Record<FirmId, Firm>;
+  /** Alias onto `towns[HOME_TOWN_ID].facilities` (non-enumerable; see Town.ts). */
   facilities: Record<FacilityId, Facility>;
   vehicles: Record<VehicleId, Vehicle>;
   contracts: Record<ContractId, Contract>;

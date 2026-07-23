@@ -91,21 +91,27 @@ export function saveMeta(slot: string): SaveMeta | null {
   try {
     const json = localStorage.getItem(PREFIX + slot);
     if (!json) return null;
+    type Records = {
+      firms?: Record<string, { cash?: number }>;
+      citizens?: Record<string, unknown>;
+    };
     const raw = JSON.parse(json) as {
       tick?: number;
       scenarioId?: string;
       config?: { ticksPerHour?: number };
-      firms?: Record<string, { cash?: number }>;
       playerFirmId?: string;
-      citizens?: Record<string, unknown>;
-    };
+      towns?: Record<string, Records>;
+    } & Records;
     const tph = raw.config?.ticksPerHour ?? 1;
+    // firms/citizens moved under `towns.home` (SAVE_VERSION 3); an older save
+    // still carries them flat. Read whichever the raw JSON holds — no migration.
+    const home: Records = raw.towns?.['home'] ?? raw;
     return {
       slot,
       day: Math.floor((raw.tick ?? 0) / (tph * 24)) + 1,
       scenarioId: raw.scenarioId ?? 'meadowbrook',
-      playerCash: raw.firms?.[raw.playerFirmId ?? '']?.cash ?? 0,
-      citizens: Object.keys(raw.citizens ?? {}).length,
+      playerCash: home.firms?.[raw.playerFirmId ?? '']?.cash ?? 0,
+      citizens: Object.keys(home.citizens ?? {}).length,
     };
   } catch {
     return null;

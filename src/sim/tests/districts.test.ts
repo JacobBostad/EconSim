@@ -80,8 +80,11 @@ describe('Districts + dark cohorts (world-scale A2)', () => {
     expect(serialize(again)).toBe(serialize(state));
     // Old saves that predate districts get the default partition + preset.
     const raw = JSON.parse(serialize(state)) as Record<string, unknown>;
-    delete raw.districts;
-    delete raw.cohorts;
+    // districts/cohorts live under towns.home now (SAVE_VERSION 3); drop them
+    // there to simulate a save that predates the district partition.
+    const home = (raw.towns as { home: Record<string, unknown> }).home;
+    delete home.districts;
+    delete home.cohorts;
     delete (raw.config as Record<string, unknown>).sizePreset;
     const loaded = deserialize(JSON.stringify(raw));
     expect(loaded.config.sizePreset).toBe('village');

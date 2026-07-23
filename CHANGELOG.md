@@ -42,6 +42,38 @@ bit-identical, every-resident-simulated town.
   dark-and-inert as the fourth measured cast-parity foundation. Suite +5
   (`castRevisit.test.ts`, now 580); `tsc` clean, full suite green. See
   docs/design/cohorts-and-districts.md, "Cast-parity attempt #3".
+- **E step 3 — the Town seam (ENDGAME: the records genuinely MOVE).** Option (c)
+  lands. The six record families (`districts`, `cohorts`, `citizens`,
+  `marketStats`, `firms`, `facilities`) now LIVE at `state.towns[HOME_TOWN_ID]`
+  (a new `GameState.towns: Record<TownId, TownRecords>`); `townOf`'s getters read
+  `state.towns[townId] ?? state.towns[HOME_TOWN_ID]` (one-town region: every id
+  resolves home), so **no converted call site changed** — the point of landing
+  the accessor first. The old flat paths (`state.firms`, ...) survive as
+  **non-enumerable accessor aliases** onto `towns.home`, installed by
+  `installTownAliases` from every construction path (fresh game, deserialize,
+  migration): un-converted writers (`state.firms[id] = ...`, `delete
+  state.facilities[x]`) and wholesale replacers (`state.districts = {...}`) keep
+  working through the alias, while `JSON.stringify` skips the non-enumerable
+  aliases so a save carries only `towns` and never doubles — the exact failure
+  that got the naive-aliasing option (a) rejected on move one. `SAVE_VERSION`
+  2 → 3 with a `v2 -> v3` migration that wraps an old save's flat records into
+  `towns.home` (BOTH paths then install the aliases before `normalize`); golden
+  saves v1–v8 become the migration corpus and all load, run conserved, and
+  round-trip. Hazard audit swept clean: no production `{...state}`/
+  `structuredClone`/`Object.keys(state)`/`for..in state`; `saveMeta` reads
+  `raw.towns?.home ?? raw` (old + new saves); 15 downgrade-simulation tests
+  relocated their raw-JSON field reads to `raw.towns.home.X` (a faithful
+  byte-layout relocation, no production flat-fallback branch). `townSeam.test.ts`
+  flips its invariant — a save now HAS `towns` and NOT the six flat keys, at
+  `SAVE_VERSION` 3, with an in-test old-shape save migrating and round-tripping.
+  Save size grows a constant **+19 bytes** (the `"towns":{"home":…}}` wrapper,
+  ~0.0016%). Suite **584** (+1 migration test); pinned baselines hold
+  bit-identically — village 11/4/7 `rngState` 3274842624 / 2896139677 /
+  4253583594 (conserved), city seed 11 `rngState` 2546912297 / money 316900000;
+  `tsc` clean, `npm run build` clean, all five e2e green (deepsmoke exercises the
+  in-game save/load + named slots). The serialized byte layout changed by design;
+  the rng stream, economy, and money did not. **Step 3 is COMPLETE.**
+
 - **E step 3 — the Town seam (closing batch: UI batch 2 + map dims).** The last
   two rows of the remaining-families table land. **UI batch 2**: the ~80
   remaining flat family reads across src/ui and src/render convert — 14 UI

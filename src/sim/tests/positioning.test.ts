@@ -96,9 +96,10 @@ describe('Store positioning', () => {
   it('old saves default to standard positioning', () => {
     const sim = newSim(9);
     const raw = JSON.parse(serialize(sim.getState())) as {
-      facilities: Record<string, Record<string, unknown>>;
+      towns: { home: { facilities: Record<string, Record<string, unknown>> } };
     };
-    for (const fid in raw.facilities) delete raw.facilities[fid]!.positioning;
+    const home = raw.towns.home; // the six families live under towns.home now
+    for (const fid in home.facilities) delete home.facilities[fid]!.positioning;
     const migrated = deserialize(JSON.stringify(raw));
     for (const fid in migrated.facilities) {
       expect(migrated.facilities[fid]!.positioning).toBe('standard');

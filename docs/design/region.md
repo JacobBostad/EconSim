@@ -759,3 +759,97 @@ so nothing needed the region-wide-flat treatment.
   facilities-determinism seam test — the last two bit-comparing every firm's
   cash/debt/valuation and every facility's level/status/workers/dailyStats/
   inventories across 30-day City double-runs); `tsc` clean.
+
+### The endgame, as landed (option (c) — the records genuinely MOVE)
+
+With every reader routed through `townOf` (the six-family gradient above), the
+endgame swap landed as designed: the record families now LIVE at
+`state.towns[HOME_TOWN_ID]`, the flat paths survive as non-enumerable aliases,
+and a save serializes only the `towns` key. No converted call site changed —
+that was the whole point of landing the accessor first.
+
+**The alias design.** `GameState.towns: Record<TownId, TownRecords>` holds the
+six families (`districts`, `cohorts`, `citizens`, `marketStats`, `firms`,
+`facilities`). `townOf(state, townId)`'s getters now read
+`state.towns[townId] ?? state.towns[HOME_TOWN_ID]` (one-town region: every id
+resolves home). The old flat fields (`state.firms`, `state.districts`, ...) are
+reinstalled as **non-enumerable accessor properties** by `installTownAliases`
+(`core/Town.ts`), each `get`/`set` aliasing `towns[HOME_TOWN_ID].X`:
+
+- a straggler reader or an un-converted **writer** (`state.firms[id] = ...`,
+  `delete state.facilities[x]`) mutates the live home-town record through the
+  getter — every writer left flat by the gradient keeps working unchanged;
+- a **wholesale-replacement** writer (`state.districts = {...}`, the migration
+  defaulter's `state.cohorts = state.cohorts ?? {}`) replaces the record inside
+  `towns.home` through the setter;
+- because the aliases are **non-enumerable**, `JSON.stringify` skips them — a
+  save carries `towns` and NOT the six flat keys, so there is **no doubling**.
+  This is exactly what makes option (c) sound where the naive aliasing option
+  (a) was rejected: the serializer needs no exclusion list; the property
+  descriptor does the work. `installTownAliases` is called from every
+  construction path — fresh game (`createInitialState`), deserialize, and
+  migration — so the aliases are always present on a live state.
+
+**`SAVE_VERSION` 3 + migration.** The version bumped 2 → 3. `migrations.ts`
+gains a `v2 -> v3` step that wraps an old save's flat records into
+`towns.home` and drops the flat keys; a v3-native save deserializes `towns`
+directly. BOTH paths then `installTownAliases` before `normalize` runs (so
+normalize's reads and wholesale-replacement writes route onto the home town).
+An old save has no `towns` key; the step supplies it. Golden saves v1–v8 (flat,
+`saveVersion` ≤ 2) are now ALSO the migration corpus: all load, run conserved,
+and round-trip (`serialize(again) === serialize(state)`) through the wrap.
+
+**The hazard audit (spread/clone/serialize sites that assumed the six families
+are enumerable own-properties of `state`).** Swept the whole tree:
+
+- `{...state}`, `structuredClone(state)`, `Object.keys/entries/values(state)`,
+  `for..in state`, `JSON.parse(JSON.stringify(state))` in production: **none
+  found** — nothing enumerates `state`'s own top-level keys, so the key-set
+  change (six keys → one `towns` key) breaks no production path.
+- `saveMeta` (`saveLoad.ts`) read `raw.firms`/`raw.citizens` off the parsed
+  save JSON — updated to read `raw.towns?.home ?? raw`, so it reads new saves
+  (under `towns.home`) and old ones (flat) with no migration.
+- `serialize`/`deserialize`/`cloneState`, `normalizedSerialize`, autosave/save
+  slots (`useGameStore`), the challenge-score selector and Hall-of-Records
+  store: all either round-trip through `migrate` or never touch the six
+  families' shape — identical behaviour.
+- the `v1 -> v2` migration reads flat `raw.firms` — correct, it runs before the
+  `v2 -> v3` wrap, while the save is still flat.
+- **test literals / downgrade-simulation tests:** 15 test files build a
+  simulated old save by serializing a live state and stripping a sub-field
+  (`delete raw.firms[id].managers`, `delete raw.marketStats.clothes`, ...), then
+  reloading to assert `normalize` backfills. The stripped field now lives under
+  `raw.towns.home.X`; each was updated to that path (a faithful relocation to
+  the new byte layout, not a weakening). Chosen strategy: **keep production code
+  clean** — `townOf` reads `towns` directly and every construction path installs
+  the aliases, so there is NO mid-gradient flat-fallback branch in production;
+  the tests that manipulate raw JSON simply address the new location. No unit
+  test builds a bare `{citizens: {...}}` GameState literal, so no test helper
+  needed a compatibility shim.
+
+**The invariant flip.** `townSeam.test.ts`'s old invariant — "no `towns` key in
+a save, byte-unchanged, zero migration" — is SUPERSEDED. The rewritten test
+asserts the NEW invariants: a save HAS the `towns` key and does NOT carry the
+six flat keys; `SAVE_VERSION` is 3; the accessor identity chain
+`townOf(state).firms === state.firms === state.towns.home.firms` holds; and an
+OLD-shape save (built in-test by unwrapping `towns.home` to the top level and
+stamping `saveVersion` 2) migrates into `towns.home`, reinstalls the aliases,
+and round-trips. `firmArchetypes.test.ts`'s `SAVE_VERSION`/loaded-version
+assertions moved 2 → 3 (the `v1 -> v2`-step unit assertion stays at 2).
+
+**Measured.**
+
+- **Save size:** the move adds a constant **+19 bytes** (the
+  `"towns":{"home":…}}` wrapper) regardless of save size — VILLAGE day-40
+  1,161,987 → 1,162,006 and CITY day-40 1,191,918 → 1,191,937 (both +19,
+  ~0.0016%). Immaterial; no save-size probe exists to re-pin.
+- **Pinned baselines hold bit-identically:** village seeds 11/4/7 reproduce
+  `rngState` 3274842624 / 2896139677 / 4253583594 (each conserved to the cent
+  across 300 days); city seed 11 reproduces `rngState` 2546912297 and money
+  supply 316900000. The serialized BYTE LAYOUT changed (the designed part); the
+  rng stream, economy, and money did not.
+- **Full suite green (584** = the prior 583 + 1 new migration-round-trip test in
+  `townSeam`); `tsc` clean; `npm run build` clean; the five e2e (smoke,
+  deepsmoke, citysmoke, metrosmoke, fpsguard) all green — deepsmoke exercises
+  the real in-game save + load round trip AND named save slots (save-as, load,
+  delete), covering `serialize`/`deserialize`/`saveGame`/`saveMeta` end-to-end.

@@ -36,7 +36,7 @@ import { defaultPersonalityFor, defaultCeoFor } from './personalities';
 import { getScenario, DEFAULT_SCENARIO_ID } from './scenarios';
 import { defaultDistrictPartition } from './districts';
 import { SAVE_VERSION } from '../core/GameState';
-import { townOf } from '../core/Town';
+import { townOf, HOME_TOWN_ID, installTownAliases, type TownRecords } from '../core/Town';
 
 const NUM_HOMES = 20;
 const CITIZENS_PER_HOME = 2;
@@ -215,6 +215,20 @@ export function createInitialState(
 ): GameState {
   const scenario = getScenario(scenarioId);
   const counters: IdCounters = {};
+  // The six town-scoped families live under `towns[HOME_TOWN_ID]` (region.md step
+  // 3 endgame). Build them once here; the flat `citizens`/`firms`/... fields below
+  // reference the SAME objects so the literal type-checks, then
+  // `installTownAliases` demotes those flat keys to non-enumerable accessors onto
+  // the home town — every writer in this builder (and every reader) keeps working,
+  // and only `towns` serializes.
+  const homeRecords: TownRecords = {
+    districts: {},
+    cohorts: {},
+    citizens: {},
+    marketStats: {},
+    firms: {},
+    facilities: {},
+  };
   const state: GameState = {
     saveVersion: SAVE_VERSION,
     seed,
@@ -224,13 +238,14 @@ export function createInitialState(
     speed: 1,
     paused: false, // the world starts alive; the player can pause anytime
     config: { ...config },
-    citizens: {},
-    firms: {},
-    facilities: {},
+    towns: { [HOME_TOWN_ID]: homeRecords },
+    citizens: homeRecords.citizens,
+    firms: homeRecords.firms,
+    facilities: homeRecords.facilities,
     vehicles: {},
     contracts: {},
     serviceContracts: {},
-    marketStats: {},
+    marketStats: homeRecords.marketStats,
     worldCash: dollars(1_000_000),
     playerFirmId: '',
     worldFirmId: '',
@@ -265,14 +280,19 @@ export function createInitialState(
     sharePriceShift: {},
     // Districts are built AFTER the size-preset block below (which may raise
     // the map dimensions), so the partition tiles the preset's real map.
-    districts: {},
-    cohorts: {},
+    districts: homeRecords.districts,
+    cohorts: homeRecords.cohorts,
     lastLapsedFireSale: null,
     townHistory: [],
     idCounters: counters,
     selectedEntityId: null,
     perf: { lastTickMs: 0, avgTickMs: 0, ticksSimulated: 0 },
   };
+  // Demote the six flat family keys to non-enumerable aliases onto towns.home
+  // (they reference the same objects, so this is invisible to construction that
+  // follows — every writer below routes through them) and keep only `towns` in a
+  // save. Must run before any townOf(...) read or family writer in this builder.
+  installTownAliases(state);
   const b: Builder = { state, rng: new Rng(state), counters };
 
   // World-scale cast ceiling: a non-Village preset lifts the immigration caps

@@ -11,6 +11,7 @@
 
 import { SAVE_VERSION } from '../core/GameState';
 import type { GameState } from '../core/GameState';
+import { HOME_TOWN_ID, TOWN_RECORD_KEYS, installTownAliases } from '../core/Town';
 import type { AccountingPeriod } from '../entities/Accounting';
 import { PRODUCT_IDS_BY_PRESET, CONSUMER_PRODUCT_IDS_BY_PRESET } from '../data/products';
 import { emptyMarketStat } from '../entities/Market';
@@ -43,6 +44,20 @@ export const MIGRATIONS: Record<number, (raw: Raw) => Raw> = {
     }
     return { ...raw, saveVersion: 2 };
   },
+  // v2 -> v3 (region.md step 3 endgame): the six town-scoped record families
+  // MOVE from the flat top level into `towns[HOME_TOWN_ID]`. An old save carries
+  // them flat (`raw.firms`, `raw.districts`, ...) with no `towns` key; wrap them
+  // into the home town and drop the flat keys. The flat back-compat accessor
+  // aliases are (re)installed by `installTownAliases` after the version loop, so
+  // every reader/writer keeps working. Money, rng, contracts are untouched — the
+  // loaded world is the same run, its records now one level down.
+  2: (raw) => {
+    const home: Record<string, unknown> = {};
+    for (const key of TOWN_RECORD_KEYS) home[key] = raw[key];
+    const next: Raw = { ...raw, towns: { [HOME_TOWN_ID]: home }, saveVersion: 3 };
+    for (const key of TOWN_RECORD_KEYS) delete next[key];
+    return next;
+  },
 };
 
 export function migrate(raw: Raw): GameState {
@@ -58,7 +73,14 @@ export function migrate(raw: Raw): GameState {
     }
     version += 1;
   }
-  return normalize(current as unknown as GameState);
+  // Both paths land here with the records under `towns[HOME_TOWN_ID]` (a v3-native
+  // save deserialized them there directly; an older save was wrapped by the v2->v3
+  // step). Install the flat back-compat aliases BEFORE normalize, so its reads and
+  // wholesale-replacement writes (`state.districts = state.districts ?? ...`) route
+  // through them onto the home town.
+  const state = current as unknown as GameState;
+  installTownAliases(state);
+  return normalize(state);
 }
 
 function normPeriod(p: Partial<AccountingPeriod> | undefined): AccountingPeriod {
