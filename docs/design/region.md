@@ -853,3 +853,360 @@ assertions moved 2 → 3 (the `v1 -> v2`-step unit assertion stays at 2).
   deepsmoke, citysmoke, metrosmoke, fpsguard) all green — deepsmoke exercises
   the real in-game save + load round trip AND named save slots (save-as, load,
   delete), covering `serialize`/`deserialize`/`saveGame`/`saveMeta` end-to-end.
+
+## What step 4 will take — a second simulated town (the design)
+
+Step 3 landed the endgame shape: the six record families LIVE at
+`state.towns[HOME_TOWN_ID]`, every reader routes through `townOf(state, townId)`,
+`SAVE_VERSION` is 3, and golden v9 freezes the towns-shape corpus. The seam is
+in the tree but the region is still **one town** — `makeContext` sets
+`ctx.townId = HOME_TOWN_ID` and nothing ever varies it. Step 4 is the migration
+path's rung 4: **a partner trade city (`port_rosa`) graduates from a price pool
+to a real (small) simulated town, and the freight edge carries goods between two
+LIVE economies.** This section is the plan — instantiation, dispatch, the seam's
+money debt, the trade mapping, gating, the de-risking probe, and the slices —
+each choice weighed against the same referee steps 1–3 answered to: bit-identity
+of every pinned run, conservation to the cent, zero shared-rng drift flag-off.
+
+### The finding up front (measured, before a line of implementation)
+
+A runnable probe — `docs/design/probes/second-town-isolation.ts`, no sim-code
+changes, reads/simulates only — attaches an INERT second town's records at
+`state.towns['port_rosa']` (a real second City economy lifted from a second
+`createInitialState`) and measures the three properties step 4 hinges on. Run
+with `npx tsx docs/design/probes/second-town-isolation.ts`:
+
+- **Isolation already holds.** With a partner town attached, a 30-day City home
+  run (seed 11) reproduces its rngState (`1334085939`) and its serialized
+  `towns.home` **byte-for-byte** against a control run with no partner; the
+  partner's serialized records are **untouched** across the home-only tick loop.
+  Home systems route through `townId = 'home'` (or the flat aliases, which also
+  point at `towns.home`), so a second town key is invisible to them — **no read
+  leak into rng or state, no write leak into the partner.** This is the property
+  that lets step 4's partner be attached behind a flag with the pinned world
+  provably undisturbed; the seam step 3 built already delivers it.
+- **The money debt is real and exactly quantified.** `totalMoneySupply` and the
+  account-resolution trio read the FLAT `state.firms`/`.citizens`/`.cohorts`
+  aliases (= `towns.home` only). With the partner attached, the flat primitive
+  reports **320,900,000 cents** while a region-aware sum reports **543,264,897** —
+  it silently omits **222,364,897 cents**, equal to the penny to the partner
+  town's holder cash. The instant `towns.length > 1`, conservation breaks unless
+  the primitive goes region-wide (design in § "The seam's debts" below).
+- **The id-collision hazard (a correction to this doc's own earlier claim).**
+  region.md's step-3 exploration said "entity ids are region-unique already
+  (`nextId` off shared counters)." That is true only WITHIN one
+  `createInitialState` pass. A partner minted from a SEPARATE `createInitialState`
+  gets its OWN `idCounters` from zero, so its `firm_3` collides with home's
+  `firm_3` (both `Global Importers`, in the probe) — and the flat account
+  primitive would then resolve a partner id to the WRONG (home) holder: a silent
+  money-corruption path. Re-id'ing the partner region-uniquely makes the flat
+  primitive correctly fail to resolve it (the account-resolution debt). **The
+  concrete constraint on step 4's town factory: it must mint the partner off the
+  region's SHARED `idCounters`, never a fresh counter set.**
+
+Everything below is designed around those three measured facts.
+
+### 1. INSTANTIATION — what creates `towns['port_rosa']`
+
+The tempting shortcut is the one step 3 already condemned for the `Town` struct:
+call the world-builder twice. The probe shows precisely why it is wrong.
+
+| option | what it is | verdict |
+| --- | --- | --- |
+| **(a) `createInitialState` ×2, staple `towns.home`** | build a whole second City game, lift its `towns.home` into `towns.port_rosa` | **Rejected.** Fresh `idCounters` ⇒ id collisions (probe finding); a second `worldCash`/`config`/ledger it drags along are world-scoped and must NOT double; it wires a full 150-cast city where a partner needs a fraction of that. It is the "stubs, not reusable towns" trap one level up. |
+| **(b) carve a `seedTown(region, townId, spec)` factory from `startingScenario`** | one function that mints ONLY the six town-scoped families into `region.towns[townId]`, off the region's SHARED `idCounters` and rng, driven by a small `PartnerTownSpec` | **Chosen.** It threads the shared counters (kills the collision), touches no world-scoped field, and takes a size `spec` so a light partner is genuinely small. It is the `Town`-struct extraction step 3 named ("everything town-scoped becomes a `Town`; everything world-scoped stays on `GameState`") finally cashed in for a second town. |
+| **(c) hand-build a minimal partner literal** | write the partner records inline | Rejected as the shipping shape (unmaintainable, drifts from the catalog), but it IS the shape of the first slice's smoke fixture. |
+
+**Town-scoped vs world-scoped, decided by the split step 3 already drew.** The
+factory writes the six `TownRecords` families and the town's map dims; it must
+NOT touch anything on `GameState` that the whole region shares. Measured
+inventory of the world-scoped state that stays singular:
+
+- **One clock, one rng, one money supply.** `rngState`, `tick`, `config` (the
+  region's, though map dims become per-town — see below), and critically
+  `worldCash` — the probe confirms `worldCash` is already a single region-wide
+  account, so a freight settlement is one `recordTransaction` and conservation
+  generalizes for free (region.md's founding promise).
+- **World-scoped ledgers and graphs:** `transactions`, `events`, `worldEvents`,
+  `achievements`, `missions`, `contracts`, `serviceContracts`, `vehicles`,
+  `tradeCities` (the freight graph itself), `rushOrder`, `tradeAnnouncement`,
+  `sharePriceShift`, and every `*Days`/`last*EntryDay` founder-signal counter.
+  These are NOT duplicated per town.
+- **Town-scoped, minted by the factory:** the six families
+  (`districts`, `cohorts`, `citizens`, `marketStats`, `firms`, `facilities`) and
+  the town's `mapWidth`/`mapHeight` (today a `config` delegate on the `Town`
+  view; step 4 is where they become genuine per-town fields, since two towns need
+  two maps — the `Town` interface already carries the getters precisely so this
+  move touches no reader).
+
+**A MINIMAL viable partner town.** The partner is a *place with an economy*, not
+a second full city. The spec that makes it cheap:
+
+- **Crowd-only, no cast (first cut).** `port_rosa` needs `cohorts` (a handful of
+  district×tier cohorts holding cash) and `districts` to key them, its own
+  `marketStats` book, and a few `firms`+`facilities` that PRODUCE what the freight
+  edge trades. It does NOT need a simulated `citizens` cast — the cast is the
+  most expensive family (70 reader sites, the labor/movement/schedule machinery)
+  and the partner's consumption can run entirely on cohorts (the crowd path A3
+  built), which is exactly what today's pool already approximates. An empty
+  `citizens` record is legal (the readers iterate `{}`), so the light partner
+  skips the whole cast subsystem.
+- **A handful of firms.** Enough producers that the port has real goods to ship
+  and real shortfalls to import — the `productionByProduct` profiles the step-2
+  pool already encodes (Port Rosa food-rich, Ironvale industrial) become the
+  partner's actual firm mix, so its specialization is now emergent, not a table.
+- **Which systems must run for it** (the light subset — see § Dispatch):
+  the crowd economy (`CohortDemandSystem`, `CohortLaborSystem`,
+  `CohortSocialSystem`, `CrowdRentSystem`), `MarketStatsSystem`,
+  `ProductionSystem`+`LogisticsSystem` for its firms, `DistrictSystem`,
+  `SatisfactionSystem`/`TierSystem` for the cohorts, and `AccountingSystem`/
+  `PayrollSystem`. It SKIPS the cast-only systems (`CitizenScheduleSystem`,
+  `MovementSystem`, `LaborSystem`, `ImmigrationSystem`, `CastCuratorSystem`),
+  the player-facing UI/alert systems, and the founder/rush/fire-sale systems
+  (the player doesn't operate there yet). That subset is the partner-town size
+  budget's lever.
+
+### 2. DISPATCH — how systems run per town
+
+Today `tick()` builds one context and runs `SYSTEMS` once. Three ways to run
+systems for N towns, weighed on determinism (iteration order over towns), perf,
+and the fact every converted reader already honors `ctx.townId`:
+
+| option | shape | determinism | perf | verdict |
+| --- | --- | --- | --- | --- |
+| **(a) outer town loop in `tick`** | `for (const townId of sortedTownIds) { const ctx = makeContext(state, townId); for (const sys of SYSTEMS) sys(ctx); }` | Sorted town id order is the ONE new iteration axis — trivially deterministic, and home-first (`'home' < 'port_rosa'`) keeps home's rng draws in exactly today's position when the partner draws none. | Re-runs the whole 40-system list per town; wasteful when the partner runs a 12-system subset. | Simplest, but runs cast systems on a cast-less town. |
+| **(b) each system internally loops towns** | every `run*System` does `for (const townId of sortedTownIds)` | Same order guarantee, but now enforced in ~40 places — 40 chances to forget the sort, and the day-boundary/rng-draw ordering interleaves across towns per-system, which is a HARDER bit-identity story to hold. | No wasted passes, but the refactor touches every system. | Rejected: diffuses the determinism contract across 40 files. |
+| **(c) `TownScheduler` with per-town system lists** | a table `{ home: SYSTEMS, port_rosa: PARTNER_SYSTEMS }`; the scheduler runs each town's list in sorted town order | Sorted town order + an explicit per-town list — the light partner runs its 12-system subset, home runs the full 40, and the ORDER is data, auditable in one place. | Runs exactly the systems each town needs — the size budget is the list. | **Chosen.** It is (a)'s clean outer-loop determinism plus the ability to make the partner genuinely light, with the schedule as one reviewable table. |
+
+**Why (c) over (a).** The partner-town budget (§5) is enforced by its system
+list: a cast-less port simply has no cast systems in its schedule, so "minimal
+partner" is a data decision, not a pile of `if (townId === 'home')` guards
+smuggled into 40 systems. The rng-draw discipline the house rules demand
+("flag-gated code draws nothing from the shared rng when off") extends cleanly:
+with the region flag off there is one town and one schedule (`home`), so the loop
+runs exactly once with exactly today's draws — bit-identity is structural, and
+the probe's isolation result is the standing proof.
+
+**The context change is one field, already present.** `makeContext(state)`
+gains a `townId` argument (defaulting to `HOME_TOWN_ID`, so every existing caller
+is unchanged); the scheduler passes each town's id. `SimContext.townId` already
+exists and every converted reader already routes through it — dispatch is the
+first caller that ever passes a value other than `'home'`.
+
+### 3. THE SEAM'S DEBTS — what going multi-town forces open
+
+Step 3 deliberately left three things pointing at home, each marked in-code as a
+debt to pay "at multi-town." Step 4 is when `towns.length > 1`, so it pays them.
+
+**(a) The region-wide money primitive (the load-bearing one).** The
+account-resolution trio (`getAccountCash`/`accountExists`/`addAccountCash` under
+`recordTransaction`) and `totalMoneySupply` in `GameState.ts` read the flat
+aliases (= `towns.home`). The probe measures the exact failure: a partner town's
+222,364,897 cents are invisible to `totalMoneySupply`, and (once ids are
+region-unique) a partner account does not resolve, so a freight settlement paying
+a `port_rosa` firm would throw on an unresolved account in dev. **The change:**
+resolution and the conservation sum iterate EVERY town's firms/cohorts/citizens,
+not `towns.home`. Because ids are region-unique (the factory shares
+`idCounters`), a firm-id lookup becomes "find the town whose `firms` holds this
+id" — either a linear scan over the (small) town set, or, to keep resolution
+O(1), a lazily-maintained `state.firmTownIndex: Record<FirmId, TownId>` rebuilt
+on entity create/delete (the `ContractIndex` precedent already in `SimContext`).
+The design keeps the shape minimal: money still moves via the single
+`recordTransaction` primitive, so conservation stays a one-line invariant — it
+just sums the region. The probe's `regionMoneySupply` is the reference
+implementation; a step-4 test pins it against a home-only baseline (must equal
+today's `totalMoneySupply` when only `home` exists) and across an inter-town
+freight settlement (Δ = 0).
+
+**(b) The bare-`state` helpers on the home default.** Measured: **246
+home-default `townOf(state)` / `townOf(s)` / `townOf(this.state)` call sites
+across 64 files** (vs 110 already threaded through `ctx.townId`). Not all 246
+gain a `townId` param — they split three ways, and the split is the actual work
+list:
+
+- **Player-command handlers** (`Simulation.ts` `dispatch` + private handlers —
+  build/price/hire/export/loan/acquire, ~40 sites) operate on the town the
+  player is ACTING in. Step 4's player still operates only in `home`, so these
+  keep the home default until the multi-town-player UI (out of scope); they are
+  correct today and become "the selected town's id" at step 5.
+- **Selectors** (`selectors/*.ts`, the marketStats/citizens/cohorts reader rows
+  in the step-3 tables) render the town the UI is VIEWING. They gain a
+  `townId`/`selectedTownId` param when the town switcher lands (step 5's hooks,
+  below) — until then, home default renders the home town, unchanged.
+- **Genuinely region-wide** — the money primitive above, which stays flat-by-
+  design but flat now MEANS "aggregate all towns" (the back-compat getter reads
+  every town). That is a handful of sites in `GameState.ts`, already commented as
+  such.
+
+So the honest count for step 4 itself: the money primitive (a) is the only group
+that MUST change to go multi-town; the command handlers and selectors keep the
+home default correctly until the player and UI can address a second town.
+
+**(c) UI town-selector state hooks (deferred to step 5, but the state seam now).**
+The switcher is step 5, but step 4 must not paint it into a corner. The minimal
+hook: a `selectedTownId` on the view store (defaulting to `HOME_TOWN_ID`), and
+the selectors above reading it instead of hard-defaulting. Step 4 adds the FIELD
+and the default; the picker that changes it is step 5. This mirrors how step 3
+added `SimContext.townId` (defaulted to home) long before dispatch ever varied it.
+
+### 4. TRADE — mapping the pool economies onto the new town records
+
+The step-1/2 pools already ARE a proto-town: a per-city population, a per-product
+inventory, a consumption drain, and a `productionByProduct` supply side. The
+question is whether the pool BECOMES the town or the town lives BEHIND the pool.
+
+| option | shape | verdict |
+| --- | --- | --- |
+| **pool BECOMES the town's marketStats/cohort demand** | delete `TradeCityPool`; the partner's `cohorts` consume and its `firms` produce, and the freight quote reads the partner's real `marketStats` book | The honest endgame — the port's price is now its own supply/demand, not a walk × cover-mult. But a big-bang swap breaks every pinned pool measurement at once. |
+| **pools remain the freight-facing INTERFACE, the town sits behind them** | the partner town simulates; a thin adapter derives the `pool.inventory`/cover the existing `cityPrice`/`feedPool`/desk/advisor already read from the town's real book | **Chosen for the FIRST slice.** The freight edge, the Gazette trade desk, and the advisor keep reading the pool interface unchanged; only the pool's NUMBERS now come from a live economy instead of a table. It is the gradient's discipline: swap the source, keep the interface, retire the interface last. |
+
+**The mapping.** `poolConsumptionPerDay` → the partner cohorts' actual demand;
+`poolLocalProductionPerDay` → the partner firms' actual output;
+`pool.inventory[pid]` → the partner's real stock of `pid` (warehoused units).
+`cityPrice` still layers cover on the walk, but "cover" is now days of the
+partner's real inventory. `feedPool(+qty)` on an export becomes "the goods land
+in the partner's warehouse" — a real stock delta the partner's consumption works
+off, which is what the pool already SIMULATED; now it is literal.
+
+**Freight edges with lead times vs today's instant settle.** Today
+`performExport`/`performCityPurchase` settle in one tick — goods leave, cash
+arrives, `feedPool` moves the larder, all instantly. With two live economies the
+edge should carry a **lead time**: goods dispatched from home arrive at
+`port_rosa` `leadDays` later, and only then hit its larder and pay out. The
+precedent is already in the tree — `ForwardSystem` settles on a `deliveryDay`
+`daysOut` in the future, with the paper/settlement split the step-1 doc unified.
+The design: a freight edge is `{ from, to, freightFee, leadDays }` on the trade
+graph, and an in-flight shipment is a dated record settled by a
+`FreightSystem` on its arrival day — the `ForwardSystem` shape reused for
+physical goods. **Out of scope for step 4's FIRST slice** (instant settle is kept
+so the trade mapping lands in isolation); the edge/lead-time record is slice 4.
+
+### 5. SCALE & GATING — pinned games stay byte-identical
+
+**The flag.** A new `regionEnabled` config flag (default OFF at every preset,
+the `tradeDemandPoolsEnabled` precedent). OFF ⇒ the scheduler has one town
+(`home`), `makeContext` passes `'home'`, no second town key is minted, the money
+primitive sums one town — the game is byte-identical to step 3, which the probe's
+isolation + flag-off-anchor results already prove (village 11 reproduces
+`3274842624`). `worldScaleConfig`'s City stack opts in (as it did for pools);
+Village NEVER runs it (double-gated on `sizePreset !== 'village'`, since a Village
+is definitionally one town). The pinned City seed-11 baseline
+(`rngState 2546912297`, money `316900000`) is re-pinned HONESTLY if the live
+partner perturbs it — a live second economy trading with home WILL move City's
+trajectory (that is the feature), so its band is re-measured, never widened to
+hide a break; a Village game is untouched by construction.
+
+**Partner-town size budget (perf grid target).** The `PartnerTownSpec` sizes the
+partner far below a full city: target a crowd of ~2–4 cohorts (hundreds of
+cohort-population, not a 150-cast), ~4–8 firms, no simulated cast. The perf lever
+is the schedule (§2): a cast-less partner skips the per-tick movement/schedule/
+labor systems entirely, so the second town costs roughly its cohort-demand +
+production + accounting passes — a small fraction of home's per-tick cost. The
+grid target: `home (City) + port_rosa (light)` stays under the existing per-tick
+budget the `perfGuard` test pins (median per-tick, contention-robust), measured
+by extending that guard to a two-town City.
+
+**Save-size projection.** Step 3 measured the `towns` wrapper at +19 bytes flat.
+A second town adds one more `towns` entry: its six families serialized. A light
+partner (no cast — the cast is the bulk of a save) is dominated by its
+`marketStats` book (~one entry per traded product) and its firms/facilities
+(single digits) and a few cohorts — on the order of tens of KB against the City
+baseline's ~1.19 MB, i.e. low single-digit percent. Projected, not pinned; a
+step-4 save-size check re-measures against the day-40 City figure
+(`1,191,937` bytes) once the factory exists.
+
+### 6. DE-RISKING PROBE PLAN
+
+The shadow-parity spike gated A3; `second-town-isolation.ts` is step 4's
+equivalent, and it is SHIPPED and green (all checks pass,
+`npx tsx docs/design/probes/second-town-isolation.ts`). What it measures BEFORE
+any slice lands, and what a follow-up probe must add once dispatch exists:
+
+- **Shipped (this probe), pre-implementation:** (0) the flag-off anchor —
+  Village seed 11 still reproduces `3274842624`; (1) ISOLATION — home rngState +
+  serialized `towns.home` byte-identical with/without a partner attached, and the
+  partner untouched by the home-only loop (defines leakage as any home
+  read/write that crosses the town boundary, and detects it by control-vs-
+  treatment diff); (2) the MONEY DEBT — flat `totalMoneySupply` omits the
+  partner's cash to the penny, a region sum recovers it; (3) the ID-COLLISION
+  hazard — independent counters collide, region-unique ids don't, so the factory
+  must share `idCounters`.
+- **Follow-up probe (after the dispatch slice, before the live-partner slice):**
+  once `TownScheduler` can TICK the partner, a `two-town-conservation` probe must
+  assert (a) conservation across an inter-town freight settlement with the
+  region-wide money primitive (Δ = 0 — the debt fixed); (b) home-town bit-
+  identity STILL holds with the partner now live-but-flagged-off (the flag, not
+  just an unticked record, is the gate); (c) home-town ISOLATION with the flag ON
+  — a shock in the partner (drain its larder) must change ONLY the freight quote
+  home reads, never home's cohorts/firms/rng except through the goods/price edge
+  (leakage on = any home state delta not attributable to a freight transaction).
+  That "isolation when on" is the harder property and needs the live partner to
+  test, so it is deliberately the follow-up probe, not this one.
+
+### 7. SLICING — each slice shippable and gated
+
+Mirroring the step-3 gradient's discipline (bit-identity the referee, one
+concern per slice, an honest measured NO-SHIP is a complete result):
+
+1. **The town factory + the flag (no dispatch yet).** `seedTown(region, townId,
+   spec)` carved from `startingScenario`, minting only the six families off the
+   SHARED `idCounters`; `regionEnabled` flag (default off); per-town `mapWidth`/
+   `mapHeight` fields. Acceptance: flag off ⇒ pinned village 11 / city 11
+   byte-identical (no second town, no per-town map delta); flag on ⇒ a partner
+   town materializes in state but is INERT (unticked) and the isolation probe's
+   properties hold; `tsc` + full suite green.
+2. **The region-wide money primitive.** Account resolution + `totalMoneySupply`
+   iterate all towns (with the `firmTownIndex` if resolution perf needs it).
+   Acceptance: `totalMoneySupply` equals today's value when only `home` exists
+   (the one-town identity); the shipped probe's region sum becomes the test
+   oracle; conservation invariant re-proven across the golden corpus.
+3. **The `TownScheduler` + light partner systems.** The outer scheduler running
+   each town's system list in sorted town order; the partner's 12-system cast-less
+   subset. Acceptance: flag off ⇒ one town, one schedule, exactly today's rng
+   draws, byte-identical pins; flag on ⇒ the partner simulates (its cohorts
+   consume, its firms produce, its book updates) and the follow-up conservation
+   probe is green; `perfGuard` extended to two-town City stays under budget.
+4. **The freight edge with a lead time.** `FreightSystem` settling dated
+   inter-town shipments (the `ForwardSystem` shape for physical goods); the pool
+   interface's numbers now sourced from the live partner. Acceptance: an export
+   dispatched from home arrives at `port_rosa` `leadDays` later, lands in its real
+   larder, and pays out then — money conserved across the delayed settlement;
+   City baseline re-pinned honestly with the measured cause documented.
+5. **Retire the pool table (optional, gradient's end).** Once the freight quote
+   reads the partner's real `marketStats`/cohort demand directly, the
+   `TradeCityPool` interface is deleted. Acceptance: the desk/advisor read the
+   town's real book; NO-SHIP-honest if the live economy can't reproduce a sane
+   quote — that stops this slice, not the arc.
+
+### What stays OUT of step 4 (and why)
+
+- **Citizen migration between towns.** The freight graph moves GOODS first (the
+  export game we have). People moving towns (regional labor markets) need a
+  cross-town emigration/immigration path and a shared labor market — its own arc,
+  and it needs two live casts, whereas the light partner is deliberately cast-
+  less. Out.
+- **Multi-town PLAYER firms / the town-switcher UI.** The player still operates
+  only in `home` in step 4; the command handlers keep the home default (§3b).
+  Owning firms across towns and the UI to switch/act between them is step 5 —
+  step 4 adds only the `selectedTownId` state field so step 5 has a seam, not the
+  picker.
+- **A full-cast partner town.** The partner is crowd-only by budget: the cast is
+  the most expensive family (70 reader sites, the whole movement/schedule/labor
+  machinery) and the port's economics run on cohorts. A simulated partner cast is
+  a later refinement, not the first "second town."
+- **More than two towns / a general region map.** Step 4 proves the SECOND town;
+  the scheduler and money primitive are written N-town-general, but the shipped
+  config wires exactly `home` + one partner. A dial-up to a full region graph is
+  gated behind step 4 landing clean.
+- **Cross-town capital / ownership.** Firms owning stakes or facilities in
+  another town needs the region-wide account primitive (this arc) AND a
+  cross-town ownership model — the former ships here, the latter is deferred with
+  people-migration.
+
+### Verification (docs-only change — proven anyway)
+
+This step changed no sim code (a new doc section and one read-only probe). Proven
+regardless: `tsc --noEmit` clean; full `npx vitest run` green (**587** tests,
+116 files); the shipped probe `second-town-isolation.ts` passes all checks
+(exit 0) — flag-off anchor `3274842624`, isolation byte-identity, the
+222,364,897-cent money debt quantified, and the id-collision hazard demonstrated.
