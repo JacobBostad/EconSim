@@ -18,6 +18,7 @@ import type { FirmId, FacilityId } from './Id';
 import { getProduct } from '../data/products';
 import { WHOLESALE_DISCOUNT } from '../data/constants';
 import { fireCitizen } from '../systems/LaborSystem';
+import { townOf } from './Town';
 
 /** Fraction of the recorded build cost refunded on sale. */
 export const SELL_REFUND_RATE = 0.5;
@@ -44,7 +45,9 @@ export function facilityBookValue(fac: { buildCost: number; upgradeCapex?: numbe
 /** Refund a sale would pay, or null if this facility cannot be sold. */
 export function sellRefund(state: GameState, firmId: FirmId, facilityId: FacilityId): number | null {
   const fac = state.facilities[facilityId];
-  const firm = state.firms[firmId];
+  // Home-town view (identity in a one-town region, so the returned record is the
+  // same reference); gains a `townId` param at the endgame move.
+  const firm = townOf(state).firms[firmId];
   if (!fac || !firm) return null;
   if (fac.ownerFirmId !== firmId) return null;
   if (UNSELLABLE_TYPES.has(fac.type)) return null;
@@ -59,7 +62,7 @@ export function sellFacility(state: GameState, firmId: FirmId, facilityId: Facil
   const refund = sellRefund(state, firmId, facilityId);
   if (refund === null) return false;
   const fac = state.facilities[facilityId]!;
-  const firm = state.firms[firmId]!;
+  const firm = townOf(state).firms[firmId]!;
 
   // Crew back to the labor pool (fireCitizen also cleans both employee lists).
   for (const cid of [...fac.employees]) fireCitizen(state, facilityId, cid);

@@ -102,7 +102,7 @@ export function runCrowdRentSystem(ctx: SimContext): void {
     if (fac.defId !== 'apartment') continue;
     fac.crowdTenants = 0;
     if (fac.status === 'closed') continue;
-    const owner = state.firms[fac.ownerFirmId];
+    const owner = town.firms[fac.ownerFirmId];
     if (!owner || (owner.ownerType !== 'player' && owner.ownerType !== 'ai')) continue;
     const d = districtAt(town.districts, fac.location.x, fac.location.y);
     if (!d) continue;
@@ -132,7 +132,7 @@ export function runCrowdRentSystem(ctx: SimContext): void {
     for (const apt of apts) {
       let spare = APARTMENT_CAPACITY - apt.residentIds.length;
       if (spare <= 0) continue;
-      const owner = state.firms[apt.ownerFirmId]!;
+      const owner = town.firms[apt.ownerFirmId]!;
       while (spare > 0 && ci < cohorts.length) {
         const co = cohorts[ci]!;
         const available = co.population - usedInCohort;

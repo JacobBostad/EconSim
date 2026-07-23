@@ -131,8 +131,9 @@ export interface EmployerRow {
 /** Who employs the town — with crew skill and pay (poaching intel). */
 export function employerBreakdown(state: GameState): EmployerRow[] {
   const rows: EmployerRow[] = [];
-  for (const fid in state.firms) {
-    const f = state.firms[fid]!;
+  const firms = townOf(state).firms;
+  for (const fid in firms) {
+    const f = firms[fid]!;
     if (f.ownerType !== 'player' && f.ownerType !== 'ai') continue;
     let skillSum = 0;
     let count = 0;

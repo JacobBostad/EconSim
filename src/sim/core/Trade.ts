@@ -22,6 +22,7 @@ import {
 import { worldTransportMult } from '../data/worldEvents';
 import { getTradeCity, TRADE_CITY_IDS, cityBias, type TradeCityId } from '../data/tradeCities';
 import { poolCoverMult, poolCoverDays } from '../data/tradePool';
+import { townOf } from './Town';
 
 /**
  * Price impact: trading against a city MOVES its quote — buying pushes the
@@ -127,7 +128,9 @@ export function performCityPurchase(
   quantity: number,
   cityId: string = 'port_rosa',
 ): number {
-  const firm = state.firms[firmId];
+  // Home-town view (identity in a one-town region, so the returned record is the
+  // same reference); gains a `townId` param at the endgame move.
+  const firm = townOf(state).firms[firmId];
   const fac = state.facilities[facilityId];
   if (!firm || !fac || fac.ownerFirmId !== firmId || fac.type !== 'warehouse') return 0;
   const product = getProduct(productId);
@@ -200,7 +203,7 @@ export function performExport(
   note = 'Exported',
   cityId: string = 'port_rosa',
 ): number {
-  const firm = state.firms[firmId];
+  const firm = townOf(state).firms[firmId];
   const fac = state.facilities[facilityId];
   if (!firm || !fac || fac.ownerFirmId !== firmId || fac.type !== 'warehouse') return 0;
 

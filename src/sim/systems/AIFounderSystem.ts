@@ -158,7 +158,7 @@ function foundFirm(
   entry: 'vacancy' | 'undersupply' = 'vacancy',
 ): void {
   const { state } = ctx;
-  const aiCount = Object.values(state.firms).filter((f) => f.ownerType === 'ai').length;
+  const aiCount = Object.values(townOf(state, ctx.townId).firms).filter((f) => f.ownerType === 'ai').length;
   const pool = FOUNDER_NAMES[productId] ?? [`New ${getProduct(productId).name} Co`];
   const name = pool[hashPick(state.seed, day, pool.length)]!;
   const personality = defaultPersonalityFor(aiCount);
@@ -246,7 +246,7 @@ function foundFirm(
  */
 function foundInvestorFirm(ctx: SimContext, day: number): void {
   const { state } = ctx;
-  const aiCount = Object.values(state.firms).filter((f) => f.ownerType === 'ai').length;
+  const aiCount = Object.values(townOf(state, ctx.townId).firms).filter((f) => f.ownerType === 'ai').length;
   const name = INVESTOR_NAMES[hashPick(state.seed, day, INVESTOR_NAMES.length)]!;
   const personality = 'expansionist'; // a holdco accumulates — high stake appetite
 
@@ -463,7 +463,7 @@ function operatorTryFound(ctx: SimContext, town: FounderTownRead): boolean {
   // 12% bar rides just above ordinary churn (a firm or two transiently in the red)
   // and trips as soon as a wave of thin new entrants starts bleeding. City never
   // reaches a firm density where this binds; Village never enters this path.
-  const unhealthy = Object.values(state.firms).filter(
+  const unhealthy = Object.values(townOf(state, ctx.townId).firms).filter(
     (f) => f.ownerType === 'ai' && f.bankruptcyStatus !== 'healthy',
   ).length;
   if (aiCount > 0 && unhealthy / aiCount > 0.12) return false;
@@ -524,9 +524,12 @@ const LANDLORD_NAMES = ['Cornerstone Properties', 'Meridian Estates', 'Brickyard
  * Sorted scan → deterministic; no rng.
  */
 function medianListedYield(state: GameState): number {
+  // Bare-`state` helper mid-gradient: home town by default (one-town region →
+  // same reference); gains a `townId` param at the endgame move.
+  const town = townOf(state);
   const yields: number[] = [];
-  for (const fid of Object.keys(state.firms).sort()) {
-    const f = state.firms[fid]!;
+  for (const fid of Object.keys(town.firms).sort()) {
+    const f = town.firms[fid]!;
     if (f.ownerType !== 'player' && f.ownerType !== 'ai') continue;
     if (f.bankruptcyStatus !== 'healthy') continue;
     const base = smoothedProfitBase(f);
@@ -567,7 +570,7 @@ function investorTryFound(ctx: SimContext, town: FounderTownRead): boolean {
   // row is ever reached.
   if (state.investorSignalDays < INVESTOR_SIGNAL_DAYS) return false;
   if (day - state.lastInvestorEntryDay < INVESTOR_ENTRY_COOLDOWN) return false;
-  const unhealthy = Object.values(state.firms).filter(
+  const unhealthy = Object.values(townOf(state, ctx.townId).firms).filter(
     (f) => f.ownerType === 'ai' && f.bankruptcyStatus !== 'healthy',
   ).length;
   if (aiCount > 0 && unhealthy / aiCount > 0.12) return false;
@@ -587,7 +590,7 @@ function investorTryFound(ctx: SimContext, town: FounderTownRead): boolean {
  */
 function foundLandlordFirm(ctx: SimContext, day: number): void {
   const { state } = ctx;
-  const aiCount = Object.values(state.firms).filter((f) => f.ownerType === 'ai').length;
+  const aiCount = Object.values(townOf(state, ctx.townId).firms).filter((f) => f.ownerType === 'ai').length;
   const name = LANDLORD_NAMES[hashPick(state.seed, day, LANDLORD_NAMES.length)]!;
   const personality = defaultPersonalityFor(aiCount);
 
@@ -678,13 +681,13 @@ function landlordTryFound(ctx: SimContext, town: FounderTownRead): boolean {
   // Metropolis 5), so a chronic housing squeeze grows a rentals sector without
   // starving the chains. The founder-scale probe measured metro seed 7 stacking
   // 8 landlords (27% of a 30-cap map) without this brake.
-  const landlordCount = Object.values(state.firms).filter(
+  const landlordCount = Object.values(townOf(state, ctx.townId).firms).filter(
     (f) => f.ownerType === 'ai' && f.strategy.archetype === 'landlord',
   ).length;
   if (landlordCount >= Math.max(2, Math.floor(founderMaxAiFirms(state.config) / 6))) return false;
   // A5 solvency brake (shared with the operator under-supply row): capital
   // stops entering a field whose incumbents are already distressed.
-  const unhealthy = Object.values(state.firms).filter(
+  const unhealthy = Object.values(townOf(state, ctx.townId).firms).filter(
     (f) => f.ownerType === 'ai' && f.bankruptcyStatus !== 'healthy',
   ).length;
   if (aiCount > 0 && unhealthy / aiCount > 0.12) return false;
@@ -718,10 +721,13 @@ const SERVICE_FOUNDER_NAMES: Record<string, string[]> = {
  * everyone's seat demand minus every provider's capacity, floored at 0. */
 function uncoveredSeats(state: GameState, serviceId: string): number {
   const def = getServiceDef(serviceId);
+  // Bare-`state` helper mid-gradient: home town by default (one-town region →
+  // same reference); gains a `townId` param at the endgame move.
+  const town = townOf(state);
   let desired = 0;
   let capacity = 0;
-  for (const fid in state.firms) {
-    const firm = state.firms[fid]!;
+  for (const fid in town.firms) {
+    const firm = town.firms[fid]!;
     if (firm.ownerType !== 'ai' && firm.ownerType !== 'player') continue;
     // A provider's own facilities don't create consumer demand (it never
     // subscribes), so count operator/subscriber-side demand only.
@@ -748,7 +754,7 @@ function serviceTrackSignals(ctx: SimContext): void {
 
 function foundServiceFirm(ctx: SimContext, serviceId: string, day: number): boolean {
   const { state } = ctx;
-  const aiCount = Object.values(state.firms).filter((f) => f.ownerType === 'ai').length;
+  const aiCount = Object.values(townOf(state, ctx.townId).firms).filter((f) => f.ownerType === 'ai').length;
   const pool = SERVICE_FOUNDER_NAMES[serviceId] ?? [`New ${serviceId} Co`];
   const name = pool[hashPick(state.seed, day, pool.length)]!;
   const personality = defaultPersonalityFor(aiCount);
@@ -824,7 +830,7 @@ function serviceTryFound(ctx: SimContext, town: FounderTownRead): boolean {
   if (day - state.lastServiceEntryDay < SERVICE_FOUNDER_COOLDOWN) return false;
   // Solvency brake (mirrors the operator under-supply row): don't add a provider
   // while a meaningful share of the field is already distressed.
-  const unhealthy = Object.values(state.firms).filter(
+  const unhealthy = Object.values(townOf(state, ctx.townId).firms).filter(
     (f) => f.ownerType === 'ai' && f.bankruptcyStatus !== 'healthy',
   ).length;
   if (aiCount > 0 && unhealthy / aiCount > 0.12) return false;
@@ -881,7 +887,7 @@ export function runAIFounderSystem(ctx: SimContext): void {
   // crowd is empty, so this is the cast headcount, exactly as before.
   const { pop, avgSat } = townPopAndSat(state);
   if (pop < FOUNDER_MIN_POPULATION) return;
-  const aiCount = Object.values(state.firms).filter((f) => f.ownerType === 'ai').length;
+  const aiCount = Object.values(townOf(state, ctx.townId).firms).filter((f) => f.ownerType === 'ai').length;
   if (aiCount >= founderMaxAiFirms(state.config)) return;
   const cityScale = state.config.sizePreset !== 'village';
   // World-cash gate — VILLAGE ONLY (A5). The world account is the town's

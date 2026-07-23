@@ -24,6 +24,7 @@ import type { SimContext } from '../core/GameState';
 import type { Firm } from '../entities/Firm';
 import { formatMoney } from '../../utils/formatMoney';
 import { recordTransaction, emitEvent } from '../core/GameState';
+import { townOf } from '../core/Town';
 import { firmAccount, WORLD_ACCOUNT } from '../core/Transactions';
 import { isDayBoundary } from '../core/Tick';
 import { netProfit } from '../entities/Accounting';
@@ -46,6 +47,7 @@ export function smoothedProfitBase(firm: Firm): number {
 export function runDividendSystem(ctx: SimContext): void {
   if (!isDayBoundary(ctx.state.tick, ctx.config)) return;
   const { state } = ctx;
+  const town = townOf(state, ctx.townId);
 
   // City-scale only: persona payout stance (Arc B2). The pool that sizes the
   // PUBLIC-FLOAT drain stays the flat DIVIDEND_PAYOUT_RATIO at every scale — so
@@ -57,12 +59,12 @@ export function runDividendSystem(ctx: SimContext): void {
   // so the Village payout is byte-identical to the pre-B2 code.
   const cityScale = state.config.sizePreset !== 'village';
 
-  const firmIds = Object.keys(state.firms).sort();
+  const firmIds = Object.keys(town.firms).sort();
 
   // Snapshot every pool first: smoothed profit base, capped by cash on hand.
   const pools = new Map<string, number>();
   for (const fid of firmIds) {
-    const payer = state.firms[fid]!;
+    const payer = town.firms[fid]!;
     if (payer.ownerType !== 'player' && payer.ownerType !== 'ai') continue;
     if (payer.cash <= 0) continue;
     const base = smoothedProfitBase(payer);
@@ -73,14 +75,14 @@ export function runDividendSystem(ctx: SimContext): void {
   for (const fid of firmIds) {
     const pool = pools.get(fid);
     if (!pool) continue;
-    const payer = state.firms[fid]!;
+    const payer = town.firms[fid]!;
     const mult = cityScale ? getPersonality(payer.personalityId).dividendMult : 1;
 
     let remaining = payer.cash; // never distribute more than cash on hand
     let neutralToHolders = 0; // the un-tilted holder share, sizing the drain
     for (const hid of firmIds) {
       if (hid === fid) continue;
-      const holder = state.firms[hid]!;
+      const holder = town.firms[hid]!;
       const pct = holder.sharesHeld[fid] ?? 0;
       if (pct <= 0) continue;
       const neutral = Math.floor((pool * pct) / 100);

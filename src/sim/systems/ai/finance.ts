@@ -14,6 +14,7 @@
 
 import type { SimContext } from '../../core/GameState';
 import { emitEvent, recordTransaction, reindexContracts } from '../../core/GameState';
+import { townOf } from '../../core/Town';
 import { contractsBySource } from '../../core/ContractIndex';
 import { firmAccount, WORLD_ACCOUNT } from '../../core/Transactions';
 import { formatMoney } from '../../../utils/formatMoney';
@@ -49,15 +50,16 @@ export function maybeBuyShares(ctx: SimContext, firmId: string): void {
     return;
   }
   const { state, rng } = ctx;
-  const firm = state.firms[firmId]!;
+  const town = townOf(state, ctx.townId);
+  const firm = town.firms[firmId]!;
   if (firm.cash < AI_SHARE_CASH_FLOOR || !rng.chance(0.12)) return;
 
   // Target the most valuable other company still below our stake cap.
   let target: string | null = null;
   let targetVal = 0;
-  for (const fid in state.firms) {
+  for (const fid in town.firms) {
     if (fid === firmId) continue;
-    const other = state.firms[fid]!;
+    const other = town.firms[fid]!;
     if (other.ownerType !== 'player' && other.ownerType !== 'ai') continue;
     if ((firm.sharesHeld[fid] ?? 0) >= AI_MAX_STAKE) continue;
     const val = marketCap(state, fid);
@@ -75,7 +77,7 @@ export function maybeBuyShares(ctx: SimContext, firmId: string): void {
   // Same path as the player's BUY_SHARES — any market rule applies to AI too.
   if (tradeShares(state, firmId, target, 5)) {
     emitEvent(state, 'info', 'ai',
-      `${firm.name} now holds ${firm.sharesHeld[target]}% of ${state.firms[target]!.name}.${ceoQuote(rng, firm, 'shares')}`,
+      `${firm.name} now holds ${firm.sharesHeld[target]}% of ${town.firms[target]!.name}.${ceoQuote(rng, firm, 'shares')}`,
       target);
   }
 }
@@ -110,7 +112,8 @@ const AI_CITY_YIELD_MIN = 0.0005;
 
 function maybeBuyStakeCity(ctx: SimContext, firmId: string): void {
   const { state, rng } = ctx;
-  const firm = state.firms[firmId]!;
+  const town = townOf(state, ctx.townId);
+  const firm = town.firms[firmId]!;
   // Identical gate to the Village path: same floor, same cadence draw, same
   // order — so the shared rng stream advances the same way regardless of scale.
   if (firm.cash < AI_SHARE_CASH_FLOOR || !rng.chance(0.12)) return;
@@ -123,9 +126,9 @@ function maybeBuyStakeCity(ctx: SimContext, firmId: string): void {
   // firm id wins a tie, deterministically.
   let target: string | null = null;
   let bestYield = AI_CITY_YIELD_MIN;
-  for (const fid of Object.keys(state.firms).sort()) {
+  for (const fid of Object.keys(town.firms).sort()) {
     if (fid === firmId) continue;
-    const other = state.firms[fid]!;
+    const other = town.firms[fid]!;
     if (other.ownerType !== 'player' && other.ownerType !== 'ai') continue;
     if (other.bankruptcyStatus !== 'healthy') continue; // never buy into trouble
     if ((firm.sharesHeld[fid] ?? 0) >= cap) continue;
@@ -151,7 +154,7 @@ function maybeBuyStakeCity(ctx: SimContext, firmId: string): void {
   if (tradeShares(state, firmId, target, want)) {
     const yieldPct = (bestYield * DIVIDEND_PAYOUT_RATIO * 365 * 100).toFixed(0);
     emitEvent(state, 'info', 'ai',
-      `${firm.name} took a ${firm.sharesHeld[target]}% dividend stake in ${state.firms[target]!.name} (~${yieldPct}%/yr yield).${ceoQuote(rng, firm, 'shares')}`,
+      `${firm.name} took a ${firm.sharesHeld[target]}% dividend stake in ${town.firms[target]!.name} (~${yieldPct}%/yr yield).${ceoQuote(rng, firm, 'shares')}`,
       target);
   }
 }
@@ -167,11 +170,12 @@ const RESCUE_KEEP_BUFFER = 30000_00; // never drop below $30k doing it
 
 export function maybeRescueAcquisition(ctx: SimContext, firmId: string): boolean {
   const { state, rng } = ctx;
-  const firm = state.firms[firmId]!;
+  const town = townOf(state, ctx.townId);
+  const firm = town.firms[firmId]!;
   if (firm.cash < RESCUE_CASH_FLOOR || !rng.chance(0.25)) return false;
-  for (const fid in state.firms) {
+  for (const fid in town.firms) {
     if (fid === firmId) continue;
-    const other = state.firms[fid]!;
+    const other = town.firms[fid]!;
     if (other.ownerType !== 'ai' || other.bankruptcyStatus === 'healthy') continue;
     const cost = acquisitionCost(state, firmId, fid);
     if (firm.cash - cost < RESCUE_KEEP_BUFFER) continue;
@@ -196,7 +200,8 @@ const AI_EXPORT_KEEP = 20; // units kept as working stock
 
 export function maybeExportSurplus(ctx: SimContext, firmId: string): void {
   const { state, rng } = ctx;
-  const firm = state.firms[firmId]!;
+  const town = townOf(state, ctx.townId);
+  const firm = town.firms[firmId]!;
   const keep = Math.round(AI_EXPORT_KEEP * getPersonality(firm.personalityId).exportKeepMult);
   for (const facId of firm.facilities) {
     const fac = state.facilities[facId];
@@ -251,7 +256,8 @@ const DEBT_MIN_REPAYMENT = 100_00; // skip dribble payments
 
 export function manageDebt(ctx: SimContext, firmId: string): void {
   const { state } = ctx;
-  const firm = state.firms[firmId]!;
+  const town = townOf(state, ctx.townId);
+  const firm = town.firms[firmId]!;
   if (firm.debt <= 0) return;
   const spare = firm.cash - DEBT_CASH_CUSHION;
   if (spare < DEBT_MIN_REPAYMENT) return;

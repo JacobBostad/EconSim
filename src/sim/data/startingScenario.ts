@@ -94,7 +94,7 @@ function newFacility(
     wholesaleEnabled: true,
   };
   b.state.facilities[id] = fac;
-  b.state.firms[ownerFirmId]!.facilities.push(id);
+  townOf(b.state).firms[ownerFirmId]!.facilities.push(id);
   return fac;
 }
 
@@ -201,7 +201,7 @@ function employ(
   cit.wage = wage;
   cit.employmentStatus = 'employed';
   b.state.facilities[facilityId]!.employees.push(citizenId);
-  b.state.firms[firmId]!.employees.push(citizenId);
+  townOf(b.state).firms[firmId]!.employees.push(citizenId);
 }
 
 function stock(inv: Inventory, productId: string, qty: number): void {

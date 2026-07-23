@@ -28,6 +28,7 @@
 
 import type { SimContext } from '../../core/GameState';
 import { emitEvent } from '../../core/GameState';
+import { townOf } from '../../core/Town';
 import { MAX_STAKE_PCT, DIVIDEND_PAYOUT_RATIO } from '../../data/constants';
 import { marketCap, operatingValuationOf } from '../../selectors/companySelectors';
 import { tradeShares, sharePricePerPct } from '../../core/Shares';
@@ -66,7 +67,8 @@ const HOLDCO_YIELD_MIN = 0.0005;
  */
 function maybeBuyStakeHoldco(ctx: SimContext, firmId: string): void {
   const { state } = ctx;
-  const firm = state.firms[firmId]!;
+  const town = townOf(state, ctx.townId);
+  const firm = town.firms[firmId]!;
   if (firm.cash < HOLDCO_CASH_FLOOR) return;
 
   const appetite = getPersonality(firm.personalityId).stakeAppetite;
@@ -74,9 +76,9 @@ function maybeBuyStakeHoldco(ctx: SimContext, firmId: string): void {
 
   let target: string | null = null;
   let bestYield = HOLDCO_YIELD_MIN;
-  for (const fid of Object.keys(state.firms).sort()) {
+  for (const fid of Object.keys(town.firms).sort()) {
     if (fid === firmId) continue;
-    const other = state.firms[fid]!;
+    const other = town.firms[fid]!;
     if (other.ownerType !== 'player' && other.ownerType !== 'ai') continue;
     if (other.bankruptcyStatus !== 'healthy') continue; // never ladder into trouble
     if ((firm.sharesHeld[fid] ?? 0) >= cap) continue;
@@ -103,7 +105,7 @@ function maybeBuyStakeHoldco(ctx: SimContext, firmId: string): void {
   if (tradeShares(state, firmId, target, want)) {
     const yieldPct = (bestYield * DIVIDEND_PAYOUT_RATIO * 365 * 100).toFixed(0);
     emitEvent(state, 'info', 'ai',
-      `${firm.name} built its ${firm.sharesHeld[target]}% position in ${state.firms[target]!.name} to harvest dividends (~${yieldPct}%/yr).`,
+      `${firm.name} built its ${firm.sharesHeld[target]}% position in ${town.firms[target]!.name} to harvest dividends (~${yieldPct}%/yr).`,
       target);
   }
 }
@@ -122,7 +124,8 @@ export function runInvestorBehavior(
   _digest: DigestBuffer | undefined,
 ): void {
   const { state } = ctx;
-  const firm = state.firms[firmId]!;
+  const town = townOf(state, ctx.townId);
+  const firm = town.firms[firmId]!;
   if (firm.bankruptcyStatus === 'healthy') {
     manageDebt(ctx, firmId);
     maybeBuyStakeHoldco(ctx, firmId);

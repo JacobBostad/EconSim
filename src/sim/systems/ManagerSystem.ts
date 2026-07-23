@@ -21,6 +21,7 @@
 
 import type { SimContext, GameState } from '../core/GameState';
 import { emitEvent, recordTransaction } from '../core/GameState';
+import { townOf } from '../core/Town';
 import { firmAccount, WORLD_ACCOUNT } from '../core/Transactions';
 import { isDayBoundary } from '../core/Tick';
 import type { Manager, ManagerRole } from '../entities/Firm';
@@ -138,7 +139,8 @@ export function managerDuties(skill: number, role: ManagerRole = 'store'): strin
  * experience) keep standing export orders on every stocked warehouse. */
 function runSalesDuty(ctx: SimContext, firmId: string, mgr: Manager): void {
   const { state } = ctx;
-  const firm = state.firms[firmId]!;
+  const town = townOf(state, ctx.townId);
+  const firm = town.firms[firmId]!;
   const order = state.rushOrder;
   if (order && firmId === state.playerFirmId) {
     for (const facId of [...firm.facilities]) {
@@ -183,7 +185,8 @@ function runLogisticsDuty(ctx: SimContext, firmId: string, mgr: Manager): void {
 
 function runMarketingDuty(ctx: SimContext, firmId: string, mgr: Manager): void {
   const { state } = ctx;
-  const firm = state.firms[firmId]!;
+  const town = townOf(state, ctx.townId);
+  const firm = town.firms[firmId]!;
   const fac = mgr.facilityId ? state.facilities[mgr.facilityId] : null;
   if (!fac) return;
   for (const pid of fac.retailProductIds) {
@@ -204,9 +207,10 @@ function runMarketingDuty(ctx: SimContext, firmId: string, mgr: Manager): void {
 export function runManagerSystem(ctx: SimContext): void {
   const { state } = ctx;
   if (!isDayBoundary(state.tick, ctx.config)) return;
+  const town = townOf(state, ctx.townId);
 
-  for (const fid in state.firms) {
-    const firm = state.firms[fid]!;
+  for (const fid in town.firms) {
+    const firm = town.firms[fid]!;
     if (firm.managers.length === 0) continue;
 
     for (const mgr of [...firm.managers]) {

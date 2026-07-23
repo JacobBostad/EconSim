@@ -61,7 +61,7 @@ export function letterGrade(score: number): string {
 export function quarterReport(state: GameState, quarter: number): QuarterReport {
   const startDay = (quarter - 1) * QUARTER_DAYS;
   const endDay = quarter * QUARTER_DAYS - 1;
-  const player = state.firms[state.playerFirmId];
+  const player = townOf(state).firms[state.playerFirmId];
   const hist = (player?.accounting.dailyHistory ?? []).filter(
     (d) => d.day >= startDay && d.day <= endDay,
   );
@@ -178,7 +178,7 @@ export interface ChallengeScore {
  * bit-identical.
  */
 export function challengeScore(state: GameState): ChallengeScore {
-  const player = state.firms[state.playerFirmId];
+  const player = townOf(state).firms[state.playerFirmId];
   const valuation = companyValuation(state, state.playerFirmId).valuation;
   // Town satisfaction — population-weighted over the cast plus the crowd
   // cohorts, mirroring the cohort migration gate's townAvg (CohortSocialSystem).

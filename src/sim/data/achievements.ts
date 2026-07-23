@@ -30,7 +30,9 @@ export interface AchievementDef {
 }
 
 function player(state: GameState) {
-  return state.firms[state.playerFirmId];
+  // Home-town view (identity in a one-town region, so the returned record is the
+  // same reference); gains a `townId` param at the endgame move.
+  return townOf(state).firms[state.playerFirmId];
 }
 
 function latestNetProfit(state: GameState): number | null {
@@ -370,8 +372,9 @@ export const ACHIEVEMENT_DEFS: AchievementDef[] = [
     check: (s) => {
       const p = player(s);
       if (!p || p.employees.length < 5) return false;
-      for (const fid in s.firms) {
-        const f = s.firms[fid]!;
+      const firms = townOf(s).firms;
+      for (const fid in firms) {
+        const f = firms[fid]!;
         if (f.id === p.id || (f.ownerType !== 'ai' && f.ownerType !== 'player')) continue;
         if (p.wagePolicy.baseWage < f.wagePolicy.baseWage * 1.15) return false;
       }

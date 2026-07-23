@@ -659,14 +659,33 @@ converted in steps 1–4 is already correct.
 | --- | --- | --- | --- |
 | **districts** | — | **DONE (14 sites, 8 files)** | step 3 first slice |
 | **cohorts** | ~128 | **DONE (46 refs, 9 files)** | step 3 second slice; the money-scope reads (account primitive + `totalMoneySupply` conservation) stay flat by design — region-wide, they read all towns at the endgame |
-| **firms** | ~500 | ~450 | the largest; `ownerFirmId` cross-refs are untyped strings, unchanged by (b) |
+| **firms** | ~500 | **DONE (230 refs, 49 files)** | step 3 fourth slice, harvested as two file partitions (systems/ 149 refs / 30 files; core+selectors+data 81 refs / 19 files); `ownerFirmId` cross-refs are reads and converted; writers flat: the four founder creation sites + two abandon deletes in `AIFounderSystem`, the acquisition delete, the `startingScenario` creation; the money-primitive reads in `GameState.ts` stay flat (region-wide) with their comments extended to name firms |
 | **facilities** | ~400 | ~360 | `facilityId` cross-refs likewise; placement helpers (`DistrictSlots`) read facilities + districts together |
 | **citizens** | ~240 | **DONE (70 sites, 28 files)** | step 3 third slice; the money-scope reads (account primitive + `totalMoneySupply` conservation) stay flat by design — region-wide, they read all towns at the endgame |
 | **marketStats** | ~40 | **DONE (22 sites, 16 files)** | step 3 third slice; per-product town book |
 | **map dims** | small | small | `config.mapWidth/Height` → per-town |
 | **UI reads** | — | **DONE (7 refs, 2 files)** | `PopulationDashboard` (4: districts, cohorts, districtAt) + `TownRenderer.drawAmbientCrowd` (3: cohorts, districtAt-free district lookup) route through `townOf(state)` (home default — the UI renders the home town, gains a town selector at the endgame); read-only projection, referential behaviour identical (accessor returns the same objects, so React memo/deps unchanged); e2e gauntlet green. the remaining ~81 UI reads (citizens/marketStats — getters now landed — plus firms/facilities) convert in a later UI batch |
 
-### Measured (Town seam, step 3 — districts + cohorts + citizens + marketStats slices)
+### The firms family (fourth slice, two harvest partitions)
+
+The largest family so far converted in one batch, split into two parallel
+file partitions (neither touching `Town.ts` — its `firms`/`facilities` getters
+landed ahead of the batch precisely so partitions need no shared edit):
+**230 reader refs across 49 files** — systems/ (incl. ai/) 149 refs / 30 files
+(largest: `OperatorBehavior` 22, `AIFounderSystem` 14, `ai/finance` 13,
+`ServiceBillingSystem` 13), core+selectors+data 81 refs / 19 files (largest:
+`companySelectors` 18, `Simulation` 20 across its command handlers,
+`Acquisition` 10). Ownership cross-refs (`state.firms[fac.ownerFirmId]` and
+kin) are reads and converted. Writers stay flat, all classified: the four
+founder **creation** sites and two abandon **deletes** in `AIFounderSystem`,
+the acquisition `delete` in `Acquisition.ts`, and `startingScenario`'s firm
+creation (its mutations of *existing* firms route through the view, matching
+the citizens-slice precedent). The **region-wide money primitive** in
+`GameState.ts` (account-resolution trio, `recordTransaction`'s firm-ledger
+reads, `totalMoneySupply`) stays flat with its comments extended to name
+firms — the same money-scope boundary every family with an account kind hits.
+
+### Measured (Town seam, step 3 — districts + cohorts + citizens + marketStats + firms slices)
 
 - **Accessor identity (test `townSeam.test.ts`):** `townOf(state,'home')
   .districts === state.districts`, `.cohorts === state.cohorts`, `.citizens ===
@@ -706,10 +725,14 @@ converted in steps 1–4 is already correct.
   files** — the widest blast radius of any family: the per-product book is read
   with `!` non-null assertions (`town.marketStats[pid]!`) throughout pricing,
   demand, and the daily rebuild, so an empty view throws the moment any product
-  is priced or sold. Restoring each getter returns the suite to green. The
+  is priced or sold. Breaking the firms accessor (`get firms() { return {}; }`)
+  turns **151 tests red across 65 files** — payroll, pricing, founders,
+  acquisitions, dividends, and every selector that resolves an owner all flag
+  it. Restoring each getter returns the suite to green. The
   harness demonstrably guards the conversion.
 - **Pinned baselines hold:** village seeds 11/4/7 reproduce `rngState`
   3274842624 / 2896139677 / 4253583594; city seed 11 reproduces its `rngState`
-  2546912297 and money supply 316900000. Full suite green (**581** = 580 + 1 new
-  citizen/marketStats-determinism seam test); `tsc` clean. No UI touched (no e2e
-  needed).
+  2546912297 and money supply 316900000. Full suite green (**582** = 580 + 1
+  citizen/marketStats-determinism seam test + 1 firms-determinism seam test, the
+  latter bit-comparing every firm's cash, debt, and computed valuation across a
+  30-day City double-run); `tsc` clean.

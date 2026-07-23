@@ -11,9 +11,10 @@
  *   2. the seam threads — `makeContext(state).townId === HOME_TOWN_ID`;
  *   3. serialization is unpolluted — no `towns` key leaks into a save;
  *
- * and that the district, cohort, citizen, AND marketStats families, run through
- * the converted systems, stay deterministic (two City runs agree bit-for-bit on
- * the districts, cohorts, citizens, market book, and rngState).
+ * and that the district, cohort, citizen, marketStats, AND firms families, run
+ * through the converted systems, stay deterministic (two City runs agree bit-for-
+ * bit on the districts, cohorts, citizens, market book, firm cash/valuation, and
+ * rngState).
  * Bit-identity against the pre-refactor pinned baselines is the orchestrator's
  * job (village seeds 11/4/7 rngState pins, city seed 11) — this file guards the
  * accessor's contract, not the whole trajectory.
@@ -28,6 +29,7 @@ import { makeContext } from '../core/GameState';
 import { townOf, HOME_TOWN_ID } from '../core/Town';
 import { ticksPerDay } from '../core/Tick';
 import { serialize } from '../persistence/saveLoad';
+import { companyValuation } from '../selectors/companySelectors';
 
 /** A running City-preset sim (crowd cohorts + districts live), resumed. */
 function newCitySim(seed: number): Simulation {
@@ -206,5 +208,45 @@ describe('Town seam — the converted citizen + marketStats families stay determ
       expect(ma[pid]!.history.length).toBe(mb[pid]!.history.length);
     }
     expect(ma[pids[0]!]!.history.length).toBeGreaterThan(0);
+  });
+});
+
+describe('Town seam — the converted firms family stays deterministic', () => {
+  it('two City runs agree bit-for-bit through the converted firm systems', () => {
+    const a = newCitySim(11);
+    const b = newCitySim(11);
+    const tpd = ticksPerDay(a.getState().config);
+    // 30 days runs the firm path hard: the AI operator/founder loops price,
+    // staff, source, expand, invest and found new firms; Payroll/Accounting/
+    // Dividend/Finance/Marketing/Bankruptcy/ServiceBilling rewrite every firm's
+    // cash and books daily; Logistics/Production/Rent move firm money. Every
+    // firm reader in those systems now routes through townOf(...).firms.
+    a.run(tpd * 30);
+    b.run(tpd * 30);
+    expect(a.getState().rngState).toBe(b.getState().rngState);
+    expect(normalizedSerialize(a.getState())).toBe(normalizedSerialize(b.getState()));
+
+    // The firm sector must actually be live — otherwise the firm readers never
+    // run and this proves nothing. City seed 11 seeds AI firms (and the founder
+    // loop mints more over 30 days); assert the book is non-empty and that every
+    // firm's cash AND its computed valuation agree run-to-run.
+    const fa = a.getState().firms;
+    const fb = b.getState().firms;
+    const fids = Object.keys(fa).sort();
+    expect(fids).toEqual(Object.keys(fb).sort()); // the same firms were founded
+    expect(fids.length).toBeGreaterThan(0);
+    let totalCash = 0;
+    for (const id of fids) {
+      totalCash += fa[id]!.cash;
+      expect(fa[id]!.cash).toBe(fb[id]!.cash);
+      expect(fa[id]!.debt).toBe(fb[id]!.debt);
+      // Valuation reads the firm's book, facilities, and equity portfolio —
+      // exercising the converted firm readers end-to-end.
+      expect(companyValuation(a.getState(), id).valuation).toBe(
+        companyValuation(b.getState(), id).valuation,
+      );
+    }
+    // A City seed-11 firm sector holds real cash after 30 days (the readers ran).
+    expect(totalCash).not.toBe(0);
   });
 });

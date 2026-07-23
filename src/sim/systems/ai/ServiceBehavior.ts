@@ -28,6 +28,7 @@ import type { SimContext, GameState } from '../../core/GameState';
 import type { Firm } from '../../entities/Firm';
 import type { ServiceDef } from '../../data/services';
 import { emitEvent, recordTransaction } from '../../core/GameState';
+import { townOf } from '../../core/Town';
 import { firmAccount, WORLD_ACCOUNT } from '../../core/Transactions';
 import { getFacilityDef } from '../../data/facilityDefinitions';
 import { createFacility } from '../../entities/factories';
@@ -73,10 +74,13 @@ function cashBuffer(state: GameState, firm: Firm): number {
 
 /** Town-wide capacity and sold seats for one service (across all providers). */
 function townService(state: GameState, def: ServiceDef): { capacity: number; sold: number; providers: number } {
+  // Bare-`state` helper mid-gradient: home town by default (one-town region →
+  // same reference); gains a `townId` param at the endgame move.
+  const town = townOf(state);
   let capacity = 0;
   let providers = 0;
-  for (const fid in state.firms) {
-    const cap = serviceCapacity(state, state.firms[fid]!, def);
+  for (const fid in town.firms) {
+    const cap = serviceCapacity(state, town.firms[fid]!, def);
     if (cap > 0) { capacity += cap; providers += 1; }
   }
   let sold = 0;
@@ -129,7 +133,7 @@ function buildServiceFacility(ctx: SimContext, firm: Firm, def: ServiceDef, inde
  * founder row). Exposed so founding and the daily loop share one build path.
  */
 export function foundServiceFacility(ctx: SimContext, firmId: string, serviceId: string): boolean {
-  const firm = ctx.state.firms[firmId]!;
+  const firm = townOf(ctx.state, ctx.townId).firms[firmId]!;
   return buildServiceFacility(ctx, firm, getServiceDef(serviceId), 0);
 }
 
@@ -223,7 +227,8 @@ export function runServiceBehavior(
   _digest: DigestBuffer | undefined,
 ): void {
   const { state } = ctx;
-  const firm = state.firms[firmId]!;
+  const town = townOf(state, ctx.townId);
+  const firm = town.firms[firmId]!;
   if (firm.bankruptcyStatus === 'insolvent') return;
 
   // Advance every provided service's full-day streak first (independent of any

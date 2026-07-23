@@ -13,6 +13,7 @@
 
 import type { SimContext } from '../core/GameState';
 import { recordTransaction } from '../core/GameState';
+import { townOf } from '../core/Town';
 import { firmAccount, WORLD_ACCOUNT } from '../core/Transactions';
 import { getRecipe } from '../data/recipes';
 import { getProduct } from '../data/products';
@@ -30,6 +31,7 @@ const PRODUCING_TYPES = new Set(['farm', 'mine', 'factory', 'importer']);
 
 export function runProductionSystem(ctx: SimContext): void {
   const { state } = ctx;
+  const town = townOf(state, ctx.townId);
   for (const fid in state.facilities) {
     const fac = state.facilities[fid]!;
     if (fac.status === 'closed') continue;
@@ -45,7 +47,7 @@ export function runProductionSystem(ctx: SimContext): void {
     if (recipe.minQuality !== undefined) {
       const outPid = recipe.outputs[0]?.productId;
       const firmQ = outPid
-        ? state.firms[fac.ownerFirmId]?.qualityByProduct[outPid] ?? getProduct(outPid).defaultQuality
+        ? town.firms[fac.ownerFirmId]?.qualityByProduct[outPid] ?? getProduct(outPid).defaultQuality
         : 0;
       if (firmQ < recipe.minQuality) {
         fac.status = 'idle';
@@ -129,7 +131,7 @@ export function runProductionSystem(ctx: SimContext): void {
     // compute coverage lifts the owning firm's output firm-wide (serviceBoost,
     // set daily by ServiceBillingSystem; undefined ⇒ 1, so Village is untouched).
     const levelMult = 1 + 0.15 * (fac.level - 1);
-    const serviceBoost = state.firms[fac.ownerFirmId]?.serviceBoost ?? 1;
+    const serviceBoost = town.firms[fac.ownerFirmId]?.serviceBoost ?? 1;
     const efficiency =
       recipe.baseEfficiency *
       workerFactor *
@@ -146,7 +148,7 @@ export function runProductionSystem(ctx: SimContext): void {
         removeStock(fac.inputInventory, io.productId, io.quantity);
       }
       // Produce outputs, stamped with this firm's quality (raised by R&D).
-      const firm = state.firms[fac.ownerFirmId];
+      const firm = town.firms[fac.ownerFirmId];
       for (const io of recipe.outputs) {
         const product = getProduct(io.productId);
         const quality = firm?.qualityByProduct[io.productId] ?? product.defaultQuality;

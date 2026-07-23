@@ -87,6 +87,7 @@ function processArrivals(ctx: SimContext): void {
 
 function processReorders(ctx: SimContext): void {
   const { state } = ctx;
+  const town = townOf(state, ctx.townId);
   // Contracts that already have an in-flight shipment.
   const inFlight = new Set<string>();
   for (const vid in state.vehicles) {
@@ -107,7 +108,7 @@ function processReorders(ctx: SimContext): void {
     // deeper (reorder sooner, hold more) so the 65%-output season doesn't
     // starve their chains. Player contracts are untouched — stockpiling is
     // the player's own call.
-    const owner = state.firms[contract.ownerFirmId];
+    const owner = town.firms[contract.ownerFirmId];
     const season = seasonOf(state);
     const bracing =
       owner?.ownerType === 'ai' && (season === 'autumn' || season === 'winter');
@@ -191,7 +192,7 @@ function processReorders(ctx: SimContext): void {
       if (crossFirm) {
         const unit = wholesaleUnitPrice(state, source, contract.productId);
         wholesalePaid = unit * qty;
-        const buyer = state.firms[dest.ownerFirmId];
+        const buyer = town.firms[dest.ownerFirmId];
         if (!buyer || buyer.cash < wholesalePaid) continue; // can't pay -> no shipment
         recordTransaction(state, {
           from: firmAccount(dest.ownerFirmId),
@@ -201,11 +202,11 @@ function processReorders(ctx: SimContext): void {
           category: 'cogs',
           productId: contract.productId,
           quantity: qty,
-          note: `Wholesale ${qty} ${product.name} from ${state.firms[source.ownerFirmId]?.name ?? 'supplier'}`,
+          note: `Wholesale ${qty} ${product.name} from ${town.firms[source.ownerFirmId]?.name ?? 'supplier'}`,
           counterparty: { firmId: source.ownerFirmId, category: 'revenue' },
         });
         buyer.wholesaleSpend += wholesalePaid;
-        const wholesaler = state.firms[source.ownerFirmId];
+        const wholesaler = town.firms[source.ownerFirmId];
         if (wholesaler) wholesaler.wholesaleEarned += wholesalePaid;
       }
       removeStock(bag, contract.productId, qty);

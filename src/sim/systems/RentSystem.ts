@@ -23,7 +23,7 @@ export function runRentSystem(ctx: SimContext): void {
   for (const fid in state.facilities) {
     const fac = state.facilities[fid]!;
     if (fac.defId !== 'apartment' || fac.status === 'closed') continue;
-    const owner = state.firms[fac.ownerFirmId];
+    const owner = town.firms[fac.ownerFirmId];
     if (!owner || (owner.ownerType !== 'player' && owner.ownerType !== 'ai')) continue;
 
     for (const cid of fac.residentIds) {

@@ -290,6 +290,7 @@ function cohortStoreScore(
   home: Vec2,
 ): number | null {
   const { state, config } = ctx;
+  const town = townOf(state, ctx.townId);
   if (!facility.retailProductIds.includes(productId)) return null;
   const product = getProduct(productId);
   const price = storePrice(state, facility, productId);
@@ -301,7 +302,7 @@ function cohortStoreScore(
   const dist = distance(home, facility.location);
   const distanceScore = 1 - clamp(dist / config.maxShoppingDistance, 0, 1);
   const qualityScore = quality / 100;
-  const firm = state.firms[facility.ownerFirmId];
+  const firm = town.firms[facility.ownerFirmId];
   const brandScore = clamp((firm?.brandByProduct[productId] ?? 0) / 100, 0, 1);
   const reliabilityScore = COHORT_RELIABILITY;
   const ageDays = (state.tick - facility.builtAtTick) / (config.ticksPerHour * 24);
@@ -310,7 +311,7 @@ function cohortStoreScore(
   const affinity = positioningAffinity(facility.positioning, cohort.tier, {
     avgQuality: quality,
     price,
-    marketAvgPrice: townOf(state, ctx.townId).marketStats[productId]?.averagePrice || product.basePrice,
+    marketAvgPrice: town.marketStats[productId]?.averagePrice || product.basePrice,
   });
 
   return (
@@ -452,13 +453,14 @@ function attemptCohortPurchase(
   castShare: number,
 ): number {
   const { state } = ctx;
+  const town = townOf(state, ctx.townId);
   const product = getProduct(productId);
   const spec = product.needSpec!;
-  const stat = townOf(state, ctx.townId).marketStats[productId]!;
+  const stat = town.marketStats[productId]!;
   const price = storePrice(state, store, productId);
   const stock = getQuantity(store.inputInventory, productId);
   const quality = getQuality(store.inputInventory, productId);
-  const firm = state.firms[store.ownerFirmId];
+  const firm = town.firms[store.ownerFirmId];
   const brand = firm?.brandByProduct[productId] ?? 0;
 
   // Strong brands and quality raise what shoppers will pay; booms/recessions,

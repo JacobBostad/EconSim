@@ -32,8 +32,8 @@ export function runAccountingSystem(ctx: SimContext): void {
   const town = townOf(state, ctx.townId);
   const completedDay = ctx.time.day - 1;
 
-  for (const fid in state.firms) {
-    const firm = state.firms[fid]!;
+  for (const fid in town.firms) {
+    const firm = town.firms[fid]!;
     if (firm.ownerType === 'player' || firm.ownerType === 'ai') {
       // 1) Maintenance.
       for (const facId of firm.facilities) {
@@ -98,7 +98,7 @@ export function runAccountingSystem(ctx: SimContext): void {
     fac.yesterdayStats = fac.dailyStats;
     fac.dailyStats = emptyFacilityDailyStats();
 
-    const owner = state.firms[fac.ownerFirmId];
+    const owner = town.firms[fac.ownerFirmId];
     const y = fac.yesterdayStats;
     const revenue = y.revenue + y.transferOutValue;
     const wages = owner

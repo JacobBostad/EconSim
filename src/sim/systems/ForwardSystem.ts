@@ -17,6 +17,7 @@
 
 import type { SimContext, GameState } from '../core/GameState';
 import { emitEvent, recordTransaction } from '../core/GameState';
+import { townOf } from '../core/Town';
 import { firmAccount, WORLD_ACCOUNT } from '../core/Transactions';
 import { isDayBoundary } from '../core/Tick';
 import { nextId } from '../core/Id';
@@ -52,7 +53,9 @@ export function sellForward(
   deliveryDay: number,
   currentDay: number,
 ): boolean {
-  const firm = state.firms[firmId];
+  // Bare-`state` helper mid-gradient: home town by default (one-town region →
+  // same reference); gains a `townId` param at the endgame move.
+  const firm = townOf(state).firms[firmId];
   if (!firm) return false;
   if (firm.forwards.length >= FORWARD_MAX_OPEN) return false;
   const qty = Math.round(quantity);
@@ -100,7 +103,9 @@ export function forwardMark(state: GameState, fwd: { productId: ProductId; quant
  * is via recordTransaction, so money stays conserved. Returns true on success.
  */
 export function closeForward(state: GameState, firmId: FirmId, forwardId: string): boolean {
-  const firm = state.firms[firmId];
+  // Bare-`state` helper mid-gradient: home town by default (one-town region →
+  // same reference); gains a `townId` param at the endgame move.
+  const firm = townOf(state).firms[firmId];
   if (!firm) return false;
   const fwd = firm.forwards.find((f) => f.id === forwardId);
   if (!fwd) return false;
@@ -174,10 +179,11 @@ export function closeForward(state: GameState, firmId: FirmId, forwardId: string
 export function runForwardSystem(ctx: SimContext): void {
   const { state } = ctx;
   if (!isDayBoundary(state.tick, ctx.config)) return;
+  const town = townOf(state, ctx.townId);
   const day = ctx.time.day;
 
-  for (const fid in state.firms) {
-    const firm = state.firms[fid]!;
+  for (const fid in town.firms) {
+    const firm = town.firms[fid]!;
     if (firm.forwards.length === 0) continue;
     for (const fwd of [...firm.forwards]) {
       if (fwd.deliveryDay > day) continue;

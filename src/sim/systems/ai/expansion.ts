@@ -43,9 +43,12 @@ import { getPersonality, ceoQuote } from '../../data/personalities';
  * lease branch that calls it is inert. A pure sorted read — draws no rng.
  */
 function findLandlordLessor(state: GameState, firmId: string, cost: number): Firm | null {
-  for (const id of Object.keys(state.firms).sort()) {
+  // Bare-`state` helper mid-gradient: home town by default (one-town region →
+  // same reference); gains a `townId` param at the endgame move.
+  const town = townOf(state);
+  for (const id of Object.keys(town.firms).sort()) {
     if (id === firmId) continue;
-    const f = state.firms[id]!;
+    const f = town.firms[id]!;
     if (f.ownerType !== 'ai' || f.strategy.archetype !== 'landlord') continue;
     if (landlordCanFinance(f, cost)) return f;
   }
@@ -59,7 +62,8 @@ function findLandlordLessor(state: GameState, firmId: string, cost: number): Fir
  */
 export function maybeExpand(ctx: SimContext, firmId: string): void {
   const { state, rng } = ctx;
-  const firm = state.firms[firmId]!;
+  const town = townOf(state, ctx.townId);
+  const firm = town.firms[firmId]!;
   const stores = firm.facilities.filter((id) => state.facilities[id]?.type === 'retail');
   if (stores.length >= 3) return; // cap stores per firm
 
@@ -73,7 +77,7 @@ export function maybeExpand(ctx: SimContext, firmId: string): void {
     lost += fac.dailyStats.lostSales;
   }
   if (!product) return;
-  const stat = townOf(state, ctx.townId).marketStats[product]!;
+  const stat = town.marketStats[product]!;
   if (stat.unmetDemand < 14 || lost < 6) return; // only under real shortage
   const expandChance = Math.min(1, ctx.config.aiExpandChance * getPersonality(firm.personalityId).expandChanceMult);
   if (!rng.chance(expandChance)) return; // not every eligible day
@@ -150,7 +154,7 @@ export function maybeExpand(ctx: SimContext, firmId: string): void {
     addContract(ctx, contract);
   }
   const how = lessor
-    ? `leased a new outlet from ${state.firms[lessor.id]!.name}`
+    ? `leased a new outlet from ${town.firms[lessor.id]!.name}`
     : 'opened a new outlet';
   emitEvent(state, 'info', 'ai', `${firm.name} ${how} to meet demand for ${getProduct(product).name}.${ceoQuote(rng, firm, 'expand')}`, fac.id);
 }
@@ -169,7 +173,8 @@ const LUXURY_RND_COST = 6000_00;
 
 export function maybeEnterLuxury(ctx: SimContext, firmId: string): void {
   const { state, rng } = ctx;
-  const firm = state.firms[firmId]!;
+  const town = townOf(state, ctx.townId);
+  const firm = town.firms[firmId]!;
   if (ctx.time.day < LUXURY_ENTRY_DAY || firm.cash < LUXURY_ENTRY_CASH) return;
   // Already in luxury? One entry per firm.
   for (const facId of firm.facilities) {
@@ -255,7 +260,8 @@ const COFFEE_ENTRY_CHANCE = 0.06;
 
 export function maybeEnterCoffee(ctx: SimContext, firmId: string): void {
   const { state, rng } = ctx;
-  const firm = state.firms[firmId]!;
+  const town = townOf(state, ctx.townId);
+  const firm = town.firms[firmId]!;
   if (ctx.time.day < COFFEE_ENTRY_DAY || firm.cash < COFFEE_ENTRY_CASH) return;
   // One entry per firm. Multiple entrants are fine — coffee on several
   // staple shelves rides existing shopping trips via baskets (measured
@@ -328,7 +334,8 @@ const LANDLORD_MAX_APARTMENTS = 2;
 
 export function maybeBuildApartment(ctx: SimContext, firmId: string): void {
   const { state, rng } = ctx;
-  const firm = state.firms[firmId]!;
+  const town = townOf(state, ctx.townId);
+  const firm = town.firms[firmId]!;
   if (ctx.time.day < LANDLORD_DAY || firm.cash < LANDLORD_CASH) return;
 
   let owned = 0;
@@ -369,7 +376,8 @@ export function maybeBuildApartment(ctx: SimContext, firmId: string): void {
 /** Flush AI firms level up a production facility now and then. */
 export function maybeUpgrade(ctx: SimContext, firmId: string): void {
   const { state, rng } = ctx;
-  const firm = state.firms[firmId]!;
+  const town = townOf(state, ctx.townId);
+  const firm = town.firms[firmId]!;
   if (firm.cash < 45000_00 || !rng.chance(0.08)) return;
   for (const facId of firm.facilities) {
     const fac = state.facilities[facId];

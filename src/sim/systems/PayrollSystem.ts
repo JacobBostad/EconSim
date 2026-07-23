@@ -39,8 +39,8 @@ export function runPayrollSystem(ctx: SimContext): void {
     }
   }
 
-  for (const fid in state.firms) {
-    const firm = state.firms[fid]!;
+  for (const fid in town.firms) {
+    const firm = town.firms[fid]!;
     if (firm.ownerType === 'world' || firm.ownerType === 'external') continue;
     if (firm.employees.length === 0) continue;
 
@@ -113,8 +113,8 @@ function payCrowd(ctx: SimContext): void {
   }
 
   // Wages, one transaction per firm × cohort.
-  for (const fid of Object.keys(state.firms).sort()) {
-    const firm = state.firms[fid]!;
+  for (const fid of Object.keys(town.firms).sort()) {
+    const firm = town.firms[fid]!;
     if (firm.ownerType === 'world' || firm.ownerType === 'external') continue;
     const byCohort: Record<string, number> = {};
     for (const facId of [...firm.facilities].sort()) {
@@ -148,10 +148,11 @@ function payCrowd(ctx: SimContext): void {
 
 /** Remove every worker of one cohort from one firm's facilities. */
 function releaseCrowd(state: GameState, firmId: string, cohortId: string): void {
-  const firm = state.firms[firmId];
   // Bare-`state` helper mid-gradient: home town by default (one-town region →
   // same reference); gains a `townId` param at the endgame move.
-  const cohort = townOf(state).cohorts[cohortId];
+  const town = townOf(state);
+  const firm = town.firms[firmId];
+  const cohort = town.cohorts[cohortId];
   if (!firm || !cohort) return;
   for (const facId of [...firm.facilities].sort()) {
     const fac = state.facilities[facId];
@@ -165,8 +166,9 @@ function releaseCrowd(state: GameState, firmId: string, cohortId: string): void 
 
 function quit(ctx: SimContext, firmId: string, citizenId: string): void {
   const { state } = ctx;
-  const firm = state.firms[firmId]!;
-  const cit = townOf(state, ctx.townId).citizens[citizenId];
+  const town = townOf(state, ctx.townId);
+  const firm = town.firms[firmId]!;
+  const cit = town.citizens[citizenId];
   if (!cit) return;
   firm.employees = firm.employees.filter((id) => id !== citizenId);
   if (cit.workplaceFacilityId) {

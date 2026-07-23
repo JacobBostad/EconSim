@@ -21,7 +21,7 @@ export function runEventLogSystem(ctx: SimContext): void {
   if (!isDayBoundary(ctx.state.tick, ctx.config)) return;
   const { state } = ctx;
   const town = townOf(state, ctx.townId);
-  const player = state.firms[state.playerFirmId];
+  const player = town.firms[state.playerFirmId];
   if (!player) return;
 
   for (const facId of player.facilities) {

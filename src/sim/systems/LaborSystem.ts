@@ -52,12 +52,13 @@ export function trainCrew(
   firmId: import('../core/Id').FirmId,
   facilityId: FacilityId,
 ): boolean {
-  const firm = state.firms[firmId];
-  const fac = state.facilities[facilityId];
-  if (!firm || !fac || fac.ownerFirmId !== firmId) return false;
   // Bare-`state` helper mid-gradient: home town by default (one-town region →
   // same reference); gains a `townId` param at the endgame move.
-  const citizens = townOf(state).citizens;
+  const town = townOf(state);
+  const firm = town.firms[firmId];
+  const fac = state.facilities[facilityId];
+  if (!firm || !fac || fac.ownerFirmId !== firmId) return false;
+  const citizens = town.citizens;
   const trainees = fac.employees
     .map((cid) => citizens[cid])
     .filter((c): c is NonNullable<typeof c> => !!c && c.skill < SKILL_MAX - 1e-9);
@@ -96,11 +97,14 @@ export function hireCitizen(
   facilityId: FacilityId,
   citizenId: CitizenId,
 ): boolean {
+  // Bare-`state` helper mid-gradient: home town by default (one-town region →
+  // same reference); gains a `townId` param at the endgame move.
+  const town = townOf(state);
   const fac = state.facilities[facilityId];
   if (!fac) return false;
-  const firm = state.firms[fac.ownerFirmId];
+  const firm = town.firms[fac.ownerFirmId];
   if (!firm) return false;
-  const cit = townOf(state).citizens[citizenId];
+  const cit = town.citizens[citizenId];
   if (!cit || cit.employmentStatus === 'employed') return false;
   if (fac.employees.length >= fac.workerCapacity) return false;
 
@@ -121,11 +125,14 @@ export function fireCitizen(
   facilityId: FacilityId,
   citizenId: CitizenId,
 ): boolean {
+  // Bare-`state` helper mid-gradient: home town by default (one-town region →
+  // same reference); gains a `townId` param at the endgame move.
+  const town = townOf(state);
   const fac = state.facilities[facilityId];
   if (!fac) return false;
-  const firm = state.firms[fac.ownerFirmId];
+  const firm = town.firms[fac.ownerFirmId];
   if (!firm) return false;
-  const cit = townOf(state).citizens[citizenId];
+  const cit = town.citizens[citizenId];
   if (!cit) return false;
   fac.employees = fac.employees.filter((id) => id !== citizenId);
   firm.employees = firm.employees.filter((id) => id !== citizenId);
@@ -236,7 +243,7 @@ function runJobMarket(ctx: SimContext): void {
     for (const fid in state.facilities) {
       const fac = state.facilities[fid]!;
       if (fac.status === 'closed' || fac.id === cit.workplaceFacilityId) continue;
-      const firm = state.firms[fac.ownerFirmId];
+      const firm = town.firms[fac.ownerFirmId];
       if (!firm || (firm.ownerType !== 'player' && firm.ownerType !== 'ai')) continue;
       if (firm.id === cit.employerFirmId) continue;
       if (fac.workerCapacity <= 0 || fac.employees.length >= fac.workerCapacity) continue;
@@ -251,7 +258,7 @@ function runJobMarket(ctx: SimContext): void {
     const oldWorkplace = cit.workplaceFacilityId;
     if (oldWorkplace) fireCitizen(state, oldWorkplace, cid);
     hireCitizen(state, best, cid);
-    const newFirm = state.firms[state.facilities[best]!.ownerFirmId]!;
+    const newFirm = town.firms[state.facilities[best]!.ownerFirmId]!;
     if (from === state.playerFirmId) {
       emitEvent(state, 'warning', 'payroll',
         `${cit.name} left you for ${newFirm.name}'s higher wages (${formatMoney(newFirm.wagePolicy.baseWage)}/day).`, cid);

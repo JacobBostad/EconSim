@@ -60,7 +60,8 @@ export function runCohortLaborSystem(ctx: SimContext): void {
 function reconcileCrowdJobs(state: GameState): void {
   // Bare-`state` helper mid-gradient: home town by default (one-town region →
   // same reference); gains a `townId` param at the endgame move.
-  const cohorts = townOf(state).cohorts;
+  const town = townOf(state);
+  const cohorts = town.cohorts;
   const cohortIds = Object.keys(cohorts).sort();
   const facilityIds = Object.keys(state.facilities).sort();
 
@@ -73,7 +74,7 @@ function reconcileCrowdJobs(state: GameState): void {
   // holdings first, id tiebreak).
   for (const fid of facilityIds) {
     const fac = state.facilities[fid]!;
-    const firm = state.firms[fac.ownerFirmId];
+    const firm = town.firms[fac.ownerFirmId];
     const eligible =
       fac.status !== 'closed' &&
       firm !== undefined &&
@@ -123,7 +124,7 @@ function reconcileCrowdJobs(state: GameState): void {
   // can afford the projected payroll with a buffer.
   for (const fid of facilityIds) {
     const fac = state.facilities[fid]!;
-    const firm = state.firms[fac.ownerFirmId];
+    const firm = town.firms[fac.ownerFirmId];
     if (!firm || (firm.ownerType !== 'player' && firm.ownerType !== 'ai')) continue;
     if (fac.status === 'closed' || fac.workerCapacity <= 0) continue;
     let room = fac.workerCapacity - fac.employees.length - crowdCount(fac);

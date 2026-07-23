@@ -42,6 +42,24 @@ bit-identical, every-resident-simulated town.
   dark-and-inert as the fourth measured cast-parity foundation. Suite +5
   (`castRevisit.test.ts`, now 580); `tsc` clean, full suite green. See
   docs/design/cohorts-and-districts.md, "Cast-parity attempt #3".
+- **E step 3 — the Town seam (fourth slice, firms).** The largest family so far
+  converts in one batch: every **firm reader** in the sim layer routes through
+  `townOf(...).firms` — **230 reader refs across 49 files**, harvested as two
+  parallel file partitions (systems/ 149 refs / 30 files; core+selectors+data
+  81 refs / 19 files) that never touch `Town.ts`, whose `firms`/`facilities`
+  getters landed one commit ahead precisely so partitions need no shared edit.
+  Ownership cross-refs (`state.firms[fac.ownerFirmId]` and kin) are reads and
+  converted. Writers stay flat, all classified: the four founder creation sites
+  + two abandon deletes in `AIFounderSystem`, the acquisition `delete`, and
+  `startingScenario`'s firm creation (its mutations of EXISTING firms route
+  through the view, per the citizens-slice precedent). The region-wide money
+  primitive in `GameState.ts` — now including `recordTransaction`'s firm-ledger
+  reads — stays flat with its comments extended to name firms. Fails-on-revert:
+  a scratch-broken firms getter turns **151 tests red across 65 files**;
+  restoring returns green. Suite +1 firms-determinism seam test (two City
+  seed-11 runs bit-agree on every firm's cash, debt, and valuation over 30
+  days; now 582); `tsc` clean; pinned baselines reproduce exactly. Remaining:
+  facilities (~360), map dims, and the rest of the UI reads.
 - **E step 3 — the Town seam (UI batch, district/cohort reads).** The last
   deferred slice of the district/cohort families lands: the UI's flat reads now
   route through the seam. **7 reader references across 2 files** —

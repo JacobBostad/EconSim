@@ -21,6 +21,7 @@ import { CHAIN_BLUEPRINTS, stageOutput } from '../data/chains';
 import { landCostMultiplier, landValueAt } from './LandValue';
 import { firstFreeDistrictSlot, type SlotSpec } from './DistrictSlots';
 import { findUnemployed, hireCitizen } from '../systems/LaborSystem';
+import { townOf } from './Town';
 
 export interface BuiltChain {
   /** Production-stage facilities in order (stage[0] = the raw producer, the
@@ -55,7 +56,9 @@ export function buildStarterChain(
   productId: string,
 ): BuiltChain | null {
   const s = state;
-  const firm = s.firms[firmId];
+  // Home-town view (identity in a one-town region, so the returned record is the
+  // same reference); gains a `townId` param at the endgame move.
+  const firm = townOf(s).firms[firmId];
   const bp = CHAIN_BLUEPRINTS[productId];
   if (!firm || !bp) return null;
 

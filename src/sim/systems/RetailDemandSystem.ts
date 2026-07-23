@@ -79,7 +79,9 @@ export function anyCohortPopulation(state: GameState): boolean {
 
 /** Price a firm charges for a product (falls back to base price). */
 export function storePrice(state: GameState, facility: Facility, productId: ProductId): number {
-  const firm = state.firms[facility.ownerFirmId];
+  // Bare-`state` helper mid-gradient: home town by default (one-town region →
+  // same reference); gains a `townId` param at the endgame move.
+  const firm = townOf(state).firms[facility.ownerFirmId];
   const p = firm?.pricesByProduct[productId];
   return p && p > 0 ? p : getProduct(productId).basePrice;
 }
@@ -123,7 +125,7 @@ export function scoreStore(
   const reliabilityRaw = citizen.storeReliability[facility.id] ?? 0;
   const reliabilityScore =
     reliabilityRaw > 0 ? clamp(reliabilityRaw / 10, 0, 1) : 0.4;
-  const firm = ctx.state.firms[facility.ownerFirmId];
+  const firm = townOf(ctx.state, ctx.townId).firms[facility.ownerFirmId];
   const brandScore = clamp((firm?.brandByProduct[productId] ?? 0) / 100, 0, 1);
 
   // Grand-opening novelty: citizens try a NEW store (first ~15 days, fading)
@@ -237,15 +239,16 @@ function attemptPurchase(
   opts: { revisit?: boolean } = {},
 ): void {
   const { state } = ctx;
+  const town = townOf(state, ctx.townId);
   const product = getProduct(productId);
-  const stat = townOf(state, ctx.townId).marketStats[productId]!;
+  const stat = town.marketStats[productId]!;
   stat.demandAttempts += 1;
 
   const open = storeIsOpen(ctx, store);
   const stock = getQuantity(store.inputInventory, productId);
   const price = storePrice(state, store, productId);
   // Strong brands and high quality raise what citizens will pay.
-  const firm = state.firms[store.ownerFirmId];
+  const firm = town.firms[store.ownerFirmId];
   const brand = firm?.brandByProduct[productId] ?? 0;
   const qual = getQuality(store.inputInventory, productId);
   const premium = 1 + brand / 250 + (qual - 50) / 300;

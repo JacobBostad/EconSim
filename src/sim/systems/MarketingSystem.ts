@@ -15,6 +15,7 @@
 
 import type { SimContext } from '../core/GameState';
 import { recordTransaction, canAfford } from '../core/GameState';
+import { townOf } from '../core/Town';
 import { firmAccount, WORLD_ACCOUNT } from '../core/Transactions';
 import { isDayBoundary } from '../core/Tick';
 import { clamp } from '../../utils/clamp';
@@ -24,8 +25,9 @@ import { AD_BRAND_GAIN_PER_DOLLAR, BRAND_DECAY_PER_DAY, MAX_BRAND } from '../dat
 export function runMarketingSystem(ctx: SimContext): void {
   if (!isDayBoundary(ctx.state.tick, ctx.config)) return;
   const { state } = ctx;
-  for (const fid in state.firms) {
-    const firm = state.firms[fid]!;
+  const town = townOf(state, ctx.townId);
+  for (const fid in town.firms) {
+    const firm = town.firms[fid]!;
     if (firm.ownerType !== 'player' && firm.ownerType !== 'ai') continue;
 
     // Decay all existing brand.

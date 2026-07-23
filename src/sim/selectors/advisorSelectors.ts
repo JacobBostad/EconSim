@@ -31,7 +31,10 @@ export interface Advice {
 const MAX_ITEMS = 5;
 
 export function morningBriefing(state: GameState): Advice[] {
-  const player = state.firms[state.playerFirmId];
+  // Home-town view (identity in a one-town region, so the returned record is the
+  // same reference); gains a `townId` param at the endgame move.
+  const firms = townOf(state).firms;
+  const player = firms[state.playerFirmId];
   if (!player) return [];
   const items: Advice[] = [];
 
@@ -168,7 +171,7 @@ export function morningBriefing(state: GameState): Advice[] {
     for (const fid in state.facilities) {
       const fac = state.facilities[fid]!;
       if (fac.ownerFirmId === player.id || fac.type === 'importer') continue;
-      if (state.firms[fac.ownerFirmId]?.ownerType !== 'ai') continue;
+      if (firms[fac.ownerFirmId]?.ownerType !== 'ai') continue;
       if (getQuantity(fac.outputInventory, ctr.productId) >= 30) {
         items.push({
           icon: '🤝',
@@ -249,7 +252,7 @@ export function morningBriefing(state: GameState): Advice[] {
   // Open market closing: a staple gap has run half the founder clock. Capital
   // is watching the same counter the founder system reads — warn while the
   // player can still claim the market instead of meeting a new rival in it.
-  const aiFirms = Object.values(state.firms).filter((f) => f.ownerType === 'ai').length;
+  const aiFirms = Object.values(firms).filter((f) => f.ownerType === 'ai').length;
   if (aiFirms < founderMaxAiFirms(state.config)) {
     for (const pid of ['bread', 'tools', 'clothes']) {
       const gap = state.marketGapDays[pid] ?? 0;

@@ -308,6 +308,9 @@ function runTierGates(
 ): void {
   const pop = cohort.population;
   if (pop <= 0) return;
+  // Bare-`state` helper mid-gradient: home town by default (one-town region →
+  // same reference); gains a `townId` param at the endgame move.
+  const town = townOf(state);
   const idx = ORDER.indexOf(cohort.tier);
   const empShare = cohort.employed / pop;
   const perCapitaCash = cohort.cashPool / pop;
@@ -323,7 +326,7 @@ function runTierGates(
       const fac = state.facilities[fid]!;
       const n = fac.crowdByCohort[cohort.id] ?? 0;
       if (n <= 0) continue;
-      const firm = state.firms[fac.ownerFirmId];
+      const firm = town.firms[fac.ownerFirmId];
       if ((firm?.wagePolicy.baseWage ?? 0) >= wageBar) atOrAbove += n;
     }
     return atOrAbove / pop;

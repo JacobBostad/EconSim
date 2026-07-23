@@ -36,6 +36,7 @@ export function marketRows(state: GameState, consumerOnly = true): MarketRow[] {
     ? CONSUMER_PRODUCT_IDS_BY_PRESET[state.config.sizePreset]
     : PRODUCT_IDS_BY_PRESET[state.config.sizePreset];
   const marketStats = townOf(state).marketStats;
+  const firms = townOf(state).firms;
   return ids.map((pid) => {
     const stat = marketStats[pid]!;
     const product = getProduct(pid);
@@ -45,7 +46,7 @@ export function marketRows(state: GameState, consumerOnly = true): MarketRow[] {
       const share = stat.marketShareByFirm[fid]!;
       if (share > topShare) {
         topShare = share;
-        topFirm = state.firms[fid]?.name ?? fid;
+        topFirm = firms[fid]?.name ?? fid;
       }
     }
     return {
@@ -94,7 +95,7 @@ export function pricingInsight(
   firmId: string,
   productId: string,
 ): PricingInsight {
-  const firm = state.firms[firmId];
+  const firm = townOf(state).firms[firmId];
   const product = getProduct(productId);
   const brand = firm?.brandByProduct[productId] ?? 0;
   const quality = firm?.qualityByProduct[productId] ?? product.defaultQuality;

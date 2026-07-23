@@ -41,15 +41,17 @@ export function objectiveProgress(state: GameState): ObjectiveProgress {
 }
 
 export function getFirm(state: GameState, firmId: FirmId): Firm | undefined {
-  return state.firms[firmId];
+  // Home-town view (identity in a one-town region, so the returned record is the
+  // same reference); gains a `townId` param at the endgame move.
+  return townOf(state).firms[firmId];
 }
 
 export function getPlayerFirm(state: GameState): Firm | undefined {
-  return state.firms[state.playerFirmId];
+  return townOf(state).firms[state.playerFirmId];
 }
 
 export function firmFacilities(state: GameState, firmId: FirmId): Facility[] {
-  const firm = state.firms[firmId];
+  const firm = townOf(state).firms[firmId];
   if (!firm) return [];
   return firm.facilities
     .map((id) => state.facilities[id])
@@ -57,7 +59,7 @@ export function firmFacilities(state: GameState, firmId: FirmId): Facility[] {
 }
 
 export function firmEmployees(state: GameState, firmId: FirmId): Citizen[] {
-  const firm = state.firms[firmId];
+  const firm = townOf(state).firms[firmId];
   if (!firm) return [];
   const citizens = townOf(state).citizens;
   return firm.employees
@@ -119,16 +121,16 @@ function toPnL(p: import('../entities/Accounting').AccountingPeriod | null): Fir
 }
 
 export function firmPnLToday(state: GameState, firmId: FirmId): FirmPnL {
-  return toPnL(state.firms[firmId]?.accounting.today ?? null);
+  return toPnL(townOf(state).firms[firmId]?.accounting.today ?? null);
 }
 
 export function firmPnLLifetime(state: GameState, firmId: FirmId): FirmPnL {
-  return toPnL(state.firms[firmId]?.accounting.lifetime ?? null);
+  return toPnL(townOf(state).firms[firmId]?.accounting.lifetime ?? null);
 }
 
 /** Human-readable warnings for a firm (cash, distress, bottlenecks). */
 export function firmWarnings(state: GameState, firmId: FirmId): string[] {
-  const firm = state.firms[firmId];
+  const firm = townOf(state).firms[firmId];
   if (!firm) return [];
   const warnings: string[] = [];
   if (firm.cash < 0) warnings.push(`Cash is negative (${formatMoney(firm.cash)}).`);
@@ -146,9 +148,10 @@ export function firmWarnings(state: GameState, firmId: FirmId): string[] {
 /** Highest base wage any OTHER player/AI firm pays — the poaching bar. */
 export function rivalTopWage(state: GameState, firmId: FirmId): number {
   let top = 0;
-  for (const fid in state.firms) {
+  const firms = townOf(state).firms;
+  for (const fid in firms) {
     if (fid === firmId) continue;
-    const f = state.firms[fid]!;
+    const f = firms[fid]!;
     if (f.ownerType !== 'player' && f.ownerType !== 'ai') continue;
     top = Math.max(top, f.wagePolicy.baseWage);
   }
@@ -174,7 +177,7 @@ export interface DailyInsight {
  * has been played.
  */
 export function dailyInsight(state: GameState, firmId: FirmId): DailyInsight | null {
-  const hist = state.firms[firmId]?.accounting.dailyHistory;
+  const hist = townOf(state).firms[firmId]?.accounting.dailyHistory;
   if (!hist || hist.length === 0) return null;
   const d = hist[hist.length - 1]!;
   const prior = hist.length > 1 ? hist[hist.length - 2]! : null;
@@ -236,7 +239,7 @@ function earningsPremium(netWorth: number, avgNet: number): number {
  * which keeps cross-holding valuation a closed form instead of a fixed point.
  */
 export function operatingValuationOf(state: GameState, firmId: FirmId): number {
-  const firm = state.firms[firmId];
+  const firm = townOf(state).firms[firmId];
   if (!firm) return 0;
   const inventoryValue = firmInventoryValue(state, firmId);
   let assetValue = 0;
@@ -264,7 +267,7 @@ export function operatingValuationOf(state: GameState, firmId: FirmId): number {
  * this, so buying a holding company buys its portfolio.
  */
 export function marketCap(state: GameState, firmId: FirmId): number {
-  const firm = state.firms[firmId];
+  const firm = townOf(state).firms[firmId];
   if (!firm) return 0;
   let holdings = 0;
   for (const tid of Object.keys(firm.sharesHeld).sort()) {
@@ -284,7 +287,7 @@ export function marketCap(state: GameState, firmId: FirmId): number {
  * multiple as an operator's.
  */
 export function companyValuation(state: GameState, firmId: FirmId): Valuation {
-  const firm = state.firms[firmId];
+  const firm = townOf(state).firms[firmId];
   if (!firm) {
     return {
       cash: 0, inventoryValue: 0, assetValue: 0, holdingsValue: 0,
@@ -347,8 +350,9 @@ export function boardVisibility(
   holderId: FirmId,
   targetId: FirmId,
 ): BoardView | null {
-  const holder = state.firms[holderId];
-  const target = state.firms[targetId];
+  const firms = townOf(state).firms;
+  const holder = firms[holderId];
+  const target = firms[targetId];
   if (!holder || !target) return null;
   if ((holder.sharesHeld[targetId] ?? 0) < BOARD_VISIBILITY_PCT) return null;
   const recent = target.accounting.dailyHistory.slice(-7);
@@ -389,7 +393,7 @@ export interface FacilityPnLRow {
  * flip-flop with ship/idle rhythms): the pit is the bottom row.
  */
 export function facilityPnL(state: GameState, firmId: FirmId): FacilityPnLRow[] {
-  const firm = state.firms[firmId];
+  const firm = townOf(state).firms[firmId];
   if (!firm) return [];
   const rows: FacilityPnLRow[] = [];
   for (const fac of firmFacilities(state, firmId)) {
@@ -427,8 +431,9 @@ export interface RankEntry {
 /** Competitive standings of all real (player + AI) firms by valuation. */
 export function rankings(state: GameState): RankEntry[] {
   const entries: RankEntry[] = [];
-  for (const id in state.firms) {
-    const f = state.firms[id]!;
+  const firms = townOf(state).firms;
+  for (const id in firms) {
+    const f = firms[id]!;
     if (f.ownerType !== 'player' && f.ownerType !== 'ai') continue;
     const v = companyValuation(state, id);
     entries.push({

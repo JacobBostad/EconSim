@@ -23,6 +23,7 @@ import { recordTransaction, canAfford, emitEvent } from './GameState';
 import { firmAccount, WORLD_ACCOUNT } from './Transactions';
 import type { FirmId } from './Id';
 import { marketCap } from '../selectors/companySelectors';
+import { townOf } from './Town';
 import {
   MAX_STAKE_PCT,
   SHARE_TRADE_FEE,
@@ -70,8 +71,11 @@ export function tradeShares(
   targetFirmId: FirmId,
   pct: number,
 ): boolean {
-  const firm = state.firms[firmId];
-  const target = state.firms[targetFirmId];
+  // Home-town view (identity in a one-town region, so the returned record is the
+  // same reference); gains a `townId` param at the endgame move.
+  const firms = townOf(state).firms;
+  const firm = firms[firmId];
+  const target = firms[targetFirmId];
   if (!firm || !target || firmId === targetFirmId || pct === 0) return false;
   if (target.ownerType !== 'player' && target.ownerType !== 'ai') return false;
 
@@ -99,8 +103,8 @@ export function tradeShares(
   // anyway; the new city yield-buying is the only pressure toward full float.
   if (state.config.sizePreset !== 'village' && applied > 0) {
     let outstanding = 0;
-    for (const hid of Object.keys(state.firms).sort()) {
-      outstanding += state.firms[hid]!.sharesHeld[targetFirmId] ?? 0;
+    for (const hid of Object.keys(firms).sort()) {
+      outstanding += firms[hid]!.sharesHeld[targetFirmId] ?? 0;
     }
     applied = Math.min(applied, Math.max(0, 100 - outstanding));
     if (applied === 0) {

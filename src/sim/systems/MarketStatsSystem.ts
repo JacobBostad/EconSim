@@ -61,7 +61,7 @@ function finalizeAndReset(ctx: SimContext): void {
     }
     stat.marketShareByFirm = shares;
     for (const fid in shares) {
-      const firm = state.firms[fid];
+      const firm = town.firms[fid];
       if (firm) firm.marketShareByProduct[pid] = shares[fid]!;
     }
 

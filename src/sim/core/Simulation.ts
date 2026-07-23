@@ -197,6 +197,9 @@ export class Simulation {
   /** Apply a command. Meta commands (save/load) are handled by the caller. */
   dispatch(command: Command): void {
     const s = this.state;
+    // Home-town view (identity in a one-town region, so the returned record is
+    // the same reference); gains a `townId` param at the endgame move.
+    const firms = townOf(s).firms;
     switch (command.type) {
       case 'START_NEW_GAME':
         this.state = createInitialState(command.seed);
@@ -237,7 +240,7 @@ export class Simulation {
         this.setPrice(command);
         return;
       case 'SET_AUTO_PRICE': {
-        const firm = s.firms[command.firmId];
+        const firm = firms[command.firmId];
         if (firm) firm.autoPriceByProduct[command.productId] = command.enabled;
         return;
       }
@@ -289,7 +292,7 @@ export class Simulation {
         return;
       }
       case 'HIRE_MANAGER': {
-        const firm = s.firms[command.firmId];
+        const firm = firms[command.firmId];
         if (!firm) return;
         const role = command.role ?? 'store';
         const day = computeTime(s.tick, s.config).day;
@@ -335,7 +338,7 @@ export class Simulation {
         );
         return;
       case 'FIRE_MANAGER': {
-        const firm = s.firms[command.firmId];
+        const firm = firms[command.firmId];
         if (!firm) return;
         const mgr = firm.managers.find((m) => m.id === command.managerId);
         if (!mgr) return;
@@ -385,7 +388,7 @@ export class Simulation {
         this.buyFromImporter(command);
         return;
       case 'SET_AD_BUDGET': {
-        const firm = s.firms[command.firmId];
+        const firm = firms[command.firmId];
         if (firm && command.dailyBudget >= 0) {
           firm.adBudgetByProduct[command.productId] = Math.round(command.dailyBudget);
         }
@@ -433,8 +436,9 @@ export class Simulation {
   private subscribeService(firmId: FirmId, providerFirmId: FirmId): void {
     const s = this.state;
     if (!s.config.servicesEnabled || s.config.sizePreset === 'village') return;
-    const firm = s.firms[firmId];
-    const provider = s.firms[providerFirmId];
+    const firms = townOf(s).firms;
+    const firm = firms[firmId];
+    const provider = firms[providerFirmId];
     if (!firm || !provider || firmId === providerFirmId) return;
     const capacity = computeCapacity(s, provider);
     if (capacity <= 0) return;
@@ -472,7 +476,7 @@ export class Simulation {
    */
   private buildChain(firmId: FirmId, productId: string): void {
     const s = this.state;
-    const firm = s.firms[firmId];
+    const firm = townOf(s).firms[firmId];
     const bp = CHAIN_BLUEPRINTS[productId];
     if (!firm || !bp) return;
     // C1: the wizard only builds chains whose product exists at this preset —
@@ -540,7 +544,7 @@ export class Simulation {
    */
   private civicAction(firmId: FirmId, action: 'festival' | 'fund_home'): void {
     const s = this.state;
-    const firm = s.firms[firmId];
+    const firm = townOf(s).firms[firmId];
     if (!firm) return;
     const day = Math.floor(s.tick / (s.config.ticksPerHour * 24));
 
@@ -610,7 +614,9 @@ export class Simulation {
 
   /** Net worth used for credit limits: cash + inventory value. */
   private netWorth(firmId: FirmId): number {
-    const firm = this.state.firms[firmId];
+    // Home-town view (identity in a one-town region, so the returned record is
+    // the same reference); gains a `townId` param at the endgame move.
+    const firm = townOf(this.state).firms[firmId];
     if (!firm) return 0;
     let inv = 0;
     for (const facId of firm.facilities) {
@@ -625,7 +631,7 @@ export class Simulation {
 
   private investRnd(command: Extract<Command, { type: 'INVEST_RND' }>): void {
     const s = this.state;
-    const firm = s.firms[command.firmId];
+    const firm = townOf(s).firms[command.firmId];
     if (!firm || command.amount <= 0) return;
     if (!canAfford(s, firmAccount(firm.id), command.amount)) {
       emitEvent(s, 'danger', 'player', 'Not enough cash for R&D.', firm.id);
@@ -650,7 +656,7 @@ export class Simulation {
 
   private takeLoan(command: Extract<Command, { type: 'TAKE_LOAN' }>): void {
     const s = this.state;
-    const firm = s.firms[command.firmId];
+    const firm = townOf(s).firms[command.firmId];
     if (!firm || command.amount <= 0) return;
     const limit = Math.max(LOAN_MIN_CREDIT, Math.round(this.netWorth(firm.id) * LOAN_CREDIT_LIMIT_MULTIPLE));
     const available = limit - firm.debt;
@@ -673,7 +679,7 @@ export class Simulation {
 
   private repayLoan(command: Extract<Command, { type: 'REPAY_LOAN' }>): void {
     const s = this.state;
-    const firm = s.firms[command.firmId];
+    const firm = townOf(s).firms[command.firmId];
     if (!firm || command.amount <= 0 || firm.debt <= 0) return;
     const amount = Math.min(Math.round(command.amount), firm.debt, Math.max(0, firm.cash));
     if (amount <= 0) return;
@@ -692,7 +698,7 @@ export class Simulation {
   // ---- command handlers -------------------------------------------------
 
   private createCompany(name: string, startingCash: number): void {
-    const firm = this.state.firms[this.state.playerFirmId];
+    const firm = townOf(this.state).firms[this.state.playerFirmId];
     if (!firm) return;
     firm.name = name;
     if (startingCash > firm.cash) {
@@ -712,7 +718,8 @@ export class Simulation {
     command: Extract<Command, { type: 'BUILD_FACILITY' }>,
   ): void {
     const s = this.state;
-    const firm = s.firms[command.firmId];
+    const firms = townOf(s).firms;
+    const firm = firms[command.firmId];
     if (!firm) return;
     const def = getFacilityDef(command.defId);
     // The service facilities (datacenter, office) are city-scale only and gated on
@@ -742,7 +749,7 @@ export class Simulation {
         emitEvent(s, 'warning', 'player', 'A firm cannot lease premises from itself.', firm.id);
         return;
       }
-      const landlord = s.firms[command.leaseFrom];
+      const landlord = firms[command.leaseFrom];
       if (!landlord || (landlord.ownerType !== 'ai' && landlord.ownerType !== 'player')) {
         emitEvent(s, 'warning', 'player', 'No such landlord to lease from.', firm.id);
         return;
@@ -851,20 +858,20 @@ export class Simulation {
   }
 
   private seedDefaultPrice(firmId: FirmId, productId: string): void {
-    const firm = this.state.firms[firmId];
+    const firm = townOf(this.state).firms[firmId];
     if (firm && !firm.pricesByProduct[productId]) {
       firm.pricesByProduct[productId] = getProduct(productId).basePrice;
     }
   }
 
   private setPrice(command: Extract<Command, { type: 'SET_PRICE' }>): void {
-    const firm = this.state.firms[command.firmId];
+    const firm = townOf(this.state).firms[command.firmId];
     if (!firm || command.price <= 0) return;
     firm.pricesByProduct[command.productId] = Math.round(command.price);
   }
 
   private setWage(command: Extract<Command, { type: 'SET_WAGE' }>): void {
-    const firm = this.state.firms[command.firmId];
+    const firm = townOf(this.state).firms[command.firmId];
     if (!firm || command.wage < 0) return;
     firm.wagePolicy.baseWage = Math.round(command.wage);
     for (const cid of firm.employees) {
@@ -924,11 +931,12 @@ export class Simulation {
     command: Extract<Command, { type: 'BUY_FROM_IMPORTER' }>,
   ): void {
     const s = this.state;
-    const firm = s.firms[command.firmId];
+    const firms = townOf(s).firms;
+    const firm = firms[command.firmId];
     const dest = s.facilities[command.destinationFacilityId];
     if (!firm || !dest) return;
     const product = getProduct(command.productId);
-    const importer = Object.values(s.firms).find((f) => f.ownerType === 'external');
+    const importer = Object.values(firms).find((f) => f.ownerType === 'external');
     const unitPrice = Math.round(product.basePrice * IMPORT_MARKUP * worldImportMult(s));
     const room = dest.storageCapacity - totalUnits(dest.inputInventory);
     const qty = Math.min(command.quantity, Math.max(0, room));

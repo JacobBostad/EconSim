@@ -51,7 +51,7 @@ export function debugSnapshot(state: GameState): DebugSnapshot {
     totalMoneySupply: totalMoneySupply(state),
     worldCash: state.worldCash,
     citizenCount: Object.keys(townOf(state).citizens).length,
-    firmCount: Object.keys(state.firms).length,
+    firmCount: Object.keys(townOf(state).firms).length,
     facilityCount: Object.keys(state.facilities).length,
     activeShipments: active,
     contractCount: Object.keys(state.contracts).length,
@@ -95,8 +95,9 @@ export function macroIndicators(state: GameState): MacroIndicators {
     inv += stat.totalInventory;
   }
   let activeFirms = 0;
-  for (const id in state.firms) {
-    const f = state.firms[id]!;
+  const firms = townOf(state).firms;
+  for (const id in firms) {
+    const f = firms[id]!;
     if ((f.ownerType === 'player' || f.ownerType === 'ai') && f.bankruptcyStatus !== 'insolvent') activeFirms++;
   }
   return {

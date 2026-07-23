@@ -13,6 +13,7 @@ import { firmAccount, WORLD_ACCOUNT } from './Transactions';
 import type { FirmId, FacilityId } from './Id';
 import { getFacilityDef } from '../data/facilityDefinitions';
 import { landCostMultiplier, landValueAt } from './LandValue';
+import { townOf } from './Town';
 
 export const MAX_FACILITY_LEVEL = 3;
 
@@ -30,7 +31,9 @@ export function upgradeFacility(
   firmId: FirmId,
   facilityId: FacilityId,
 ): boolean {
-  const firm = state.firms[firmId];
+  // Home-town view (identity in a one-town region, so the returned record is the
+  // same reference); gains a `townId` param at the endgame move.
+  const firm = townOf(state).firms[firmId];
   const fac = state.facilities[facilityId];
   if (!firm || !fac || fac.ownerFirmId !== firmId) return false;
   if (fac.level >= MAX_FACILITY_LEVEL) return false;

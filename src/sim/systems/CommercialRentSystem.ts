@@ -26,12 +26,14 @@
 
 import type { SimContext } from '../core/GameState';
 import { recordTransaction } from '../core/GameState';
+import { townOf } from '../core/Town';
 import { firmAccount } from '../core/Transactions';
 import { isDayBoundary } from '../core/Tick';
 
 export function runCommercialRentSystem(ctx: SimContext): void {
   const { state } = ctx;
   if (!isDayBoundary(state.tick, ctx.config)) return;
+  const town = townOf(state, ctx.townId);
 
   // Sorted iteration keeps the ledger order deterministic across runs.
   for (const fid of Object.keys(state.facilities).sort()) {
@@ -42,8 +44,8 @@ export function runCommercialRentSystem(ctx: SimContext): void {
     if (fac.status === 'closed') continue;
     const tenantId = fac.ownerFirmId;
     if (landlordId === tenantId) continue; // self-lease guard
-    const tenant = state.firms[tenantId];
-    const landlord = state.firms[landlordId];
+    const tenant = town.firms[tenantId];
+    const landlord = town.firms[landlordId];
     if (!tenant || !landlord) continue;
     // A tenant that can't cover the day's rent skips it (arrears aren't modeled;
     // a chronically broke operator is BankruptcySystem's problem, not an

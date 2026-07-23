@@ -39,6 +39,7 @@
 import type { SimContext, GameState } from '../../core/GameState';
 import type { Firm } from '../../entities/Firm';
 import { emitEvent, recordTransaction } from '../../core/GameState';
+import { townOf } from '../../core/Town';
 import { firmAccount, WORLD_ACCOUNT } from '../../core/Transactions';
 import { getFacilityDef } from '../../data/facilityDefinitions';
 import { createFacility } from '../../entities/factories';
@@ -142,7 +143,8 @@ function housingSqueezed(state: GameState): boolean {
  * Returns true if a block was sold. */
 function sellWeakestBlock(ctx: SimContext, firmId: string): boolean {
   const { state } = ctx;
-  const firm = state.firms[firmId]!;
+  const town = townOf(state, ctx.townId);
+  const firm = town.firms[firmId]!;
   let target: string | null = null;
   let lowest = Infinity;
   for (const facId of firm.facilities) {
@@ -169,7 +171,8 @@ function sellWeakestBlock(ctx: SimContext, firmId: string): boolean {
  * deterministic apart from the paced hash gate. */
 function developBlock(ctx: SimContext, firmId: string): void {
   const { state } = ctx;
-  const firm = state.firms[firmId]!;
+  const town = townOf(state, ctx.townId);
+  const firm = town.firms[firmId]!;
   if (!housingSqueezed(state)) return;
   if (!landlordRoll(state.seed, ctx.time.day, firmId, LANDLORD_BUILD_CHANCE)) return;
 
@@ -207,7 +210,8 @@ export function runLandlordBehavior(
   _digest: DigestBuffer | undefined,
 ): void {
   const { state } = ctx;
-  const firm = state.firms[firmId];
+  const town = townOf(state, ctx.townId);
+  const firm = town.firms[firmId];
   if (!firm) return;
   // Insolvent landlords are BankruptcySystem's to wind down; do nothing.
   if (firm.bankruptcyStatus === 'insolvent') return;

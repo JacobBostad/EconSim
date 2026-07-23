@@ -9,6 +9,7 @@ import { wholesaleUnitPrice, localSurplus } from '../core/Wholesale';
 import { WHOLESALE_DISCOUNT, IMPORT_MARKUP } from '../data/constants';
 import { getProduct } from '../data/products';
 import { worldImportMult } from '../data/worldEvents';
+import { townOf } from '../core/Town';
 
 export interface WholesaleRow {
   facilityId: string;
@@ -38,11 +39,14 @@ export interface WholesaleProduct {
 export function wholesaleBoard(state: GameState): WholesaleProduct[] {
   const byProduct = new Map<string, WholesaleRow[]>();
 
+  // Home-town view (identity in a one-town region, so the returned record is the
+  // same reference); gains a `townId` param at the endgame move.
+  const firms = townOf(state).firms;
   for (const fid in state.facilities) {
     const fac = state.facilities[fid]!;
     if (fac.type === 'importer' || fac.type === 'warehouse' || fac.type === 'home') continue;
     if (fac.type === 'retail' || fac.status === 'closed' || fac.wholesaleEnabled === false) continue;
-    const firm = state.firms[fac.ownerFirmId];
+    const firm = firms[fac.ownerFirmId];
     if (!firm || firm.ownerType === 'world') continue;
 
     const pids = new Set<string>(Object.keys(fac.outputInventory));

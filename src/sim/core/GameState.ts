@@ -333,10 +333,12 @@ export function addContract(ctx: SimContext, contract: Contract): void {
 // The account-resolution primitive under recordTransaction (getAccountCash /
 // accountExists / addAccountCash). A money account is resolved by id, and money
 // moves between towns, so these are REGION-WIDE reads: at the endgame move they
-// resolve against every town's cohorts AND citizens (the flat `state.cohorts` /
-// `state.citizens` back-compat getters left at the old paths), NOT a single
-// town's view. Routing them through the home-default `townOf(state).cohorts` /
-// `.citizens` would misrepresent that scope, so they stay flat by design.
+// resolve against every town's firms, cohorts AND citizens (the flat
+// `state.firms` / `state.cohorts` / `state.citizens` back-compat getters left at
+// the old paths), NOT a single town's view. Routing them through the home-default
+// `townOf(state).firms` / `.cohorts` / `.citizens` would misrepresent that scope,
+// so they stay flat by design (the firm-ledger reads inside recordTransaction
+// resolve the same region-wide firm ids and stay flat with them).
 function getAccountCash(state: GameState, ref: AccountRef): number {
   if (ref.kind === 'world') return state.worldCash;
   if (ref.kind === 'firm') return state.firms[ref.id!]?.cash ?? 0;
@@ -586,11 +588,11 @@ export function emitEvent(
 /** Total money across citizens + firms + cohorts + world (constant). */
 export function totalMoneySupply(state: GameState): number {
   let sum = state.worldCash;
+  // Region-wide money reads: conservation sums the WHOLE region's firm, citizen
+  // and cohort cash, so these iterate every town's firms/citizens/cohorts at the
+  // endgame (via the flat `state.firms` / `state.citizens` / `state.cohorts`
+  // back-compat getters), not one town's view — they stay flat by design.
   for (const id in state.firms) sum += state.firms[id]!.cash;
-  // Region-wide money reads: conservation sums the WHOLE region's citizen and
-  // cohort cash, so these iterate every town's citizens/cohorts at the endgame
-  // (via the flat `state.citizens` / `state.cohorts` back-compat getters), not one
-  // town's view — they stay flat by design.
   for (const id in state.citizens) sum += state.citizens[id]!.cash;
   for (const id in state.cohorts) sum += state.cohorts[id]!.cashPool;
   return sum;

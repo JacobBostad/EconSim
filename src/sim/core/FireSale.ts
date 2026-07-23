@@ -25,8 +25,9 @@ export function acceptFacilityOffer(state: GameState): boolean {
   const offer = state.facilityOffer;
   if (!offer) return false;
   const fac = state.facilities[offer.facilityId];
-  const seller = state.firms[offer.sellerFirmId];
-  const buyer = state.firms[state.playerFirmId];
+  const firms = townOf(state).firms;
+  const seller = firms[offer.sellerFirmId];
+  const buyer = firms[state.playerFirmId];
   // The world may have moved on: facility sold/closed, seller acquired.
   if (!fac || !seller || !buyer || fac.ownerFirmId !== offer.sellerFirmId) {
     state.facilityOffer = null;
