@@ -7,7 +7,9 @@ import fixture5Json from './fixtures/golden-save-v5.json';
 import fixture6Json from './fixtures/golden-save-v6.json';
 import fixture7Json from './fixtures/golden-save-v7.json';
 import fixture8Json from './fixtures/golden-save-v8.json';
+import fixture9Json from './fixtures/golden-save-v9.json';
 import { Simulation } from '../core/Simulation';
+import { HOME_TOWN_ID } from '../core/Town';
 import { deserialize, serialize } from '../persistence/saveLoad';
 import { totalMoneySupply } from '../core/GameState';
 import { ticksPerDay } from '../core/Tick';
@@ -384,6 +386,145 @@ describe('Golden save fixture v8 (archetype era, City preset)', () => {
 
   it('the archetype city keeps running with money conserved to the cent', () => {
     const state = deserialize(raw8);
+    const supply0 = totalMoneySupply(state);
+    const sim = new Simulation(state);
+    expect(() => sim.run(ticksPerDay(state.config) * 5)).not.toThrow();
+    expect(totalMoneySupply(sim.getState())).toBe(supply0);
+    expect(Object.keys(sim.getState().citizens).length).toBeGreaterThan(0);
+  });
+});
+
+/**
+ * Golden save v9 — the towns era (City preset, seed 11, day 120): the FIRST
+ * fixture minted in the SAVE_VERSION 3 shape (region.md step-3 endgame). The six
+ * town-scoped record families (districts, cohorts, citizens, marketStats, firms,
+ * facilities) now LIVE under `state.towns.home`; the flat `state.firms`/
+ * `state.districts`/... paths are non-enumerable accessor aliases (see Town.ts),
+ * so a save serializes ONLY the `towns` key — no flat family key appears in the
+ * JSON. v1-v8 predate the move and stay in the old flat format; the guard below
+ * pins exactly that split, so every future migration must prove it can load both
+ * the flat corpus AND this towns-shaped one.
+ *
+ * Content mirrors v8's archetype era at the current engine (same recipe: a City
+ * game left to grow itself, no player actions) so the towns-era shape is frozen
+ * over a real world-scale economy — all four archetypes live, service contracts,
+ * a 300-strong crowd across cohorts. Reproducible byte-for-byte via
+ * docs/design/probes/mint-golden-v9.ts (perf telemetry zeroed there — it is the
+ * only wall-clock-noisy field). Same contract as v1-v8: never regenerate to
+ * paper over a break — add a migration instead.
+ */
+describe('Golden save fixture v9 (towns era, City preset — first SAVE_VERSION 3 fixture)', () => {
+  const raw9 = JSON.stringify(fixture9Json);
+
+  it('is the first fixture stored in the towns shape; v1-v8 stay flat', () => {
+    // v9 is the ONLY corpus fixture serialized in the SAVE_VERSION 3 (towns) shape.
+    const oldFormat = [
+      fixtureJson, fixture2Json, fixture3Json, fixture4Json,
+      fixture5Json, fixture6Json, fixture7Json, fixture8Json,
+    ];
+    for (const j of oldFormat) {
+      const r = j as Record<string, unknown>;
+      // Old-format corpus: records sit FLAT at the top level, no `towns` key.
+      expect(r.towns).toBeUndefined();
+      expect(r.firms).toBeTruthy();
+    }
+    // v9: records live under `towns.home`; the flat family keys are ABSENT from
+    // the stored JSON (the aliases are non-enumerable, so stringify skips them).
+    const r9 = fixture9Json as Record<string, unknown>;
+    expect(r9.saveVersion).toBe(3);
+    expect(r9.firms).toBeUndefined();
+    expect(r9.districts).toBeUndefined();
+    const towns = r9.towns as Record<string, Record<string, unknown>>;
+    expect(Object.keys(towns)).toEqual([HOME_TOWN_ID]);
+    expect(Object.keys(towns[HOME_TOWN_ID]!).sort()).toEqual(
+      ['citizens', 'cohorts', 'districts', 'facilities', 'firms', 'marketStats'],
+    );
+  });
+
+  it('loads intact with records under towns.home and the flat aliases resolving', () => {
+    const state = deserialize(raw9);
+    // The records genuinely live under towns.home, and the flat back-compat
+    // aliases resolve to the SAME objects (installTownAliases ran on load).
+    expect(state.towns[HOME_TOWN_ID]).toBeTruthy();
+    expect(state.firms).toBe(state.towns[HOME_TOWN_ID]!.firms);
+    expect(state.facilities).toBe(state.towns[HOME_TOWN_ID]!.facilities);
+    expect(state.districts).toBe(state.towns[HOME_TOWN_ID]!.districts);
+    expect(state.cohorts).toBe(state.towns[HOME_TOWN_ID]!.cohorts);
+    expect(state.citizens).toBe(state.towns[HOME_TOWN_ID]!.citizens);
+    expect(state.marketStats).toBe(state.towns[HOME_TOWN_ID]!.marketStats);
+
+    // The world-scale economy is live under the new shape: City preset with the
+    // full specialist channel opted in.
+    expect(state.config.sizePreset).toBe('city');
+    expect(state.config.servicesEnabled).toBe(true);
+    expect(state.config.realEstateEnabled).toBe(true);
+    expect(state.config.investorsEnabled).toBe(true);
+
+    // All four Arc D archetypes founded and went to work off the crowd (read
+    // through the alias, which is the home town's firms record).
+    const businesses = Object.values(state.firms).filter(
+      (f) => f.ownerType === 'ai' || f.ownerType === 'player',
+    );
+    const archetypes = new Set(businesses.map((f) => f.strategy.archetype));
+    expect(archetypes.has('operator')).toBe(true);
+    expect(archetypes.has('landlord')).toBe(true);
+    expect(archetypes.has('investor')).toBe(true);
+    expect(archetypes.has('service')).toBe(true);
+
+    // The archetype-internal invariants v8 pins hold in the towns shape too
+    // (same referee depth, read through the aliases).
+    // D2: a landlord archetype holds rental housing it built.
+    const landlords = businesses.filter((f) => f.strategy.archetype === 'landlord');
+    expect(landlords.length).toBeGreaterThanOrEqual(1);
+    expect(
+      landlords.some((f) => f.facilities.some((id) => state.facilities[id]?.type === 'home')),
+    ).toBe(true);
+    // D4: a service provider runs a datacenter; every contract links a real
+    // provider to a real subscriber, no subscriber is itself a provider, and
+    // seats are live (the billing rule).
+    const providers = businesses.filter((f) => f.strategy.archetype === 'service');
+    expect(providers.some((f) => f.facilities.some((id) => state.facilities[id]?.defId === 'datacenter'))).toBe(true);
+    for (const c of Object.values(state.serviceContracts)) {
+      expect(state.firms[c.providerFirmId]).toBeTruthy();
+      const sub = state.firms[c.subscriberFirmId];
+      expect(sub).toBeTruthy();
+      expect(sub!.strategy.archetype).not.toBe('service');
+      expect(c.seats).toBeGreaterThan(0);
+    }
+    // D3: every investor stake targets a real firm within the 0..49% cap.
+    const investors = businesses.filter((f) => f.strategy.archetype === 'investor');
+    expect(investors.reduce((n, f) => n + Object.keys(f.sharesHeld).length, 0)).toBeGreaterThanOrEqual(1);
+    for (const f of investors) {
+      for (const [targetId, pct] of Object.entries(f.sharesHeld)) {
+        expect(state.firms[targetId]).toBeTruthy();
+        expect(pct).toBeGreaterThan(0);
+        expect(pct).toBeLessThanOrEqual(49);
+      }
+    }
+
+    // Live service contracts, a partitioned map, and a real crowd across tiers.
+    expect(Object.keys(state.serviceContracts).length).toBeGreaterThan(0);
+    expect(Object.keys(state.districts).length).toBeGreaterThanOrEqual(2);
+    const cohorts = Object.values(state.cohorts);
+    expect(cohorts.reduce((n, c) => n + c.population, 0)).toBeGreaterThan(200);
+    expect(cohorts.some((c) => c.tier === 'comfortable' && c.population > 0)).toBe(true);
+
+    // No ghost links survive: every home/job id resolves through the alias.
+    for (const f of Object.values(state.facilities)) {
+      for (const id of f.residentIds) expect(state.citizens[id]).toBeTruthy();
+      for (const id of f.employees) expect(state.citizens[id]).toBeTruthy();
+    }
+    // Round-trip stability: loading a re-serialized load changes nothing (and the
+    // re-serialized form is still the towns shape — no flat key leaks back in).
+    const reserialized = serialize(state);
+    expect(JSON.parse(reserialized).firms).toBeUndefined();
+    expect(JSON.parse(reserialized).towns).toBeTruthy();
+    const again = deserialize(reserialized);
+    expect(serialize(again)).toBe(serialize(state));
+  });
+
+  it('the towns-era city keeps running with money conserved to the cent', () => {
+    const state = deserialize(raw9);
     const supply0 = totalMoneySupply(state);
     const sim = new Simulation(state);
     expect(() => sim.run(ticksPerDay(state.config) * 5)).not.toThrow();

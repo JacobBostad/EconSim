@@ -19,6 +19,25 @@ real City or Metropolis game switches the whole stack on together (crowd +
 districts + all three specialist channels); Village stays the classic,
 bit-identical, every-resident-simulated town.
 
+- **Golden save v9 — the towns-era fixture (first `SAVE_VERSION` 3 save in the
+  corpus).** The step-3 endgame moved the six record families under
+  `state.towns.home` (flat paths now non-enumerable aliases); v9 freezes that
+  shape so every future migration must prove it can load a real towns-shaped
+  save, not just the flat v1–v8 corpus. Minted by a City game, seed 11, day 120,
+  left to grow itself with no player actions (the v8 recipe at the current
+  engine) — the full archetype economy live under the new shape: 15 firms
+  (7 operators, 3 landlords, 2 holdcos, 1 service provider), 14 service
+  contracts, 5 districts, a 300-strong crowd across 3 cohorts, 42-strong cast.
+  The stored JSON carries ONLY the `towns` key — no flat `firms`/`districts`/…
+  leak in (the aliases are non-enumerable). Reproducible byte-for-byte via
+  `docs/design/probes/mint-golden-v9.ts` (the one wall-clock-noisy field,
+  `state.perf`, is zeroed at mint — v7/v8 froze live perf noise; v9 does not);
+  fixture **1,790,455 bytes**. The v9 trio in `goldenSave.test.ts` (loads intact
+  with records under `towns.home` and every flat alias resolving to the same
+  object, runs 5 days money-conserved, round-trips `serialize(deserialize)`) plus
+  a guard that PINS the split — v1–v8 have no `towns` key and stay flat, v9 is the
+  sole towns-shaped fixture at `SAVE_VERSION` 3. Suite **584 → 587** (+3); v1–v8
+  fixtures byte-untouched; `tsc` clean, full suite green.
 - **A — cast-parity attempt #3: the restocked-shelf revisit (measured, NOT
   shipped, dark foundation).** Built the forward path the prior cast-parity
   verdict named — a cast-SHOPPING model change, not another demand constant: when
