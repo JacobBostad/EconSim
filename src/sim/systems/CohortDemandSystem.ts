@@ -35,7 +35,7 @@
 
 import type { SimContext, GameState } from '../core/GameState';
 import { recordTransaction } from '../core/GameState';
-import { townOf } from '../core/Town';
+import { townOf, HOME_TOWN_ID, type TownId } from '../core/Town';
 import { cohortAccount, firmAccount } from '../core/Transactions';
 import { isDayBoundary, isHourBoundary } from '../core/Tick';
 import type { Cohort } from '../entities/Cohort';
@@ -156,10 +156,10 @@ const ATTEMPT_EPS = 0.0002;
 // pinned A3/A4 city tier calibration stays byte-stable and a crowd never craves
 // an unserved product into a founder-blocking satisfaction drag. See products.ts.
 
-function anyCrowd(state: GameState): boolean {
-  // Bare-`state` helper mid-gradient: home town by default (one-town region →
-  // same reference); gains a `townId` param at the endgame move.
-  const cohorts = townOf(state).cohorts;
+function anyCrowd(state: GameState, townId: TownId = HOME_TOWN_ID): boolean {
+  // Town-scoped: the scheduler passes ctx.townId so the partner's guard reads
+  // the partner's crowd. Home default keeps every one-town caller byte-identical.
+  const cohorts = townOf(state, townId).cohorts;
   for (const cid in cohorts) {
     if (cohorts[cid]!.population > 0) return true;
   }
@@ -169,7 +169,7 @@ function anyCrowd(state: GameState): boolean {
 export function runCohortDemandSystem(ctx: SimContext): void {
   const { state } = ctx;
   // Village stays dark: no crowd means no new code path touches state.
-  if (!anyCrowd(state)) return;
+  if (!anyCrowd(state, ctx.townId)) return;
 
   // Daily: grow every cohort's appetite (mirrors SatisfactionSystem's need
   // growth, per bucket rather than per citizen).
@@ -236,7 +236,7 @@ function runSlice(ctx: SimContext): void {
   // never target a trip (else capped urgency for a product nobody stocks
   // swallows the softmax and the crowd stops shopping for what it CAN buy).
   const sold: Record<string, boolean> = {};
-  for (const pid of COHORT_DEMAND_PRODUCT_IDS) sold[pid] = soldSomewhere(state, pid);
+  for (const pid of COHORT_DEMAND_PRODUCT_IDS) sold[pid] = soldSomewhere(state, pid, ctx.townId);
 
   // Cast reservation share, computed ONCE per slice (not per store): the cast's
   // town population against the total demand (cast + crowd). A coarse but honest
@@ -267,8 +267,12 @@ interface OpenStore {
  * Bare-`state` helper mid-gradient: reads the home town by default (one-town
  * region → identical reference). Gains a `townId` param when the endgame move
  * lands and a second town exists — see the recipe in region.md § step 3. */
-function districtCenter(state: GameState, districtId: string): Vec2 {
-  const d = townOf(state).districts[districtId];
+function districtCenter(state: GameState, districtId: string, townId: TownId = HOME_TOWN_ID): Vec2 {
+  // Town-scoped: the cohort's home district lives in ITS town, so the partner's
+  // shopper origin must read the partner's districts (ctx.townId), not home's —
+  // a home default would return {0,0} for a partner district id and misplace the
+  // representative shopper. Home default is byte-identical for one-town callers.
+  const d = townOf(state, townId).districts[districtId];
   if (!d) return { x: 0, y: 0 };
   return { x: d.bounds.x + d.bounds.w / 2, y: d.bounds.y + d.bounds.h / 2 };
 }
@@ -293,7 +297,7 @@ function cohortStoreScore(
   const town = townOf(state, ctx.townId);
   if (!facility.retailProductIds.includes(productId)) return null;
   const product = getProduct(productId);
-  const price = storePrice(state, facility, productId);
+  const price = storePrice(state, facility, productId, ctx.townId);
   const stock = getQuantity(facility.inputInventory, productId);
   const quality = getQuality(facility.inputInventory, productId);
 
@@ -341,7 +345,7 @@ function shopCohortSlice(
   const empShare = pop > 0 ? cohort.employed / pop : 0;
   // Per-slice trip budget: the daily per-capita rate split across the 5 slices.
   const totalVisits = (pop * (T_EMP * empShare + T_UNEMP * (1 - empShare))) / SLICES;
-  const home = districtCenter(state, cohort.districtId);
+  const home = districtCenter(state, cohort.districtId, ctx.townId);
   // District-local shopping (A4): the cohort only reaches stores in its home
   // district plus adjacent quarters — the crowd analogue of the cast's
   // chooseBestStore restriction. Stores outside are dropped from its store split.
@@ -458,7 +462,7 @@ function attemptCohortPurchase(
   const product = getProduct(productId);
   const spec = product.needSpec!;
   const stat = town.marketStats[productId]!;
-  const price = storePrice(state, store, productId);
+  const price = storePrice(state, store, productId, ctx.townId);
   const stock = getQuantity(store.inputInventory, productId);
   const quality = getQuality(store.inputInventory, productId);
   const firm = town.firms[store.ownerFirmId];

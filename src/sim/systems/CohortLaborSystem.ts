@@ -16,7 +16,7 @@
  */
 
 import type { SimContext, GameState } from '../core/GameState';
-import { townOf } from '../core/Town';
+import { townOf, HOME_TOWN_ID, type TownId } from '../core/Town';
 import { isDayBoundary } from '../core/Tick';
 import { crowdCount } from '../entities/Facility';
 import { isWorkTime } from './CitizenScheduleSystem';
@@ -25,10 +25,11 @@ import { isWorkTime } from './CitizenScheduleSystem';
  * projected wage bill — the same instinct the AI applies to cast hiring. */
 const CROWD_WAGE_BUFFER_DAYS = 7;
 
-function anyCrowd(state: GameState): boolean {
-  // Bare-`state` helper mid-gradient: home town by default (one-town region →
-  // same reference); gains a `townId` param at the endgame move.
-  const cohorts = townOf(state).cohorts;
+function anyCrowd(state: GameState, townId: TownId = HOME_TOWN_ID): boolean {
+  // Town-scoped: reads THIS town's crowd (the scheduler passes ctx.townId so the
+  // partner's guard checks the partner's cohorts). Home default keeps every
+  // one-town caller byte-identical.
+  const cohorts = townOf(state, townId).cohorts;
   for (const cid in cohorts) {
     if (cohorts[cid]!.population > 0) return true;
   }
@@ -37,10 +38,26 @@ function anyCrowd(state: GameState): boolean {
 
 export function runCohortLaborSystem(ctx: SimContext): void {
   const { state } = ctx;
-  if (!anyCrowd(state)) return;
+  if (!anyCrowd(state, ctx.townId)) return;
   const town = townOf(state, ctx.townId);
 
-  if (isDayBoundary(state.tick, ctx.config)) reconcileCrowdJobs(state);
+  if (isDayBoundary(state.tick, ctx.config)) reconcileCrowdJobs(state, ctx.townId);
+
+  // Per-tick presence RESET for a CAST-LESS town (region.md step 4, slice 3). In
+  // a town with a cast, LaborSystem owns this reset (it zeroes presentWorkers/
+  // Skill each tick before the cast, then the crowd, add their presence). A
+  // partner runs the light subset WITHOUT LaborSystem, so this system owns the
+  // reset there — every tick, so an off-hours factory has no phantom night shift
+  // (presentWorkers must be 0 when nobody is on the clock). Gated on an empty
+  // cast, so a town WITH a cast is byte-identical (LaborSystem still owns it, and
+  // this branch never runs). Without it, the partner's presentWorkers would
+  // accumulate unbounded across ticks.
+  if (Object.keys(town.citizens).length === 0) {
+    for (const fid in town.facilities) {
+      town.facilities[fid]!.presentWorkers = 0;
+      town.facilities[fid]!.presentSkill = 0;
+    }
+  }
 
   // Crowd presence: cohort workers keep facility hours, not commutes.
   if (isWorkTime(ctx)) {
@@ -57,10 +74,12 @@ export function runCohortLaborSystem(ctx: SimContext): void {
   }
 }
 
-function reconcileCrowdJobs(state: GameState): void {
-  // Bare-`state` helper mid-gradient: home town by default (one-town region →
-  // same reference); gains a `townId` param at the endgame move.
-  const town = townOf(state);
+function reconcileCrowdJobs(state: GameState, townId: TownId = HOME_TOWN_ID): void {
+  // Town-scoped (region.md step 4, slice 3): the scheduler passes ctx.townId so
+  // the partner's crowd staffs the PARTNER's facilities and home's staffs home's
+  // — the two reconciliations never touch each other's records. Home default is
+  // byte-identical for every one-town caller.
+  const town = townOf(state, townId);
   const cohorts = town.cohorts;
   const cohortIds = Object.keys(cohorts).sort();
   const facilityIds = Object.keys(town.facilities).sort();

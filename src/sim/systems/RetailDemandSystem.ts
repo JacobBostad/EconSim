@@ -14,7 +14,7 @@
 
 import type { SimContext, GameState } from '../core/GameState';
 import { recordTransaction } from '../core/GameState';
-import { townOf } from '../core/Town';
+import { townOf, HOME_TOWN_ID, type TownId } from '../core/Town';
 import {
   citizenAccount,
   firmAccount,
@@ -78,10 +78,16 @@ export function anyCohortPopulation(state: GameState): boolean {
 }
 
 /** Price a firm charges for a product (falls back to base price). */
-export function storePrice(state: GameState, facility: Facility, productId: ProductId): number {
-  // Bare-`state` helper mid-gradient: home town by default (one-town region →
-  // same reference); gains a `townId` param at the endgame move.
-  const firm = townOf(state).firms[facility.ownerFirmId];
+export function storePrice(
+  state: GameState,
+  facility: Facility,
+  productId: ProductId,
+  townId: TownId = HOME_TOWN_ID,
+): number {
+  // Town-scoped: resolves the store's owning firm in THIS town (ctx.townId), so
+  // a partner store reads its own firm's price. Home default is byte-identical
+  // for one-town callers.
+  const firm = townOf(state, townId).firms[facility.ownerFirmId];
   const p = firm?.pricesByProduct[productId];
   return p && p > 0 ? p : getProduct(productId).basePrice;
 }

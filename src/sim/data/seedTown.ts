@@ -37,18 +37,20 @@ import type { Firm } from '../entities/Firm';
 import { emptyStrategy } from '../entities/Firm';
 import type { Facility } from '../entities/Facility';
 import { emptyFacilityDailyStats } from '../entities/Facility';
+import type { District } from '../entities/District';
 import { emptyAccounting } from '../entities/Accounting';
 import { emptyMarketStat } from '../entities/Market';
 import { emptyCohort, cohortId } from '../entities/Cohort';
 import { addStock, type Inventory } from '../entities/Inventory';
 import { Rng, seedToState, type RngHost } from '../core/Random';
 import { nextId } from '../core/Id';
-import type { ProductId } from '../core/Id';
+import type { ProductId, RecipeId } from '../core/Id';
 import type { SizePreset } from '../core/SimulationConfig';
 import { SIZE_PRESETS } from '../core/SimulationConfig';
 import { defaultDistrictPartition } from './districts';
 import { getProduct, PRODUCT_IDS_BY_PRESET } from './products';
 import { getFacilityDef, facilityRecipesForPreset } from './facilityDefinitions';
+import { RECIPES, getRecipe } from './recipes';
 import { getTradeCity, type TradeCityId } from './tradeCities';
 import { dollars } from './constants';
 
@@ -98,8 +100,24 @@ export const PORT_ROSA_SPEC: PartnerTownSpec = {
 };
 
 const CROWD_START_CASH_PER_CAPITA = dollars(50); // matches seedCrowd
-const PRODUCER_FIRM_CASH = dollars(30000);
-const PRODUCER_OUTPUT_STOCK = 400;
+const PRODUCER_FIRM_CASH = dollars(60000);
+/**
+ * A partner firm makes AND sells its specialty (region.md step 4, slice 3). The
+ * partner runs the light subset with NO logistics (intra-/inter-town freight is
+ * slice 4's FreightSystem), so its factory output and its retail shelf are
+ * SEEDED directly rather than linked by a supply contract. The seeds are sized
+ * "warehouse-scale" so a 60-day City run never starves the factory of inputs nor
+ * empties the shelf under the crowd — the slice demonstrates a LIVE economy (the
+ * crowd consuming, the firm producing, the book moving), not a scarcity balance
+ * (that arrives with the freight edge). All held as real, conserved money/stock.
+ */
+const PARTNER_INPUT_STOCK = 400_000; // raw-input buffer per producing factory
+const PARTNER_SHELF_STOCK = 400_000; // consumer-good shelf per retail store
+const PARTNER_STORAGE_CAP = 2_000_000; // per-facility cap: never the binding one
+/** Quality stamped on a firm's specialty — clears the luxury recipes' mastery
+ * gate (pastries/jewelry need minQuality 75) so a food-rich port's pastry line
+ * actually produces. */
+const PARTNER_SPECIALTY_QUALITY = 80;
 
 /** FNV-1a hash of the town id, so the local rng seed varies per town. */
 function hashTownId(townId: string): number {
@@ -113,6 +131,61 @@ function hashTownId(townId: string): number {
 
 function stock(inv: Inventory, productId: string, qty: number): void {
   addStock(inv, productId, qty, getProduct(productId).defaultQuality);
+}
+
+/**
+ * Namespace a district partition to a town: every district id (and every
+ * `adjacent` reference) is prefixed `${townId}:`, so the partner's districts —
+ * and the cohorts keyed `districtId:tier` off them — are REGION-UNIQUE. Without
+ * this the partner's `the_rows:worker` cohort id would collide with home's, and
+ * the region-wide account primitive (which resolves a holder by id across every
+ * town) would credit the partner's crowd wages to HOME's crowd — the exact
+ * id-collision hazard the second-town probe caught, here for cohorts/districts
+ * (slice 1 already namespaced firm/facility ids the same way).
+ */
+function namespaceDistricts(
+  partition: Record<string, District>,
+  townId: string,
+): Record<string, District> {
+  const out: Record<string, District> = {};
+  for (const oldId of Object.keys(partition)) {
+    const d = partition[oldId]!;
+    const nid = `${townId}:${oldId}`;
+    out[nid] = { ...d, id: nid, adjacent: d.adjacent.map((a) => `${townId}:${a}`) };
+  }
+  return out;
+}
+
+/** The first district of a kind, in sorted-id order (deterministic). */
+function firstDistrictOfKind(
+  districts: Record<string, District>,
+  kind: District['kind'],
+): District | undefined {
+  return Object.keys(districts)
+    .sort()
+    .map((id) => districts[id]!)
+    .find((d) => d.kind === kind);
+}
+
+/** A deterministic point inside a district's bounds (local rng, no shared draw),
+ * inset from the edges so a facility sits clearly within its quarter. */
+function pointInDistrict(d: District, rng: Rng): { x: number; y: number } {
+  const b = d.bounds;
+  return {
+    x: Math.round(b.x + rng.range(0.2, 0.8) * b.w),
+    y: Math.round(b.y + rng.range(0.2, 0.8) * b.h),
+  };
+}
+
+/** The factory recipe that OUTPUTS `productId` (deterministic: first by recipe
+ * id in sorted order). Returns null for a product no factory recipe makes. */
+function factoryRecipeFor(productId: ProductId): RecipeId | null {
+  for (const rid of Object.keys(RECIPES).sort()) {
+    const r = RECIPES[rid]!;
+    if (r.facilityType !== 'factory') continue;
+    if (r.outputs.some((o) => o.productId === productId)) return rid;
+  }
+  return null;
 }
 
 /**
@@ -154,105 +227,122 @@ export function seedTown(
   // counters untouched (a distinct key), so home's runtime ids never shift.
   const mintId = (kind: string): string => nextId(region.idCounters, `${townId}:${kind}`);
 
-  // --- Districts: the partner's own partition, tiling its own map ----------
-  records.districts = defaultDistrictPartition({
-    mapWidth,
-    mapHeight,
-    maxCitizens: preset.castTarget,
-    sizePreset: spec.sizePreset,
-  });
+  // --- Districts: the partner's own partition, tiling its own map, with ids
+  // NAMESPACED to the town so its cohorts are region-unique (see the helper). --
+  records.districts = namespaceDistricts(
+    defaultDistrictPartition({
+      mapWidth,
+      mapHeight,
+      maxCitizens: preset.castTarget,
+      sizePreset: spec.sizePreset,
+    }),
+    townId,
+  );
 
   // --- Market book: one entry per traded product (the partner's own book) --
   for (const pid of PRODUCT_IDS_BY_PRESET[spec.sizePreset]) {
     records.marketStats[pid] = emptyMarketStat(pid);
   }
 
+  // The districts the crowd lives, shops, and works in (region.md step 4, slice
+  // 3). The cohort lives in the primary RESIDENTIAL quarter; its retail stores
+  // stand THERE too so the crowd can reach them (CohortDemandSystem shops
+  // district-locally — a store outside the home+adjacent quarters is
+  // unreachable); the factories sit in the INDUSTRIAL belt (adjacent, so still
+  // reachable, though production needs no reachability).
+  const residentialD = firstDistrictOfKind(records.districts, 'residential');
+  const industrialD = firstDistrictOfKind(records.districts, 'industrial') ?? residentialD;
+
   // --- Crowd: one worker-tier cohort in the primary residential district,
   // holding real cash (direct-assigned initial supply, the seedCrowd idiom). --
-  const residential = Object.values(records.districts)
-    .filter((d) => d.kind === 'residential')
-    .sort((a, b) => (a.id < b.id ? -1 : 1));
-  if (residential.length > 0 && spec.crowdPopulation > 0) {
-    const primary = residential[0]!;
-    const cohort = emptyCohort(primary.id, 'worker', spec.sizePreset);
+  if (residentialD && spec.crowdPopulation > 0) {
+    const cohort = emptyCohort(residentialD.id, 'worker', spec.sizePreset);
     cohort.population = spec.crowdPopulation;
     cohort.cashPool = spec.crowdPopulation * CROWD_START_CASH_PER_CAPITA;
-    records.cohorts[cohortId(primary.id, 'worker')] = cohort;
+    records.cohorts[cohortId(residentialD.id, 'worker')] = cohort;
   }
 
-  // --- Producer firms: a handful, each making the port's over-produced
-  // specialties (top of its production profile). Each holds real cash and a
-  // factory stocked with output — goods to ship, a balance to later conserve. --
+  // --- Producer firms: a handful, each a vertically-integrated maker-seller of
+  // one of the port's over-produced specialties (top of its production profile).
+  // Each firm owns a FACTORY (turns seeded inputs + crowd labor into its
+  // specialty) and a RETAIL STORE (sells the specialty to the crowd). Both are
+  // staffed by the crowd via CohortLaborSystem, hold real cash and stock, and
+  // move money only through recordTransaction — conserved region-wide. --
   const profile = getTradeCity(spec.tradeCityId).productionByProduct;
   const specialties = (Object.keys(profile) as ProductId[])
-    .filter((pid) => records.marketStats[pid] !== undefined)
+    .filter(
+      (pid) => records.marketStats[pid] !== undefined && factoryRecipeFor(pid) !== null,
+    )
     .sort((a, b) => (profile[b] ?? 0) - (profile[a] ?? 0) || (a < b ? -1 : 1))
     .slice(0, spec.producerFirms);
 
   const factoryDef = getFacilityDef('factory');
-  for (let i = 0; i < specialties.length; i++) {
-    const productId = specialties[i]!;
-    const firmId = mintId('firm');
-    const firm: Firm = {
-      id: firmId,
-      name: `${getTradeCity(spec.tradeCityId).name} ${getProduct(productId).name} Works`,
-      ownerType: 'ai',
-      cash: PRODUCER_FIRM_CASH,
-      facilities: [],
-      employees: [],
-      pricesByProduct: {},
-      wagePolicy: { baseWage: dollars(16) },
-      accounting: emptyAccounting(),
-      strategy: emptyStrategy(productId),
-      bankruptcyStatus: 'healthy',
-      daysInsolvent: 0,
-      marketShareByProduct: {},
-      createdAtTick: 0,
-      personalityId: null,
-      ceoName: null,
-      brandByProduct: {},
-      adBudgetByProduct: {},
-      qualityByProduct: {},
-      debt: 0,
-      interestRatePerDay: 0.0009,
-      sharesHeld: {},
-      shareCostBasis: {},
-      acquiredNames: [],
-      autoPriceByProduct: {},
-      exportRevenue: 0,
-      exportRevenueByCity: {},
-      wholesaleSpend: 0,
-      wholesaleEarned: 0,
-      managers: [],
-      forwards: [],
-      forwardWins: 0,
-    };
-    records.firms[firmId] = firm;
+  const retailDef = getFacilityDef('retail');
+  const tradeCityName = getTradeCity(spec.tradeCityId).name;
 
-    const facId = mintId('fac');
-    // Spread the factories across the industrial-ish top band using the LOCAL
-    // rng (no shared draw) so the layout is deterministic but not all-stacked.
-    const loc = {
-      x: Math.round(rng.range(0.15, 0.85) * mapWidth),
-      y: Math.round(rng.range(0.1, 0.35) * mapHeight),
-    };
-    const fac: Facility = {
+  const newFirm = (firmId: string, productId: ProductId): Firm => ({
+    id: firmId,
+    name: `${tradeCityName} ${getProduct(productId).name} Works`,
+    ownerType: 'ai',
+    cash: PRODUCER_FIRM_CASH,
+    facilities: [],
+    employees: [],
+    // Price the specialty at base so the crowd's walkaway logistic centres
+    // sanely; the store reads this through the town-scoped storePrice.
+    pricesByProduct: { [productId]: getProduct(productId).basePrice },
+    wagePolicy: { baseWage: dollars(16) },
+    accounting: emptyAccounting(),
+    strategy: emptyStrategy(productId),
+    bankruptcyStatus: 'healthy',
+    daysInsolvent: 0,
+    marketShareByProduct: {},
+    createdAtTick: 0,
+    personalityId: null,
+    ceoName: null,
+    brandByProduct: {},
+    adBudgetByProduct: {},
+    // Stamp the specialty's quality so the luxury recipes' mastery gate clears.
+    qualityByProduct: { [productId]: PARTNER_SPECIALTY_QUALITY },
+    debt: 0,
+    interestRatePerDay: 0.0009,
+    sharesHeld: {},
+    shareCostBasis: {},
+    acquiredNames: [],
+    autoPriceByProduct: {},
+    exportRevenue: 0,
+    exportRevenueByCity: {},
+    wholesaleSpend: 0,
+    wholesaleEarned: 0,
+    managers: [],
+    forwards: [],
+    forwardWins: 0,
+  });
+
+  const baseFacility = (
+    facId: string,
+    firmId: string,
+    defId: 'factory' | 'retail',
+    name: string,
+    loc: { x: number; y: number },
+  ): Facility => {
+    const def = defId === 'factory' ? factoryDef : retailDef;
+    return {
       id: facId,
-      defId: 'factory',
-      name: `${getProduct(productId).name} Factory`,
-      type: factoryDef.type,
+      defId,
+      name,
+      type: def.type,
       ownerFirmId: firmId,
       location: loc,
       employees: [],
       inputInventory: {},
       outputInventory: {},
-      storageCapacity: factoryDef.storageCapacity,
-      recipes: facilityRecipesForPreset(factoryDef, spec.sizePreset),
-      activeRecipeId: null, // inert in slice 1 — no production ticks yet
+      storageCapacity: PARTNER_STORAGE_CAP,
+      recipes: facilityRecipesForPreset(def, spec.sizePreset),
+      activeRecipeId: null,
       retailProductIds: [],
       positioning: 'standard',
-      operatingCostPerDay: factoryDef.maintenanceCostPerDay,
-      buildCost: factoryDef.buildCost,
+      operatingCostPerDay: def.maintenanceCostPerDay,
+      buildCost: def.buildCost,
       productionProgress: 0,
       status: 'idle',
       bottleneckReason: null,
@@ -265,14 +355,51 @@ export function seedTown(
       crowdByCohort: {},
       crowdTenants: 0,
       level: 1,
-      workerCapacity: factoryDef.workerCapacity,
+      workerCapacity: def.workerCapacity,
       exportOrders: {},
       residentIds: [],
       wholesaleEnabled: true,
     };
-    stock(fac.outputInventory, productId, PRODUCER_OUTPUT_STOCK);
-    records.facilities[facId] = fac;
+  };
+
+  for (let i = 0; i < specialties.length; i++) {
+    const productId = specialties[i]!;
+    const recipeId = factoryRecipeFor(productId)!;
+    const recipe = getRecipe(recipeId);
+    const firmId = mintId('firm');
+    const firm = newFirm(firmId, productId);
+    records.firms[firmId] = firm;
+
+    // Factory in the industrial belt: the specialty recipe assigned and its raw
+    // inputs seeded deep, so it produces across the whole window (no logistics to
+    // restock it — freight is slice 4).
+    const facId = mintId('fac');
+    const factory = baseFacility(
+      facId,
+      firmId,
+      'factory',
+      `${getProduct(productId).name} Factory`,
+      industrialD ? pointInDistrict(industrialD, rng) : { x: 0, y: 0 },
+    );
+    factory.activeRecipeId = recipeId;
+    for (const io of recipe.inputs) stock(factory.inputInventory, io.productId, PARTNER_INPUT_STOCK);
+    records.facilities[facId] = factory;
     firm.facilities.push(facId);
+
+    // Retail store in the residential quarter (reachable by the crowd): the
+    // specialty on the shelf, seeded deep so it never empties under the crowd.
+    const storeId = mintId('fac');
+    const store = baseFacility(
+      storeId,
+      firmId,
+      'retail',
+      `${getProduct(productId).name} Market`,
+      residentialD ? pointInDistrict(residentialD, rng) : { x: 0, y: 0 },
+    );
+    store.retailProductIds = [productId];
+    stock(store.inputInventory, productId, PARTNER_SHELF_STOCK);
+    records.facilities[storeId] = store;
+    firm.facilities.push(storeId);
   }
 
   return records;

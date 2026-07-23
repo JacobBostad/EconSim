@@ -19,6 +19,41 @@ real City or Metropolis game switches the whole stack on together (crowd +
 districts + all three specialist channels); Village stays the classic,
 bit-identical, every-resident-simulated town.
 
+- **Region step 4, slice 3 — the TownScheduler + the ticking partner.** The
+  partner trade city `port_rosa` graduates from an inert record to a **live
+  economy**. `Simulation.tick()` now runs a `TownScheduler`: for each town in
+  sorted town order it builds `makeContext(state, townId)` (the arg gained an
+  optional `townId` defaulting to `HOME_TOWN_ID`) and runs that town's system
+  list — home runs the full `SYSTEMS` sequence, a partner runs the light,
+  cast-less `PARTNER_SYSTEMS` subset (8 town-scoped, zero-rng systems:
+  market-stats, districts, crowd-rent, accounting, payroll, cohort-labor,
+  cohort-demand, production). Flag off ⇒ `sortedTownIds` is `['home']`, so the
+  loop runs exactly once over the full list in today's order — **byte-identical**
+  (village 11/4/7 `rngState` 3274842624/2896139677/4253583594; plain City seed 11
+  `rngState` 2546912297, money 316900000). `seedTown` now wires a REAL economy:
+  each producer firm owns a factory (specialty recipe + seeded inputs, staffed by
+  the crowd) and a retail store (its specialty on a seeded shelf); the partner's
+  districts are namespaced `port_rosa:<id>` so its cohort ids are region-unique
+  (the id-collision hazard, for cohorts/districts). The subset systems' bare-
+  `state` helpers gained an optional `townId` (home default → byte-identical), and
+  `recordTransaction`'s firm-ledger update now resolves region-wide so a partner
+  firm's P&L populates. Measured (City seed 11, region on, 60 days): the crowd
+  consumes (39,441 units bought, cohort pool $15,000 → $45,084, 60/300 employed),
+  6 factories produce (bread 12,272 … tools 7,470 units, cash $360k → $466k, 6/6
+  firm ledgers live), the book moves, and REGION money is conserved to the cent
+  every day (358,400,000). Home stays byte-isolated flag-on vs flag-off (rngState
+  + `towns.home`); two flag-on runs agree bit-for-bit. Perf (median, warmed):
+  flag-off City 0.220 ms/tick → flag-on two-town 0.273 ms/tick (+24%), well under
+  the 2 ms guard (`perfGuard` gains a two-town case). Deltas from the design's
+  named subset, documented with reasons: `SatisfactionSystem`/`TierSystem`
+  excluded (cast-only no-ops for a crowd-only town), `CohortSocialSystem` excluded
+  (its tier-creation/migration writers are still home-flat — deferred), and
+  `LogisticsSystem` excluded (world-scoped vehicles/contracts; freight is slice 4,
+  so factory output and shelf are seeded not linked). New probe
+  `docs/design/probes/two-town-conservation.ts` (conservation + flag-off
+  bit-identity + isolation-on, all green); `second-town-isolation.ts` updated for
+  the now-live partner. `tsc` clean; full suite **606** green (600 + 6 new).
+
 - **Region step 4, slice 2 — the region-wide money primitive.** The
   account-resolution trio (`getAccountCash`/`accountExists`/`addAccountCash` under
   `recordTransaction`) and the `totalMoneySupply` conservation sum in

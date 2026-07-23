@@ -41,7 +41,7 @@
 
 import type { SimContext, GameState } from '../core/GameState';
 import { recordTransaction } from '../core/GameState';
-import { townOf } from '../core/Town';
+import { townOf, HOME_TOWN_ID, type TownId } from '../core/Town';
 import { cohortAccount, firmAccount, WORLD_ACCOUNT } from '../core/Transactions';
 import { isDayBoundary } from '../core/Tick';
 import type { Cohort } from '../entities/Cohort';
@@ -55,10 +55,10 @@ import { SIZE_PRESETS } from '../core/SimulationConfig';
  * before rent scales down (see the header). */
 const RENT_BUFFER_DAYS = 30;
 
-function anyCrowd(state: GameState): boolean {
-  // Bare-`state` helper mid-gradient: home town by default (one-town region →
-  // same reference); gains a `townId` param at the endgame move.
-  const cohorts = townOf(state).cohorts;
+function anyCrowd(state: GameState, townId: TownId = HOME_TOWN_ID): boolean {
+  // Town-scoped: the scheduler passes ctx.townId so the partner's guard reads
+  // the partner's crowd. Home default keeps every one-town caller byte-identical.
+  const cohorts = townOf(state, townId).cohorts;
   for (const cid in cohorts) {
     if (cohorts[cid]!.population > 0) return true;
   }
@@ -82,7 +82,7 @@ export function runCrowdRentSystem(ctx: SimContext): void {
   const { state } = ctx;
   if (!isDayBoundary(state.tick, ctx.config)) return;
   // Village stays dark: no crowd means no new code path touches state.
-  if (!anyCrowd(state)) return;
+  if (!anyCrowd(state, ctx.townId)) return;
   const town = townOf(state, ctx.townId);
 
   // Snapshot each cohort's affordability factor from the pool BEFORE any rent

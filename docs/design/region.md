@@ -1181,12 +1181,14 @@ concern per slice, an honest measured NO-SHIP is a complete result):
    Acceptance: `totalMoneySupply` equals today's value when only `home` exists
    (the one-town identity); the shipped probe's region sum becomes the test
    oracle; conservation invariant re-proven across the golden corpus.
-3. **The `TownScheduler` + light partner systems.** The outer scheduler running
-   each town's system list in sorted town order; the partner's 12-system cast-less
-   subset. Acceptance: flag off ⇒ one town, one schedule, exactly today's rng
-   draws, byte-identical pins; flag on ⇒ the partner simulates (its cohorts
-   consume, its firms produce, its book updates) and the follow-up conservation
-   probe is green; `perfGuard` extended to two-town City stays under budget.
+3. **The `TownScheduler` + light partner systems. — SHIPPED.** The outer
+   scheduler running each town's system list in sorted town order; the partner's
+   cast-less subset. Acceptance: flag off ⇒ one town, one schedule, exactly
+   today's rng draws, byte-identical pins; flag on ⇒ the partner simulates (its
+   cohorts consume, its firms produce, its book updates) and the follow-up
+   conservation probe is green; `perfGuard` extended to two-town City stays under
+   budget. *See "What ships now — the TownScheduler + the ticking partner (step
+   4, slice 3)" below.*
 4. **The freight edge with a lead time.** `FreightSystem` settling dated
    inter-town shipments (the `ForwardSystem` shape for physical goods); the pool
    interface's numbers now sourced from the live partner. Acceptance: an export
@@ -1264,6 +1266,153 @@ provably untouched:
   new `regionSeed.test.ts` assertions across the flag/factory/isolation/money-debt
   properties); the updated probe `second-town-isolation.ts` passes all checks
   (exit 0).
+
+### What ships now — the TownScheduler + the ticking partner (step 4, slice 3)
+
+Slice 3 makes the partner `port_rosa` a **live economy**: the `TownScheduler`
+ticks it each tick alongside home, its crowd consumes, its firms produce, and its
+book moves — region-wide conservation held to the cent, the pinned world
+byte-untouched.
+
+**The scheduler (DISPATCH decision (c), as landed).** `Simulation.tick()` now
+runs, in **sorted town order**, each town's system list:
+
+```
+for (const townId of sortedTownIds(state)) {
+  const ctx = makeContext(state, townId);
+  for (const sys of systemsForTown(townId)) sys(ctx);
+}
+```
+
+`systemsForTown` is the one reviewable table: `home` → the full `SYSTEMS`
+sequence (unchanged), any partner → the light `PARTNER_SYSTEMS` subset.
+`makeContext` gained an optional `townId` (defaulting to `HOME_TOWN_ID`), so every
+pre-region caller is unchanged and each town's systems read their own records
+through `townOf(ctx.state, ctx.townId)`.
+
+**The flag-off identity argument (the bit-identity crux).** Flag off ⇒
+`state.towns` holds only `home`, so `sortedTownIds(state)` is `['home']` and the
+loop runs **exactly once**, with `makeContext(state, 'home')` — value-identical to
+the pre-scheduler `makeContext(state)` (the `townId` default IS `'home'`) — over
+the **full `SYSTEMS` list in today's order**. No second town, no reordering, and
+the partner subset never executes. So the tick is structurally the same sequence
+of the same systems drawing from the same single `state.rngState`: **byte-
+identical**. Proven: village 11/4/7 reproduce `rngState`
+`3274842624 / 2896139677 / 4253583594`; plain City seed 11 reproduces `rngState
+2546912297` and money `316900000` (300-day scratch check + `regionScheduler.test.ts`).
+Even with the flag ON, home stays byte-identical to a flag-off run — because the
+partner's subset draws **zero shared rng** and writes only its own records: home
+sorts first, takes exactly today's draws, and the partner's pass advances neither
+`state.rngState` nor any `towns.home` byte (measured: home `rngState` and full
+`towns.home` identical over 60 days, flag-on vs flag-off).
+
+**The world-scoped systems run ONCE.** Time, world events, the trade-city price
+walk, forwards, AI strategy, achievements, etc. live only in home's full
+`SYSTEMS` list, so a two-town tick advances the clock and the world once — the
+partner's list is town-scoped only.
+
+**The partner's light subset (`PARTNER_SYSTEMS`), and the delta from the design's
+named list.** Shipped subset (8 town-scoped, zero-rng systems, ordered to mirror
+their relative order in `SYSTEMS`): `MarketStatsSystem`, `DistrictSystem`,
+`CrowdRentSystem`, `AccountingSystem`, `PayrollSystem`, `CohortLaborSystem`,
+`CohortDemandSystem`, `ProductionSystem`. Reconciled honestly against reality,
+the design's named ~12 shrank with reasons:
+
+- **`SatisfactionSystem` / `TierSystem` excluded** — both iterate the CAST
+  (`town.citizens`) only; a crowd-only partner has an empty cast, so they are
+  pure no-ops there (cohort satisfaction/tier live in `CohortSocialSystem`).
+- **`CohortSocialSystem` excluded** — its tier-promotion CREATION site
+  (`moveMass` mints a new tier cohort) and its migration path are bare-`state`
+  writers still pinned to the home town (step 3 left them flat "until multi-town"),
+  so running them for the partner would mint `port_rosa` cohorts into
+  `towns.home` — a cross-town write leak. Threading them region-wide is the
+  analogue of the money-primitive debt and is deferred to a follow-up slice.
+  Consequence: the partner crowd is a single `worker`-tier block (no tier
+  mobility / migration) — sufficient and coherent for slice 3.
+- **`LogisticsSystem` excluded** — it iterates the WORLD-scoped `state.vehicles`
+  / `state.contracts` and is paired with the cast-only `MovementSystem` (which
+  marks vehicles delivered); the partner mints no contracts (freight is slice 4's
+  `FreightSystem`), so it would be a no-op at best and a cross-town vehicle-
+  corruption risk at worst. Consequence: the partner's factory output and its
+  retail shelf are **seeded directly** (not linked by a supply contract) — the
+  freight edge connects the two economies in slice 4.
+
+**Per-town threading (the seam extended).** The subset systems' bare-`state`
+helpers that the step-3 gradient left on the home default gained an optional
+`townId` param (defaulting to `HOME_TOWN_ID`, so home is byte-identical): the
+staffing reconciliation (`CohortLaborSystem.reconcileCrowdJobs`), the crowd's
+shopper origin (`CohortDemandSystem.districtCenter`), the "sold somewhere" and
+store-price reads (`SatisfactionSystem.soldSomewhere`, `RetailDemandSystem.storePrice`),
+the crowd-release path (`PayrollSystem.releaseCrowd`), the land-value snapshot
+(`LandValue.buildHomeIndex`), and the crowd guards (`anyCrowd`). Without this the
+partner's staffing/shopping would silently operate on **home's** records — a
+double-process leak. One subtlety: the per-tick `presentWorkers` RESET is owned
+by the cast-only `LaborSystem` (not in the partner subset), so `CohortLaborSystem`
+now performs it for a **cast-less** town (gated on an empty cast → byte-identical
+for home) — else the partner's `presentWorkers` accumulates unbounded and its
+factories run a phantom night shift.
+
+**The region-wide firm-ledger.** `recordTransaction`'s firm-accounting-accumulator
+update resolved the firm through the flat `state.firms` (home only), so a partner
+firm's P&L ledger never populated. It now resolves region-wide (`findFirmRegionWide`,
+the same money-scope boundary the account primitive draws) — byte-identical for
+home (a home firm id resolves in `towns.home`, sorted first), and the partner's 6
+firms now carry a real P&L.
+
+**The partner economy (`seedTown`, wired to actually run).** The reviewers' slice-1
+forward note — the factory seeds *idle* firms — is paid off:
+
+- Each producer firm is a **vertically-integrated maker-seller**: a FACTORY (its
+  specialty recipe assigned via `activeRecipeId`, its raw inputs seeded deep) and
+  a RETAIL STORE (its specialty on a seeded shelf), both staffed by the crowd
+  through `CohortLaborSystem`'s existing crowd-jobs reconciliation. City seed 11
+  stands up 6 firms → 12 facilities. Specialties are the port's top
+  `productionByProduct` goods that a city-preset factory recipe makes: bread,
+  coffee, pastries, clothes, jewelry, tools.
+- **Districts are namespaced** `port_rosa:<id>` (ids + `adjacent` refs), so the
+  partner's cohort id (`port_rosa:the_rows:worker`) is region-unique. Without
+  this it would collide with home's `the_rows:worker`, and the region-wide
+  account primitive would credit the partner's crowd wages to HOME's crowd — the
+  id-collision hazard the probe caught, here for cohorts/districts (slice 1
+  already namespaced firm/facility ids the same way).
+- No logistics links factory output to the shelf (freight is slice 4), so both
+  are seeded "warehouse-scale" — the slice demonstrates a LIVE economy, not a
+  scarcity balance.
+
+**Measured (City seed 11, region on, 60 days).**
+
+- **Cohort consumes:** its worker cohort's pool moved `$15,000.00 → $45,084.38`
+  (net inflow as wages + stipends outpace shelf spend); **60 of 300** staff the
+  12 facilities; **39,441 units** bought over the run through the standard
+  `CohortDemandSystem` machinery — bread 23,381 @ $3.50, coffee 8,921 @ $2.50,
+  tools 3,809 @ $9.00, clothes 3,330 @ $12.00 (the two luxury specialties —
+  pastries, jewelry — sit idle: a worker-tier crowd doesn't buy luxury, so their
+  output awaits the freight/export edge).
+- **Firms produce:** all 6 factories run work-hour-gated (bread 12,272, coffee
+  9,440, tools 7,470, clothes 5,976, pastries 4,482, jewelry 2,240 units of
+  output accumulated), inputs drawing down; partner firm cash moved
+  `$360,000.00 → $466,076.40`; **6/6 firms carry a populated P&L ledger**.
+- **Book updates:** the partner's `marketStats` carry live daily sales history on
+  every staple sold.
+- **Conservation:** region money **invariant to the cent every day** —
+  `358,400,000` unchanged across all 60 days (`regionScheduler.test.ts` +
+  `two-town-conservation.ts`).
+- **Isolation:** home `rngState` and full `towns.home` byte-identical flag-on vs
+  flag-off (60 days); a partner shock (drained larder) leaves home byte-identical.
+- **Determinism:** two flag-on runs agree bit-for-bit (partner + home +
+  `rngState` + full serialized state).
+
+**Perf.** Median per-tick (the contention-robust statistic; warmed 120 days, timed
+40, City seed 11): flag-off City **0.220 ms/tick**, flag-on two-town City
+**0.273 ms/tick** — **+0.053 ms/tick (+24%)**, the partner's cast-less subset a
+small fraction of home's cost. `perfGuard` gains a two-town City case at the same
+**2 ms/tick** catastrophic-regression bound the one-town guard uses (~7× measured
+headroom — a real bound, not a hopeful one).
+
+**Verification.** `tsc` clean; full `vitest run` green (**606** = 600 baseline + 5
+new `regionScheduler.test.ts` + 1 new `perfGuard` two-town case; `regionSeed.test.ts`
+slice-1 assertions updated in place to the slice-3 shape, no count change);
+`two-town-conservation.ts` and `second-town-isolation.ts` both exit 0.
 
 ### What stays OUT of step 4 (and why)
 

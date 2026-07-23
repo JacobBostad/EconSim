@@ -74,7 +74,8 @@ export function runDistrictSystem(ctx: SimContext): void {
 
   // One home snapshot shared across every district's land-value sample, so the
   // daily aggregate is a single O(homes) sweep instead of O(districts × homes).
-  const homeIndex = buildHomeIndex(state);
+  // Town-scoped: the partner's districts sample the PARTNER's homes (ctx.townId).
+  const homeIndex = buildHomeIndex(state, ctx.townId);
   for (const id of ids) {
     const d = town.districts[id]!;
     const homeShare = totalHomes > 0 ? (homes.get(id) ?? 0) / totalHomes : 0;

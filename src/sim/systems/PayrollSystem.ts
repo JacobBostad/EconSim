@@ -9,7 +9,7 @@
 
 import type { SimContext, GameState } from '../core/GameState';
 import { recordTransaction, emitEvent, canAfford } from '../core/GameState';
-import { townOf } from '../core/Town';
+import { townOf, HOME_TOWN_ID, type TownId } from '../core/Town';
 import { firmAccount, citizenAccount, cohortAccount, WORLD_ACCOUNT } from '../core/Transactions';
 import { isDayBoundary } from '../core/Tick';
 import { clamp } from '../../utils/clamp';
@@ -138,7 +138,7 @@ function payCrowd(ctx: SimContext): void {
           note: `Crowd wages (${workers})`,
         });
       } else {
-        releaseCrowd(state, firm.id, cid);
+        releaseCrowd(state, firm.id, cid, ctx.townId);
         emitEvent(state, 'warning', 'payroll',
           `${firm.name} couldn't pay its ${workers} crowd workers — they walked off the job.`, firm.id);
       }
@@ -147,10 +147,10 @@ function payCrowd(ctx: SimContext): void {
 }
 
 /** Remove every worker of one cohort from one firm's facilities. */
-function releaseCrowd(state: GameState, firmId: string, cohortId: string): void {
-  // Bare-`state` helper mid-gradient: home town by default (one-town region →
-  // same reference); gains a `townId` param at the endgame move.
-  const town = townOf(state);
+function releaseCrowd(state: GameState, firmId: string, cohortId: string, townId: TownId = HOME_TOWN_ID): void {
+  // Town-scoped (region.md step 4, slice 3): releases within the town whose
+  // payroll is running (ctx.townId). Home default is byte-identical for one-town.
+  const town = townOf(state, townId);
   const firm = town.firms[firmId];
   const cohort = town.cohorts[cohortId];
   if (!firm || !cohort) return;

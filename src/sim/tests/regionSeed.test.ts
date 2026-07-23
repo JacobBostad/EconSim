@@ -22,7 +22,7 @@ import { Simulation } from '../core/Simulation';
 import { createInitialState } from '../data/startingScenario';
 import { DEFAULT_CONFIG, SIZE_PRESETS } from '../core/SimulationConfig';
 import type { SimulationConfig } from '../core/SimulationConfig';
-import { totalMoneySupply, type GameState } from '../core/GameState';
+import { totalMoneySupply } from '../core/GameState';
 import { townOf, HOME_TOWN_ID } from '../core/Town';
 import type { TownRecords } from '../core/Town';
 import { seedTown, PARTNER_TOWN_ID, PORT_ROSA_SPEC } from '../data/seedTown';
@@ -118,13 +118,23 @@ describe('Region slice 1 — the factory (seedTown) mints only town-scoped recor
     expect(Object.keys(partner.citizens).length).toBe(0);
     const pop = Object.values(partner.cohorts).reduce((n, c) => n + c.population, 0);
     expect(pop).toBe(PORT_ROSA_SPEC.crowdPopulation);
-    // A handful of producing firms, each with a factory holding output stock.
+    // A handful of producer firms, each a vertically-integrated maker-seller:
+    // a FACTORY (specialty recipe + seeded raw inputs) AND a RETAIL STORE (its
+    // specialty on a seeded shelf) — 2 facilities per firm (region.md step 4,
+    // slice 3). No logistics links them (freight is slice 4), so both are seeded.
     expect(Object.keys(partner.firms).length).toBe(PORT_ROSA_SPEC.producerFirms);
-    expect(Object.keys(partner.facilities).length).toBe(PORT_ROSA_SPEC.producerFirms);
-    const anyOutput = Object.values(partner.facilities).some(
-      (f) => Object.keys(f.outputInventory).length > 0,
-    );
-    expect(anyOutput).toBe(true);
+    expect(Object.keys(partner.facilities).length).toBe(PORT_ROSA_SPEC.producerFirms * 2);
+    const factories = Object.values(partner.facilities).filter((f) => f.type === 'factory');
+    const stores = Object.values(partner.facilities).filter((f) => f.type === 'retail');
+    expect(factories.length).toBe(PORT_ROSA_SPEC.producerFirms);
+    expect(stores.length).toBe(PORT_ROSA_SPEC.producerFirms);
+    // Every factory has a recipe assigned and its raw inputs stocked (so it
+    // produces, not idle) — the reviewers' forward note (slice 1 seeded idle).
+    expect(factories.every((f) => f.activeRecipeId !== null)).toBe(true);
+    expect(factories.every((f) => Object.keys(f.inputInventory).length > 0)).toBe(true);
+    // Every store sells exactly its firm's one specialty off a seeded shelf.
+    expect(stores.every((f) => f.retailProductIds.length === 1)).toBe(true);
+    expect(stores.every((f) => Object.keys(f.inputInventory).length > 0)).toBe(true);
     // Holds real money (cohort pools + firm cash).
     expect(townCash(partner)).toBeGreaterThan(0);
     // Its OWN map dims — the partner preset's authored size, not home's.
@@ -153,8 +163,8 @@ describe('Region slice 1 — the factory (seedTown) mints only town-scoped recor
   });
 });
 
-describe('Region slice 1 — the partner is INERT (flag-on home == flag-off)', () => {
-  it('a 30-day City run: home rngState / serialized-home / money identical to flag-off', () => {
+describe('Region slice 3 — the partner TICKS, home stays byte-isolated', () => {
+  it('a 30-day City run: home rngState + serialized-home identical to flag-off', () => {
     const DAYS = 30;
     const off = createInitialState(11, cityConfig());
     const offSim = new Simulation(off);
@@ -168,18 +178,18 @@ describe('Region slice 1 — the partner is INERT (flag-on home == flag-off)', (
     onSim.dispatch({ type: 'RESUME' });
     onSim.run(ticksPerDay(on.config) * DAYS);
 
-    // Isolation: home is byte-identical with the partner present (no read-leak).
+    // ISOLATION (the bit-identity crux): the partner draws ZERO shared rng and
+    // touches only its own records, so home's rng stream and its whole
+    // `towns.home` record are byte-identical with the partner live vs absent.
     expect(on.rngState).toBe(off.rngState);
     expect(JSON.stringify(on.towns[HOME_TOWN_ID])).toBe(JSON.stringify(off.towns[HOME_TOWN_ID]));
-    // Home-scoped money is identical with the partner attached. (Slice 2 made
-    // totalMoneySupply region-wide, so the WHOLE sum rightly includes the
-    // partner's cash and differs by exactly that; the isolation property is
-    // home + world.)
-    const homeMoney = (st: GameState) => townCash(st.towns[HOME_TOWN_ID]!) + st.worldCash;
-    expect(homeMoney(on)).toBe(homeMoney(off));
-    expect(totalMoneySupply(on) - totalMoneySupply(off)).toBe(townCash(on.towns[PARTNER_TOWN_ID]!));
-    // The partner is untouched by the home-only tick loop (no write-leak).
-    expect(JSON.stringify(on.towns[PARTNER_TOWN_ID])).toBe(partnerBefore);
+    // Home-town holder cash is identical with the partner attached (world cash
+    // legitimately diverges — the partner shares the region's world account:
+    // stipends, variable costs and rent flow partner ↔ world).
+    expect(townCash(on.towns[HOME_TOWN_ID]!)).toBe(townCash(off.towns[HOME_TOWN_ID]!));
+    // The partner is NO LONGER inert — the scheduler ticks it, so its records
+    // changed (its economy ran). Slice 3's whole point.
+    expect(JSON.stringify(on.towns[PARTNER_TOWN_ID])).not.toBe(partnerBefore);
   });
 
   it('two flag-on City runs agree bit-for-bit (determinism, partner + home)', () => {

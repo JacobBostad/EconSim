@@ -307,13 +307,20 @@ export interface SimContext {
   contractIndex: ContractIndex;
 }
 
-export function makeContext(state: GameState): SimContext {
+export function makeContext(state: GameState, townId: TownId = HOME_TOWN_ID): SimContext {
+  // `townId` is the town this context's systems operate on. It defaults to
+  // HOME_TOWN_ID, so every pre-region caller (`makeContext(state)`) is
+  // byte-identical to before — a one-town region builds exactly today's home
+  // context. The TownScheduler (region.md step 4, slice 3) is the first caller
+  // to pass a value other than 'home': it builds one context per town in sorted
+  // town order, and each town's systems read their own records through
+  // `townOf(ctx.state, ctx.townId)`.
   return {
     state,
     config: state.config,
     rng: new Rng(state),
     time: computeTime(state.tick, state.config),
-    townId: HOME_TOWN_ID,
+    townId,
     contractIndex: buildContractIndex(state),
   };
 }
@@ -338,6 +345,24 @@ export function reindexContracts(ctx: SimContext): void {
 export function addContract(ctx: SimContext, contract: Contract): void {
   ctx.state.contracts[contract.id] = contract;
   indexAddContract(ctx.contractIndex, contract);
+}
+
+/**
+ * Resolve a firm by id ACROSS the region (the same money-scope boundary the
+ * account primitive draws): a firm's accounting-ledger update under
+ * recordTransaction must reach the firm wherever it lives, since a partner town's
+ * firm transacts through the shared world ledger too. Ids are region-unique (the
+ * town factory shares `idCounters`), so the firm lives in at most one town and
+ * the sorted scan returns the same object whatever the order. One-town region:
+ * `towns.home.firms` IS the flat `state.firms` alias, so this is byte-identical to
+ * the pre-region `state.firms[id]` read the ledger update used.
+ */
+function findFirmRegionWide(state: GameState, firmId: FirmId): Firm | undefined {
+  for (const tid of sortedTownIds(state)) {
+    const f = state.towns[tid]!.firms[firmId];
+    if (f) return f;
+  }
+  return undefined;
 }
 
 // ---------------------------------------------------------------------------
@@ -511,16 +536,19 @@ export function recordTransaction(
     note: input.note ?? '',
   };
 
-  // Update firm accounting accumulators by category.
+  // Update firm accounting accumulators by category. Region-wide firm lookup:
+  // a partner town's firm ledger must update from its own transactions too (the
+  // money-scope boundary the account primitive draws). Byte-identical for home —
+  // a home firm id resolves in `towns.home` (sorted first, = the flat alias).
   if (input.firmId) {
-    const firm = state.firms[input.firmId];
+    const firm = findFirmRegionWide(state, input.firmId);
     if (firm) {
       applyToLedger(firm.accounting.lifetime, input.category, amount);
       applyToLedger(firm.accounting.today, input.category, amount);
     }
   }
   if (input.counterparty) {
-    const other = state.firms[input.counterparty.firmId];
+    const other = findFirmRegionWide(state, input.counterparty.firmId);
     if (other) {
       applyToLedger(other.accounting.lifetime, input.counterparty.category, amount);
       applyToLedger(other.accounting.today, input.counterparty.category, amount);

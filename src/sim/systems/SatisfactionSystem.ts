@@ -8,7 +8,7 @@
  */
 
 import type { SimContext } from '../core/GameState';
-import { townOf } from '../core/Town';
+import { townOf, HOME_TOWN_ID, type TownId } from '../core/Town';
 import { isDayBoundary } from '../core/Tick';
 import { getProduct } from '../data/products';
 import { clamp } from '../../utils/clamp';
@@ -62,10 +62,15 @@ export function basketNormalization(
 
 /** Whether any staffed store in town currently sells the product. Shared
  * with the AI founder system's market-gap tracking. */
-export function soldSomewhere(state: import('../core/GameState').GameState, productId: string): boolean {
-  // Bare-`state` helper mid-gradient: home town by default (one-town region →
-  // same reference); gains a `townId` param at the endgame move.
-  const town = townOf(state);
+export function soldSomewhere(
+  state: import('../core/GameState').GameState,
+  productId: string,
+  townId: TownId = HOME_TOWN_ID,
+): boolean {
+  // Town-scoped: whether any staffed store IN THIS TOWN sells the product. The
+  // crowd-demand path passes ctx.townId so the partner's crowd only shops for
+  // what the PARTNER stocks. Home default keeps every one-town caller identical.
+  const town = townOf(state, townId);
   for (const fid in town.facilities) {
     const f = town.facilities[fid]!;
     if (

@@ -37,10 +37,12 @@
  *      We demonstrate BOTH: the hazard a naive fresh-counter partner would hit,
  *      and that the factory's partner is free of it.
  *
- * Note on scope: this probe does NOT tick the partner town — that needs the
- * dispatch change a later slice introduces (a TownScheduler). It attaches an
- * INERT partner (the shipped factory's records) to prove the seam isolates home
- * and to quantify the money debt.
+ * Note on scope: as of slice 3 the TownScheduler ticks the partner, so this
+ * probe's isolation check (1) now runs a LIVE partner and asserts home stays
+ * byte-identical anyway (the partner draws no shared rng, writes only its own
+ * records). The dedicated live-partner conservation/isolation probe is
+ * two-town-conservation.ts; this one remains the seam + money-debt + id-collision
+ * de-risk.
  *
  * Runnable: `npx tsx docs/design/probes/second-town-isolation.ts`
  */
@@ -128,9 +130,14 @@ console.log('(0) Flag-off anchor — pinned Village seed-11 300-day rngState');
 
 // ---------------------------------------------------------------------------
 // (1) ISOLATION — a flag-ON City home is byte-identical to flag-OFF over 30
-// days, and the factory-seeded partner is untouched by the home-only tick loop.
+// days. As of slice 3 the TownScheduler TICKS the partner (its light cast-less
+// subset), so the partner is NO LONGER inert: it changes. The isolation property
+// is that home's rngState and its whole `towns.home` record stay byte-identical
+// (the partner draws ZERO shared rng and writes only its own records + the
+// shared world ledger). Home HOLDER cash is identical; the world account
+// legitimately diverges (the partner shares it — stipends/wages/costs/rent).
 // ---------------------------------------------------------------------------
-console.log('\n(1) Isolation — flag-on home byte-identical to flag-off (City, seed 11, 30d)');
+console.log('\n(1) Isolation — flag-on home byte-identical to flag-off, partner LIVE (City, seed 11, 30d)');
 const DAYS = 30;
 {
   // Control: flag off — a one-town region, no partner.
@@ -140,11 +147,10 @@ const DAYS = 30;
   ctrlSim.run(ticksPerDay(ctrl.config) * DAYS);
   const ctrlRng = ctrl.rngState;
   const ctrlHome = hashTown(ctrl.towns[HOME_TOWN_ID]!);
-  // Home-scoped (one-town control: identical to totalMoneySupply, but stated
-  // in the same home+world terms the flag-on comparison below must use).
-  const ctrlMoney = townCash(ctrl.towns[HOME_TOWN_ID]!) + ctrl.worldCash;
+  const ctrlHomeCash = townCash(ctrl.towns[HOME_TOWN_ID]!);
 
-  // Treatment: flag ON — createInitialState seeds the inert partner (seedTown).
+  // Treatment: flag ON — createInitialState seeds the partner, the scheduler
+  // ticks its economy (slice 3).
   const trt = createInitialState(11, regionConfig());
   const partnerBefore = hashTown(trt.towns[PARTNER_TOWN_ID]!);
   const trtSim = new Simulation(trt);
@@ -155,18 +161,18 @@ const DAYS = 30;
   check('partner town materializes in state (flag on)', !!trt.towns[PARTNER_TOWN_ID]);
   check('home rngState identical with/without partner (no read-leak into rng)',
     trt.rngState === ctrlRng, `${trt.rngState} vs ${ctrlRng}`);
-  check('serialized towns.home identical with/without partner (no read-leak)',
+  check('serialized towns.home identical with/without partner (no read/write-leak)',
     hashTown(trt.towns[HOME_TOWN_ID]!) === ctrlHome,
     `${hashTown(trt.towns[HOME_TOWN_ID]!)} vs ${ctrlHome}`);
-  check('serialized towns.port_rosa unchanged across home-only run (no write-leak)',
-    partnerAfter === partnerBefore, `${partnerAfter} vs ${partnerBefore}`);
-  // Slice 2 made totalMoneySupply region-wide, so the flag-on sum rightly
-  // includes the partner's cash and is NOT comparable across the two runs.
-  // The isolation property is HOME-scoped: home's holder cash + the world
-  // account must match with and without the partner attached.
-  const trtHomeMoney = townCash(trt.towns[HOME_TOWN_ID]!) + trt.worldCash;
-  check('home-scoped money (home holders + world) identical with/without partner',
-    trtHomeMoney === ctrlMoney, `${trtHomeMoney} vs ${ctrlMoney}`);
+  // Slice 3: the partner is LIVE, so its records DID change over the run (the
+  // scheduler ran its economy) — the inverse of slice 1's inert assertion.
+  check('serialized towns.port_rosa CHANGED across the run (the partner is live)',
+    partnerAfter !== partnerBefore, `${partnerAfter} vs ${partnerBefore}`);
+  // Home HOLDER cash is identical with/without the partner (the world account
+  // diverges — it is region-wide and the live partner transacts with it).
+  const trtHomeCash = townCash(trt.towns[HOME_TOWN_ID]!);
+  check('home HOLDER cash identical with/without partner (home isolated)',
+    trtHomeCash === ctrlHomeCash, `${trtHomeCash} vs ${ctrlHomeCash}`);
 }
 
 // ---------------------------------------------------------------------------

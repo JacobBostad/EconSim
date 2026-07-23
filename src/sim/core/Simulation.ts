@@ -25,7 +25,7 @@ import { computeTime } from './Tick';
 import { createInitialState } from '../data/startingScenario';
 import { createFacility, createCitizen } from '../entities/factories';
 import { Rng } from './Random';
-import { townOf } from './Town';
+import { townOf, HOME_TOWN_ID, sortedTownIds, type TownId } from './Town';
 import { getFacilityDef } from '../data/facilityDefinitions';
 import { getRecipe } from '../data/recipes';
 import { getProduct, productAvailableInPreset } from '../data/products';
@@ -154,6 +154,71 @@ const SYSTEMS: SystemFn[] = [
   runMissionSystem, // hourly; guided chain advances after achievements
 ];
 
+/**
+ * PARTNER_SYSTEMS — the light, cast-less subset a partner trade city runs each
+ * tick (region.md step 4, slice 3; DISPATCH decision (c): TownScheduler with
+ * per-town system lists). A partner (`port_rosa`) is a CROWD-ONLY town — no
+ * simulated cast, no founders/rush/fire-sale, no player UI — so its schedule is
+ * exactly the town-scoped economic core the crowd needs, and nothing else. Every
+ * system here is TOWN-SCOPED (operates on `townOf(ctx.state, ctx.townId)`) and
+ * draws ZERO shared rng, which is what keeps a flag-on home byte-identical to
+ * flag-off: the partner's pass advances no rng and touches only its own records.
+ *
+ * Order MIRRORS the relative order these systems hold in `SYSTEMS` above (daily
+ * roll-ups finalize the previous day before the per-tick sim runs), so the
+ * partner's internal day boundary sequences exactly as home's does.
+ *
+ * The WORLD-scoped systems (time, world events, the trade-city price walk,
+ * forwards, achievements, AI strategy, ...) are NOT in this list — they run
+ * exactly ONCE, in home's full `SYSTEMS` pass, since the scheduler runs the full
+ * list only for home. The clock is advanced once per tick (in `tick()`), not per
+ * town.
+ *
+ * DELTA vs the design's named subset (region.md § "Which systems must run for
+ * it"), documented with reasons:
+ *   - SatisfactionSystem / TierSystem are EXCLUDED: both iterate the CAST
+ *     (`town.citizens`) only — a crowd-only partner has an empty cast, so they
+ *     are pure no-ops there (the crowd's satisfaction/tier machinery lives in
+ *     CohortSocialSystem, not these). Running them would burn cycles for nothing.
+ *   - CohortSocialSystem is EXCLUDED for slice 3: its tier-promotion CREATION
+ *     sites (`moveMass` mints a new tier cohort) and its migration path are
+ *     bare-`state` writers still pinned to the home town (region.md step 3 left
+ *     them flat "until multi-town"), so running them for the partner would mint
+ *     `port_rosa` cohorts into `towns.home` — a cross-town write leak. Threading
+ *     those region-wide is the analogue of the money-primitive debt and is
+ *     deferred (a follow-up slice), exactly the honest-scope discipline the arc
+ *     uses. Consequence: the partner crowd stays a single `worker`-tier block
+ *     (no tier mobility / migration) — sufficient for slice 3's acceptance
+ *     (the crowd consumes, its firms produce, its book updates) and coherent.
+ *   - LogisticsSystem is EXCLUDED: it iterates the WORLD-scoped `state.vehicles`
+ *     / `state.contracts` and is paired with the cast-only MovementSystem (which
+ *     marks vehicles 'delivered'); the partner mints no contracts (intra- and
+ *     inter-town freight is slice 4's `FreightSystem`), so it would be a no-op at
+ *     best and a cross-town vehicle-corruption risk at worst. The partner's
+ *     production and retail are therefore SEEDED to run without a logistics
+ *     linkage (its factory output and its retail shelf are stocked directly by
+ *     the factory — freight connects the two economies in slice 4).
+ */
+const PARTNER_SYSTEMS: SystemFn[] = [
+  runMarketStatsSystem, // finalize the partner's book; hourly inventory totals
+  runDistrictSystem, // daily desirability cache for the partner's districts
+  runCrowdRentSystem, // the crowd pays for a roof (pool-drift sink)
+  runAccountingSystem, // maintenance + snapshot + reset daily accumulators
+  runPayrollSystem, // wages: partner firms -> partner cohort; idle stipend
+  runCohortLaborSystem, // crowd staffs the partner's factories + stores
+  runCohortDemandSystem, // the crowd shops the partner's shelves
+  runProductionSystem, // the partner's factories turn inputs + labor into output
+];
+
+/** The system list a town runs each tick. Home runs the full `SYSTEMS`
+ * sequence (the bit-identity crux — flag-off, `sortedTownIds` is `['home']`, so
+ * the scheduler runs exactly this list once, in exactly today's order); any
+ * partner runs the light `PARTNER_SYSTEMS` subset. The schedule is DATA — one
+ * reviewable table — per the DISPATCH decision (region.md step 4, § 2). */
+function systemsForTown(townId: TownId): SystemFn[] {
+  return townId === HOME_TOWN_ID ? SYSTEMS : PARTNER_SYSTEMS;
+}
+
 export class Simulation {
   private state: GameState;
 
@@ -175,8 +240,21 @@ export class Simulation {
     const start =
       typeof performance !== 'undefined' ? performance.now() : Date.now();
     this.state.tick += 1;
-    const ctx = makeContext(this.state);
-    for (const system of SYSTEMS) system(ctx);
+    // The TownScheduler (region.md step 4, slice 3): run each town's system list
+    // in SORTED town order. Sorted order is the ONE new deterministic axis, and
+    // home sorts first ('home' < 'port_rosa'), so home's rng draws land in
+    // exactly today's position while a cast-less partner draws none. Flag off ⇒
+    // `sortedTownIds` is `['home']`, so this loop runs exactly ONCE with
+    // `makeContext(state, 'home')` (identity with the pre-scheduler
+    // `makeContext(state)`) over the full `SYSTEMS` list — byte-identical to the
+    // pre-region tick. Both towns draw from the single shared region rng stream
+    // (`state.rngState` is world-scoped), so the schedule's town order IS the
+    // draw order — which is why it lives in this one auditable place.
+    for (const townId of sortedTownIds(this.state)) {
+      const ctx = makeContext(this.state, townId);
+      const systems = systemsForTown(townId);
+      for (const system of systems) system(ctx);
+    }
 
     const end =
       typeof performance !== 'undefined' ? performance.now() : Date.now();
