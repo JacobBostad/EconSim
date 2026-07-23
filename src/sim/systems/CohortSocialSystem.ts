@@ -210,7 +210,7 @@ export function runCohortSocialSystem(ctx: SimContext): void {
 
   // Snapshot the id list before the gates mint new tier cohorts.
   const cohortIds = Object.keys(town.cohorts).sort();
-  const facilityIds = Object.keys(state.facilities).sort();
+  const facilityIds = Object.keys(town.facilities).sort();
 
   // --- a. satisfaction ----------------------------------------------------
   for (const cid of cohortIds) {
@@ -323,7 +323,7 @@ function runTierGates(
   const wageFracAtLeast = (wageBar: number): number => {
     let atOrAbove = 0;
     for (const fid of facilityIds) {
-      const fac = state.facilities[fid]!;
+      const fac = town.facilities[fid]!;
       const n = fac.crowdByCohort[cohort.id] ?? 0;
       if (n <= 0) continue;
       const firm = town.firms[fac.ownerFirmId];
@@ -449,6 +449,9 @@ function moveMass(
 ): void {
   if (m <= 0 || m > source.population) m = Math.min(m, source.population);
   if (m <= 0) return;
+  // Bare-`state` helper mid-gradient: home town by default (one-town region →
+  // same reference); gains a `townId` param at the endgame move.
+  const town = townOf(state);
   const popS = source.population;
 
   // Cohort CREATION site — a writer, kept on the flat path until records move
@@ -503,7 +506,7 @@ function moveMass(
   let remaining = workersToMove;
   for (const fid of facilityIds) {
     if (remaining <= 0) break;
-    const fac = state.facilities[fid]!;
+    const fac = town.facilities[fid]!;
     const n = fac.crowdByCohort[source.id] ?? 0;
     if (n <= 0) continue;
     const take = Math.min(n, remaining);

@@ -118,7 +118,7 @@ function curate(ctx: SimContext): boolean {
   let castTotal = 0;
   for (const cid of Object.keys(town.citizens).sort()) {
     const c = town.citizens[cid]!;
-    const home = state.facilities[c.homeFacilityId];
+    const home = town.facilities[c.homeFacilityId];
     if (!home) continue;
     const key = stratumOf(state, home.location, c.tier);
     if (castCount[key] === undefined) continue; // stratum outside the partition
@@ -195,10 +195,13 @@ function curate(ctx: SimContext): boolean {
  */
 function pickRetiree(state: GameState, over: Stratum): Citizen | null {
   let pick: Citizen | null = null;
-  const citizens = townOf(state).citizens;
+  // Bare-`state` helper mid-gradient: home town by default (one-town region →
+  // same reference); gains a `townId` param at the endgame move.
+  const town = townOf(state);
+  const citizens = town.citizens;
   for (const cid of Object.keys(citizens).sort()) {
     const c = citizens[cid]!;
-    const home = state.facilities[c.homeFacilityId];
+    const home = town.facilities[c.homeFacilityId];
     if (!home) continue;
     if (stratumOf(state, home.location, c.tier) !== over.key) continue;
     if (pick === null) {
@@ -227,16 +230,17 @@ function pickRetiree(state: GameState, over: Stratum): Citizen | null {
  */
 function resolvePromoteHome(ctx: SimContext, districtId: DistrictId, gone: Citizen): string | null {
   const { state } = ctx;
+  const town = townOf(state, ctx.townId);
   const inDistrict = (loc: Vec2): boolean =>
-    districtAt(townOf(state, ctx.townId).districts, loc.x, loc.y)?.id === districtId;
+    districtAt(town.districts, loc.x, loc.y)?.id === districtId;
 
-  const goneHome = state.facilities[gone.homeFacilityId];
+  const goneHome = town.facilities[gone.homeFacilityId];
   if (goneHome && inDistrict(goneHome.location)) return gone.homeFacilityId;
 
   let homes = 0;
   let existing: string | null = null;
-  for (const fid of Object.keys(state.facilities).sort()) {
-    const f = state.facilities[fid]!;
+  for (const fid of Object.keys(town.facilities).sort()) {
+    const f = town.facilities[fid]!;
     if (f.type !== 'home') continue;
     homes += 1;
     if (existing === null && f.residentIds.length < 2 && inDistrict(f.location)) existing = fid;

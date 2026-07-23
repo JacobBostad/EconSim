@@ -97,8 +97,8 @@ export function runCrowdRentSystem(ctx: SimContext): void {
   // ids are iterated sorted, so each district's list is already id-sorted).
   // Reset every apartment's crowd occupancy first — it is recomputed daily.
   const aptsByDistrict: Record<string, Facility[]> = {};
-  for (const fid of Object.keys(state.facilities).sort()) {
-    const fac = state.facilities[fid]!;
+  for (const fid of Object.keys(town.facilities).sort()) {
+    const fac = town.facilities[fid]!;
     if (fac.defId !== 'apartment') continue;
     fac.crowdTenants = 0;
     if (fac.status === 'closed') continue;

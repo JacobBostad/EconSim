@@ -223,8 +223,8 @@ function runSlice(ctx: SimContext): void {
   // is district-local by construction.
   const openStores: OpenStore[] = [];
   const town = townOf(state, ctx.townId);
-  for (const fid of Object.keys(state.facilities).sort()) {
-    const fac = state.facilities[fid]!;
+  for (const fid of Object.keys(town.facilities).sort()) {
+    const fac = town.facilities[fid]!;
     if (fac.retailProductIds.length === 0) continue;
     if (!storeIsOpen(ctx, fac)) continue;
     const d = districtAt(town.districts, fac.location.x, fac.location.y);
@@ -336,6 +336,7 @@ function shopCohortSlice(
   castShare: number,
 ): void {
   const { state } = ctx;
+  const town = townOf(state, ctx.townId);
   const pop = cohort.population;
   const empShare = pop > 0 ? cohort.employed / pop : 0;
   // Per-slice trip budget: the daily per-capita rate split across the 5 slices.
@@ -415,7 +416,7 @@ function shopCohortSlice(
   for (const stid of Object.keys(visitsByStore).sort()) {
     const v = visitsByStore[stid]!;
     if (v <= VISIT_EPS) continue;
-    const store = state.facilities[stid]!;
+    const store = town.facilities[stid]!;
     for (const pid of [...store.retailProductIds].sort()) {
       const spec = PRODUCTS[pid]?.needSpec;
       if (!spec) continue;

@@ -19,7 +19,9 @@ export const MAX_FACILITY_LEVEL = 3;
 
 /** Cost to take the facility to the next level (0 when maxed). */
 export function upgradeCost(state: GameState, facilityId: FacilityId): number {
-  const fac = state.facilities[facilityId];
+  // Home-town view (identity in a one-town region, so the returned record is the
+  // same reference); gains a `townId` param at the endgame move.
+  const fac = townOf(state).facilities[facilityId];
   if (!fac || fac.level >= MAX_FACILITY_LEVEL) return 0;
   const def = getFacilityDef(fac.defId);
   const mult = landCostMultiplier(landValueAt(state, fac.location));
@@ -34,7 +36,7 @@ export function upgradeFacility(
   // Home-town view (identity in a one-town region, so the returned record is the
   // same reference); gains a `townId` param at the endgame move.
   const firm = townOf(state).firms[firmId];
-  const fac = state.facilities[facilityId];
+  const fac = townOf(state).facilities[facilityId];
   if (!firm || !fac || fac.ownerFirmId !== firmId) return false;
   if (fac.level >= MAX_FACILITY_LEVEL) return false;
   const def = getFacilityDef(fac.defId);

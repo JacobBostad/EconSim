@@ -64,7 +64,7 @@ export function runCitizenScheduleSystem(ctx: SimContext): void {
 
     // 1) Work has priority during work hours.
     if (employed && isWorkTime(ctx)) {
-      const wp = state.facilities[cit.workplaceFacilityId!];
+      const wp = town.facilities[cit.workplaceFacilityId!];
       if (wp) {
         if (cit.activity !== 'working') {
           startCommute(cit, wp.id, wp.location, 'commuting-to-work');
@@ -105,7 +105,7 @@ export function runCitizenScheduleSystem(ctx: SimContext): void {
     }
 
     // 3) Default: be at home (sleeping before work, home otherwise).
-    const home = state.facilities[cit.homeFacilityId];
+    const home = town.facilities[cit.homeFacilityId];
     if (home) {
       const atHome =
         cit.currentLocation.x === home.location.x &&

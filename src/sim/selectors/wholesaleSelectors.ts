@@ -42,8 +42,9 @@ export function wholesaleBoard(state: GameState): WholesaleProduct[] {
   // Home-town view (identity in a one-town region, so the returned record is the
   // same reference); gains a `townId` param at the endgame move.
   const firms = townOf(state).firms;
-  for (const fid in state.facilities) {
-    const fac = state.facilities[fid]!;
+  const facilities = townOf(state).facilities;
+  for (const fid in facilities) {
+    const fac = facilities[fid]!;
     if (fac.type === 'importer' || fac.type === 'warehouse' || fac.type === 'home') continue;
     if (fac.type === 'retail' || fac.status === 'closed' || fac.wholesaleEnabled === false) continue;
     const firm = firms[fac.ownerFirmId];
@@ -60,7 +61,7 @@ export function wholesaleBoard(state: GameState): WholesaleProduct[] {
       for (const cid in state.contracts) {
         const c = state.contracts[cid]!;
         if (!c.active || c.sourceFacilityId !== fac.id || c.productId !== pid) continue;
-        if (state.facilities[c.destinationFacilityId]?.ownerFirmId !== fac.ownerFirmId) customers++;
+        if (facilities[c.destinationFacilityId]?.ownerFirmId !== fac.ownerFirmId) customers++;
       }
       if (surplus <= 0 && customers === 0) continue;
       const rows = byProduct.get(pid) ?? [];

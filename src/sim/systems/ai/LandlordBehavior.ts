@@ -72,10 +72,13 @@ export const COMMERCIAL_TARGET_YIELD = 0.15;
  * no housing. Exported for the founder row and probes. Deterministic read.
  */
 export function townHousingOccupancy(state: GameState): number {
+  // Bare-`state` helper mid-gradient: home town by default (one-town region →
+  // same reference); gains a `townId` param at the endgame move.
+  const town = townOf(state);
   let filled = 0;
   let capacity = 0;
-  for (const fid in state.facilities) {
-    const f = state.facilities[fid]!;
+  for (const fid in town.facilities) {
+    const f = town.facilities[fid]!;
     if (f.type !== 'home') continue;
     if (f.defId === 'apartment') {
       capacity += APARTMENT_CAPACITY;
@@ -128,10 +131,13 @@ function landlordRoll(seed: number, day: number, firmId: string, chance: number)
  * — the same housing-squeeze read the operator's maybeBuildApartment uses, so a
  * landlord develops under exactly the conditions that warrant new stock. */
 function housingSqueezed(state: GameState): boolean {
+  // Bare-`state` helper mid-gradient: home town by default (one-town region →
+  // same reference); gains a `townId` param at the endgame move.
+  const town = townOf(state);
   let homes = 0;
   let vacancies = 0;
-  for (const fid in state.facilities) {
-    const f = state.facilities[fid]!;
+  for (const fid in town.facilities) {
+    const f = town.facilities[fid]!;
     if (f.type !== 'home') continue;
     homes += 1;
     if (f.residentIds.length < 2) vacancies += 1;
@@ -148,7 +154,7 @@ function sellWeakestBlock(ctx: SimContext, firmId: string): boolean {
   let target: string | null = null;
   let lowest = Infinity;
   for (const facId of firm.facilities) {
-    const fac = state.facilities[facId];
+    const fac = town.facilities[facId];
     if (!fac || fac.defId !== 'apartment') continue;
     const bv = facilityBookValue(fac);
     if (bv < lowest) {
@@ -157,7 +163,7 @@ function sellWeakestBlock(ctx: SimContext, firmId: string): boolean {
     }
   }
   if (!target) return false;
-  const name = state.facilities[target]!.name;
+  const name = town.facilities[target]!.name;
   const sold = sellFacility(state, firmId, target);
   if (sold) {
     emitEvent(state, 'warning', 'ai',

@@ -251,7 +251,7 @@ export class Simulation {
         this.exportGoods(command);
         return;
       case 'SET_EXPORT_ORDER': {
-        const fac = s.facilities[command.facilityId];
+        const fac = townOf(s).facilities[command.facilityId];
         if (!fac || fac.type !== 'warehouse') return;
         if (command.minMult === null) {
           delete fac.exportOrders[command.productId];
@@ -282,12 +282,12 @@ export class Simulation {
         this.setWage(command);
         return;
       case 'TOGGLE_WHOLESALE': {
-        const fac = s.facilities[command.facilityId];
+        const fac = townOf(s).facilities[command.facilityId];
         if (fac) fac.wholesaleEnabled = command.enabled;
         return;
       }
       case 'SET_POSITIONING': {
-        const fac = s.facilities[command.facilityId];
+        const fac = townOf(s).facilities[command.facilityId];
         if (fac && fac.type === 'retail') fac.positioning = command.positioning;
         return;
       }
@@ -301,7 +301,7 @@ export class Simulation {
         let facilityId: string | null = null;
         let where = `${firm.name}'s ${role} desk`;
         if (role === 'store') {
-          const fac = command.facilityId ? s.facilities[command.facilityId] : undefined;
+          const fac = command.facilityId ? townOf(s).facilities[command.facilityId] : undefined;
           if (!fac || fac.type !== 'retail' || fac.ownerFirmId !== command.firmId) return;
           if (firm.managers.some((m) => m.role === 'store' && m.facilityId === fac.id)) return;
           facilityId = fac.id;
@@ -344,14 +344,14 @@ export class Simulation {
         if (!mgr) return;
         firm.managers = firm.managers.filter((m) => m.id !== command.managerId);
         const post = mgr.facilityId
-          ? (s.facilities[mgr.facilityId]?.name ?? 'their store')
+          ? (townOf(s).facilities[mgr.facilityId]?.name ?? 'their store')
           : `the ${mgr.role} desk`;
         emitEvent(s, 'info', 'player',
           `${mgr.name} was let go from ${post}.`, mgr.facilityId ?? command.firmId);
         return;
       }
       case 'SET_WHOLESALE_PRICE': {
-        const fac = s.facilities[command.facilityId];
+        const fac = townOf(s).facilities[command.facilityId];
         if (!fac || !Number.isFinite(command.mult)) return;
         fac.wholesalePriceMult =
           Math.round(Math.min(WHOLESALE_MULT_MAX, Math.max(WHOLESALE_MULT_MIN, command.mult)) * 100) / 100;
@@ -526,7 +526,7 @@ export class Simulation {
    */
   private exportGoods(command: Extract<Command, { type: 'EXPORT_GOODS' }>): void {
     const s = this.state;
-    const fac = s.facilities[command.facilityId];
+    const fac = townOf(s).facilities[command.facilityId];
     if (fac && fac.type !== 'warehouse') {
       emitEvent(s, 'warning', 'logistics', 'Exports ship from warehouses — stage goods there first.', fac.id);
       return;
@@ -569,7 +569,8 @@ export class Simulation {
 
     // fund_home
     const citizens = Object.keys(townOf(s).citizens).length;
-    const homes = Object.values(s.facilities).filter((f) => f.type === 'home').length;
+    const facilities = townOf(s).facilities;
+    const homes = Object.values(facilities).filter((f) => f.type === 'home').length;
     if (citizens >= s.config.maxCitizens || homes >= s.config.maxHomes) {
       emitEvent(s, 'warning', 'player', 'The town is at capacity — no room for another home.', firmId);
       return;
@@ -583,8 +584,8 @@ export class Simulation {
     for (let y = 60; y <= s.config.mapHeight - 4 && !loc; y += 8) {
       for (let x = 14; x <= s.config.mapWidth - 8; x += 6) {
         let clear = true;
-        for (const fid in s.facilities) {
-          const l = s.facilities[fid]!.location;
+        for (const fid in facilities) {
+          const l = facilities[fid]!.location;
           const dx = l.x - x, dy = l.y - y;
           if (dx * dx + dy * dy < 30) { clear = false; break; }
         }
@@ -620,7 +621,7 @@ export class Simulation {
     if (!firm) return 0;
     let inv = 0;
     for (const facId of firm.facilities) {
-      const fac = this.state.facilities[facId];
+      const fac = townOf(this.state).facilities[facId];
       if (!fac) continue;
       for (const bag of [fac.inputInventory, fac.outputInventory]) {
         for (const pid in bag) inv += bag[pid]!.quantity * getProduct(pid).basePrice;
@@ -804,7 +805,7 @@ export class Simulation {
   private selectRecipe(
     command: Extract<Command, { type: 'SELECT_RECIPE' }>,
   ): void {
-    const fac = this.state.facilities[command.facilityId];
+    const fac = townOf(this.state).facilities[command.facilityId];
     if (!fac) return;
     if (command.recipeId !== null && !fac.recipes.includes(command.recipeId)) return;
     fac.activeRecipeId = command.recipeId;
@@ -818,7 +819,7 @@ export class Simulation {
   private setRetailProduct(
     command: Extract<Command, { type: 'SET_RETAIL_PRODUCT' }>,
   ): void {
-    const fac = this.state.facilities[command.facilityId];
+    const fac = townOf(this.state).facilities[command.facilityId];
     if (!fac || fac.type !== 'retail') return;
     const def = getFacilityDef(fac.defId);
     if (command.productId !== null && !def.allowedProductsForSale.includes(command.productId)) {
@@ -838,7 +839,7 @@ export class Simulation {
   private toggleRetailProduct(
     command: Extract<Command, { type: 'TOGGLE_RETAIL_PRODUCT' }>,
   ): void {
-    const fac = this.state.facilities[command.facilityId];
+    const fac = townOf(this.state).facilities[command.facilityId];
     if (!fac || fac.type !== 'retail') return;
     const def = getFacilityDef(fac.defId);
     if (!def.allowedProductsForSale.includes(command.productId)) return;
@@ -888,7 +889,7 @@ export class Simulation {
       return;
     }
     const ok = hireCitizen(s, command.facilityId, citizenId);
-    const fac = s.facilities[command.facilityId];
+    const fac = townOf(s).facilities[command.facilityId];
     if (ok && fac) {
       const cit = townOf(s).citizens[citizenId];
       emitEvent(s, 'success', 'player', `Hired ${cit?.name ?? citizenId} at ${fac.name}.`, fac.id);
@@ -901,8 +902,8 @@ export class Simulation {
     command: Extract<Command, { type: 'CREATE_SUPPLY_CONTRACT' }>,
   ): void {
     const s = this.state;
-    const source = s.facilities[command.sourceFacilityId];
-    const dest = s.facilities[command.destinationFacilityId];
+    const source = townOf(s).facilities[command.sourceFacilityId];
+    const dest = townOf(s).facilities[command.destinationFacilityId];
     if (!source || !dest) return;
     const id = nextId(s.idCounters, 'ctr');
     const contract: Contract = {
@@ -933,7 +934,7 @@ export class Simulation {
     const s = this.state;
     const firms = townOf(s).firms;
     const firm = firms[command.firmId];
-    const dest = s.facilities[command.destinationFacilityId];
+    const dest = townOf(s).facilities[command.destinationFacilityId];
     if (!firm || !dest) return;
     const product = getProduct(command.productId);
     const importer = Object.values(firms).find((f) => f.ownerType === 'external');

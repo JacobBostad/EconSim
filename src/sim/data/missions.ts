@@ -70,7 +70,7 @@ export const MISSION_DEFS: MissionDef[] = [
     check: (s) => {
       const p = player(s);
       if (!p) return false;
-      return p.facilities.some((fid) => (s.facilities[fid]?.dailyStats.unitsProduced ?? 0) > 0);
+      return p.facilities.some((fid) => (townOf(s).facilities[fid]?.dailyStats.unitsProduced ?? 0) > 0);
     },
   },
   {
@@ -83,7 +83,7 @@ export const MISSION_DEFS: MissionDef[] = [
       const p = player(s);
       if (!p) return false;
       return p.facilities.some((fid) => {
-        const f = s.facilities[fid];
+        const f = townOf(s).facilities[fid];
         return f?.type === 'retail' && f.retailProductIds.length > 0 && f.employees.length >= 1;
       });
     },
@@ -199,7 +199,7 @@ export const MISSION_DEFS: MissionDef[] = [
     check: (s) => {
       const p = player(s);
       if (!p) return false;
-      const carries = p.facilities.some((fid) => s.facilities[fid]?.retailProductIds.includes('coffee'));
+      const carries = p.facilities.some((fid) => townOf(s).facilities[fid]?.retailProductIds.includes('coffee'));
       return carries && (townOf(s).marketStats['coffee']?.unitsSoldByFirm[p.id] ?? 0) > 0;
     },
   },
@@ -213,7 +213,7 @@ export const MISSION_DEFS: MissionDef[] = [
       const p = player(s);
       if (!p) return false;
       return p.facilities.some((fid) => {
-        const f = s.facilities[fid];
+        const f = townOf(s).facilities[fid];
         return f?.defId === 'apartment' && f.residentIds.length >= 1;
       });
     },
@@ -251,7 +251,7 @@ export const MISSION_DEFS: MissionDef[] = [
     check: (s) => {
       const p = player(s);
       if (!p) return false;
-      return p.facilities.some((fid) => s.facilities[fid]?.landlordFirmId !== undefined);
+      return p.facilities.some((fid) => townOf(s).facilities[fid]?.landlordFirmId !== undefined);
     },
   },
   {
@@ -305,13 +305,14 @@ export const MISSION_DEFS: MissionDef[] = [
     check: (s) => {
       const p = player(s);
       if (!p) return false;
+      const facilities = townOf(s).facilities;
       const retail = p.facilities.some((fid) => {
-        const f = s.facilities[fid];
+        const f = facilities[fid];
         return f?.type === 'retail' && f.retailProductIds.length > 0;
       });
       const rent =
-        p.facilities.some((fid) => s.facilities[fid]?.landlordFirmId !== undefined) ||
-        Object.values(s.facilities).some((f) => f.landlordFirmId === p.id);
+        p.facilities.some((fid) => facilities[fid]?.landlordFirmId !== undefined) ||
+        Object.values(facilities).some((f) => f.landlordFirmId === p.id);
       const dividends = Object.values(p.sharesHeld).some((v) => v > 0);
       const boost = (p.serviceBoost ?? 1) > 1;
       return retail && rent && dividends && boost;

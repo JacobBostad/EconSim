@@ -8,6 +8,7 @@
  */
 
 import type { SimContext } from '../core/GameState';
+import { townOf } from '../core/Town';
 import { isDayBoundary } from '../core/Tick';
 import { getProduct } from '../data/products';
 import { removeStock, type Inventory } from '../entities/Inventory';
@@ -15,8 +16,9 @@ import { removeStock, type Inventory } from '../entities/Inventory';
 export function runInventorySystem(ctx: SimContext): void {
   if (!isDayBoundary(ctx.state.tick, ctx.config)) return;
   const { state } = ctx;
-  for (const fid in state.facilities) {
-    const fac = state.facilities[fid]!;
+  const town = townOf(state, ctx.townId);
+  for (const fid in town.facilities) {
+    const fac = town.facilities[fid]!;
     if (fac.type === 'importer') continue; // importer buffer doesn't spoil
     spoil(fac.inputInventory);
     spoil(fac.outputInventory);

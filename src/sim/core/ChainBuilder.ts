@@ -59,6 +59,7 @@ export function buildStarterChain(
   // Home-town view (identity in a one-town region, so the returned record is the
   // same reference); gains a `townId` param at the endgame move.
   const firm = townOf(s).firms[firmId];
+  const facilities = townOf(s).facilities;
   const bp = CHAIN_BLUEPRINTS[productId];
   if (!firm || !bp) return null;
 
@@ -66,8 +67,8 @@ export function buildStarterChain(
   // town edge never sees foot traffic, whatever it costs.
   let homeCx = s.config.mapWidth / 2;
   let homeCount = 0;
-  for (const fid in s.facilities) {
-    const f = s.facilities[fid]!;
+  for (const fid in facilities) {
+    const f = facilities[fid]!;
     if (f.type === 'home') { homeCx += f.location.x; homeCount++; }
   }
   if (homeCount > 0) homeCx = (homeCx - s.config.mapWidth / 2) / homeCount;
@@ -76,8 +77,8 @@ export function buildStarterChain(
     let bestDist = Infinity;
     for (let x = 12; x <= s.config.mapWidth - 8; x += 6) {
       let clear = true;
-      for (const fid in s.facilities) {
-        const loc = s.facilities[fid]!.location;
+      for (const fid in facilities) {
+        const loc = facilities[fid]!.location;
         const dx = loc.x - x;
         const dy = loc.y - y;
         if (dx * dx + dy * dy < 36) {

@@ -23,6 +23,7 @@
 
 import type { GameState } from './GameState';
 import type { Vec2 } from '../entities/Location';
+import { townOf } from './Town';
 
 /** Distance beyond which a home contributes nothing. */
 const HOME_REACH = 45;
@@ -51,15 +52,18 @@ export function buildHomeIndex(state: GameState): HomeIndex {
   // insertion order, so the index visits homes in the identical order the direct
   // scan did — the invariant the byte-identity of every query rests on.
   let count = 0;
-  for (const fid in state.facilities) {
-    if (state.facilities[fid]!.type === 'home') count += 1;
+  // Home-town view (identity in a one-town region, so the returned record is the
+  // same reference); gains a `townId` param at the endgame move.
+  const facilities = townOf(state).facilities;
+  for (const fid in facilities) {
+    if (facilities[fid]!.type === 'home') count += 1;
   }
   const xs = new Float64Array(count);
   const ys = new Float64Array(count);
   const residents = new Float64Array(count);
   let i = 0;
-  for (const fid in state.facilities) {
-    const fac = state.facilities[fid]!;
+  for (const fid in facilities) {
+    const fac = facilities[fid]!;
     if (fac.type !== 'home') continue;
     xs[i] = fac.location.x;
     ys[i] = fac.location.y;

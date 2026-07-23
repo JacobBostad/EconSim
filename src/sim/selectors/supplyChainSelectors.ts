@@ -9,6 +9,7 @@ import type { Vehicle } from '../entities/Vehicle';
 import type { Contract } from '../entities/Contract';
 import type { ProductId, FacilityId } from '../core/Id';
 import { getQuantity } from '../entities/Inventory';
+import { townOf } from '../core/Town';
 
 export interface InventoryByFacilityRow {
   facilityId: FacilityId;
@@ -19,8 +20,11 @@ export interface InventoryByFacilityRow {
 
 export function inventoryByFacility(state: GameState, productId: ProductId): InventoryByFacilityRow[] {
   const rows: InventoryByFacilityRow[] = [];
-  for (const id in state.facilities) {
-    const f = state.facilities[id]!;
+  // Home-town view (identity in a one-town region, so the returned record is the
+  // same reference); gains a `townId` param at the endgame move.
+  const facilities = townOf(state).facilities;
+  for (const id in facilities) {
+    const f = facilities[id]!;
     if (f.type === 'importer') continue;
     const input = getQuantity(f.inputInventory, productId);
     const output = getQuantity(f.outputInventory, productId);
@@ -40,8 +44,9 @@ export interface BottleneckRow {
 
 export function bottlenecks(state: GameState): BottleneckRow[] {
   const rows: BottleneckRow[] = [];
-  for (const id in state.facilities) {
-    const f = state.facilities[id]!;
+  const facilities = townOf(state).facilities;
+  for (const id in facilities) {
+    const f = facilities[id]!;
     if (f.status === 'input-starved' || f.status === 'labor-starved' || f.status === 'inventory-full') {
       rows.push({
         facilityId: id,

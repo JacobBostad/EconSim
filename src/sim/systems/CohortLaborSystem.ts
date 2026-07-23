@@ -44,8 +44,8 @@ export function runCohortLaborSystem(ctx: SimContext): void {
 
   // Crowd presence: cohort workers keep facility hours, not commutes.
   if (isWorkTime(ctx)) {
-    for (const fid in state.facilities) {
-      const fac = state.facilities[fid]!;
+    for (const fid in town.facilities) {
+      const fac = town.facilities[fid]!;
       for (const cid in fac.crowdByCohort) {
         const n = fac.crowdByCohort[cid]!;
         if (n <= 0) continue;
@@ -63,7 +63,7 @@ function reconcileCrowdJobs(state: GameState): void {
   const town = townOf(state);
   const cohorts = town.cohorts;
   const cohortIds = Object.keys(cohorts).sort();
-  const facilityIds = Object.keys(state.facilities).sort();
+  const facilityIds = Object.keys(town.facilities).sort();
 
   // Rebuild employment counts from assignments so they can never drift.
   const employedByCohort: Record<string, number> = {};
@@ -73,7 +73,7 @@ function reconcileCrowdJobs(state: GameState): void {
   // where the cast has grown into the capacity, crowd yields (largest
   // holdings first, id tiebreak).
   for (const fid of facilityIds) {
-    const fac = state.facilities[fid]!;
+    const fac = town.facilities[fid]!;
     const firm = town.firms[fac.ownerFirmId];
     const eligible =
       fac.status !== 'closed' &&
@@ -109,7 +109,7 @@ function reconcileCrowdJobs(state: GameState): void {
     if (excess <= 0) continue;
     for (const fid of facilityIds) {
       if (excess <= 0) break;
-      const fac = state.facilities[fid]!;
+      const fac = town.facilities[fid]!;
       const n = fac.crowdByCohort[cid] ?? 0;
       if (n <= 0) continue;
       const take = Math.min(n, excess);
@@ -123,7 +123,7 @@ function reconcileCrowdJobs(state: GameState): void {
   // Pass 3 — fill open slots from cohorts with idle hands, while the owner
   // can afford the projected payroll with a buffer.
   for (const fid of facilityIds) {
-    const fac = state.facilities[fid]!;
+    const fac = town.facilities[fid]!;
     const firm = town.firms[fac.ownerFirmId];
     if (!firm || (firm.ownerType !== 'player' && firm.ownerType !== 'ai')) continue;
     if (fac.status === 'closed' || fac.workerCapacity <= 0) continue;
@@ -134,7 +134,7 @@ function reconcileCrowdJobs(state: GameState): void {
     // Projected daily bill: cast + crowd across the whole firm.
     let firmCrowd = 0;
     for (const ofid of firm.facilities) {
-      const of = state.facilities[ofid];
+      const of = town.facilities[ofid];
       if (of) firmCrowd += crowdCount(of);
     }
     const dailyBill = () => (firm.employees.length + firmCrowd) * wage;

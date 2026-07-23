@@ -19,6 +19,7 @@
 
 import type { SimContext } from '../core/GameState';
 import { emitEvent } from '../core/GameState';
+import { townOf } from '../core/Town';
 import { isDayBoundary } from '../core/Tick';
 import { PRODUCT_IDS_BY_PRESET, getProduct } from '../data/products';
 import {
@@ -154,8 +155,9 @@ function updatePrices(ctx: SimContext): void {
  */
 function runStandingOrders(ctx: SimContext): void {
   const { state } = ctx;
-  for (const fid in state.facilities) {
-    const fac = state.facilities[fid]!;
+  const town = townOf(state, ctx.townId);
+  for (const fid in town.facilities) {
+    const fac = town.facilities[fid]!;
     if (fac.type !== 'warehouse') continue;
     for (const pid in fac.exportOrders) {
       const order = fac.exportOrders[pid]!;

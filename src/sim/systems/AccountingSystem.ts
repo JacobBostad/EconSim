@@ -37,7 +37,7 @@ export function runAccountingSystem(ctx: SimContext): void {
     if (firm.ownerType === 'player' || firm.ownerType === 'ai') {
       // 1) Maintenance.
       for (const facId of firm.facilities) {
-        const fac = state.facilities[facId];
+        const fac = town.facilities[facId];
         if (!fac || fac.status === 'closed') continue;
         if (fac.operatingCostPerDay > 0) {
           recordTransaction(state, {
@@ -93,8 +93,8 @@ export function runAccountingSystem(ctx: SimContext): void {
   // fold the closed day into the 7-day P&L EMA: ship-day/idle-day rhythms
   // make single days flip-flop, so ranking/advice keys off this instead.
   const EMA_ALPHA = 1 / 7;
-  for (const facId in state.facilities) {
-    const fac = state.facilities[facId]!;
+  for (const facId in town.facilities) {
+    const fac = town.facilities[facId]!;
     fac.yesterdayStats = fac.dailyStats;
     fac.dailyStats = emptyFacilityDailyStats();
 
@@ -122,9 +122,10 @@ export function runAccountingSystem(ctx: SimContext): void {
 }
 
 function computeInventoryValue(ctx: SimContext, facilityIds: string[]): number {
+  const town = townOf(ctx.state, ctx.townId);
   let value = 0;
   for (const fid of facilityIds) {
-    const fac = ctx.state.facilities[fid];
+    const fac = town.facilities[fid];
     if (!fac) continue;
     for (const inv of [fac.inputInventory, fac.outputInventory]) {
       for (const pid in inv) {

@@ -115,8 +115,9 @@ export function pricingInsight(
   if (!isFinite(lo)) { lo = 1.2; hi = 1.6; }
 
   let competitors = 0;
-  for (const fid in state.facilities) {
-    const f = state.facilities[fid]!;
+  const facilities = townOf(state).facilities;
+  for (const fid in facilities) {
+    const f = facilities[fid]!;
     if (f.retailProductIds.includes(productId) && f.ownerFirmId !== firmId &&
         f.status !== 'closed' && (f.employees.length > 0 || crowdCount(f) > 0)) {
       competitors++;

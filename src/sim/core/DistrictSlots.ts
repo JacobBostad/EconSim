@@ -48,9 +48,10 @@ export function firstFreeDistrictSlot(
   onlyDistrictId?: string,
 ): Vec2 | null {
   const r2 = spec.clearRadius * spec.clearRadius;
+  const facilities = townOf(state).facilities;
   const blocked = (x: number, y: number): boolean => {
-    for (const fid in state.facilities) {
-      const loc = state.facilities[fid]!.location;
+    for (const fid in facilities) {
+      const loc = facilities[fid]!.location;
       const dx = loc.x - x;
       const dy = loc.y - y;
       if (dx * dx + dy * dy < r2) return true;

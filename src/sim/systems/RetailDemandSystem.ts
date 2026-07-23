@@ -112,7 +112,7 @@ export function scoreStore(
 ): StoreScore | null {
   if (!facility.retailProductIds.includes(productId)) return null;
   const product = getProduct(productId);
-  const home = ctx.state.facilities[citizen.homeFacilityId];
+  const home = townOf(ctx.state, ctx.townId).facilities[citizen.homeFacilityId];
   const refPrice = product.basePrice;
   const price = storePrice(ctx.state, facility, productId);
   const stock = getQuantity(facility.inputInventory, productId);
@@ -175,7 +175,7 @@ export function chooseBestStore(
   const town = townOf(ctx.state, ctx.townId);
   let allowed: Set<string> | null = null;
   if (districtLocal) {
-    const home = ctx.state.facilities[citizen.homeFacilityId];
+    const home = town.facilities[citizen.homeFacilityId];
     const originDistrict = home
       ? districtAt(town.districts, home.location.x, home.location.y)
       : null;
@@ -183,8 +183,8 @@ export function chooseBestStore(
   }
   let best: Facility | null = null;
   let bestScore = -Infinity;
-  for (const id in ctx.state.facilities) {
-    const fac = ctx.state.facilities[id]!;
+  for (const id in town.facilities) {
+    const fac = town.facilities[id]!;
     if (!fac.retailProductIds.includes(productId)) continue;
     if (fac.status === 'closed') continue;
     if (fac.employees.length === 0 && crowdCount(fac) === 0) continue;
@@ -209,7 +209,7 @@ export function runRetailDemandSystem(ctx: SimContext): void {
   for (const id in town.citizens) {
     const cit = town.citizens[id]!;
     if (cit.activity !== 'shopping' || cit.movementState !== 'idle') continue;
-    const store = cit.targetFacilityId ? state.facilities[cit.targetFacilityId] : null;
+    const store = cit.targetFacilityId ? town.facilities[cit.targetFacilityId] : null;
     // Whatever happens, after a shopping visit the citizen heads home.
     sendHome(ctx, cit);
     if (!store || store.retailProductIds.length === 0) continue;
@@ -431,7 +431,7 @@ function attemptPurchase(
 }
 
 function sendHome(ctx: SimContext, cit: Citizen): void {
-  const home = ctx.state.facilities[cit.homeFacilityId];
+  const home = townOf(ctx.state, ctx.townId).facilities[cit.homeFacilityId];
   if (!home) {
     cit.activity = 'home';
     cit.movementState = 'idle';
@@ -512,7 +512,7 @@ export function runRestockRevisitSystem(ctx: SimContext): void {
 
     const remaining: { storeId: string; productId: ProductId }[] = [];
     for (const rv of q) {
-      const store = state.facilities[rv.storeId];
+      const store = town.facilities[rv.storeId];
       const need = cit.needs.find((n) => n.productId === rv.productId);
       // Store demolished or need already satisfied elsewhere: drop the entry.
       if (!store || !need || need.urgency < state.config.needUrgencyThreshold) continue;

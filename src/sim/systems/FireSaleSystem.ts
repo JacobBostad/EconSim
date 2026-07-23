@@ -52,8 +52,8 @@ function worstAIFacility(state: GameState, day: number) {
   const town = townOf(state);
   let worst: { id: string; net: number } | null = null;
   const cooled = state.lastLapsedFireSale;
-  for (const fid in state.facilities) {
-    const f = state.facilities[fid]!;
+  for (const fid in town.facilities) {
+    const f = town.facilities[fid]!;
     if (f.type === 'home' || f.type === 'importer' || f.status === 'closed') continue;
     const firm = town.firms[f.ownerFirmId];
     if (firm?.ownerType !== 'ai') continue;
@@ -78,7 +78,7 @@ export function runFireSaleSystem(ctx: SimContext): void {
 
   const active = state.facilityOffer;
   if (active) {
-    const fac = state.facilities[active.facilityId];
+    const fac = town.facilities[active.facilityId];
     const stillValid = fac && fac.ownerFirmId === active.sellerFirmId;
     if (!stillValid || day > active.deadlineDay) {
       state.facilityOffer = null;
@@ -95,7 +95,7 @@ export function runFireSaleSystem(ctx: SimContext): void {
   if (saleRoll(state.seed, day) >= FIRE_SALE_DAILY_CHANCE) return;
   const worst = worstAIFacility(state, day);
   if (!worst) return;
-  const fac = state.facilities[worst.id]!;
+  const fac = town.facilities[worst.id]!;
   const seller = town.firms[fac.ownerFirmId]!;
 
   const offer: FacilityOffer = {

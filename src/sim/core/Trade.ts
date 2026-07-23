@@ -131,7 +131,7 @@ export function performCityPurchase(
   // Home-town view (identity in a one-town region, so the returned record is the
   // same reference); gains a `townId` param at the endgame move.
   const firm = townOf(state).firms[firmId];
-  const fac = state.facilities[facilityId];
+  const fac = townOf(state).facilities[facilityId];
   if (!firm || !fac || fac.ownerFirmId !== firmId || fac.type !== 'warehouse') return 0;
   const product = getProduct(productId);
   const room =
@@ -204,7 +204,7 @@ export function performExport(
   cityId: string = 'port_rosa',
 ): number {
   const firm = townOf(state).firms[firmId];
-  const fac = state.facilities[facilityId];
+  const fac = townOf(state).facilities[facilityId];
   if (!firm || !fac || fac.ownerFirmId !== firmId || fac.type !== 'warehouse') return 0;
 
   const product = getProduct(productId);

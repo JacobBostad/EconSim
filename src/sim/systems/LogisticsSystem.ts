@@ -53,12 +53,13 @@ export function runLogisticsSystem(ctx: SimContext): void {
 
 function processArrivals(ctx: SimContext): void {
   const { state } = ctx;
+  const town = townOf(state, ctx.townId);
   const delivered: string[] = [];
   for (const vid in state.vehicles) {
     const v = state.vehicles[vid]!;
     if (v.status !== 'delivered') continue;
     delivered.push(vid);
-    const dest = state.facilities[v.destinationFacilityId];
+    const dest = town.facilities[v.destinationFacilityId];
     if (dest) {
       addStock(dest.inputInventory, v.cargo.productId, v.cargo.quantity, v.cargo.quality);
       dest.dailyStats.unitsReceived += v.cargo.quantity;
@@ -98,8 +99,8 @@ function processReorders(ctx: SimContext): void {
   for (const cid in state.contracts) {
     const contract = state.contracts[cid]!;
     if (!contract.active || inFlight.has(cid)) continue;
-    const source = state.facilities[contract.sourceFacilityId];
-    const dest = state.facilities[contract.destinationFacilityId];
+    const source = town.facilities[contract.sourceFacilityId];
+    const dest = town.facilities[contract.destinationFacilityId];
     if (!source || !dest) continue;
 
     const destHave = getQuantity(dest.inputInventory, contract.productId);
@@ -180,7 +181,7 @@ function processReorders(ctx: SimContext): void {
           const c2 = state.contracts[cid2]!;
           if (!c2.active || c2.id === contract.id) continue;
           if (c2.productId !== contract.productId) continue;
-          if (state.facilities[c2.destinationFacilityId]?.ownerFirmId !== source.ownerFirmId) continue;
+          if (town.facilities[c2.destinationFacilityId]?.ownerFirmId !== source.ownerFirmId) continue;
           reserved += c2.targetQuantity;
         }
         avail = Math.max(0, avail - reserved);

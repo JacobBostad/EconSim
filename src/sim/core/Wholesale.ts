@@ -42,6 +42,9 @@ export function localSurplus(
   index?: ContractIndex,
 ): number {
   let reserved = 0;
+  // Home-town view (identity in a one-town region, so the returned record is the
+  // same reference); gains a `townId` param at the endgame move.
+  const facilities = townOf(state).facilities;
   // Per-tick callers (the AI sourcing loop) pass the context's contract index
   // so this reserve sum is O(source-bucket), not O(all contracts) — the same
   // set of contracts, summed in the same order. Callers without an index (UI
@@ -50,14 +53,14 @@ export function localSurplus(
     for (const cid of contractsBySource(index, fac.id)) {
       const c = state.contracts[cid]!;
       if (!c.active || c.productId !== productId) continue;
-      if (state.facilities[c.destinationFacilityId]?.ownerFirmId !== fac.ownerFirmId) continue;
+      if (facilities[c.destinationFacilityId]?.ownerFirmId !== fac.ownerFirmId) continue;
       reserved += c.targetQuantity;
     }
   } else {
     for (const cid in state.contracts) {
       const c = state.contracts[cid]!;
       if (!c.active || c.sourceFacilityId !== fac.id || c.productId !== productId) continue;
-      if (state.facilities[c.destinationFacilityId]?.ownerFirmId !== fac.ownerFirmId) continue;
+      if (facilities[c.destinationFacilityId]?.ownerFirmId !== fac.ownerFirmId) continue;
       reserved += c.targetQuantity;
     }
   }

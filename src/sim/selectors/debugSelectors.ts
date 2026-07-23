@@ -33,8 +33,9 @@ export function debugSnapshot(state: GameState): DebugSnapshot {
   const productIds = PRODUCT_IDS_BY_PRESET[state.config.sizePreset];
   const productQuantities: Record<string, number> = {};
   for (const pid of productIds) productQuantities[pid] = 0;
-  for (const fid in state.facilities) {
-    const f = state.facilities[fid]!;
+  const facilities = townOf(state).facilities;
+  for (const fid in facilities) {
+    const f = facilities[fid]!;
     for (const pid of productIds) {
       productQuantities[pid]! += getQuantity(f.inputInventory, pid) + getQuantity(f.outputInventory, pid);
     }
@@ -52,7 +53,7 @@ export function debugSnapshot(state: GameState): DebugSnapshot {
     worldCash: state.worldCash,
     citizenCount: Object.keys(townOf(state).citizens).length,
     firmCount: Object.keys(townOf(state).firms).length,
-    facilityCount: Object.keys(state.facilities).length,
+    facilityCount: Object.keys(facilities).length,
     activeShipments: active,
     contractCount: Object.keys(state.contracts).length,
     productQuantities,

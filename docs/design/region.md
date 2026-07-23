@@ -660,7 +660,7 @@ converted in steps 1–4 is already correct.
 | **districts** | — | **DONE (14 sites, 8 files)** | step 3 first slice |
 | **cohorts** | ~128 | **DONE (46 refs, 9 files)** | step 3 second slice; the money-scope reads (account primitive + `totalMoneySupply` conservation) stay flat by design — region-wide, they read all towns at the endgame |
 | **firms** | ~500 | **DONE (230 refs, 49 files)** | step 3 fourth slice, harvested as two file partitions (systems/ 149 refs / 30 files; core+selectors+data 81 refs / 19 files); `ownerFirmId` cross-refs are reads and converted; writers flat: the four founder creation sites + two abandon deletes in `AIFounderSystem`, the acquisition delete, the `startingScenario` creation; the money-primitive reads in `GameState.ts` stay flat (region-wide) with their comments extended to name firms |
-| **facilities** | ~400 | ~360 | `facilityId` cross-refs likewise; placement helpers (`DistrictSlots`) read facilities + districts together |
+| **facilities** | ~400 | **DONE (226 refs, 55 files)** | step 3 fifth slice, harvested as two file partitions (systems/ 137 refs / 33 files; core+selectors+data 89 refs / 22 files); `facilityId` cross-refs are reads and converted; writers flat: `startingScenario`'s facility creation and `Demolition`'s delete (the only two in sim code — creation runs through the `createFacility` factory, whose sink is the scenario, and every other path mutates existing records through the view); zero facilities refs in the money primitive |
 | **citizens** | ~240 | **DONE (70 sites, 28 files)** | step 3 third slice; the money-scope reads (account primitive + `totalMoneySupply` conservation) stay flat by design — region-wide, they read all towns at the endgame |
 | **marketStats** | ~40 | **DONE (22 sites, 16 files)** | step 3 third slice; per-product town book |
 | **map dims** | small | small | `config.mapWidth/Height` → per-town |
@@ -685,7 +685,23 @@ the citizens-slice precedent). The **region-wide money primitive** in
 reads, `totalMoneySupply`) stays flat with its comments extended to name
 firms — the same money-scope boundary every family with an account kind hits.
 
-### Measured (Town seam, step 3 — districts + cohorts + citizens + marketStats + firms slices)
+### The facilities family (fifth slice, two harvest partitions)
+
+Same two-partition harvest as firms: **226 reader refs across 55 files** —
+systems/ 137 refs / 33 files (largest: `OperatorBehavior` 24, `ai/expansion`
+12, `LaborSystem` 11), core+selectors+data 89 refs / 22 files (largest:
+`Simulation` 18 across its command handlers, `advisorSelectors` 9,
+`facilitySelectors` 8, `missions` 8). `facilityId` cross-refs (contract
+endpoints, workplace/home lookups, `mgr.facilityId`) are reads and converted.
+Only two writers exist in all of sim code and both stay flat:
+`startingScenario`'s facility creation (`b.state.facilities[id] = fac`) and
+`Demolition`'s `delete` — every other path (labor resets, positioning,
+ownership transfer in `FireSale`/`Acquisition`, resident/employee rosters)
+mutates an EXISTING record obtained through the view, per the established
+precedent. The family has zero refs inside `GameState.ts`'s money primitive,
+so nothing needed the region-wide-flat treatment.
+
+### Measured (Town seam, step 3 — districts + cohorts + citizens + marketStats + firms + facilities slices)
 
 - **Accessor identity (test `townSeam.test.ts`):** `townOf(state,'home')
   .districts === state.districts`, `.cohorts === state.cohorts`, `.citizens ===
@@ -728,11 +744,14 @@ firms — the same money-scope boundary every family with an account kind hits.
   is priced or sold. Breaking the firms accessor (`get firms() { return {}; }`)
   turns **151 tests red across 65 files** — payroll, pricing, founders,
   acquisitions, dividends, and every selector that resolves an owner all flag
-  it. Restoring each getter returns the suite to green. The
-  harness demonstrably guards the conversion.
+  it. Breaking the facilities accessor (`get facilities() { return {}; }`)
+  turns **160 tests red across 71 files** — production, logistics, labor,
+  retail, and rent all read the building stock. Restoring each getter returns
+  the suite to green. The harness demonstrably guards the conversion.
 - **Pinned baselines hold:** village seeds 11/4/7 reproduce `rngState`
   3274842624 / 2896139677 / 4253583594; city seed 11 reproduces its `rngState`
-  2546912297 and money supply 316900000. Full suite green (**582** = 580 + 1
-  citizen/marketStats-determinism seam test + 1 firms-determinism seam test, the
-  latter bit-comparing every firm's cash, debt, and computed valuation across a
-  30-day City double-run); `tsc` clean.
+  2546912297 and money supply 316900000. Full suite green (**583** = 580 + 1
+  citizen/marketStats-determinism seam test + 1 firms-determinism seam test + 1
+  facilities-determinism seam test — the last two bit-comparing every firm's
+  cash/debt/valuation and every facility's level/status/workers/dailyStats/
+  inventories across 30-day City double-runs); `tsc` clean.

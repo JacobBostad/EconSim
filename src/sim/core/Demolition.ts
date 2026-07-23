@@ -44,9 +44,9 @@ export function facilityBookValue(fac: { buildCost: number; upgradeCapex?: numbe
 
 /** Refund a sale would pay, or null if this facility cannot be sold. */
 export function sellRefund(state: GameState, firmId: FirmId, facilityId: FacilityId): number | null {
-  const fac = state.facilities[facilityId];
   // Home-town view (identity in a one-town region, so the returned record is the
   // same reference); gains a `townId` param at the endgame move.
+  const fac = townOf(state).facilities[facilityId];
   const firm = townOf(state).firms[firmId];
   if (!fac || !firm) return null;
   if (fac.ownerFirmId !== firmId) return null;
@@ -61,7 +61,7 @@ export function sellRefund(state: GameState, firmId: FirmId, facilityId: Facilit
 export function sellFacility(state: GameState, firmId: FirmId, facilityId: FacilityId): boolean {
   const refund = sellRefund(state, firmId, facilityId);
   if (refund === null) return false;
-  const fac = state.facilities[facilityId]!;
+  const fac = townOf(state).facilities[facilityId]!;
   const firm = townOf(state).firms[firmId]!;
 
   // Crew back to the labor pool (fireCitizen also cleans both employee lists).
@@ -71,7 +71,7 @@ export function sellFacility(state: GameState, firmId: FirmId, facilityId: Facil
   // wholesale contracts that merely SOURCED here: those are their property,
   // so they fall back to the importer instead of vanishing (deleting them
   // would silently sever an AI chain's input line forever).
-  const importer = Object.values(state.facilities).find((f) => f.type === 'importer');
+  const importer = Object.values(townOf(state).facilities).find((f) => f.type === 'importer');
   for (const cid in state.contracts) {
     const c = state.contracts[cid]!;
     if (c.destinationFacilityId === facilityId) {

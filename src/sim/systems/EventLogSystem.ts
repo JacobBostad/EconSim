@@ -25,7 +25,7 @@ export function runEventLogSystem(ctx: SimContext): void {
   if (!player) return;
 
   for (const facId of player.facilities) {
-    const fac = state.facilities[facId];
+    const fac = town.facilities[facId];
     if (!fac || fac.status === 'closed') continue;
 
     // Daily production digest from yesterday's stats (EventLog runs before the

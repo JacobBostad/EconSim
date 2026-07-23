@@ -42,6 +42,23 @@ bit-identical, every-resident-simulated town.
   dark-and-inert as the fourth measured cast-parity foundation. Suite +5
   (`castRevisit.test.ts`, now 580); `tsc` clean, full suite green. See
   docs/design/cohorts-and-districts.md, "Cast-parity attempt #3".
+- **E step 3 — the Town seam (fifth slice, facilities).** The last big family
+  converts: every **facility reader** in the sim layer routes through
+  `townOf(...).facilities` — **226 reader refs across 55 files**, harvested as
+  two parallel file partitions (systems/ 137 refs / 33 files; core+selectors+
+  data 89 refs / 22 files). `facilityId` cross-refs (contract endpoints,
+  workplace/home lookups, manager assignments) are reads and converted. Only
+  two writers exist in all of sim code and both stay flat: `startingScenario`'s
+  facility creation and `Demolition`'s `delete` — every other path (labor
+  resets, positioning, `FireSale`/`Acquisition` ownership transfer,
+  resident/employee rosters) mutates an existing record through the view. The
+  family has zero refs in the money primitive. Fails-on-revert: a
+  scratch-broken facilities getter turns **160 tests red across 71 files**;
+  restored green. Suite +1 facilities-determinism seam test (every facility's
+  level/status/workers/dailyStats/inventories bit-agree over a 30-day City
+  double-run; now 583); `tsc` clean; pinned baselines exact. With this, ALL
+  SIX record families read through the seam — remaining before the endgame
+  move: map dims and the rest of the UI reads.
 - **E step 3 — the Town seam (fourth slice, firms).** The largest family so far
   converts in one batch: every **firm reader** in the sim layer routes through
   `townOf(...).firms` — **230 reader refs across 49 files**, harvested as two

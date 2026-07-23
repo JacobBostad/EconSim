@@ -36,8 +36,8 @@ export function runCommercialRentSystem(ctx: SimContext): void {
   const town = townOf(state, ctx.townId);
 
   // Sorted iteration keeps the ledger order deterministic across runs.
-  for (const fid of Object.keys(state.facilities).sort()) {
-    const fac = state.facilities[fid]!;
+  for (const fid of Object.keys(town.facilities).sort()) {
+    const fac = town.facilities[fid]!;
     const landlordId = fac.landlordFirmId;
     const rent = fac.rentPerDay ?? 0;
     if (!landlordId || rent <= 0) continue;

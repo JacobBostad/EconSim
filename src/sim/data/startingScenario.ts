@@ -181,7 +181,7 @@ function newCitizen(b: Builder, homeId: string, homeLoc: Vec2): Citizen {
     skill: b.rng.range(0.85, 1.05),
   };
   b.state.citizens[id] = cit;
-  b.state.facilities[homeId]!.residentIds.push(id);
+  townOf(b.state).facilities[homeId]!.residentIds.push(id);
   return cit;
 }
 
@@ -200,7 +200,7 @@ function employ(
   cit.role = role;
   cit.wage = wage;
   cit.employmentStatus = 'employed';
-  b.state.facilities[facilityId]!.employees.push(citizenId);
+  townOf(b.state).facilities[facilityId]!.employees.push(citizenId);
   townOf(b.state).firms[firmId]!.employees.push(citizenId);
 }
 
@@ -335,13 +335,14 @@ export function createInitialState(
   }
 
   // --- Citizens ----------------------------------------------------------
-  const homeFacilityIds = Object.keys(state.facilities).filter(
-    (id) => state.facilities[id]!.type === 'home',
+  const facilities = townOf(state).facilities;
+  const homeFacilityIds = Object.keys(facilities).filter(
+    (id) => facilities[id]!.type === 'home',
   );
   for (let h = 0; h < homeFacilityIds.length; h++) {
     const homeId = homeFacilityIds[h]!;
     for (let c = 0; c < CITIZENS_PER_HOME; c++) {
-      newCitizen(b, homeId, state.facilities[homeId]!.location);
+      newCitizen(b, homeId, facilities[homeId]!.location);
     }
   }
   const allCitizenIds = Object.keys(townOf(state).citizens);

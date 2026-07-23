@@ -34,6 +34,7 @@ export function morningBriefing(state: GameState): Advice[] {
   // Home-town view (identity in a one-town region, so the returned record is the
   // same reference); gains a `townId` param at the endgame move.
   const firms = townOf(state).firms;
+  const facilities = townOf(state).facilities;
   const player = firms[state.playerFirmId];
   if (!player) return [];
   const items: Advice[] = [];
@@ -81,7 +82,7 @@ export function morningBriefing(state: GameState): Advice[] {
   // 2. Production blocked all day. Reads the closed-day snapshot, not the
   // mid-day partial stats — otherwise the alert only appeared late in the day.
   for (const facId of player.facilities) {
-    const fac = state.facilities[facId];
+    const fac = facilities[facId];
     if (!fac || fac.status === 'closed') continue;
     if (fac.activeRecipeId && fac.yesterdayStats.ticksActive === 0 && fac.yesterdayStats.bottleneck) {
       // Saturation reads differently from starvation: a full output buffer
@@ -107,7 +108,7 @@ export function morningBriefing(state: GameState): Advice[] {
     if (worst && worst.emaNet <= -20_00 && worst.status !== 'closed') {
       // A producer drowning in its own output isn't broken — it's oversized
       // for the chain's sales. "Sell it" is terrible advice for that case.
-      const fac = state.facilities[worst.facilityId];
+      const fac = facilities[worst.facilityId];
       let full = 0;
       if (fac) for (const pid in fac.outputInventory) full += fac.outputInventory[pid]!.quantity;
       const saturated =
@@ -166,10 +167,10 @@ export function morningBriefing(state: GameState): Advice[] {
   outer: for (const cid in state.contracts) {
     const ctr = state.contracts[cid]!;
     if (!ctr.active || ctr.ownerFirmId !== player.id) continue;
-    const src = state.facilities[ctr.sourceFacilityId];
+    const src = facilities[ctr.sourceFacilityId];
     if (!src || src.type !== 'importer') continue;
-    for (const fid in state.facilities) {
-      const fac = state.facilities[fid]!;
+    for (const fid in facilities) {
+      const fac = facilities[fid]!;
       if (fac.ownerFirmId === player.id || fac.type === 'importer') continue;
       if (firms[fac.ownerFirmId]?.ownerType !== 'ai') continue;
       if (getQuantity(fac.outputInventory, ctr.productId) >= 30) {
@@ -185,7 +186,7 @@ export function morningBriefing(state: GameState): Advice[] {
 
   // 5. Trade: some port pays a premium for something you actually hold.
   for (const facId of player.facilities) {
-    const fac = state.facilities[facId];
+    const fac = facilities[facId];
     if (!fac) continue;
     let found = false;
     for (const pid of Object.keys(townOf(state).marketStats)) {
@@ -216,7 +217,7 @@ export function morningBriefing(state: GameState): Advice[] {
   // every pinned (flag-off) run by construction (pool is undefined → skipped).
   // Sorted-product iteration; fires on the first held short product, one line.
   poolThin: for (const facId of player.facilities) {
-    const fac = state.facilities[facId];
+    const fac = facilities[facId];
     if (!fac) continue;
     for (const cid of TRADE_CITY_IDS) {
       const pool = state.tradeCities[cid]?.pool;
@@ -258,7 +259,7 @@ export function morningBriefing(state: GameState): Advice[] {
       const gap = state.marketGapDays[pid] ?? 0;
       if (gap < FOUNDER_GAP_DAYS / 2) continue;
       const playerSells = player.facilities.some((fid) => {
-        const fac = state.facilities[fid];
+        const fac = facilities[fid];
         return (
           !!fac &&
           fac.status !== 'closed' &&
@@ -285,7 +286,7 @@ export function morningBriefing(state: GameState): Advice[] {
   if (ann) {
     const day = computeTime(state.tick, state.config).day;
     const ownsWarehouse = player.facilities.some(
-      (fid) => state.facilities[fid]?.type === 'warehouse',
+      (fid) => facilities[fid]?.type === 'warehouse',
     );
     if (day < ann.effectDay && ownsWarehouse) {
       const city = getTradeCity(ann.cityId);

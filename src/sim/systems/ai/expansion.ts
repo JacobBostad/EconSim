@@ -64,14 +64,14 @@ export function maybeExpand(ctx: SimContext, firmId: string): void {
   const { state, rng } = ctx;
   const town = townOf(state, ctx.townId);
   const firm = town.firms[firmId]!;
-  const stores = firm.facilities.filter((id) => state.facilities[id]?.type === 'retail');
+  const stores = firm.facilities.filter((id) => town.facilities[id]?.type === 'retail');
   if (stores.length >= 3) return; // cap stores per firm
 
   // Which product does this firm sell, and is demand unmet?
   let product: string | null = null;
   let lost = 0;
   for (const id of stores) {
-    const fac = state.facilities[id]!;
+    const fac = town.facilities[id]!;
     if (fac.retailProductIds.length === 0) continue;
     product = fac.retailProductIds[0]!;
     lost += fac.dailyStats.lostSales;
@@ -121,7 +121,7 @@ export function maybeExpand(ctx: SimContext, firmId: string): void {
   // Find the firm's factory that produces this product (supply source).
   let sourceId: string | null = null;
   for (const id of firm.facilities) {
-    const fac = state.facilities[id];
+    const fac = town.facilities[id];
     if (fac?.activeRecipeId && getRecipe(fac.activeRecipeId).outputs.some((o) => o.productId === product)) {
       sourceId = id; break;
     }
@@ -178,7 +178,7 @@ export function maybeEnterLuxury(ctx: SimContext, firmId: string): void {
   if (ctx.time.day < LUXURY_ENTRY_DAY || firm.cash < LUXURY_ENTRY_CASH) return;
   // Already in luxury? One entry per firm.
   for (const facId of firm.facilities) {
-    const pids = state.facilities[facId]?.retailProductIds ?? [];
+    const pids = town.facilities[facId]?.retailProductIds ?? [];
     if (pids.some((p) => getProduct(p).needType === 'luxury')) return;
   }
   if (!rng.chance(LUXURY_ENTRY_CHANCE)) return;
@@ -188,7 +188,7 @@ export function maybeEnterLuxury(ctx: SimContext, firmId: string): void {
   let hasMine = false;
   let producerId: string | null = null;
   for (const facId of firm.facilities) {
-    const fac = state.facilities[facId];
+    const fac = town.facilities[facId];
     if (!fac) continue;
     if (fac.activeRecipeId === 'grow_grain') { hasGrainFarm = true; producerId = producerId ?? fac.id; }
     if (fac.type === 'mine') { hasMine = true; producerId = hasGrainFarm ? producerId : fac.id; }
@@ -229,7 +229,7 @@ export function maybeEnterLuxury(ctx: SimContext, firmId: string): void {
   // Wire input supply: own producer if compatible, otherwise the importer.
   let sourceId = producerId;
   if (!sourceId || (luxury === 'jewelry' && !hasMine) || (luxury === 'pastries' && !hasGrainFarm)) {
-    sourceId = Object.values(state.facilities).find((f) => f.type === 'importer')?.id ?? null;
+    sourceId = Object.values(town.facilities).find((f) => f.type === 'importer')?.id ?? null;
   }
   const wire = (src: string, dest: string, pid: string, t: number, r: number, m: number): void => {
     const id = nextId(state.idCounters, 'ctr');
@@ -267,12 +267,12 @@ export function maybeEnterCoffee(ctx: SimContext, firmId: string): void {
   // staple shelves rides existing shopping trips via baskets (measured
   // healthier than a single scarce seller that pulls dedicated trips).
   for (const facId of firm.facilities) {
-    if (state.facilities[facId]?.retailProductIds.includes('coffee')) return;
+    if (town.facilities[facId]?.retailProductIds.includes('coffee')) return;
   }
   // A store with a free assortment slot is required.
   let store: import('../../entities/Facility').Facility | null = null;
   for (const facId of firm.facilities) {
-    const fac = state.facilities[facId];
+    const fac = town.facilities[facId];
     if (fac?.type === 'retail' && fac.status !== 'closed' && fac.retailProductIds.length < MAX_RETAIL_PRODUCTS) {
       store = fac;
       break;
@@ -297,7 +297,7 @@ export function maybeEnterCoffee(ctx: SimContext, firmId: string): void {
   // Grain comes from the importer, never the local farms: measured on seed 5,
   // roasteries siphoning farm grain cut the town's bread supply ~30% and
   // crashed satisfaction to 9 — coffee must be additive, not cannibalizing.
-  const grainSource = Object.values(state.facilities).find((f) => f.type === 'importer')?.id ?? null;
+  const grainSource = Object.values(town.facilities).find((f) => f.type === 'importer')?.id ?? null;
   const wire = (src: string, dest: string, pid: string, t: number, r: number, m: number): void => {
     const id = nextId(state.idCounters, 'ctr');
     const contract: Contract = {
@@ -341,8 +341,8 @@ export function maybeBuildApartment(ctx: SimContext, firmId: string): void {
   let owned = 0;
   let homes = 0;
   let vacancies = 0;
-  for (const fid in state.facilities) {
-    const f = state.facilities[fid]!;
+  for (const fid in town.facilities) {
+    const f = town.facilities[fid]!;
     if (f.type !== 'home') continue;
     homes += 1;
     if (f.residentIds.length < 2) vacancies += 1;
@@ -380,7 +380,7 @@ export function maybeUpgrade(ctx: SimContext, firmId: string): void {
   const firm = town.firms[firmId]!;
   if (firm.cash < 45000_00 || !rng.chance(0.08)) return;
   for (const facId of firm.facilities) {
-    const fac = state.facilities[facId];
+    const fac = town.facilities[facId];
     if (!fac || (fac.type !== 'farm' && fac.type !== 'mine' && fac.type !== 'factory')) continue;
     if (fac.level >= MAX_FACILITY_LEVEL) continue;
     const cost = upgradeCost(state, facId);

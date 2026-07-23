@@ -58,9 +58,12 @@ const SERVICE_EXPAND_DAYS = 12;
 
 /** Total daily maintenance across a firm's facilities (cents). */
 function firmMaintenance(state: GameState, firm: Firm): number {
+  // Bare-`state` helper mid-gradient: home town by default (one-town region →
+  // same reference); gains a `townId` param at the endgame move.
+  const town = townOf(state);
   let m = 0;
   for (const facId of firm.facilities) {
-    const fac = state.facilities[facId];
+    const fac = town.facilities[facId];
     if (fac && fac.status !== 'closed') m += fac.operatingCostPerDay;
   }
   return m;
@@ -144,6 +147,7 @@ export function foundServiceFacility(ctx: SimContext, firmId: string, serviceId:
  */
 function maybeEnterService(ctx: SimContext, firm: Firm, def: ServiceDef): boolean {
   const { state } = ctx;
+  const town = townOf(state, ctx.townId);
   if (serviceCapacity(state, firm, def) > 0) return false; // already provides it
   const { capacity, sold, providers } = townService(state, def);
   if (providers >= SERVICE_ENTRY_MAX_PROVIDERS) return false;
@@ -152,7 +156,7 @@ function maybeEnterService(ctx: SimContext, firm: Firm, def: ServiceDef): boolea
   // Count only the firm's EXISTING service sites for placement spread.
   let owned = 0;
   for (const facId of firm.facilities) {
-    const fac = state.facilities[facId];
+    const fac = town.facilities[facId];
     if (fac && fac.type === def.facilityType) owned += 1;
   }
   if (!buildServiceFacility(ctx, firm, def, owned)) return false;
@@ -181,6 +185,7 @@ function trackFullDay(state: GameState, firm: Firm, def: ServiceDef): number {
  */
 function maybeExpandCapacity(ctx: SimContext, firm: Firm, def: ServiceDef): boolean {
   const { state } = ctx;
+  const town = townOf(state, ctx.townId);
   const cap = serviceCapacity(state, firm, def);
   if (cap <= 0) return false;
   const streak = firm.serviceFullDaysByService?.[def.id] ?? 0;
@@ -191,7 +196,7 @@ function maybeExpandCapacity(ctx: SimContext, firm: Firm, def: ServiceDef): bool
   let owned = 0;
   let upgradable: string | null = null;
   for (const facId of firm.facilities) {
-    const fac = state.facilities[facId];
+    const fac = town.facilities[facId];
     if (!fac || fac.type !== def.facilityType) continue;
     owned += 1;
     if (fac.level < MAX_FACILITY_LEVEL && upgradable === null) upgradable = facId;

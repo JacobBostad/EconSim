@@ -53,8 +53,9 @@ export function getPlayerFirm(state: GameState): Firm | undefined {
 export function firmFacilities(state: GameState, firmId: FirmId): Facility[] {
   const firm = townOf(state).firms[firmId];
   if (!firm) return [];
+  const facilities = townOf(state).facilities;
   return firm.facilities
-    .map((id) => state.facilities[id])
+    .map((id) => facilities[id])
     .filter((f): f is Facility => !!f);
 }
 

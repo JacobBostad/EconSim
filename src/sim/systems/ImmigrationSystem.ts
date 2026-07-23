@@ -190,8 +190,8 @@ export function runImmigrationSystem(ctx: SimContext): void {
   // Find a home with room, or build one in the new residential block.
   let homeId: string | null = null;
   let homes = 0;
-  for (const fid in state.facilities) {
-    const f = state.facilities[fid]!;
+  for (const fid in town.facilities) {
+    const f = town.facilities[fid]!;
     if (f.type !== 'home') continue;
     homes += 1;
     if (homeId === null && f.residentIds.length < 2) homeId = fid;

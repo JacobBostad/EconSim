@@ -20,8 +20,8 @@ export function runRentSystem(ctx: SimContext): void {
   if (!isDayBoundary(state.tick, ctx.config)) return;
   const town = townOf(state, ctx.townId);
 
-  for (const fid in state.facilities) {
-    const fac = state.facilities[fid]!;
+  for (const fid in town.facilities) {
+    const fac = town.facilities[fid]!;
     if (fac.defId !== 'apartment' || fac.status === 'closed') continue;
     const owner = town.firms[fac.ownerFirmId];
     if (!owner || (owner.ownerType !== 'player' && owner.ownerType !== 'ai')) continue;

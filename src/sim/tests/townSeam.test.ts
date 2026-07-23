@@ -11,10 +11,10 @@
  *   2. the seam threads — `makeContext(state).townId === HOME_TOWN_ID`;
  *   3. serialization is unpolluted — no `towns` key leaks into a save;
  *
- * and that the district, cohort, citizen, marketStats, AND firms families, run
- * through the converted systems, stay deterministic (two City runs agree bit-for-
- * bit on the districts, cohorts, citizens, market book, firm cash/valuation, and
- * rngState).
+ * and that the district, cohort, citizen, marketStats, firms, AND facilities
+ * families, run through the converted systems, stay deterministic (two City runs
+ * agree bit-for-bit on the districts, cohorts, citizens, market book, firm
+ * cash/valuation, every facility's inventory/level/dailyStats, and rngState).
  * Bit-identity against the pre-refactor pinned baselines is the orchestrator's
  * job (village seeds 11/4/7 rngState pins, city seed 11) — this file guards the
  * accessor's contract, not the whole trajectory.
@@ -248,5 +248,65 @@ describe('Town seam — the converted firms family stays deterministic', () => {
     }
     // A City seed-11 firm sector holds real cash after 30 days (the readers ran).
     expect(totalCash).not.toBe(0);
+  });
+});
+
+describe('Town seam — the converted facilities family stays deterministic', () => {
+  it('two City runs agree bit-for-bit through the converted facility systems', () => {
+    const a = newCitySim(11);
+    const b = newCitySim(11);
+    const tpd = ticksPerDay(a.getState().config);
+    // 30 days runs the building path hard: Production/Inventory rebuild every
+    // facility's stock, Logistics/Forward/TradeCity move goods in and out,
+    // Labor/CohortLabor staff them (presentWorkers/dailyStats), Retail/CohortDemand
+    // sell off the shelves, Accounting snapshots dailyStats→yesterdayStats, the AI
+    // operator/landlord/service loops build, upgrade and level them, and
+    // Bankruptcy/FireSale close or sell them. Every facility reader in those
+    // systems now routes through townOf(...).facilities.
+    a.run(tpd * 30);
+    b.run(tpd * 30);
+    expect(a.getState().rngState).toBe(b.getState().rngState);
+    expect(normalizedSerialize(a.getState())).toBe(normalizedSerialize(b.getState()));
+
+    // The building stock must actually be live — otherwise the facility readers
+    // never run and this proves nothing. City seed 11 seeds facilities (and the
+    // AI build loops add more over 30 days); assert the book is non-empty and that
+    // every facility's level, status, dailyStats, and both inventories agree
+    // run-to-run.
+    const ga = a.getState().facilities;
+    const gb = b.getState().facilities;
+    const gids = Object.keys(ga).sort();
+    expect(gids).toEqual(Object.keys(gb).sort()); // the same facilities exist
+    expect(gids.length).toBeGreaterThan(0);
+    let totalStock = 0;
+    let totalSold = 0;
+    for (const id of gids) {
+      const fa = ga[id]!;
+      const fb = gb[id]!;
+      expect(fa.level).toBe(fb.level);
+      expect(fa.status).toBe(fb.status);
+      expect(fa.presentWorkers).toBe(fb.presentWorkers);
+      // dailyStats is the per-facility ledger the converted readers write and read;
+      // yesterdayStats is the snapshot AccountingSystem folds it into at the day
+      // boundary (30 full days lands on one, so dailyStats is freshly reset — the
+      // completed day's real sales live in yesterdayStats).
+      expect(fa.dailyStats.unitsSold).toBe(fb.dailyStats.unitsSold);
+      expect(fa.dailyStats.unitsProduced).toBe(fb.dailyStats.unitsProduced);
+      expect(fa.dailyStats.lostSales).toBe(fb.dailyStats.lostSales);
+      expect(fa.dailyStats.revenue).toBe(fb.dailyStats.revenue);
+      expect(fa.yesterdayStats.unitsSold).toBe(fb.yesterdayStats.unitsSold);
+      expect(fa.yesterdayStats.revenue).toBe(fb.yesterdayStats.revenue);
+      // Both inventories, compared structurally (the same stacks, same qualities).
+      expect(JSON.stringify(fa.inputInventory)).toBe(JSON.stringify(fb.inputInventory));
+      expect(JSON.stringify(fa.outputInventory)).toBe(JSON.stringify(fb.outputInventory));
+      for (const inv of [fa.inputInventory, fa.outputInventory]) {
+        for (const pid in inv) totalStock += inv[pid]!.quantity;
+      }
+      totalSold += fa.yesterdayStats.unitsSold;
+    }
+    // A City seed-11 town holds real stock on its shelves and has moved units
+    // through them after 30 days — the facility readers demonstrably ran live.
+    expect(totalStock).toBeGreaterThan(0);
+    expect(totalSold).toBeGreaterThan(0);
   });
 });

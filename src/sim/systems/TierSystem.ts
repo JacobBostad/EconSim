@@ -132,7 +132,9 @@ export function positioningPriceImage(positioning: string, avgQuality: number): 
 }
 
 function livesInApartment(state: GameState, cit: Citizen): boolean {
-  return state.facilities[cit.homeFacilityId]?.defId === 'apartment';
+  // Bare-`state` helper mid-gradient: home town by default (one-town region →
+  // same reference); gains a `townId` param at the endgame move.
+  return townOf(state).facilities[cit.homeFacilityId]?.defId === 'apartment';
 }
 
 /** Does this citizen meet the ENTRY bar for `tier` right now? */

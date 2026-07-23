@@ -55,8 +55,8 @@ export function runDistrictSystem(ctx: SimContext): void {
   let totalJobs = 0;
   let totalShops = 0;
 
-  for (const fid of Object.keys(state.facilities).sort()) {
-    const fac = state.facilities[fid]!;
+  for (const fid of Object.keys(town.facilities).sort()) {
+    const fac = town.facilities[fid]!;
     const d = districtAt(town.districts, fac.location.x, fac.location.y);
     if (!d) continue;
     if (fac.type === 'home') {

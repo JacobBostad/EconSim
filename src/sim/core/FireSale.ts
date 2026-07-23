@@ -24,7 +24,7 @@ export const FIRE_SALE_RATE = 0.75;
 export function acceptFacilityOffer(state: GameState): boolean {
   const offer = state.facilityOffer;
   if (!offer) return false;
-  const fac = state.facilities[offer.facilityId];
+  const fac = townOf(state).facilities[offer.facilityId];
   const firms = townOf(state).firms;
   const seller = firms[offer.sellerFirmId];
   const buyer = firms[state.playerFirmId];

@@ -53,9 +53,12 @@ import {
 /** Seat capacity a firm offers for one service (0 if it runs no open facility
  * of that service's type). */
 export function serviceCapacity(state: GameState, firm: Firm, def: ServiceDef): number {
+  // Bare-`state` helper mid-gradient: home town by default (one-town region →
+  // same reference); gains a `townId` param at the endgame move.
+  const town = townOf(state);
   let seats = 0;
   for (const facId of firm.facilities) {
-    const fac = state.facilities[facId];
+    const fac = town.facilities[facId];
     if (fac && fac.type === def.facilityType && fac.status !== 'closed') {
       seats += def.seatsPerLevel * fac.level;
     }

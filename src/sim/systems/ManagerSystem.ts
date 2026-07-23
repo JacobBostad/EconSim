@@ -146,7 +146,7 @@ function runSalesDuty(ctx: SimContext, firmId: string, mgr: Manager): void {
     for (const facId of [...firm.facilities]) {
       const active = state.rushOrder;
       if (!active) break; // filled — the bonus already landed
-      const fac = state.facilities[facId];
+      const fac = town.facilities[facId];
       if (!fac || fac.type !== 'warehouse') continue;
       const staged =
         getQuantity(fac.inputInventory, active.productId) +
@@ -161,7 +161,7 @@ function runSalesDuty(ctx: SimContext, firmId: string, mgr: Manager): void {
     // Veterans set a sharper floor: ship at 1.25x instead of holding for 1.35x.
     const minMult = mgr.skill >= MARKETING_DUTY_SKILL ? 1.25 : 1.35;
     for (const facId of firm.facilities) {
-      const fac = state.facilities[facId];
+      const fac = town.facilities[facId];
       if (!fac || fac.type !== 'warehouse') continue;
       for (const inv of [fac.inputInventory, fac.outputInventory]) {
         for (const pid in inv) {
@@ -187,7 +187,7 @@ function runMarketingDuty(ctx: SimContext, firmId: string, mgr: Manager): void {
   const { state } = ctx;
   const town = townOf(state, ctx.townId);
   const firm = town.firms[firmId]!;
-  const fac = mgr.facilityId ? state.facilities[mgr.facilityId] : null;
+  const fac = mgr.facilityId ? town.facilities[mgr.facilityId] : null;
   if (!fac) return;
   for (const pid of fac.retailProductIds) {
     const budget = firm.adBudgetByProduct[pid] ?? 0;
@@ -214,7 +214,7 @@ export function runManagerSystem(ctx: SimContext): void {
     if (firm.managers.length === 0) continue;
 
     for (const mgr of [...firm.managers]) {
-      const fac = mgr.facilityId ? state.facilities[mgr.facilityId] : null;
+      const fac = mgr.facilityId ? town.facilities[mgr.facilityId] : null;
       // A store manager's store was sold or demolished: the job is gone.
       if (mgr.role === 'store' && (!fac || fac.ownerFirmId !== fid)) {
         firm.managers = firm.managers.filter((m) => m.id !== mgr.id);
@@ -242,7 +242,7 @@ export function runManagerSystem(ctx: SimContext): void {
       for (const gate of [SHELF_DUTY_SKILL, MARKETING_DUTY_SKILL]) {
         if (before < gate && mgr.skill >= gate) {
           const newDuty = managerDuties(mgr.skill, mgr.role).slice(-1)[0]!;
-          const post = mgr.facilityId ? (state.facilities[mgr.facilityId]?.name ?? 'their store') : `the ${mgr.role} desk`;
+          const post = mgr.facilityId ? (town.facilities[mgr.facilityId]?.name ?? 'their store') : `the ${mgr.role} desk`;
           emitEvent(state, 'success', 'player',
             `🎓 ${mgr.name} earned the ${newDuty} brief at ${post} — experience pays.`, fid);
         }

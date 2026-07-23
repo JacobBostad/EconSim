@@ -86,8 +86,9 @@ export const ACHIEVEMENT_DEFS: AchievementDef[] = [
       const p = player(s);
       if (!p) return false;
       let raw = false, fact = false, shop = false;
+      const facilities = townOf(s).facilities;
       for (const fid of p.facilities) {
-        const t = s.facilities[fid]?.type;
+        const t = facilities[fid]?.type;
         if (t === 'farm' || t === 'mine') raw = true;
         else if (t === 'factory') fact = true;
         else if (t === 'retail') shop = true;
@@ -273,13 +274,14 @@ export const ACHIEVEMENT_DEFS: AchievementDef[] = [
     check: (s) => {
       const p = player(s);
       if (!p) return false;
+      const facilities = townOf(s).facilities;
       for (const fid of p.facilities) {
-        const fac = s.facilities[fid];
+        const fac = facilities[fid];
         if (!fac || (fac.wholesalePriceMult ?? 1) > 0.6) continue;
         for (const cid in s.contracts) {
           const c = s.contracts[cid]!;
           if (!c.active || c.sourceFacilityId !== fac.id) continue;
-          if (s.facilities[c.destinationFacilityId]?.ownerFirmId !== p.id) return true;
+          if (facilities[c.destinationFacilityId]?.ownerFirmId !== p.id) return true;
         }
       }
       return false;
@@ -294,8 +296,9 @@ export const ACHIEVEMENT_DEFS: AchievementDef[] = [
     check: (s) => {
       const p = player(s);
       if (!p) return false;
+      const facilities = townOf(s).facilities;
       for (const fid of p.facilities) {
-        const fac = s.facilities[fid];
+        const fac = facilities[fid];
         if (!fac || fac.employees.length < 2) continue;
         const avg = fac.employees.reduce((sum, cid) => sum + (townOf(s).citizens[cid]?.skill ?? 0), 0) / fac.employees.length;
         if (avg >= 1.25) return true;
@@ -348,8 +351,9 @@ export const ACHIEVEMENT_DEFS: AchievementDef[] = [
       const p = player(s);
       if (!p) return false;
       let full = 0;
+      const facilities = townOf(s).facilities;
       for (const fid of p.facilities) {
-        const f = s.facilities[fid];
+        const f = facilities[fid];
         if (f?.defId === 'apartment' && f.residentIds.length >= 1) full += 1;
       }
       return full >= 3;
@@ -453,7 +457,7 @@ export const ACHIEVEMENT_DEFS: AchievementDef[] = [
       if (!s.config.realEstateEnabled) return false;
       const p = player(s);
       if (!p) return false;
-      return p.facilities.some((fid) => s.facilities[fid]?.landlordFirmId !== undefined);
+      return p.facilities.some((fid) => townOf(s).facilities[fid]?.landlordFirmId !== undefined);
     },
   },
   {

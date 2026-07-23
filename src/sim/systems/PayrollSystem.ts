@@ -118,7 +118,7 @@ function payCrowd(ctx: SimContext): void {
     if (firm.ownerType === 'world' || firm.ownerType === 'external') continue;
     const byCohort: Record<string, number> = {};
     for (const facId of [...firm.facilities].sort()) {
-      const fac = state.facilities[facId];
+      const fac = town.facilities[facId];
       if (!fac) continue;
       for (const cid of Object.keys(fac.crowdByCohort)) {
         byCohort[cid] = (byCohort[cid] ?? 0) + fac.crowdByCohort[cid]!;
@@ -155,7 +155,7 @@ function releaseCrowd(state: GameState, firmId: string, cohortId: string): void 
   const cohort = town.cohorts[cohortId];
   if (!firm || !cohort) return;
   for (const facId of [...firm.facilities].sort()) {
-    const fac = state.facilities[facId];
+    const fac = town.facilities[facId];
     if (!fac) continue;
     const n = fac.crowdByCohort[cohortId] ?? 0;
     if (n <= 0) continue;
@@ -172,7 +172,7 @@ function quit(ctx: SimContext, firmId: string, citizenId: string): void {
   if (!cit) return;
   firm.employees = firm.employees.filter((id) => id !== citizenId);
   if (cit.workplaceFacilityId) {
-    const fac = state.facilities[cit.workplaceFacilityId];
+    const fac = town.facilities[cit.workplaceFacilityId];
     if (fac) fac.employees = fac.employees.filter((id) => id !== citizenId);
   }
   cit.employerFirmId = null;

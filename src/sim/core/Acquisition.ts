@@ -198,8 +198,9 @@ export function performAcquisition(
   buyer.debt += target.debt;
 
   // Facilities, staff, shipments, contracts.
+  const facilities = townOf(s).facilities;
   for (const facId of target.facilities) {
-    const fac = s.facilities[facId];
+    const fac = facilities[facId];
     if (!fac) continue;
     fac.ownerFirmId = buyer.id;
     buyer.facilities.push(facId);

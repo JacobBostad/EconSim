@@ -31,8 +31,8 @@ function computeInventoryTotals(ctx: SimContext): void {
   const ids = PRODUCT_IDS_BY_PRESET[state.config.sizePreset];
   const totals: Record<string, number> = {};
   for (const pid of ids) totals[pid] = 0;
-  for (const fid in state.facilities) {
-    const fac = state.facilities[fid]!;
+  for (const fid in town.facilities) {
+    const fac = town.facilities[fid]!;
     if (fac.type === 'importer') continue; // exclude the infinite buffer
     for (const pid of ids) {
       totals[pid]! +=

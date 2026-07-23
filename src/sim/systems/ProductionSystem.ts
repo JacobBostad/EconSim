@@ -32,8 +32,8 @@ const PRODUCING_TYPES = new Set(['farm', 'mine', 'factory', 'importer']);
 export function runProductionSystem(ctx: SimContext): void {
   const { state } = ctx;
   const town = townOf(state, ctx.townId);
-  for (const fid in state.facilities) {
-    const fac = state.facilities[fid]!;
+  for (const fid in town.facilities) {
+    const fac = town.facilities[fid]!;
     if (fac.status === 'closed') continue;
     if (!PRODUCING_TYPES.has(fac.type)) continue;
     if (!fac.activeRecipeId) {

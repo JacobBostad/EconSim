@@ -204,7 +204,7 @@ export function maybeExportSurplus(ctx: SimContext, firmId: string): void {
   const firm = town.firms[firmId]!;
   const keep = Math.round(AI_EXPORT_KEEP * getPersonality(firm.personalityId).exportKeepMult);
   for (const facId of firm.facilities) {
-    const fac = state.facilities[facId];
+    const fac = town.facilities[facId];
     if (!fac || (fac.type !== 'farm' && fac.type !== 'mine' && fac.type !== 'factory')) continue;
     for (const pid in fac.outputInventory) {
       const have = getQuantity(fac.outputInventory, pid);

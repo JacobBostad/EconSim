@@ -63,8 +63,11 @@ export function basketNormalization(
 /** Whether any staffed store in town currently sells the product. Shared
  * with the AI founder system's market-gap tracking. */
 export function soldSomewhere(state: import('../core/GameState').GameState, productId: string): boolean {
-  for (const fid in state.facilities) {
-    const f = state.facilities[fid]!;
+  // Bare-`state` helper mid-gradient: home town by default (one-town region →
+  // same reference); gains a `townId` param at the endgame move.
+  const town = townOf(state);
+  for (const fid in town.facilities) {
+    const f = town.facilities[fid]!;
     if (
       f.retailProductIds.includes(productId) &&
       f.status !== 'closed' &&
@@ -125,7 +128,7 @@ export function runSatisfactionSystem(ctx: SimContext): void {
     let target = 50;
     target += cit.employmentStatus === 'employed' ? 20 : -5;
     // Premium housing: apartment residents live a little better.
-    if (state.facilities[cit.homeFacilityId]?.defId === 'apartment') {
+    if (town.facilities[cit.homeFacilityId]?.defId === 'apartment') {
       target += APARTMENT_SATISFACTION_BONUS;
     }
     // Smooth provisioning curve: fully provided = +15, and small chronic

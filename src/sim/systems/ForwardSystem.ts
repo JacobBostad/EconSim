@@ -195,7 +195,7 @@ export function runForwardSystem(ctx: SimContext): void {
       let pulled = 0;
       for (const facId of firm.facilities) {
         if (pulled >= fwd.quantity) break;
-        const fac = state.facilities[facId];
+        const fac = town.facilities[facId];
         if (!fac || fac.type !== 'warehouse') continue;
         for (const inv of [fac.inputInventory, fac.outputInventory]) {
           if (pulled >= fwd.quantity) break;
