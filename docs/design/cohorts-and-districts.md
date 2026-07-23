@@ -1251,6 +1251,117 @@ surface than the prior preset-number foundations (a new per-tick system that ear
 off, plus an optional never-populated `Citizen.pendingRevisits` field), but it is provably
 byte-inert off and is the exact mechanism the roadmap's forward path calls for.
 
+### Cast-parity attempt #4 — the JOINT landing, measured across the full grid, and NOT shipped
+
+This pass executed the sharpened forward path attempt #3 named verbatim: land the
+`restockRevisit` demand-timing half **jointly** with the already-inert
+`immigrationEmpFloor` gate (the "flood-stopper") and a founder trigger meant to hold
+crowd empShare ≈ 0.5, so the flood is capped while the cast is served. All pieces were
+already in-tree, all inert; nothing was newly built. Measured via
+`docs/design/probes/cast-joint.ts` (`npx tsx`; env overrides `REVISIT/IMMIGFLOOR/FILLRATE/
+WAGE/WCB/SYNTH/SINKFLOOR/SINKRATE/FCASH/COOLDOWN`, all local to the probe process — source
+stays inert). **Verdict: NO SHIP. The joint stack seats the pinned seed 11 on firms, bands,
+supply and pool, but the supply-capped bistable cast-worker gap defeats every grid cell on
+seeds 4/7 — and, sharper than the prior verdict, the measurement REFUTES the flood-stopper
+half of the hypothesis: `immigrationEmpFloor` is byte-inert across the ENTIRE joint regime.
+No band was widened; the City stays bit-identical to today; the four ingredients remain dark.**
+
+**Baseline anchored exactly** (shipped regime, all flags off, 300 days × seeds 11/4/7 —
+reproduces the committed attempt-#3 grid to the digit): seed 11 — 9 firms, band15 W .609 /
+C .365, cast/cohort worker sat 55.7 / 53.1, gap MoM45 2.6 / daily15 5.84, empW .36, crowd 300,
+cast 109, bread unmet 249/day, conserved 0c, **PASS**; seed 4 — 9f, .666 / .310, 57.2 / 65.2,
+8.0 / 7.02, empW .32, cast 123, bread 280, **PASS**; seed 7 — 8f, .655 / .321, 60.3 / 62.0,
+1.7 / 4.18, empW .34, cast 112, bread 264, **PASS**.
+
+**The joint grid** (300 days × seeds 11/4/7; band15 W/C against the committed .50-.70 / .30-.40;
+worker sat cast/cohort; gap MoM45 / daily-|diff|-15 against ≤ 8; empW = crowd worker employment
+share; drift = days-40→120 $/cap/day, committed < $2.00; bread unmet/day; conservation exact 0c
+on **every** cell):
+
+| # | config (revisit on; floor 0.5) | firms 11/4/7 | s11 W/C · cast/coh · gapM/D · empW | s4 W/C · cast/coh · gapM/D · empW | s7 W/C · cast/coh · gapM/D · empW | verdict |
+|---|--------------------------------|--------------|------------------------------------|------------------------------------|------------------------------------|---------|
+| 0 | SHIPPED (all off) | 9/9/8 | .61/.37 · 56/53 · 2.6/5.8 · .36 | .67/.31 · 57/65 · 8.0/7.0 · .32 | .65/.32 · 60/62 · 1.7/4.2 · .34 | **all PASS** |
+| A | revisit+floor only (fill .65) | 10/8/9 | **.69/.29** · 59/65 · 5.9/**10.5** · .25 | .68/**.30** · 59/67 · 7.8/**9.2** · .42 | .63/.35 · 63/62 · 1.0/1.7 · .28 (**drift 2.10**) | all FAIL |
+| C | +.68 wage18 synth wcb2 sink | 8/9/9 | **.69/.29** · —/— · 13/**16.5** · .29 | **.71/.27** · —/— · 3.5/**5.4** · .20 | **.70/.27** · —/— · 4.3/**9.6** · .18 | all FAIL |
+| D | +.72 wage18 synth wcb2 sink | 8/10/9 | **.78/.20** · —/— · 2.2/**9.7** · .28 | .60/.37 · —/— · 6.7/**10.7** · .24 | .64/.34 · —/— · 6.1/4.9 · .18 | s7 PASS; 11/4 FAIL |
+| E | +.72 wage18 synth wcb4 sink | 9/10/8 | **.70/.28** · —/— · 9.2/**15.7** · .25 | .68/**.30** · —/— · 9.0/**10.9** · .26 | .69/**.29** · —/— · 6.4/4.9 · .45 | all FAIL |
+| F | +.75 wage18 synth wcb3 sink | 10/11/11 | **.96/.03** · —/— · 7.5/**12.0** · .40 | .69/**.29** · —/— · 9.9/7.6 · .49 | **.72/.26** · —/— · 0.5/**8.0** · .38 | all FAIL |
+| B | +.78 wage18 synth wcb4 sink | 13/13/13 | .59/.39 · **41/63** · **21.6/27.7** · .40 | .62/.36 · **46/64** · **17.7/20.2** · .41 | **.54/.44** · **47/67** · **20.4/24.2** · .37 | all FAIL |
+| — | **control: cell B, revisit OFF** | 9/10/11 | .64/.34 · 58/54 · **3.8/3.8** · .28 | **.69/.29** · 47/67 · **20.3/21.4** · .37 | **.73/.26** · 52/67 · **14.6/17.0** · .43 | **s11 PASS**; 4/7 FAIL |
+
+(Bold = out of a committed band. The B-vs-control pair is the load-bearing row: the exact stack
+that seated seed 11 in the prior "decoupling" verdict — 9 firms, gap 3.8 — jumps to **13 firms**
+and blows seed 11's gap to **27.7** the moment the revisit is added, with cast worker sat
+DROPPING 58 → 41.)
+
+**Three sharp findings, one of which refutes the prior hypothesis.**
+
+- **Finding 1 (the refutation) — `immigrationEmpFloor` is byte-inert across the whole joint
+  regime; there is no headcount flood left to stop.** The gate produces **identical** 300-day
+  output floor-on vs floor-off on every cell tested (cell A floor 0.5 == attempt-#3 revisit-alone
+  to the digit; cell B floor 0.5 == floor 0; a max-attractive 14-16-firm regime floor 0.5 ==
+  floor 0), and the crowd sits at its **300 bootstrap in every cell regardless of the gate**. The
+  gate scales *inflow*, but immigration is not firing: post the A4 `INFLOW_RATE = 0.002` pinning
+  the City crowd no longer floods by headcount (the 472-crowd flood the empFloor was built for was
+  the pre-pinning `INFLOW_RATE = 0.004` regime). The empShare crater the prior verdict blamed on
+  "flooding the worker cohort" (0.36 → 0.25) is a **tier-COMPOSITION** effect — comfortable
+  demoting into worker swells the worker *denominator* (crowd total unchanged at 300; worker
+  headcount 178 → 192) — which an *immigration* gate structurally cannot touch. The flood-stopper
+  half of attempt #3's forward path addresses a failure mode that no longer exists.
+
+- **Finding 2 — the revisit's demand is counted as MARKET demand, so it re-inflates the founder
+  signal and re-opens the gap the synthetic accounting had closed.** Unlike the catch-up tranche
+  (`catchupSyntheticSignal`, excluded from `marketStats`), the revisit buys through
+  `attemptPurchase` and its persistent unmet feeds the founder fill-rate gauge. At the raised
+  0.78 trigger this lifts the firm count **9 → 13** (cell B vs control), over-serving the
+  frictionless cohort (cohort worker sat 62-67) while the trip-limited cast, now contesting a
+  city with 13 sellers' worth of crowd demand in its one after-work window, FALLS to 41-47 — the
+  gap WIDENS to 20-28. The revisit is a *market-demand* lever; the gap needs a *cast-throughput*
+  lever that does not touch the founder signal.
+
+- **Finding 3 — no founder-lever setting holds empShare ≈ 0.5 while seating bands AND gap; the
+  gates stay chaotically bistable.** empShare tops out ~0.40-0.49 even at 13-16 firms (the $18
+  founder wage's `CROWD_WAGE_BUFFER_DAYS` throttle caps crowd hiring), and every setting that
+  pushes it up over-serves the cohort and blows the gap; every setting that keeps the gap down
+  leaves empShare ~0.18-0.28, so comfortable loses the wage leg and **collapses into the worker
+  basin** (cell D seed 11 W .78/C .20; cell F seed 11 W .96/C .03) — the same trajectory-phase
+  bistability documented throughout this doc (one seed seats while another collapses at the SAME
+  constants). The "founder trigger holding empShare ≈ 0.5 with gap ≤ 8 and bands seated" the prior
+  verdict posited **does not exist anywhere in the grid** — the three targets are mutually
+  exclusive under these levers.
+
+**What did NOT break.** Conservation is exact (0c) on every cell — the revisit and cohort flows
+move money only through `recordTransaction`. Village/Metropolis are byte-untouched by construction
+(every knob is City-preset-scoped), and with all flags at their inert defaults the full 587-test
+suite (incl. golden fixtures) and the village 11/4/7 + city 11 pins pass unchanged. The
+cohort-side satisfaction regression watchdog is not violated (cohort worker sat rises or holds);
+the failure is compositional (tier bands, cast-worker gap), not a cohort mood drop.
+
+**The sharpened hypothesis for attempt #5.** The prior forward path ("revisit + empFloor + founder
+trigger holding empShare ≈ 0.5") is now **measured to rest on two dead levers**: the empFloor is
+inert (no flood post 0.002), and the revisit-as-market-demand fights the very founder signal it
+rides. The corrected next hypothesis has two coupled requirements the grid isolates:
+1. **The cast-throughput lever must be founder-signal-neutral** — the revisit needs the same
+   synthetic-accounting split the catch-up got (`catchupSyntheticSignal`), so closing the cast gap
+   does not re-inflate firm count and re-widen it. This is a one-flag extension of an existing
+   mechanism, measurable in isolation, and is the cheapest honest next step.
+2. **empShare ≈ 0.5 must be reached WITHOUT more sellers** — because more sellers over-serve the
+   frictionless cohort faster than any cast lever can keep pace (the supply-capped divergence that
+   WIDENS with supply). The lever is the `CROWD_WAGE_BUFFER_DAYS` hiring throttle, not the founder
+   count: a City-scoped relaxation of the crowd-hiring cash buffer would let the *existing* firms
+   employ more of the fixed-300 crowd (lift empShare toward 0.5 for the wage leg) without founding
+   the extra sellers that blow the gap. Attempt #5's grid should sweep {synthetic-revisit} ×
+   {crowd-hiring-buffer relaxation} at the SHIPPED trigger, holding firm count near baseline —
+   the first joint that does not try to buy empShare with firms.
+
+**Judgment — nothing shipped; the four ingredients stay dark.** No code changed: the pass added
+only the `cast-joint.ts` probe and this verdict. `restockRevisit`, `immigrationEmpFloor`,
+`founderCrowdWage`, and `catchupSyntheticSignal`/`catchupBaskets` remain in `SIZE_PRESETS` at
+their inert defaults (this verdict records the measurement that the empFloor is inert against the
+current no-flood City regime — a candidate for removal or re-scoping once attempt #5 confirms the
+crowd stays at bootstrap). An honest NO-SHIP with a full grid, per the standing rule, is a
+complete result.
+
 ## Open questions
 
 - **Cast-vs-cohort shelf competition.** Within a shop-window slice,

@@ -54,6 +54,32 @@ bit-identical, every-resident-simulated town.
   a guard that PINS the split — v1–v8 have no `towns` key and stay flat, v9 is the
   sole towns-shaped fixture at `SAVE_VERSION` 3. Suite **584 → 587** (+3); v1–v8
   fixtures byte-untouched; `tsc` clean, full suite green.
+- **A — cast-parity attempt #4: the JOINT landing (measured across the full
+  grid, NOT shipped, docs-only).** Executed the forward path attempt #3 named —
+  land the `restockRevisit` demand-timing half JOINTLY with the inert
+  `immigrationEmpFloor` "flood-stopper" and a founder trigger meant to hold crowd
+  empShare ≈ 0.5. All pieces already in-tree; nothing newly built (probe only:
+  `docs/design/probes/cast-joint.ts`). The 300-day × 3-seed grid anchors the
+  shipped baseline to the digit (9/9/8 firms, all PASS) then sweeps the joint
+  regime. **Verdict: NO SHIP** — and the grid REFUTES the hypothesis's second
+  half: `immigrationEmpFloor` is **byte-inert across the entire regime** (floor-on
+  == floor-off on every cell; the crowd holds its 300 bootstrap regardless),
+  because post the A4 `INFLOW_RATE = 0.002` pinning there is no headcount flood
+  left to gate — the empShare crater the prior verdict blamed on immigration is a
+  tier-COMPOSITION effect (comfortable demoting into worker) an immigration gate
+  cannot touch. Two further findings: the revisit's demand counts as MARKET demand
+  (unlike the synthetic catch-up), so it re-inflates the founder signal (9→13
+  firms at the raised trigger) and re-opens the gap it means to close (seed-11 cast
+  worker sat 58→41, gap 3.8→27.7); and no founder-lever setting holds empShare ≈
+  0.5 while seating bands AND gap (empShare caps ~0.40-0.49 under the $18-wage
+  hiring throttle; the three targets are mutually exclusive, the gates chaotically
+  bistable). Money conserves to the cent on every cell; **no band widened, nothing
+  re-pinned, no code changed** — the four ingredients stay dark at their inert
+  defaults, full 587-suite + all pins unchanged. Sharpened attempt-#5 hypothesis
+  (recorded): a founder-signal-neutral cast-throughput lever (synthetic revisit) ×
+  a `CROWD_WAGE_BUFFER_DAYS` relaxation that lifts empShare WITHOUT more sellers,
+  swept at the shipped trigger. See docs/design/cohorts-and-districts.md,
+  "Cast-parity attempt #4 — the JOINT landing".
 - **A — cast-parity attempt #3: the restocked-shelf revisit (measured, NOT
   shipped, dark foundation).** Built the forward path the prior cast-parity
   verdict named — a cast-SHOPPING model change, not another demand constant: when

@@ -233,9 +233,13 @@ console.log('\n(3) Id-collision hazard — the town factory must share the regio
     `partner="${partnerFirm.name}" ($${partnerFirm.cash / 100}) — flat primitive would mis-resolve to the home holder`);
 
   // 3b — the FIX (region-unique ids): re-id the partner's firms with a distinct
-  // namespace, as a shared-counter or namespaced factory would. Now the flat
-  // account primitive correctly does NOT resolve them — which is precisely why
-  // resolution must become region-scoped (read every town, not just towns.home).
+  // namespace, as a shared-counter or namespaced factory would. (The design's
+  // CHOSEN mechanism is shared counters — namespacing here is the cheap probe
+  // stand-in; both yield region-unique ids and the identical conclusion below,
+  // since a shared-counter partner firm equally sits outside towns.home.) Now
+  // the flat account primitive correctly does NOT resolve them — which is
+  // precisely why resolution must become region-scoped (read every town, not
+  // just towns.home).
   const reided: TownRecords = {
     ...partner,
     firms: Object.fromEntries(

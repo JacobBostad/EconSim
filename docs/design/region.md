@@ -978,6 +978,12 @@ and the fact every converted reader already honors `ctx.townId`:
 | **(b) each system internally loops towns** | every `run*System` does `for (const townId of sortedTownIds)` | Same order guarantee, but now enforced in ~40 places — 40 chances to forget the sort, and the day-boundary/rng-draw ordering interleaves across towns per-system, which is a HARDER bit-identity story to hold. | No wasted passes, but the refactor touches every system. | Rejected: diffuses the determinism contract across 40 files. |
 | **(c) `TownScheduler` with per-town system lists** | a table `{ home: SYSTEMS, port_rosa: PARTNER_SYSTEMS }`; the scheduler runs each town's list in sorted town order | Sorted town order + an explicit per-town list — the light partner runs its 12-system subset, home runs the full 40, and the ORDER is data, auditable in one place. | Runs exactly the systems each town needs — the size budget is the list. | **Chosen.** It is (a)'s clean outer-loop determinism plus the ability to make the partner genuinely light, with the schedule as one reviewable table. |
 
+One determinism fact the scheduler makes explicit rather than implicit: BOTH
+towns draw from the single shared region rng stream (`state.rngState` is
+world-scoped, per the inventory above) — the scheduler's sorted town order IS
+the draw order, which is why it must live in one auditable place and why a
+flag-off game (no partner in the schedule) is byte-identical by construction.
+
 **Why (c) over (a).** The partner-town budget (§5) is enforced by its system
 list: a cast-less port simply has no cast systems in its schedule, so "minimal
 partner" is a data decision, not a pile of `if (townId === 'home')` guards
