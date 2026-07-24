@@ -1752,3 +1752,85 @@ store level (no in-app path enables the region flag yet, so a browser smoke cann
 reach the partner view); `e2e/switchersmoke.mjs` verifies the flag-off no-chrome
 guarantee in the shipped UI and documents the extension point for when a preset
 wires the flag on.
+
+## The region ships at Metropolis too — the deferral, measured
+
+The region shipped as the **City** new-game default; Metropolis was left a single
+town with a note that an early flip "made metrosmoke crawl," deferred until it
+could be measured on its own budget. That measurement is done, and the deferral
+resolves to **ENABLE** — the "crawl" was a fixable bug, not a real cost.
+
+**What the crawl actually was — a crash that halted the tick loop, not tick
+cost.** The partner (`PORT_ROSA_SPEC`) is fixed **city-sized** (crowd 300, 6
+firms, city catalog) regardless of host, so its own tick cost is host-independent
+— a two-town Metropolis delta should match City's. It did not, and the reason was
+not perf: two PARTNER systems keyed off the **host's** `config.sizePreset`
+instead of the partner's own preset. At a City host these coincide, so the bug
+was invisible; at a Metropolis host they diverge. `MarketStatsSystem` then took
+`PRODUCT_IDS_BY_PRESET['metropolis']` — a **superset** of the city catalog the
+partner's `marketStats` book was seeded with — and on the first hour boundary
+wrote `town.marketStats[metropolisOnlyProduct]!.totalInventory`, throwing on the
+undefined entry. The exception propagated out of `Simulation.tick()`, the loop
+stopped, the day counter froze — and `metrosmoke`, which polls the day counter
+and fails with "too slow to boot the crowd render paths" when it can't advance,
+reported that frozen counter as a **crawl**. The truth was a hard crash on tick 1
+of the partner's day.
+
+**Fix (correctness).** `MarketStatsSystem` now iterates the **town's own market
+book** (`Object.keys(town.marketStats)`) instead of the host preset's product
+list. Home's book is seeded with exactly `PRODUCT_IDS_BY_PRESET[home preset]`
+(same set, same insertion order), and the system draws no rng and moves no money,
+so home is **byte-identical** (pins + golden v10 untouched); a partner is now
+correct at every host preset. This is the general rule for a PARTNER system that
+carries its own preset: read the town, not `state.config`.
+
+**The perf worry, measured and refuted.** `docs/design/probes/region-metro-perf.ts`
+(median ms/tick, warmed to day 300 then timed per-tick, seeds 11/4): the two-town
+partner overhead sits **below the run-to-run noise floor** at both City and
+Metropolis — the median tick swings ±0.1ms run to run, larger than the partner's
+whole contribution. The one genuine `O(towns × host-size)` accident the probe
+localized was NOT in the partner's own systems: every town's `makeContext`
+rebuilt the **full host-scoped contract index** each tick, so the partner paid a
+redundant `buildContractIndex` over **home's** contracts every tick — measured at
+~7µs at City (~32 contracts) but **~15µs at Metropolis** (~80 contracts), scaling
+with the HOST, and read by no partner system (the index's only consumers —
+`LogisticsSystem` and the AI operator/finance paths — are all home-only). Fixed:
+a partner's `makeContext` now gets an **empty** index (`emptyContractIndex`),
+removing the waste with zero observable change (the partner never reads it, mints
+no contracts, and never calls `reindexContracts`/`addContract`). City region-on
+stays byte-identical; the wart that made the Metropolis delta overshoot City's is
+gone.
+
+**Post-fix measurements (`region-metro-verify.ts`, seeds 11/4, day 300).** City
+and Metropolis region-ON both: run to day 300 without throwing; conserve money to
+the cent region-wide (Δ=0); and are deterministic (two runs byte-identical after
+normalizing the wall-clock `perf` field). A single-town Metropolis is byte-
+identical to before (no partner ⇒ home context only; its book == the metropolis
+preset set), so the metropolis founder pins (24-30 firms, 0 insolvent) are
+untouched — proven by the green `founders.test.ts` metropolis scale-up.
+
+**Wiring.** `worldScaleConfig('metropolis')` now sets `regionEnabled: true`
+alongside services/realEstate/trade pools (investors stays city-only — inert
+here). The partner seed gate is `sizePreset !== 'village'`, so this was always a
+scope choice, not an engine limit.
+
+**perfGuard.** A two-town **Metropolis** case joins the two-town City guard, and
+both now assert the **median** ms/tick (the house statistic) rather than the
+`state.perf.avgTickMs` EWMA. The EWMA was the source of the previously-documented
+"known contention flake": a two-town Metropolis carries a ~3.5MB serialized state
+and allocates hard, so a single multi-ms GC pause corrupts the EWMA mean for many
+ticks (reading ~2.6-3.2ms on a slow/GC-heavy box while the true central tick is
+~0.5ms). The median is immune to those sparse outliers. Same **2ms** catastrophic
+bound (not widened) — just a robust statistic, so the guard measures the real
+per-tick cost and no longer false-trips on GC.
+
+**Verification.** `tsc -b --noEmit` clean; full `npx vitest run` green (**671** =
+668 baseline + 3 new: 2 in `regionScheduler.test.ts` — the two-town Metropolis
+no-crash/conservation and Metropolis determinism — and 1 in `perfGuard.test.ts` —
+the two-town Metropolis budget); flag-off pins exact (village 11/4/7
+`3274842624 / 2896139677 / 4253583594`; plain City seed 11 `2546912297`, money
+`316900000`); golden v10 (the two-town City fixture) untouched. Browser e2e
+(`metrosmoke`) was NOT runnable in the authoring sandbox (no chromium); the crawl
+root cause is reproduced and fixed at the headless probe/test level, and
+`metrosmoke` should now reach its usual day-10 green once run on integration
+hardware — the frozen-counter crash it tripped on is gone.

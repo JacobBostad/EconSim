@@ -41,6 +41,7 @@ import { computeTime, type GameTime } from './Tick';
 import { nextId } from './Id';
 import {
   buildContractIndex,
+  emptyContractIndex,
   indexAddContract,
   type ContractIndex,
 } from './ContractIndex';
@@ -345,7 +346,12 @@ export function makeContext(state: GameState, townId: TownId = HOME_TOWN_ID): Si
     rng: new Rng(state),
     time: computeTime(state.tick, state.config),
     townId,
-    contractIndex: buildContractIndex(state),
+    // Home builds the real host-scoped index its AI/logistics systems read; a
+    // partner town (region.md step 4) runs none of the index's consumers and
+    // mints no contracts, so it gets an empty index instead of paying an
+    // O(host-contracts) rebuild every tick for nothing (see emptyContractIndex).
+    contractIndex:
+      townId === HOME_TOWN_ID ? buildContractIndex(state) : emptyContractIndex(),
   };
 }
 

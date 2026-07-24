@@ -57,15 +57,17 @@ describe('worldScaleConfig — New Game world-scale wiring', () => {
     expect(cfg.playerStartCash).toBe(configForDifficulty('standard').playerStartCash);
   });
 
-  it('metropolis wires the biggest preset + services/realEstate/trade pools, investors + region OFF', () => {
+  it('metropolis wires the biggest preset + services/realEstate/trade pools + the region, investors OFF', () => {
     const cfg = worldScaleConfig('standard', false, 'cozy', 'metropolis');
     expect(cfg.sizePreset).toBe('metropolis');
     expect(cfg.servicesEnabled).toBe(true);
     expect(cfg.realEstateEnabled).toBe(true);
     expect(cfg.tradeDemandPoolsEnabled).toBe(true);
-    // The region ships as the CITY new-game default only (measured at City scale);
-    // a two-town Metropolis stays deferred, so region is off here.
-    expect(cfg.regionEnabled).toBe(false);
+    // The region now ships at Metropolis too (region.md step 4): the one-time
+    // deferral was measured to a fixable crash (the partner MarketStats
+    // host-preset mismatch), not a genuine cost — a two-town Metropolis runs to
+    // day 300 conserved/deterministic and far under the perf guard.
+    expect(cfg.regionEnabled).toBe(true);
     // investorsEnabled is a no-op at metropolis (founder row is city-only), so
     // the wiring leaves it off rather than pretending it does something.
     expect(cfg.investorsEnabled).toBe(false);

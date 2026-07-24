@@ -39,6 +39,18 @@ function cityConfig(): SimulationConfig {
 function regionConfig(): SimulationConfig {
   return { ...cityConfig(), regionEnabled: true };
 }
+function metroRegionConfig(): SimulationConfig {
+  // The Metropolis new-game flags (worldScaleConfig('metropolis')): every channel
+  // City turns on EXCEPT investors (its founder row is city-only), region on.
+  return {
+    ...DEFAULT_CONFIG,
+    sizePreset: 'metropolis',
+    servicesEnabled: true,
+    realEstateEnabled: true,
+    tradeDemandPoolsEnabled: true,
+    regionEnabled: true,
+  };
+}
 
 
 describe('Region slice 3 — flag-off identity (one town, one schedule)', () => {
@@ -149,6 +161,48 @@ describe('Region slice 3 — the partner SIMULATES (60-day City, flag on)', () =
   it('two flag-on runs agree bit-for-bit (partner + home + rngState)', () => {
     const a = createInitialState(11, regionConfig());
     const b = createInitialState(11, regionConfig());
+    const sa = new Simulation(a);
+    const sb = new Simulation(b);
+    sa.dispatch({ type: 'RESUME' });
+    sb.dispatch({ type: 'RESUME' });
+    sa.run(ticksPerDay(a.config) * DAYS);
+    sb.run(ticksPerDay(b.config) * DAYS);
+    expect(a.rngState).toBe(b.rngState);
+    expect(JSON.stringify(a.towns[PARTNER_TOWN_ID])).toBe(JSON.stringify(b.towns[PARTNER_TOWN_ID]));
+    expect(normalizedSerialize(a)).toBe(normalizedSerialize(b));
+  });
+});
+
+describe('Region at Metropolis — the two-town Metropolis new-game path (region.md step 4)', () => {
+  const DAYS = 60;
+
+  it('a two-town Metropolis ticks the partner without crashing on the host-preset mismatch', () => {
+    // The deferral regression: PARTNER systems keyed off the HOST preset would,
+    // at a Metropolis host, index the metropolis product SUPERSET into the
+    // city-sized partner book and throw on the first hour boundary (halting the
+    // loop — the "metrosmoke crawl"). MarketStatsSystem now keys off the town's
+    // OWN book, so a Metropolis host runs the city-sized partner cleanly. The
+    // partner crossing an hour boundary (production/book) is what used to crash.
+    const on = createInitialState(11, metroRegionConfig());
+    expect(on.towns[PARTNER_TOWN_ID]).toBeTruthy();
+    const money0 = totalMoneySupply(on);
+    const sim = new Simulation(on);
+    sim.dispatch({ type: 'RESUME' });
+    // Runs many hour boundaries (48 ticks/day × 60 days) with no throw.
+    expect(() => sim.run(ticksPerDay(on.config) * DAYS)).not.toThrow();
+    // Region-wide money conserved to the cent.
+    expect(totalMoneySupply(on)).toBe(money0);
+    // The partner SIMULATED: its book carries live sales history.
+    const partner = on.towns[PARTNER_TOWN_ID]!;
+    const soldProducts = Object.values(partner.marketStats).filter((st) =>
+      st.history.some((h) => h.unitsSold > 0),
+    );
+    expect(soldProducts.length).toBeGreaterThan(0);
+  });
+
+  it('two flag-on Metropolis runs agree bit-for-bit (deterministic)', () => {
+    const a = createInitialState(4, metroRegionConfig());
+    const b = createInitialState(4, metroRegionConfig());
     const sa = new Simulation(a);
     const sb = new Simulation(b);
     sa.dispatch({ type: 'RESUME' });

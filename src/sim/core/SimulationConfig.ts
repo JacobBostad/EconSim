@@ -427,17 +427,31 @@ export function worldScaleConfig(
     // reshuffles the D3-measured crowd-tier bands), so the flag is a no-op here —
     // omitted rather than set to something inert. services + realEstate + trade
     // pools all activate at metropolis (their gates are sizePreset !== 'village').
-    // regionEnabled is deliberately NOT set here: region.md step 4 measured and
-    // pinned the live partner at CITY scale (seed 11) only, and a two-town
-    // Metropolis is the heaviest per-tick path in the game — so the region ships
-    // as the City new-game default and Metropolis stays a single town until it is
-    // measured on its own budget. (The partner seed gate is sizePreset !==
-    // 'village', so this is a scope choice, not an engine limit.)
+    //
+    // regionEnabled ships here too (region.md step 4). It was deferred once
+    // because an early flip "made metrosmoke crawl" — MEASURED to a sharp cause:
+    // NOT tick cost, but a CRASH that halted the tick loop. The partner is fixed
+    // city-sized (PORT_ROSA_SPEC), but two PARTNER systems keyed off the HOST's
+    // `config.sizePreset` instead of the partner's own preset; at a Metropolis
+    // host MarketStatsSystem then indexed the metropolis product SUPERSET into
+    // the city-sized partner book and threw (undefined marketStats entry) on the
+    // first hour boundary — the loop stopped, the day counter froze, and the UI
+    // smoke read that as a "crawl". Fixed by keying MarketStatsSystem off the
+    // town's own book (byte-identical for home and for a City partner). The perf
+    // worry was also measured and refuted: the two-town tick delta sits BELOW the
+    // run-to-run noise floor at both scales; the one real O(towns × host-size)
+    // wart — the partner's makeContext rebuilding the full HOST contract index
+    // every tick (~15µs at Metropolis vs ~7µs at City, unread by any partner
+    // system) — is removed (empty partner index). Post-fix a two-town Metropolis
+    // runs to day 300 at seeds 11/4, money conserved to the cent, deterministic,
+    // and far under the perf guard. (Investors stays city-only; the partner seed
+    // gate is sizePreset !== 'village'.)
     worldOverride = {
       sizePreset: 'metropolis',
       servicesEnabled: true,
       realEstateEnabled: true,
       tradeDemandPoolsEnabled: true,
+      regionEnabled: true,
     };
   }
   const config: SimulationConfig = {

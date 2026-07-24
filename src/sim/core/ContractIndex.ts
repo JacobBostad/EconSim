@@ -47,6 +47,22 @@ function push(map: Map<string, ContractId[]>, key: string, id: ContractId): void
   else map.set(key, [id]);
 }
 
+/**
+ * An empty index. Used for a PARTNER town's SimContext (region.md step 4): the
+ * partner runs the light PARTNER_SYSTEMS subset, none of whose members read the
+ * contract index (its only consumers — LogisticsSystem and the AI operator/
+ * finance paths — are all home-only), and the partner mints no contracts, so
+ * `reindexContracts`/`addContract` never touch it either. Building the full
+ * host-scoped index for the partner was O(host contracts) of pure waste EVERY
+ * tick that grew with the HOST's firm count (~15µs/tick at Metropolis vs ~7µs at
+ * City) — the O(towns × host-size) accident behind the two-town Metropolis
+ * delta overshooting City's. Handing the partner an empty index removes it with
+ * zero observable change (the partner never reads the index).
+ */
+export function emptyContractIndex(): ContractIndex {
+  return { bySource: new Map(), byDest: new Map(), byOwner: new Map() };
+}
+
 /** Build the index from scratch by scanning contracts in insertion order. */
 export function buildContractIndex(state: GameState): ContractIndex {
   const index: ContractIndex = {

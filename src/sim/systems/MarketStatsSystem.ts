@@ -13,7 +13,6 @@
 import type { SimContext } from '../core/GameState';
 import { townOf } from '../core/Town';
 import { isDayBoundary, isHourBoundary } from '../core/Tick';
-import { PRODUCT_IDS_BY_PRESET } from '../data/products';
 import { safeDiv } from '../../utils/math';
 import { getQuantity } from '../entities/Inventory';
 import { pickBestCity } from '../core/Trade';
@@ -26,9 +25,16 @@ export function runMarketStatsSystem(ctx: SimContext): void {
 function computeInventoryTotals(ctx: SimContext): void {
   const { state } = ctx;
   const town = townOf(state, ctx.townId);
-  // Preset-gated (C1): only products present at this preset have a marketStats
-  // entry, so Village iterates its classic catalog exactly (no missing-key hit).
-  const ids = PRODUCT_IDS_BY_PRESET[state.config.sizePreset];
+  // Iterate THIS town's own market book, not PRODUCT_IDS_BY_PRESET[host preset].
+  // Home's book is seeded with exactly PRODUCT_IDS_BY_PRESET[home preset] (same
+  // set, same insertion order), so home is byte-identical; but a PARTNER town
+  // (region.md step 4) carries its OWN preset (PORT_ROSA_SPEC is city-sized,
+  // fixed) independent of the host — so at a Metropolis host the host superset
+  // would name products the city-sized partner book has no entry for and this
+  // write would throw. Keying off the town's own book makes the partner correct
+  // at every host preset. This system draws no rng and moves no money, so the
+  // set — not the order — is what matters (determinism is untouched).
+  const ids = Object.keys(town.marketStats);
   const totals: Record<string, number> = {};
   for (const pid of ids) totals[pid] = 0;
   for (const fid in town.facilities) {
@@ -47,7 +53,9 @@ function computeInventoryTotals(ctx: SimContext): void {
 function finalizeAndReset(ctx: SimContext): void {
   const { state } = ctx;
   const town = townOf(state, ctx.townId);
-  for (const pid of PRODUCT_IDS_BY_PRESET[state.config.sizePreset]) {
+  // The town's own book (see computeInventoryTotals) — byte-identical for home,
+  // correct for a partner whose preset differs from the host's.
+  for (const pid of Object.keys(town.marketStats)) {
     const stat = town.marketStats[pid]!;
     stat.averagePrice = Math.round(safeDiv(stat.revenueAccum, stat.unitsSold, 0));
     stat.averageQuality = safeDiv(stat.qualityAccum, stat.unitsSold, 0);
