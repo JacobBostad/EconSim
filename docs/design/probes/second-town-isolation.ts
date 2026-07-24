@@ -129,15 +129,16 @@ console.log('(0) Flag-off anchor — pinned Village seed-11 300-day rngState');
 }
 
 // ---------------------------------------------------------------------------
-// (1) ISOLATION — a flag-ON City home is byte-identical to flag-OFF over 30
-// days. As of slice 3 the TownScheduler TICKS the partner (its light cast-less
-// subset), so the partner is NO LONGER inert: it changes. The isolation property
-// is that home's rngState and its whole `towns.home` record stay byte-identical
-// (the partner draws ZERO shared rng and writes only its own records + the
-// shared world ledger). Home HOLDER cash is identical; the world account
-// legitimately diverges (the partner shares it — stipends/wages/costs/rent).
+// (1) THE ISOLATION FLIP (slice 5) — through slice 4 a flag-ON City home was
+// byte-identical to flag-OFF, because `port_rosa` quoted a fixed pool home never
+// traded. Slice 5 makes the quote the partner's REAL cover and home EXPORTS into
+// it, so home's BOOK now legitimately diverges (the endgame). What still holds:
+// region money is CONSERVED (the divergence is a transfer, not minting) and the
+// partner is LIVE. Home rngState identity is NO LONGER the invariant (once the
+// trade-driven money divergence crosses an rng-drawing AI decision it may drift);
+// see two-town-conservation.ts for the surviving invariants stated as tests.
 // ---------------------------------------------------------------------------
-console.log('\n(1) Isolation — flag-on home byte-identical to flag-off, partner LIVE (City, seed 11, 30d)');
+console.log('\n(1) Isolation FLIP — flag-on home BOOK diverges (slice 5), region conserved (City, seed 11, 30d)');
 const DAYS = 30;
 {
   // Control: flag off — a one-town region, no partner.
@@ -145,13 +146,12 @@ const DAYS = 30;
   const ctrlSim = new Simulation(ctrl);
   ctrlSim.dispatch({ type: 'RESUME' });
   ctrlSim.run(ticksPerDay(ctrl.config) * DAYS);
-  const ctrlRng = ctrl.rngState;
   const ctrlHome = hashTown(ctrl.towns[HOME_TOWN_ID]!);
-  const ctrlHomeCash = townCash(ctrl.towns[HOME_TOWN_ID]!);
 
   // Treatment: flag ON — createInitialState seeds the partner, the scheduler
-  // ticks its economy (slice 3).
+  // ticks its economy, and home trades its real quote (slice 5).
   const trt = createInitialState(11, regionConfig());
+  const money0 = totalMoneySupply(trt);
   const partnerBefore = hashTown(trt.towns[PARTNER_TOWN_ID]!);
   const trtSim = new Simulation(trt);
   trtSim.dispatch({ type: 'RESUME' });
@@ -159,20 +159,16 @@ const DAYS = 30;
   const partnerAfter = hashTown(trt.towns[PARTNER_TOWN_ID]!);
 
   check('partner town materializes in state (flag on)', !!trt.towns[PARTNER_TOWN_ID]);
-  check('home rngState identical with/without partner (no read-leak into rng)',
-    trt.rngState === ctrlRng, `${trt.rngState} vs ${ctrlRng}`);
-  check('serialized towns.home identical with/without partner (no read/write-leak)',
-    hashTown(trt.towns[HOME_TOWN_ID]!) === ctrlHome,
+  // The FLIP: home's book diverges — home trades the real partner quote now.
+  check('home BOOK DIVERGES flag-on vs flag-off (the endgame — real export prices)',
+    hashTown(trt.towns[HOME_TOWN_ID]!) !== ctrlHome,
     `${hashTown(trt.towns[HOME_TOWN_ID]!)} vs ${ctrlHome}`);
-  // Slice 3: the partner is LIVE, so its records DID change over the run (the
-  // scheduler ran its economy) — the inverse of slice 1's inert assertion.
+  // The surviving invariant: region money is conserved across the run.
+  check('region money conserved with the live partner (divergence is a transfer)',
+    totalMoneySupply(trt) === money0, `money=${money0}`);
+  // The partner is LIVE: its records changed over the run.
   check('serialized towns.port_rosa CHANGED across the run (the partner is live)',
     partnerAfter !== partnerBefore, `${partnerAfter} vs ${partnerBefore}`);
-  // Home HOLDER cash is identical with/without the partner (the world account
-  // diverges — it is region-wide and the live partner transacts with it).
-  const trtHomeCash = townCash(trt.towns[HOME_TOWN_ID]!);
-  check('home HOLDER cash identical with/without partner (home isolated)',
-    trtHomeCash === ctrlHomeCash, `${trtHomeCash} vs ${ctrlHomeCash}`);
 }
 
 // ---------------------------------------------------------------------------

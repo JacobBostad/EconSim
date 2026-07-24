@@ -26,6 +26,7 @@ import { getProduct } from '../data/products';
 import { getTradeCity } from '../data/tradeCities';
 import { getQuantity, removeStock } from '../entities/Inventory';
 import { cityPrice, exportFreightFee, applyPriceImpact, impactedFillPrice, feedPool } from '../core/Trade';
+import { isLivePartnerCity, partnerLarderStock, feedPartnerLarder } from '../core/PartnerMarket';
 import { formatMoney } from '../../utils/formatMoney';
 
 export const FORWARD_MAX_OPEN = 2;
@@ -226,7 +227,13 @@ export function runForwardSystem(ctx: SimContext): void {
         // then — only settlement puts physical stock on the shelf. This is the
         // divergence region.md flagged (a forward delivery used to create no
         // cover overhang a spot export would), now resolved.
-        if (state.tradeCities[fwd.cityId]?.pool?.inventory[fwd.productId] !== undefined) {
+        // Route the two supply models (slice 5): a LIVE partner takes the goods
+        // into its REAL larder, a stub city into its pool.
+        if (isLivePartnerCity(state, fwd.cityId)) {
+          if (partnerLarderStock(state, fwd.cityId, fwd.productId) !== undefined) {
+            feedPartnerLarder(state, fwd.cityId, fwd.productId, pulled);
+          }
+        } else if (state.tradeCities[fwd.cityId]?.pool?.inventory[fwd.productId] !== undefined) {
           feedPool(state, fwd.cityId, fwd.productId, pulled);
         }
         if (fwd.lockedPrice >= product.basePrice * FORWARD_WIN_MULT) {

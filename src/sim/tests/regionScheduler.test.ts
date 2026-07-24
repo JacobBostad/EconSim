@@ -22,7 +22,6 @@ import { DEFAULT_CONFIG } from '../core/SimulationConfig';
 import type { SimulationConfig } from '../core/SimulationConfig';
 import { totalMoneySupply } from '../core/GameState';
 import { HOME_TOWN_ID } from '../core/Town';
-import type { TownRecords } from '../core/Town';
 import { PARTNER_TOWN_ID } from '../data/seedTown';
 import { ticksPerDay } from '../core/Tick';
 import { normalizedSerialize } from './helpers';
@@ -41,13 +40,6 @@ function regionConfig(): SimulationConfig {
   return { ...cityConfig(), regionEnabled: true };
 }
 
-function townCash(r: TownRecords): number {
-  let sum = 0;
-  for (const id in r.firms) sum += r.firms[id]!.cash;
-  for (const id in r.cohorts) sum += r.cohorts[id]!.cashPool;
-  for (const id in r.citizens) sum += r.citizens[id]!.cash;
-  return sum;
-}
 
 describe('Region slice 3 — flag-off identity (one town, one schedule)', () => {
   it('a plain City seed 11 reproduces its pinned rngState + money with the scheduler', () => {
@@ -125,19 +117,33 @@ describe('Region slice 3 — the partner SIMULATES (60-day City, flag on)', () =
     expect(soldProducts.length).toBeGreaterThan(0);
   });
 
-  it('home stays byte-isolated with the partner live (rngState + towns.home)', () => {
+  it('home BEHAVIOR diverges flag-on vs flag-off (the slice-5 isolation flip), conserved', () => {
+    // Slice 5 flips the isolation invariant (region.md § "the isolation flip").
+    // Through slice 4 home's whole `towns.home` — and its rngState — were
+    // byte-identical flag-on vs flag-off, because `port_rosa` quoted a fixed pool
+    // home never actually traded. Slice 5 makes the quote the partner's REAL cover
+    // and home EXPORTS into it, so home's book diverges AND, once that trade-driven
+    // money divergence crosses an rng-drawing AI decision, home's rngState may
+    // diverge too — the designed endgame ("export prices respond to a real
+    // economy"), exactly the money-debt flip precedent. So home rngState identity
+    // is NO LONGER asserted here. What STILL must hold: region money is conserved
+    // (the divergence is a transfer, not minting) and the sim is deterministic
+    // (the two-flag-on-runs test below). Flag-off byte-identity is pinned above.
     const off = createInitialState(11, cityConfig());
     const on = createInitialState(11, regionConfig());
+    const money0 = totalMoneySupply(on);
     const offSim = new Simulation(off);
     const onSim = new Simulation(on);
     offSim.dispatch({ type: 'RESUME' });
     onSim.dispatch({ type: 'RESUME' });
     offSim.run(ticksPerDay(off.config) * DAYS);
     onSim.run(ticksPerDay(on.config) * DAYS);
-    expect(on.rngState).toBe(off.rngState);
-    expect(JSON.stringify(on.towns[HOME_TOWN_ID])).toBe(JSON.stringify(off.towns[HOME_TOWN_ID]));
-    // Home holder cash unchanged (world cash legitimately diverges — shared).
-    expect(townCash(on.towns[HOME_TOWN_ID]!)).toBe(townCash(off.towns[HOME_TOWN_ID]!));
+    // The book legitimately DIVERGES — home trades the real partner quote now.
+    expect(JSON.stringify(on.towns[HOME_TOWN_ID])).not.toBe(
+      JSON.stringify(off.towns[HOME_TOWN_ID]),
+    );
+    // Region money conserved across the run (the divergence is a transfer).
+    expect(totalMoneySupply(on)).toBe(money0);
   });
 
   it('two flag-on runs agree bit-for-bit (partner + home + rngState)', () => {

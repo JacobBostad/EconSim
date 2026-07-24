@@ -17,6 +17,7 @@ import { formatMoney } from '../../utils/formatMoney';
 import { pickBestCity } from '../core/Trade';
 import { getTradeCity, TRADE_CITY_IDS } from '../data/tradeCities';
 import { poolCoverDays } from '../data/tradePool';
+import { isLivePartnerCity, partnerCoverDaysOrUndefined } from '../core/PartnerMarket';
 import { PRODUCT_IDS_BY_PRESET } from '../data/products';
 import { FOUNDER_GAP_DAYS, TRADE_POOL_THIN_COVER_DAYS } from '../data/constants';
 import { founderMaxAiFirms } from '../systems/AIFounderSystem';
@@ -220,19 +221,26 @@ export function morningBriefing(state: GameState): Advice[] {
     const fac = facilities[facId];
     if (!fac) continue;
     for (const cid of TRADE_CITY_IDS) {
+      const livePartner = isLivePartnerCity(state, cid);
       const pool = state.tradeCities[cid]?.pool;
-      if (!pool) continue;
+      if (!livePartner && !pool) continue;
       for (const pid of PRODUCT_IDS_BY_PRESET[state.config.sizePreset]) {
-        const stock = pool.inventory[pid];
-        if (stock === undefined) continue; // not a product this city stocks
-        if (poolCoverDays(cid, pid, stock) >= TRADE_POOL_THIN_COVER_DAYS) continue; // not thin
+        // Cover routes the two supply models (slice 5): a live partner reads its
+        // real shelf/demand, a stub city its pool. Undefined ⇒ nothing to nudge.
+        const cover = livePartner
+          ? partnerCoverDaysOrUndefined(state, cid, pid)
+          : pool!.inventory[pid] === undefined
+            ? undefined
+            : poolCoverDays(cid, pid, pool!.inventory[pid]!);
+        if (cover === undefined) continue; // not a product this city stocks/demands
+        if (cover >= TRADE_POOL_THIN_COVER_DAYS) continue; // not thin
         const held = getQuantity(fac.inputInventory, pid) + getQuantity(fac.outputInventory, pid);
         if (held < 10) continue; // nothing exportable to ship in
         const city = getTradeCity(cid);
         items.push({
           icon: '🔥',
           severity: 'info',
-          text: `${city.name} is running thin on ${getProduct(pid).name} (${poolCoverDays(cid, pid, stock).toFixed(1)}d cover) and you hold ${held} — stage them in a warehouse and export into the premium before its larder refills.`,
+          text: `${city.name} is running thin on ${getProduct(pid).name} (${cover.toFixed(1)}d cover) and you hold ${held} — stage them in a warehouse and export into the premium before its larder refills.`,
         });
         break poolThin;
       }

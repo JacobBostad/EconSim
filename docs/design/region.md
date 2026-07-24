@@ -1203,11 +1203,16 @@ concern per slice, an honest measured NO-SHIP is a complete result):
    and the flag-on slice-3 bands (conservation, home isolation, determinism) stay
    byte-green — no re-pin needed. *See "What ships now — the freight edge with a
    lead time (step 4, slice 4)" below.*
-5. **Retire the pool table (optional, gradient's end).** Once the freight quote
-   reads the partner's real `marketStats`/cohort demand directly, the
-   `TradeCityPool` interface is deleted. Acceptance: the desk/advisor read the
-   town's real book; NO-SHIP-honest if the live economy can't reproduce a sane
-   quote — that stops this slice, not the arc.
+5. **Retire the pool table (optional, gradient's end). — SHIPPED.** The live
+   partner's export quote now reads its REAL book (real shelf stock ÷ real cohort
+   demand, the same clamped cover curve), the `TradeCityPool` row is no longer
+   seeded or read for it, and a partner-side shock moves home's quote. The stub
+   pool path is unchanged for `ironvale` and every flag-off game (where
+   `port_rosa` is still a stub — its pool row STAYS). The live quote is SANE over
+   a 300-day soak (bounded, solvent, conserved), so this is a SHIP, not the
+   honest-NO-SHIP the escape hatch reserved. *See "What ships now — the partner
+   quotes from its real economy (step 4, slice 5)" below. With this, STEP 4 IS
+   COMPLETE.*
 
 ### What ships now — the town factory + the flag (step 4, slice 1)
 
@@ -1504,6 +1509,167 @@ gap.
 new `regionFreight.test.ts` covering dispatch/arrival/conservation/round-trip/gating/
 identity/determinism); `two-town-conservation.ts` (now with a freight leg (d)) and
 `second-town-isolation.ts` both exit 0.
+
+### What ships now — the partner quotes from its real economy (step 4, slice 5)
+
+Slice 5 is the gradient's END: the `TradeCityPool` is RETIRED for the live
+partner. Its export quote no longer reads a seeded pool table — it reads the
+partner town's **REAL book** (real shelf stock ÷ real cohort demand), through the
+SAME clamped cover curve. A partner-side shock now moves home's quote, which is
+the arc's stated endgame: "export prices respond to a real (tiny) economy." The
+stub pool path is byte-for-byte unchanged for `ironvale`, every stub city, and
+every flag-off game (where `port_rosa` is still a stub — its pool row STAYS).
+
+**The mapping, as landed (`core/PartnerMarket.ts`).** The binding TRADE decision
+(§4) is realized: the pool interface is dropped, the town sits in front.
+
+- **STOCK** = the partner's real retail-shelf units of the product, summed over
+  its stores that carry it (`partnerLarderStock`) — the larder the crowd shops
+  and exports land in. `undefined` (bare walk) for a product the port stocks no
+  store for.
+- **DEMAND** = the partner cohorts' ACTUAL recent daily consumption, read off the
+  partner's own `marketStats` sales history over a short
+  `PARTNER_DEMAND_WINDOW_DAYS = 3` window (`partnerDailyDemand`). This is the §4
+  mapping `poolConsumptionPerDay → the partner cohorts' real demand`, and it is
+  **tier-correct for free**: a worker-tier crowd that never buys a luxury reports
+  zero demand for it, so that product quotes the bare walk — no hand-authored
+  table (the pool's `perCapitaDailyConsumption` spec-midpoints are used only for
+  the SEED, below, not the live read).
+- **COVER** = STOCK / DEMAND (`partnerCoverDays`), mapped through the shared
+  `coverMult(target, stock)` curve factored out of `tradePool.ts` — the STUB pool
+  and the LIVE partner now apply the IDENTICAL unit-elastic clamped curve; they
+  differ ONLY in where `target`/`stock` come from (def-population + pool dict vs
+  real cohort demand + real shelf). `target = TRADE_POOL_TARGET_COVER_DAYS (6) ×
+  demand`.
+
+`cityPrice` routes the two supply models through one function (`cityQuoteMult`):
+`isLivePartnerCity` ⇒ the real-book path; else the pool dict. `feedPool(+qty)`
+becomes `feedPartnerLarder(+qty)` — an export/freight arrival adds real units to
+the partner's shelf, a real overhang its crowd works off. `settleExportLanding`,
+`performCityPurchase`, and the forward-settlement feed (`ForwardSystem`) each
+route the live partner to its real larder and a stub city to its pool, the
+per-product guard preserved (a product the port doesn't stock takes the classic
+one-tick walk impact — the stub-parity anti-arbitrage guarantee).
+
+**The supply side, retired-pool (`systems/PartnerMarketSystem.ts`).** The other
+half of the pool's `updatePools` logic is moved onto the real shelf. Each day, per
+store product, the port refills toward the cover buffer:
+
+```
+supply = localProd + max(0, demand − localProd + (target − shelf)·REPLENISH)·throttle
+```
+
+where `demand` is the partner's REAL recent daily sales, `localProd =
+localProductionFraction(cityId, pid) × demand` (the `productionByProduct`
+specialty profile), `target = 6 × demand`, and a pre-announced TENDER throttles
+imports (`TRADE_POOL_SHORTAGE_THROTTLE`) so the headline shock bites through real
+cover. At equilibrium (shelf = target, no tender) `supply = demand`: the crowd's
+drain is exactly replaced and the shelf holds — the same negative-feedback
+stabilizer the pool had, now on real stock. It runs ONLY in `PARTNER_SYSTEMS`
+(gated on `isLivePartnerCity`), moves STOCK only (cash-free, rng-free). The
+`(target − shelf)` term is what self-corrects the seed ramp and any demand-vs-
+sales mismatch, which is what BOUNDS the quote over a long soak.
+
+**The re-seed, derived from the cover curve (`data/seedTown.ts`).** Slice 3 seeded
+the retail shelves warehouse-scale (400k units), which slice 4 measured pegs the
+cover read at `TRADE_POOL_MULT_MIN` (400k ÷ ~360/day ≈ 1,100 days of cover — a
+degenerate discount floor). Slice 5 re-seeds the SHELF (the export larder the
+quote now reads) at COVER-BUFFER scale so `stock / demand` lands IN the mult band:
+
+- **Shelf seed** = `SHELF_SEED_COVER_DAYS (12) × crowdPopulation × perCapita`,
+  a generous buffer ABOVE the 6-day target so it survives the demand RAMP (the
+  real-demand read needs a few days of sales history before `PartnerMarketSystem`
+  activates), after which the `(target − shelf)` feedback pulls it DOWN to the
+  6-day buffer and holds it. Derived per product from the pool's own spec-midpoint
+  `perCapitaDailyConsumption` (the number the pool's `target` used) × the 300-crowd:
+
+  | product | perCapita/day | model demand (×300) | seed (12d) | target (6d) |
+  | --- | --- | --- | --- | --- |
+  | bread | 1.30 | 390.0 | 4,680 | 2,340 |
+  | coffee | 0.425 | 127.5 | 1,530 | 765 |
+  | tools | 0.27 | 81.0 | 972 | 486 |
+  | clothes | 0.25 | 75.0 | 900 | 450 |
+  | pastries | 0.14 | 42.0 | 504 | 252 |
+  | jewelry | 0.05 | 15.0 | 180 | 90 |
+
+- **Factory INPUTS stay deep** (`PARTNER_INPUT_STOCK = 400,000`): the factory's
+  job is keeping the crowd employed over the whole soak, not the export larder;
+  its dead output is the crowd's paycheque. Only the SHELF was re-scaled.
+
+**The pool retirement (no dead flag-gated pool code for the partner path).**
+Grepped every pool read keyed by city id and routed the partner variant:
+
+- `startingScenario` skips seeding a pool row for the live partner
+  (`willBeLivePartner` — the construction-time twin of `isLivePartnerCity`, since
+  the pool loop runs before `state.towns[port_rosa]` exists). A live `port_rosa`
+  carries NO `pool` row; a flag-off `port_rosa` and `ironvale` seed it as before.
+- `TradeCitySystem.updatePools` skips the live partner (explicit
+  `isLivePartnerCity` `continue`; the `!pool` guard already did, this states it).
+- `Trade.cityQuoteMult` / `settleExportLanding` / `performCityPurchase` and
+  `ForwardSystem`'s settlement feed route `isLivePartnerCity` to the real book;
+  the pool row is simply never read on the live-partner path.
+- The desk (`gazetteSelectors`) and advisor (`advisorSelectors`) cover chips read
+  `partnerCoverDaysOrUndefined` for the live partner, the pool for stubs.
+
+**The isolation invariant FLIPS (documented exactly like the money-debt flip).**
+Through slice 4, home's whole `towns.home` AND its `rngState` were byte-identical
+flag-on vs flag-off, because `port_rosa` quoted a fixed pool table home never
+actually traded against. Slice 5 makes the quote the partner's REAL cover and home
+EXPORTS into it, so:
+
+- **What legitimately DIVERGES now:** home's BOOK (its firms' cash) diverges
+  flag-on vs flag-off, and once that trade-driven money divergence crosses an
+  rng-drawing AI decision, home's `rngState` may diverge too. This is the designed
+  endgame, not a leak — the same category as slice 2's money-debt flip (a
+  primitive that used to omit the partner now includes it). Home `rngState`
+  identity flag-on-vs-flag-off is NO LONGER an invariant.
+- **What STILL MUST hold (and is pinned):** (a) region money conserved daily to
+  the cent (the divergence is a TRANSFER, not minting); (b) two flag-on runs
+  deterministic bit-for-bit (no hidden nondeterminism); (c) FLAG-OFF byte-identity
+  everywhere (a flag-off `port_rosa` is a stub on the pool path — pins untouched).
+  The probes (`second-town-isolation.ts` check (1), `two-town-conservation.ts`
+  check (c)) and the `regionSeed`/`regionScheduler` isolation tests were updated
+  in place to this honest invariant: they now assert the book DIVERGES + region
+  conserved, instead of the old byte-isolation.
+
+**Measured (City seed 11, region on).**
+
+- **Re-seed lands in-band.** Day 0 shelves are exactly the derived seeds (bread
+  4,680, coffee 1,530, tools 972, clothes 900, pastries 504, jewelry 180). By day
+  40 the `(target − shelf)` feedback has pulled cover to its buffer: bread 6.01d
+  (quote 0.949× base), coffee 7.24d (0.688×), tools 7.51d (0.672×), clothes 7.59d
+  (0.600×) — cover sits IN the band, not pegged at the `MULT_MIN` rail slice 4's
+  warehouse-scale shelves produced.
+- **THE PAYOFF (the arc's endgame).** Warm 40 days, drain the partner's bread
+  shelf to 15% (a starved port): cover falls **6.01d → 0.90d** and the export
+  quote RISES **332 → 516** (+55%). With freight, home's SAME 300-bread export
+  locks at the shocked price — locked **257 → 400/unit**, net-on-delivery **236 →
+  368/unit** — and settles there `FREIGHT_LEAD_DAYS` later. Home's export price
+  responded to the partner's real state. Region money conserved to the cent across
+  the whole in-flight window in both arms.
+- **THE SANITY BAR (300-day flag-on soak; the NO-SHIP line — cleared).** Over 300
+  days the live quote stays BOUNDED within the walk band's intent — quote/base in
+  bread [0.600, 1.354]×, coffee [0.600, 1.628]×, tools [0.600, 1.764]×, clothes
+  [0.600, 1.353]× (no runaway spiral, every day inside the `[0.6, 1.8]×` walk
+  band). The partner economy stays SOLVENT (firm cash $883,876; cohort cash
+  $160,764 at day 300), the shelves hold near their buffers (bread final 2,493 ≈
+  target 2,340, cover 6.98d), and region money is conserved to the cent every day
+  (`358,400,000` unchanged). This is a SHIP, not the honest-NO-SHIP the escape
+  hatch reserved.
+- **Retirement + gating.** A live `port_rosa` carries no `pool` row; `ironvale`
+  and a flag-off `port_rosa` keep theirs. Flag off ⇒ byte-identical pins hold:
+  village 11/4/7 reproduce `3274842624 / 2896139677 / 4253583594`, plain City seed
+  11 reproduces `rngState 2546912297`, money `316900000`.
+- **Determinism:** two flag-on runs agree bit-for-bit (partner + home + `rngState`
+  + full serialized state).
+
+**Verification.** `tsc` clean; full `vitest run` green (**622** = 615 baseline + 6
+new `regionPartnerMarket.test.ts` covering retirement/real-state-quote/the-payoff/
+the-sanity-soak/gating + 1 net new isolation-flip assertion; `regionSeed` and
+`regionScheduler` isolation tests updated in place to the flip, no count change);
+the perfGuard two-town timing case is a known contention flake (green in
+isolation). `two-town-conservation.ts` and `second-town-isolation.ts` both exit 0,
+updated to the isolation-flip invariant. **With this, STEP 4 IS COMPLETE.**
 
 ### What stays OUT of step 4 (and why)
 

@@ -19,6 +19,42 @@ real City or Metropolis game switches the whole stack on together (crowd +
 districts + all three specialist channels); Village stays the classic,
 bit-identical, every-resident-simulated town.
 
+- **Region step 4, slice 5 — the partner quotes from its real economy (STEP 4
+  COMPLETE).** The gradient's END: the `TradeCityPool` is RETIRED for the live
+  partner. Its export quote no longer reads a seeded pool table — it reads the
+  partner town's REAL book: STOCK = its real retail-shelf units
+  (`partnerLarderStock`), DEMAND = its cohorts' actual recent daily sales off its
+  own `marketStats` (`partnerDailyDemand`, a 3-day window — tier-correct for free,
+  no hand-authored table), COVER = STOCK/DEMAND through the SAME clamped cover
+  curve (`coverMult`, factored out of `tradePool.ts` so the stub pool and the live
+  partner apply the identical curve). A new `PartnerMarketSystem` is the retired
+  pool's supply side moved onto the real shelf (production + gap-import tender
+  refill toward the 6-day cover buffer; cash-free, rng-free), and the shelf is
+  RE-SEEDED at cover-buffer scale (`SHELF_SEED_COVER_DAYS = 12 × crowd × perCapita`
+  — bread 4,680, converging to the ~2,340 target) instead of slice 4's degenerate
+  400k warehouse-scale. `cityPrice`, `settleExportLanding`, `performCityPurchase`,
+  and `ForwardSystem` route the live partner to its real larder and stub cities to
+  the pool; `startingScenario` (`willBeLivePartner`) seeds no pool row for the live
+  partner and `TradeCitySystem.updatePools` skips it — no dead flag-gated pool code
+  on the partner path. THE PAYOFF (the arc's endgame): a partner-side shock now
+  moves home's quote — draining the partner's bread shelf to 15% drops cover
+  6.01d → 0.90d, raises the export quote 332 → 516, and with freight home's next
+  300-bread export settles at the shocked price (locked 257 → 400/unit, net 236 →
+  368/unit). SANITY BAR cleared over a 300-day flag-on soak: the live quote stays
+  bounded (quote/base within [0.600, 1.764]× the walk band, no runaway), the
+  partner economy solvent (firm cash $883,876, cohort cash $160,764), region money
+  conserved to the cent every day. The ISOLATION invariant FLIPS by design (like
+  the slice-2 money-debt flip): home's book — and possibly its `rngState` — now
+  legitimately diverges flag-on vs flag-off because home trades a real partner;
+  what still holds is region conservation, two-run determinism, and FLAG-OFF
+  byte-identity (a flag-off `port_rosa` is a stub — its pool row STAYS; village
+  11/4/7 reproduce `3274842624/2896139677/4253583594`, plain City seed 11
+  reproduces `rngState 2546912297` money `316900000`). `tsc` clean; full `vitest
+  run` green (622 = 615 + 6 new `regionPartnerMarket.test.ts` + 1 net isolation
+  assertion; the perfGuard two-town timing case is a known contention flake, green
+  in isolation); `two-town-conservation.ts` and `second-town-isolation.ts` both
+  exit 0, updated to the isolation-flip invariant.
+
 - **Region step 4, slice 4 — the freight edge with a lead time.** Home's export
   to the LIVE partner (`port_rosa`) is no longer instant: it becomes a dated
   inter-town shipment (the `ForwardSystem` shape for physical goods). A new

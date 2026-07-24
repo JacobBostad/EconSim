@@ -24,6 +24,13 @@ import {
 import { worldTransportMult } from '../data/worldEvents';
 import { getTradeCity, TRADE_CITY_IDS, cityBias, type TradeCityId } from '../data/tradeCities';
 import { poolCoverMult, poolCoverDays } from '../data/tradePool';
+import {
+  isLivePartnerCity,
+  partnerCoverMult,
+  partnerCoverDays,
+  partnerLarderStock,
+  feedPartnerLarder,
+} from './PartnerMarket';
 import { townOf, HOME_TOWN_ID } from './Town';
 import { computeTime } from './Tick';
 import type { FreightShipment } from '../entities/Freight';
@@ -73,21 +80,41 @@ export function exportFreightFee(state: GameState, cityId: string = 'port_rosa')
   return Math.min(0.5, EXPORT_FREIGHT_FEE * worldTransportMult(state) * getTradeCity(cityId).freightMult);
 }
 
+/**
+ * The cover multiplier a trade city applies to its walked quote, routing the two
+ * supply models (Arc E step 4, slice 5): a LIVE partner (`port_rosa` with the
+ * region flag on) reads its REAL shelf stock + REAL cohort demand
+ * (`partnerCoverMult`); every stub city (`ironvale`), a flag-off `port_rosa`, and
+ * every product a city doesn't stock read the stub `TradeCityPool`
+ * (`poolCoverMult`). Returns `null` for a bare walk (no larder/pool for this
+ * product). This one function is where the partner variant is routed — the pool
+ * row is simply never read on the live-partner path (it is not even seeded there).
+ */
+function cityQuoteMult(state: GameState, cityId: string, productId: ProductId): number | null {
+  if (isLivePartnerCity(state, cityId)) {
+    if (partnerLarderStock(state, cityId, productId) === undefined) return null;
+    return partnerCoverMult(state, cityId, productId);
+  }
+  const stock = state.tradeCities[cityId]?.pool?.inventory[productId];
+  if (stock === undefined) return null; // no pool, or a product this city doesn't consume
+  return poolCoverMult(cityId, productId, stock);
+}
+
 /** A city's quoted price for a product (base price if unknown).
  *
- * With a demand pool live (Arc E, opt-in), the walked quote picks up the pool's
- * cover multiplier — a premium when the city's stock of this product is thin, a
+ * With a demand pool live (Arc E, opt-in), the walked quote picks up a cover
+ * multiplier — a premium when the city's stock of this product is thin, a
  * discount when an export overhang has piled it up — clamped back into the
- * walk's own [MIN, MAX]× band so the pool layers WITHIN it, never beyond. Flag
- * off (or a product the city doesn't stock) ⇒ the bare walked quote, unchanged.
+ * walk's own [MIN, MAX]× band so cover layers WITHIN it, never beyond. For a LIVE
+ * partner (region flag on) that cover comes from its REAL shelf + demand; for a
+ * stub city from the pool table. Flag off (or a product the city doesn't stock)
+ * ⇒ the bare walked quote, unchanged.
  */
 export function cityPrice(state: GameState, cityId: string, productId: ProductId): number {
   const book = state.tradeCities[cityId];
   const walk = book?.pricesByProduct[productId] ?? getProduct(productId).basePrice;
-  const stock = book?.pool?.inventory[productId];
-  if (stock === undefined) return walk; // no pool, or a product this city doesn't consume
-  const mult = poolCoverMult(cityId, productId, stock);
-  if (mult === 1) return walk;
+  const mult = cityQuoteMult(state, cityId, productId);
+  if (mult === null || mult === 1) return walk;
   const center = getProduct(productId).basePrice * cityBias(cityId, productId);
   return Math.round(
     Math.max(center * TRADE_PRICE_MIN_MULT, Math.min(center * TRADE_PRICE_MAX_MULT, walk * mult)),
@@ -163,14 +190,20 @@ export function performCityPurchase(
     note: `Bought ${qty} ${product.name} from ${getTradeCity(cityId).name} @ ${formatMoney(unitCost)}`,
   });
   addStock(fac.inputInventory, productId, qty, product.defaultQuality);
-  // A POOLED product draws the buy down the city's larder (durable cover,
-  // healed by restock over days); anything else — a plain city, or a
-  // raw/intermediate the pool never stocks — takes the classic one-tick
-  // impact the walk's center-pull heals. The guard tests the PRODUCT, not
-  // just the city: feedPool no-ops on un-pooled products, and skipping the
-  // impact there would reopen the riskless cross-city arbitrage the impact
+  // A LARDER product draws the buy down the city's stock (durable cover, healed
+  // by restock over days); anything else — a plain city, or a raw/intermediate
+  // no larder ever stocks — takes the classic one-tick impact the walk's
+  // center-pull heals. The guard tests the PRODUCT, not just the city, and routes
+  // the LIVE partner (real shelf) vs a stub (pool dict): skipping the impact on an
+  // un-stocked product would reopen the riskless cross-city arbitrage the impact
   // exists to prevent (review blocker). Either way buying moves the quote UP.
-  if (state.tradeCities[cityId]?.pool?.inventory[productId] !== undefined) {
+  if (isLivePartnerCity(state, cityId)) {
+    if (partnerLarderStock(state, cityId, productId) !== undefined) {
+      feedPartnerLarder(state, cityId, productId, -qty);
+    } else {
+      applyPriceImpact(state, cityId, productId, qty, 1);
+    }
+  } else if (state.tradeCities[cityId]?.pool?.inventory[productId] !== undefined) {
     feedPool(state, cityId, productId, -qty);
   } else {
     applyPriceImpact(state, cityId, productId, qty, 1);
@@ -202,9 +235,10 @@ export function pickBestCity(state: GameState, productId: ProductId): ExportQuot
  * flag-off game are all false, so they keep the instant pool path unchanged.
  */
 export function isFreightDest(state: GameState, cityId: string): boolean {
-  return (
-    state.config.regionEnabled && cityId !== HOME_TOWN_ID && state.towns[cityId] !== undefined
-  );
+  // Identical to `isLivePartnerCity`: a city on the freight edge is exactly one
+  // whose quote comes from its real book (slice 5). Kept as a named export for
+  // the export-path call sites; the two must agree by construction.
+  return isLivePartnerCity(state, cityId);
 }
 
 /**
@@ -352,6 +386,29 @@ export function settleExportLanding(
   productId: ProductId,
   qty: number,
 ): void {
+  // LIVE partner (slice 5): the goods land in the partner's REAL larder (its
+  // retail shelf), a durable stock overhang its crowd works off — the cover the
+  // next `cityPrice` reads is now days of real inventory. The player's read-the-
+  // ports counters use the real cover; AI exports just feed the shelf. A product
+  // the port doesn't stock has no larder ⇒ the classic walk impact (stub-parity).
+  if (isLivePartnerCity(state, cityId)) {
+    if (partnerLarderStock(state, cityId, productId) === undefined) {
+      applyPriceImpact(state, cityId, productId, qty, -1);
+      return;
+    }
+    if (firmId === state.playerFirmId) {
+      const coverBefore = partnerCoverDays(state, cityId, productId);
+      feedPartnerLarder(state, cityId, productId, qty);
+      const coverAfter = partnerCoverDays(state, cityId, productId);
+      if (coverBefore < TRADE_POOL_THIN_COVER_DAYS) state.poolFeedsWhileThin += 1;
+      if (coverBefore < TRADE_POOL_TARGET_COVER_DAYS && coverAfter >= TRADE_POOL_TARGET_COVER_DAYS) {
+        state.poolCoversRestored += 1;
+      }
+    } else {
+      feedPartnerLarder(state, cityId, productId, qty);
+    }
+    return;
+  }
   if (state.tradeCities[cityId]?.pool?.inventory[productId] !== undefined) {
     // Read the pool's cover for this product BEFORE the feed, then feed it. Only
     // the player's own reads-the-ports action is tallied (missions/achievements):

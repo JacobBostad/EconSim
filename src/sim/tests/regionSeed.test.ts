@@ -163,8 +163,19 @@ describe('Region slice 1 — the factory (seedTown) mints only town-scoped recor
   });
 });
 
-describe('Region slice 3 — the partner TICKS, home stays byte-isolated', () => {
-  it('a 30-day City run: home rngState + serialized-home identical to flag-off', () => {
+describe('Region slice 5 — the isolation invariant FLIPS (home trades a real partner)', () => {
+  // The honest invariant CHANGES at slice 5 (region.md § "the isolation flip"),
+  // exactly like the money-debt flip precedent. Through slice 4 `port_rosa` quoted
+  // a fixed pool table home never actually traded, so home's whole `towns.home` —
+  // and its rngState — were byte-identical flag-on vs flag-off. Slice 5 makes the
+  // quote the partner's REAL economy's cover and home EXPORTS into it, so home's
+  // book legitimately DIVERGES — and once that trade-driven money divergence
+  // crosses an rng-drawing AI decision, home's rngState may diverge too (the
+  // endgame: "export prices respond to a real economy"). So home rngState identity
+  // is NO LONGER an invariant. What STILL must hold: region money is conserved and
+  // two flag-on runs are deterministic (the test below); flag-off is byte-identical
+  // (the slice-1 anchors above).
+  it('a 30-day City run: home BOOK diverges by trade, region conserved (the flip)', () => {
     const DAYS = 30;
     const off = createInitialState(11, cityConfig());
     const offSim = new Simulation(off);
@@ -174,21 +185,24 @@ describe('Region slice 3 — the partner TICKS, home stays byte-isolated', () =>
     const on = createInitialState(11, regionConfig());
     expect(on.towns[PARTNER_TOWN_ID]).toBeTruthy(); // partner materialized
     const partnerBefore = JSON.stringify(on.towns[PARTNER_TOWN_ID]);
+    const money0 = totalMoneySupply(on);
     const onSim = new Simulation(on);
     onSim.dispatch({ type: 'RESUME' });
     onSim.run(ticksPerDay(on.config) * DAYS);
 
-    // ISOLATION (the bit-identity crux): the partner draws ZERO shared rng and
-    // touches only its own records, so home's rng stream and its whole
-    // `towns.home` record are byte-identical with the partner live vs absent.
-    expect(on.rngState).toBe(off.rngState);
-    expect(JSON.stringify(on.towns[HOME_TOWN_ID])).toBe(JSON.stringify(off.towns[HOME_TOWN_ID]));
-    // Home-town holder cash is identical with the partner attached (world cash
-    // legitimately diverges — the partner shares the region's world account:
-    // stipends, variable costs and rent flow partner ↔ world).
-    expect(townCash(on.towns[HOME_TOWN_ID]!)).toBe(townCash(off.towns[HOME_TOWN_ID]!));
+    // Home's BOOK legitimately diverges — home exports into `port_rosa` at its real
+    // quote (different from the retired pool table), so its firms' cash differs.
+    // The designed flip, not a leak: conservation below proves the divergence flows
+    // only through the trade edge (a transfer), and the determinism test proves the
+    // sim has no hidden nondeterminism.
+    expect(JSON.stringify(on.towns[HOME_TOWN_ID])).not.toBe(
+      JSON.stringify(off.towns[HOME_TOWN_ID]),
+    );
+    // Region money conserved with the live partner (the divergence is a transfer,
+    // not minting): the region supply is unchanged across the whole run.
+    expect(totalMoneySupply(on)).toBe(money0);
     // The partner is NO LONGER inert — the scheduler ticks it, so its records
-    // changed (its economy ran). Slice 3's whole point.
+    // changed (its economy ran).
     expect(JSON.stringify(on.towns[PARTNER_TOWN_ID])).not.toBe(partnerBefore);
   });
 

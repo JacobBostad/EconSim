@@ -101,6 +101,7 @@ import { runLaborSystem, hireCitizen, fireCitizen, findUnemployed, trainCrew } f
 import { runCohortLaborSystem } from '../systems/CohortLaborSystem';
 import { runCohortDemandSystem } from '../systems/CohortDemandSystem';
 import { runProductionSystem } from '../systems/ProductionSystem';
+import { runPartnerMarketSystem } from '../systems/PartnerMarketSystem';
 import { runLogisticsSystem } from '../systems/LogisticsSystem';
 import { runRetailDemandSystem, runRestockRevisitSystem } from '../systems/RetailDemandSystem';
 
@@ -210,6 +211,7 @@ const PARTNER_SYSTEMS: SystemFn[] = [
   runCohortLaborSystem, // crowd staffs the partner's factories + stores
   runCohortDemandSystem, // the crowd shops the partner's shelves
   runProductionSystem, // the partner's factories turn inputs + labor into output
+  runPartnerMarketSystem, // slice 5: refill the export larder toward its cover buffer (retired-pool supply side)
 ];
 
 /** The system list a town runs each tick. Home runs the full `SYSTEMS`

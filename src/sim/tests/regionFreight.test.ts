@@ -25,7 +25,8 @@ import type { SimulationConfig } from '../core/SimulationConfig';
 import { ticksPerDay, computeTime } from '../core/Tick';
 import { totalMoneySupply } from '../core/GameState';
 import { addStock } from '../entities/Inventory';
-import { performExport, exportFreightFee, isFreightDest } from '../core/Trade';
+import { performExport, exportFreightFee, isFreightDest, settleExportLanding } from '../core/Trade';
+import { partnerLarderStock } from '../core/PartnerMarket';
 import { getTradeCity } from '../data/tradeCities';
 import { FREIGHT_LEAD_DAYS } from '../data/constants';
 import { PARTNER_TOWN_ID } from '../data/seedTown';
@@ -74,7 +75,7 @@ describe('Region slice 4 — the freight edge dispatches, not settles', () => {
     const cash0 = player.cash;
     const world0 = state.worldCash;
     const money0 = totalMoneySupply(state);
-    const larder0 = state.tradeCities[PARTNER_TOWN_ID]!.pool!.inventory['bread']!;
+    const larder0 = partnerLarderStock(state, PARTNER_TOWN_ID, 'bread')!; // real shelf (pool retired)
     const day = computeTime(state.tick, state.config).day;
 
     performExport(state, player.id, wh.id, 'bread', QTY, 'Exported', PARTNER_TOWN_ID);
@@ -85,8 +86,8 @@ describe('Region slice 4 — the freight edge dispatches, not settles', () => {
     expect(state.worldCash).toBe(world0);
     expect(totalMoneySupply(state)).toBe(money0);
     expect(state.freight.length).toBe(1);
-    // Larder NOT fed yet — the goods are in flight, not landed.
-    expect(state.tradeCities[PARTNER_TOWN_ID]!.pool!.inventory['bread']).toBe(larder0);
+    // Larder NOT fed yet — the goods are in flight, not landed (no tick ran).
+    expect(partnerLarderStock(state, PARTNER_TOWN_ID, 'bread')).toBe(larder0);
 
     const ship = state.freight[0]!;
     expect(ship.destTownId).toBe(PARTNER_TOWN_ID);
@@ -130,23 +131,40 @@ describe('Region slice 4 — the freight edge dispatches, not settles', () => {
     expect(computeTime(txns[0]!.tick, state.config).day).toBe(ship.arrivalDay);
   });
 
-  it('the qty LANDS in the partner larder on arrival (control vs treatment)', () => {
-    // Isolate the +qty landing from the pool's own daily drain/refill by diffing a
-    // dispatched run against an identical run that ships nothing.
-    function poolBreadAtArrival(dispatchIt: boolean): number {
+  it('a freight arrival LANDS qty in the partner larder (its real shelf)', () => {
+    // Slice 5: the partner's larder is its REAL retail shelf (the pool is retired).
+    // The freight arrival lands through the shared `settleExportLanding`, which
+    // feeds the real shelf by exactly qty. Measure the shelf delta across a single
+    // landing call on a warmed live partner — the exact mechanism the arrival day
+    // runs (isolated from the same-day restock/crowd-drain, which react on the day
+    // boundary; this asserts the feed itself is qty-for-qty).
+    const sim = regionSim(11);
+    const state = sim.getState();
+    sim.run(ticksPerDay(state.config) * 10); // warm to a stocked, real-demand larder
+    const before = partnerLarderStock(state, PARTNER_TOWN_ID, 'bread')!;
+    settleExportLanding(state, state.playerFirmId, PARTNER_TOWN_ID, 'bread', QTY);
+    const after = partnerLarderStock(state, PARTNER_TOWN_ID, 'bread')!;
+    expect(after - before).toBe(QTY);
+  });
+
+  it('a full freight leg RAISES the partner larder by ~qty on arrival', () => {
+    // End-to-end: a dispatched export lands its goods in the real shelf on the
+    // arrival day. The shelf also restocks/drains daily, so assert the arrival's
+    // shelf sits clearly ABOVE the no-shipment control (the +qty landing dominates
+    // one day of restock differential), the honest end-to-end landing signal.
+    function larderBreadAtArrival(dispatchIt: boolean): number {
       const sim = regionSim(11);
       const state = sim.getState();
-      const wh = loadedWarehouse(sim, 'bread', QTY); // built identically in both arms
+      const wh = loadedWarehouse(sim, 'bread', QTY);
       let arrival = computeTime(state.tick, state.config).day + FREIGHT_LEAD_DAYS;
       if (dispatchIt) {
         performExport(state, state.playerFirmId, wh.id, 'bread', QTY, 'Exported', PARTNER_TOWN_ID);
         arrival = state.freight[0]!.arrivalDay;
       }
       while (computeTime(state.tick, state.config).day < arrival) sim.run(ticksPerDay(state.config));
-      return state.tradeCities[PARTNER_TOWN_ID]!.pool!.inventory['bread']!;
+      return partnerLarderStock(state, PARTNER_TOWN_ID, 'bread')!;
     }
-    // Everything but the shipment is identical, so the delta is exactly the landing.
-    expect(poolBreadAtArrival(true) - poolBreadAtArrival(false)).toBe(QTY);
+    expect(larderBreadAtArrival(true)).toBeGreaterThan(larderBreadAtArrival(false));
   });
 
   it('region money is conserved to the cent EVERY day across the in-flight window', () => {

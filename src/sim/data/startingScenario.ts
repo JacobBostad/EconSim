@@ -37,7 +37,7 @@ import { getScenario, DEFAULT_SCENARIO_ID } from './scenarios';
 import { defaultDistrictPartition } from './districts';
 import { SAVE_VERSION } from '../core/GameState';
 import { townOf, HOME_TOWN_ID, installTownAliases, type TownRecords } from '../core/Town';
-import { seedTown, PARTNER_TOWN_ID, PORT_ROSA_SPEC } from './seedTown';
+import { seedTown, PARTNER_TOWN_ID, PORT_ROSA_SPEC, willBeLivePartner } from './seedTown';
 
 const NUM_HOMES = 20;
 const CITIZENS_PER_HOME = 2;
@@ -339,8 +339,15 @@ export function createInitialState(
   // Arc E (opt-in): each trade city grows a demand pool seeded AT its target
   // buffer, so a fresh game opens in equilibrium (cover mult 1.0). Flag off ⇒
   // no pool key is written and the book stays byte-identical to pre-Arc-E.
+  //
+  // Slice 5 RETIRES the pool for the LIVE partner: when `port_rosa` graduates to
+  // a real simulated town (region flag on, non-Village — the `seedTown` gate
+  // below), its export quote reads its REAL shelf/demand, so it carries NO pool
+  // row. A flag-off `port_rosa` is still a stub — its pool row STAYS (this is the
+  // byte-identity gate: flag-off is unchanged). `ironvale` always keeps its pool.
   if (state.config.tradeDemandPoolsEnabled) {
     for (const cid of TRADE_CITY_IDS) {
+      if (willBeLivePartner(state.config, cid)) continue; // retired: real book, no pool
       const book = state.tradeCities[cid]!;
       book.pool = { population: getTradeCity(cid).population, inventory: {} };
       for (const pid of PRODUCT_IDS_BY_PRESET[state.config.sizePreset]) {

@@ -5,13 +5,27 @@
  */
 
 import type { GameState } from '../core/GameState';
+import type { ProductId } from '../core/Id';
 import type { GameEvent } from '../core/Events';
 import { CONSUMER_PRODUCT_IDS_BY_PRESET, PRODUCT_IDS_BY_PRESET, getProduct } from '../data/products';
 import { ticksPerDay } from '../core/Tick';
 import { cityPrice, exportFreightFee } from '../core/Trade';
 import { TRADE_CITY_IDS, getTradeCity } from '../data/tradeCities';
 import { poolCoverDays } from '../data/tradePool';
+import { isLivePartnerCity, partnerCoverDaysOrUndefined } from '../core/PartnerMarket';
 import { townOf } from '../core/Town';
+
+/**
+ * Days of cover the desk shows for a trade city+product, routing the two supply
+ * models (Arc E slice 5): a LIVE partner reads real shelf/demand cover, a stub
+ * city its pool. Undefined ⇒ no chip (bare walk, or a live partner with no larder
+ * / no crowd demand for the product).
+ */
+function deskCoverDays(state: GameState, cityId: string, pid: ProductId): number | undefined {
+  if (isLivePartnerCity(state, cityId)) return partnerCoverDaysOrUndefined(state, cityId, pid);
+  const stock = state.tradeCities[cityId]?.pool?.inventory[pid];
+  return stock === undefined ? undefined : poolCoverDays(cityId, pid, stock);
+}
 
 export interface GazetteStory {
   severity: GameEvent['severity'];
@@ -143,14 +157,11 @@ export function tradeDesk(state: GameState, limit = 4): TradeDeskRow[] {
     const best = nets[0]!;
     const other = nets[nets.length - 1]!;
     const city = getTradeCity(best.cid);
-    // Arc E: if the better port runs a demand pool for this product, read its
-    // cover (days of stock) so the desk shows WHY the quote is where it is.
-    const stock = state.tradeCities[best.cid]?.pool?.inventory[pid];
-    const bestCover =
-      stock === undefined ? undefined : poolCoverDays(best.cid, pid, stock);
-    const otherStock = state.tradeCities[other.cid]?.pool?.inventory[pid];
-    const otherCover =
-      otherStock === undefined ? undefined : poolCoverDays(other.cid, pid, otherStock);
+    // Arc E: if a port runs cover on this product, show it (days of stock) so the
+    // desk explains WHY the quote is where it is. A LIVE partner (slice 5) reads
+    // real shelf/demand cover; a stub city reads its pool. `deskCoverDays` routes.
+    const bestCover = deskCoverDays(state, best.cid, pid);
+    const otherCover = deskCoverDays(state, other.cid, pid);
     rows.push({
       productId: pid,
       productName: getProduct(pid).name,

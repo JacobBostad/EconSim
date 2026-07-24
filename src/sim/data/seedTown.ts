@@ -52,10 +52,26 @@ import { getProduct, PRODUCT_IDS_BY_PRESET } from './products';
 import { getFacilityDef, facilityRecipesForPreset } from './facilityDefinitions';
 import { RECIPES, getRecipe } from './recipes';
 import { getTradeCity, type TradeCityId } from './tradeCities';
+import { perCapitaDailyConsumption } from './tradePool';
 import { dollars } from './constants';
 
 /** The partner town's id for slice 1 (region.md's chosen partner). */
 export const PARTNER_TOWN_ID: TownId = 'port_rosa';
+
+/**
+ * Whether a trade city WILL be seeded as a live partner town under this config —
+ * the construction-time predicate that must agree with `isLivePartnerCity(state,
+ * cityId)` once `seedTown` has run. Used in `startingScenario` to RETIRE the stub
+ * pool for the live partner BEFORE `state.towns[port_rosa]` exists (the pool loop
+ * runs before the town is minted). A flag-off game — or any city that is not the
+ * chosen partner — is false, so its pool row is seeded exactly as before.
+ */
+export function willBeLivePartner(
+  config: { regionEnabled: boolean; sizePreset: SizePreset },
+  cityId: string,
+): boolean {
+  return config.regionEnabled && config.sizePreset !== 'village' && cityId === PARTNER_TOWN_ID;
+}
 
 /**
  * The minimal shape a partner town is built from — a LIGHT partner (region.md
@@ -104,16 +120,28 @@ const PRODUCER_FIRM_CASH = dollars(60000);
 /**
  * A partner firm makes AND sells its specialty (region.md step 4, slice 3). The
  * partner runs the light subset with NO logistics (intra-/inter-town freight is
- * slice 4's FreightSystem), so its factory output and its retail shelf are
- * SEEDED directly rather than linked by a supply contract. The seeds are sized
- * "warehouse-scale" so a 60-day City run never starves the factory of inputs nor
- * empties the shelf under the crowd — the slice demonstrates a LIVE economy (the
- * crowd consuming, the firm producing, the book moving), not a scarcity balance
- * (that arrives with the freight edge). All held as real, conserved money/stock.
+ * slice 4's FreightSystem), so its factory INPUTS are seeded deep — the factory
+ * runs the whole soak to keep the crowd employed (its dead output is the crowd's
+ * job, not the export larder). The retail SHELF, by contrast, is the export
+ * larder the quote now reads (slice 5), so it is seeded at COVER-BUFFER scale
+ * (below), not warehouse-scale — otherwise `stock / demand` cover pegs the quote
+ * at the discount floor (slice 4's measured degeneracy: 400k units ÷ ~360/day =
+ * ~1100 days of cover). PartnerMarketSystem then refills it toward that buffer.
  */
-const PARTNER_INPUT_STOCK = 400_000; // raw-input buffer per producing factory
-const PARTNER_SHELF_STOCK = 400_000; // consumer-good shelf per retail store
+const PARTNER_INPUT_STOCK = 400_000; // raw-input buffer per producing factory (crowd employment)
 const PARTNER_STORAGE_CAP = 2_000_000; // per-facility cap: never the binding one
+/**
+ * Slice-5 shelf seed, in DAYS of cover (region.md step 4, slice 5). The export
+ * larder opens with a generous buffer above the `TRADE_POOL_TARGET_COVER_DAYS`
+ * (6) target so it survives the demand RAMP — the real-demand read needs a few
+ * days of sales history before `PartnerMarketSystem` activates — after which the
+ * `(target − shelf)` feedback pulls it DOWN to the 6-day buffer and holds it
+ * there. Derived: a seed of `SHELF_SEED_COVER_DAYS × modelDemand` where
+ * modelDemand = crowd population × the product's needSpec spec-midpoint per-capita
+ * consumption (the same number the pool's target used), so bread (crowd 300 ×
+ * 1.30/day = 390/day) opens at ~12 days = ~4,680 units and converges to ~2,340.
+ */
+const SHELF_SEED_COVER_DAYS = 12;
 /** Quality stamped on a firm's specialty — clears the luxury recipes' mastery
  * gate (pastries/jewelry need minQuality 75) so a food-rich port's pastry line
  * actually produces. */
@@ -387,7 +415,9 @@ export function seedTown(
     firm.facilities.push(facId);
 
     // Retail store in the residential quarter (reachable by the crowd): the
-    // specialty on the shelf, seeded deep so it never empties under the crowd.
+    // specialty on the shelf — the EXPORT LARDER the slice-5 quote reads. Seeded
+    // at cover-buffer scale (a few days above the target), NOT warehouse-scale, so
+    // `stock / demand` cover lands in the mult band. PartnerMarketSystem refills it.
     const storeId = mintId('fac');
     const store = baseFacility(
       storeId,
@@ -397,7 +427,10 @@ export function seedTown(
       residentialD ? pointInDistrict(residentialD, rng) : { x: 0, y: 0 },
     );
     store.retailProductIds = [productId];
-    stock(store.inputInventory, productId, PARTNER_SHELF_STOCK);
+    const shelfSeed = Math.round(
+      SHELF_SEED_COVER_DAYS * spec.crowdPopulation * perCapitaDailyConsumption(productId),
+    );
+    stock(store.inputInventory, productId, Math.max(shelfSeed, 1));
     records.facilities[storeId] = store;
     firm.facilities.push(storeId);
   }
