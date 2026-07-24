@@ -386,13 +386,20 @@ export function worldScaleConfig(
   let worldOverride: Partial<SimulationConfig> = {};
   if (world === 'city') {
     // City turns the whole stack on together (crowd + services + landlords +
-    // holdcos + trade pools) — the founder baselines are pinned with all four on.
+    // holdcos + trade pools + the region) — the founder baselines are pinned
+    // with the archetype channels on, and region.md step 4 landed the live
+    // partner (port_rosa) as the City new-game default: a second economy home
+    // trades with, on the freight edge. The pinned flag-OFF City baseline
+    // (rngState 2546912297, money 316900000) is preserved by the direct-config
+    // pin tests (regionScheduler/interestRates build config without this
+    // helper), so it stays the region-off reference; a NEW City game opts in.
     worldOverride = {
       sizePreset: 'city',
       servicesEnabled: true,
       realEstateEnabled: true,
       investorsEnabled: true,
       tradeDemandPoolsEnabled: true,
+      regionEnabled: true,
     };
   } else if (world === 'metropolis') {
     // Metropolis wires every channel City does EXCEPT investorsEnabled: the
@@ -400,6 +407,12 @@ export function worldScaleConfig(
     // reshuffles the D3-measured crowd-tier bands), so the flag is a no-op here —
     // omitted rather than set to something inert. services + realEstate + trade
     // pools all activate at metropolis (their gates are sizePreset !== 'village').
+    // regionEnabled is deliberately NOT set here: region.md step 4 measured and
+    // pinned the live partner at CITY scale (seed 11) only, and a two-town
+    // Metropolis is the heaviest per-tick path in the game — so the region ships
+    // as the City new-game default and Metropolis stays a single town until it is
+    // measured on its own budget. (The partner seed gate is sizePreset !==
+    // 'village', so this is a scope choice, not an engine limit.)
     worldOverride = {
       sizePreset: 'metropolis',
       servicesEnabled: true,

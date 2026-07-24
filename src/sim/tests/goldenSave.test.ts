@@ -8,11 +8,13 @@ import fixture6Json from './fixtures/golden-save-v6.json';
 import fixture7Json from './fixtures/golden-save-v7.json';
 import fixture8Json from './fixtures/golden-save-v8.json';
 import fixture9Json from './fixtures/golden-save-v9.json';
+import fixture10Json from './fixtures/golden-save-v10.json';
 import { Simulation } from '../core/Simulation';
+import { PARTNER_TOWN_ID } from '../data/seedTown';
 import { HOME_TOWN_ID } from '../core/Town';
 import { deserialize, serialize } from '../persistence/saveLoad';
 import { totalMoneySupply } from '../core/GameState';
-import { ticksPerDay } from '../core/Tick';
+import { ticksPerDay, computeTime } from '../core/Tick';
 
 /**
  * Golden-save compatibility guard: a REAL save produced by an earlier build
@@ -416,8 +418,11 @@ describe('Golden save fixture v8 (archetype era, City preset)', () => {
 describe('Golden save fixture v9 (towns era, City preset — first SAVE_VERSION 3 fixture)', () => {
   const raw9 = JSON.stringify(fixture9Json);
 
-  it('is the first fixture stored in the towns shape; v1-v8 stay flat', () => {
-    // v9 is the ONLY corpus fixture serialized in the SAVE_VERSION 3 (towns) shape.
+  it('is the first towns-shape fixture (one town, home); v1-v8 stay flat', () => {
+    // v9 is the first corpus fixture serialized in the SAVE_VERSION 3 (towns)
+    // shape, and a ONE-town region (home only) — v10 is the first with a second
+    // town. v1-v8 predate the move and stay flat (the corpus-split guard, in full,
+    // lives in the v10 block below).
     const oldFormat = [
       fixtureJson, fixture2Json, fixture3Json, fixture4Json,
       fixture5Json, fixture6Json, fixture7Json, fixture8Json,
@@ -530,5 +535,163 @@ describe('Golden save fixture v9 (towns era, City preset — first SAVE_VERSION 
     expect(() => sim.run(ticksPerDay(state.config) * 5)).not.toThrow();
     expect(totalMoneySupply(sim.getState())).toBe(supply0);
     expect(Object.keys(sim.getState().citizens).length).toBeGreaterThan(0);
+  });
+});
+
+/**
+ * Golden save v10 — the region + interest era (City preset, seed 11, day 120): the
+ * SECOND SAVE_VERSION 3 fixture and the FIRST with a second town. A current City
+ * new game now opts into the whole region.md step-4 endgame (regionEnabled) and the
+ * risk-tiered loan pricing (riskTieredInterestEnabled) that shipped with it — both
+ * `worldScaleConfig` City defaults. So this fixture carries what v9 could not:
+ *
+ *  - a LIVE PARTNER TOWN at `towns.port_rosa` — its own cohorts, firms, facilities,
+ *    and a marketStats book with real sales history (its crowd has been shopping);
+ *  - a FREIGHT SHIPMENT IN FLIGHT at the cut — the player freighted 300 bread to
+ *    Port Rosa on day 118 (arrival day 121), so `state.freight` carries a dated
+ *    inter-town shipment that must round-trip: land + pay on day 121 after a load,
+ *    region money conserved to the cent across the settlement.
+ *
+ * Reproducible byte-for-byte via docs/design/probes/mint-golden-v10.ts (perf
+ * telemetry zeroed there — the v9 improvement carried forward). Same contract as
+ * v1-v9: never regenerate to paper over a break — add a migration instead.
+ */
+describe('Golden save fixture v10 (region + interest era — first two-town fixture)', () => {
+  const raw10 = JSON.stringify(fixture10Json);
+
+  it('is towns-shaped with TWO towns; the corpus split holds (v1-v8 flat, v9-v10 towns)', () => {
+    // v1-v8: FLAT, no `towns` key.
+    const oldFormat = [
+      fixtureJson, fixture2Json, fixture3Json, fixture4Json,
+      fixture5Json, fixture6Json, fixture7Json, fixture8Json,
+    ];
+    for (const j of oldFormat) {
+      const r = j as Record<string, unknown>;
+      expect(r.towns).toBeUndefined();
+      expect(r.firms).toBeTruthy();
+    }
+    // v9: towns shape, ONE town (home).
+    const t9 = (fixture9Json as Record<string, unknown>).towns as Record<string, unknown>;
+    expect(Object.keys(t9)).toEqual([HOME_TOWN_ID]);
+    // v10: towns shape, TWO towns (home + the live partner) — the first fixture
+    // with a second town. The flat family keys are ABSENT (non-enumerable aliases).
+    const r10 = fixture10Json as Record<string, unknown>;
+    expect(r10.saveVersion).toBe(3);
+    expect(r10.firms).toBeUndefined();
+    expect(r10.districts).toBeUndefined();
+    const t10 = r10.towns as Record<string, Record<string, unknown>>;
+    expect(Object.keys(t10).sort()).toEqual([HOME_TOWN_ID, PARTNER_TOWN_ID].sort());
+    // Each town carries the full six-family record set PLUS its own map dims
+    // (mapWidth/mapHeight became per-town fields at step 4 — v9 predates them, so
+    // its home record has only the six families; a step-4 town has all eight keys).
+    for (const townId of [HOME_TOWN_ID, PARTNER_TOWN_ID]) {
+      expect(Object.keys(t10[townId]!).sort()).toEqual(
+        ['citizens', 'cohorts', 'districts', 'facilities', 'firms', 'mapHeight', 'mapWidth', 'marketStats'],
+      );
+    }
+    // The in-flight freight is a WORLD-scoped save-shape addition (an array).
+    expect(Array.isArray(r10.freight)).toBe(true);
+    expect((r10.freight as unknown[]).length).toBe(1);
+  });
+
+  it('loads intact: the region on, a live partner book, and freight in flight', () => {
+    const state = deserialize(raw10);
+    // Both era flags are on (the City new-game defaults).
+    expect(state.config.sizePreset).toBe('city');
+    expect(state.config.regionEnabled).toBe(true);
+    expect(state.config.riskTieredInterestEnabled).toBe(true);
+    // Both towns live; the flat aliases resolve to the HOME town's records.
+    expect(state.towns[HOME_TOWN_ID]).toBeTruthy();
+    expect(state.towns[PARTNER_TOWN_ID]).toBeTruthy();
+    expect(state.firms).toBe(state.towns[HOME_TOWN_ID]!.firms);
+    expect(state.marketStats).toBe(state.towns[HOME_TOWN_ID]!.marketStats);
+
+    // The PARTNER is a real (small) economy: cohorts holding population, its own
+    // firms, and a marketStats book with LIVE sales history (its crowd has shopped).
+    const partner = state.towns[PARTNER_TOWN_ID]!;
+    expect(Object.keys(partner.firms).length).toBeGreaterThanOrEqual(1);
+    expect(Object.values(partner.cohorts).reduce((n, c) => n + c.population, 0)).toBeGreaterThan(0);
+    const partnerHistory = Object.values(partner.marketStats).reduce((n, m) => n + m.history.length, 0);
+    expect(partnerHistory).toBeGreaterThan(0);
+
+    // A freight shipment is IN FLIGHT home → the live partner (goods dispatched,
+    // not yet landed): the arc's new inter-town edge, frozen mid-transit.
+    expect(state.freight.length).toBe(1);
+    const ship = state.freight[0]!;
+    expect(ship.originTownId).toBe(HOME_TOWN_ID);
+    expect(ship.destTownId).toBe(PARTNER_TOWN_ID);
+    expect(ship.qty).toBeGreaterThan(0);
+    expect(ship.priceLocked).toBeGreaterThan(0);
+    expect(ship.arrivalDay).toBeGreaterThan(ship.dispatchDay);
+
+    // v9's referee strength holds in the two-town shape: all four archetypes live
+    // on the home crowd, with the archetype-internal invariants intact.
+    const businesses = Object.values(state.firms).filter(
+      (f) => f.ownerType === 'ai' || f.ownerType === 'player',
+    );
+    const archetypes = new Set(businesses.map((f) => f.strategy.archetype));
+    expect(archetypes.has('operator')).toBe(true);
+    expect(archetypes.has('landlord')).toBe(true);
+    expect(archetypes.has('investor')).toBe(true);
+    expect(archetypes.has('service')).toBe(true);
+    const landlords = businesses.filter((f) => f.strategy.archetype === 'landlord');
+    expect(
+      landlords.some((f) => f.facilities.some((id) => state.facilities[id]?.type === 'home')),
+    ).toBe(true);
+    const providers = businesses.filter((f) => f.strategy.archetype === 'service');
+    expect(providers.some((f) => f.facilities.some((id) => state.facilities[id]?.defId === 'datacenter'))).toBe(true);
+    for (const c of Object.values(state.serviceContracts)) {
+      expect(state.firms[c.providerFirmId]).toBeTruthy();
+      const sub = state.firms[c.subscriberFirmId];
+      expect(sub).toBeTruthy();
+      expect(sub!.strategy.archetype).not.toBe('service');
+      expect(c.seats).toBeGreaterThan(0);
+    }
+    const investors = businesses.filter((f) => f.strategy.archetype === 'investor');
+    expect(investors.reduce((n, f) => n + Object.keys(f.sharesHeld).length, 0)).toBeGreaterThanOrEqual(1);
+    for (const f of investors) {
+      for (const [targetId, pct] of Object.entries(f.sharesHeld)) {
+        expect(state.firms[targetId]).toBeTruthy();
+        expect(pct).toBeGreaterThan(0);
+        expect(pct).toBeLessThanOrEqual(49);
+      }
+    }
+    // A real home crowd across tiers; no ghost home/job links survive.
+    const cohorts = Object.values(state.cohorts);
+    expect(cohorts.reduce((n, c) => n + c.population, 0)).toBeGreaterThan(200);
+    expect(cohorts.some((c) => c.tier === 'comfortable' && c.population > 0)).toBe(true);
+    for (const f of Object.values(state.facilities)) {
+      for (const id of f.residentIds) expect(state.citizens[id]).toBeTruthy();
+      for (const id of f.employees) expect(state.citizens[id]).toBeTruthy();
+    }
+    // Round-trip stability: re-serializing a load changes nothing, and the form is
+    // still the two-town shape carrying the in-flight freight (no flat key leaks).
+    const reserialized = serialize(state);
+    expect(JSON.parse(reserialized).firms).toBeUndefined();
+    expect(Object.keys(JSON.parse(reserialized).towns).sort()).toEqual(
+      [HOME_TOWN_ID, PARTNER_TOWN_ID].sort(),
+    );
+    const again = deserialize(reserialized);
+    expect(serialize(again)).toBe(serialize(state));
+  });
+
+  it('keeps running, the in-flight freight round-trips, money conserved to the cent', () => {
+    const state = deserialize(raw10);
+    const supply0 = totalMoneySupply(state);
+    const ship = { ...state.freight[0]! };
+    const sim = new Simulation(state);
+    // Run past the shipment's arrival day: it must LAND and PAY (the round-trip),
+    // clearing the in-flight queue, with region money conserved every step.
+    const daysToArrival = ship.arrivalDay - computeTime(state.tick, state.config).day;
+    expect(() => sim.run(ticksPerDay(state.config) * (daysToArrival + 2))).not.toThrow();
+    const end = sim.getState();
+    // The shipment settled: no longer in flight, and a freight-delivery payment
+    // was booked to the live partner.
+    expect(end.freight.some((s) => s.id === ship.id)).toBe(false);
+    expect(end.transactions.some((t) => /Freight delivered to Port Rosa/.test(t.note))).toBe(true);
+    // Region money is conserved across the inter-town settlement (a TRANSFER, not
+    // minting) — summed over BOTH towns by the region-wide primitive.
+    expect(totalMoneySupply(end)).toBe(supply0);
+    expect(Object.keys(end.citizens).length).toBeGreaterThan(0);
   });
 });

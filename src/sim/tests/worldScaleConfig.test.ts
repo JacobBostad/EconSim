@@ -42,23 +42,30 @@ describe('worldScaleConfig — New Game world-scale wiring', () => {
     }
   });
 
-  it('city turns the whole stack on together (all four channels)', () => {
+  it('city turns the whole stack on together (all channels + the region)', () => {
     const cfg = worldScaleConfig('standard', false, 'cozy', 'city');
     expect(cfg.sizePreset).toBe('city');
     expect(cfg.servicesEnabled).toBe(true);
     expect(cfg.realEstateEnabled).toBe(true);
     expect(cfg.investorsEnabled).toBe(true);
     expect(cfg.tradeDemandPoolsEnabled).toBe(true);
+    // region.md step 4 landed the live partner (port_rosa) as the City new-game
+    // default — a second economy on the freight edge. The pinned flag-OFF City
+    // baseline stays the region-off reference via the direct-config pin tests.
+    expect(cfg.regionEnabled).toBe(true);
     // City keeps the difficulty starting cash (no uplift).
     expect(cfg.playerStartCash).toBe(configForDifficulty('standard').playerStartCash);
   });
 
-  it('metropolis wires the biggest preset + services/realEstate/trade pools, investors OFF', () => {
+  it('metropolis wires the biggest preset + services/realEstate/trade pools, investors + region OFF', () => {
     const cfg = worldScaleConfig('standard', false, 'cozy', 'metropolis');
     expect(cfg.sizePreset).toBe('metropolis');
     expect(cfg.servicesEnabled).toBe(true);
     expect(cfg.realEstateEnabled).toBe(true);
     expect(cfg.tradeDemandPoolsEnabled).toBe(true);
+    // The region ships as the CITY new-game default only (measured at City scale);
+    // a two-town Metropolis stays deferred, so region is off here.
+    expect(cfg.regionEnabled).toBe(false);
     // investorsEnabled is a no-op at metropolis (founder row is city-only), so
     // the wiring leaves it off rather than pretending it does something.
     expect(cfg.investorsEnabled).toBe(false);

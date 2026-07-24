@@ -16,6 +16,13 @@ Headless-browser checks against the production build (`vite preview`):
   390×276 crowd/district render paths and the wider catalog, not chasing a
   founder milestone), then opens Population/Districts and the era dashboards.
   Asserts zero page errors; polls the day counter.
+- `regionsmoke.mjs` — the region smoke: a City game now opts into the region by
+  default (a live partner town, Port Rosa), so this drives the era's one new
+  play — the freight edge. Runs ~25 days to warm the partner's book, checks the
+  Gazette Trade Desk renders the live-partner cover, then builds a warehouse,
+  buys a staple into it, and freights it to Port Rosa: asserts the dispatch
+  event, runs past the lead time, and asserts the delivery event (the shipment
+  round-trips). Zero page errors; polls the day counter and the event log.
 
 ```bash
 npm run build && npx vite preview --port 4173 &   # serve dist/
@@ -23,6 +30,7 @@ npm run e2e          # quick smoke
 npm run e2e:deep     # full gauntlet (~40s)
 npm run e2e:city     # City / world-scale gauntlet (~30s)
 npm run e2e:metro    # Metropolis boot smoke (~15s)
+npm run e2e:region   # Region / freight-edge gauntlet (~40s)
 ```
 
 Env: `BASE_URL` (default http://localhost:4173), `CHROMIUM_PATH` to point

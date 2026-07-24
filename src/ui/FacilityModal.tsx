@@ -17,14 +17,15 @@ import { facilityEmployees } from '../sim/selectors/facilitySelectors';
 import { contractsByDestination } from '../sim/selectors/supplyChainSelectors';
 import { getQuantity } from '../sim/entities/Inventory';
 import { formatMoney } from '../utils/formatMoney';
-import { CENTS, WHOLESALE_DISCOUNT } from '../sim/data/constants';
+import { CENTS, WHOLESALE_DISCOUNT, FREIGHT_LEAD_DAYS } from '../sim/data/constants';
 import { WHOLESALE_MULT_MIN, WHOLESALE_MULT_MAX } from '../sim/core/Wholesale';
 import { upgradeCost } from '../sim/core/Upgrades';
 import { TRAINING_COST_PER_WORKER, TRAINING_SKILL_GAIN, SKILL_MAX } from '../sim/systems/LaborSystem';
 import { sellRefund } from '../sim/core/Demolition';
 import { pricingInsight } from '../sim/selectors/marketSelectors';
-import { pickBestCity, cityPrice, exportFreightFee } from '../sim/core/Trade';
+import { pickBestCity, cityPrice, exportFreightFee, isFreightDest } from '../sim/core/Trade';
 import { TRADE_CITY_IDS, getTradeCity } from '../sim/data/tradeCities';
+import { PARTNER_TOWN_ID } from '../sim/data/seedTown';
 import { managerCandidates, managerDuties } from '../sim/systems/ManagerSystem';
 import { FORWARD_MAX_OPEN, FORWARD_CLOSE_FEE, forwardMark } from '../sim/systems/ForwardSystem';
 import { computeTime } from '../sim/core/Tick';
@@ -171,6 +172,13 @@ export function FacilityActions({ fac }: { fac: Facility }): React.ReactElement 
             ~8% (more during fuel spikes, more to inland Ironvale). Ship to
             whichever port pays — the button routes each product to today's best
             net price.
+            {isFreightDest(state, PARTNER_TOWN_ID) && (
+              <>
+                {' '}Port Rosa is now a <strong>live partner town</strong>: a
+                shipment there is real freight — it leaves the warehouse now and
+                arrives (paying the locked price) in {FREIGHT_LEAD_DAYS} days.
+              </>
+            )}
           </p>
           {PRODUCT_IDS_BY_PRESET[state.config.sizePreset].map((pid) => {
             const qty = getQuantity(fac.inputInventory, pid) + getQuantity(fac.outputInventory, pid);
@@ -200,14 +208,26 @@ export function FacilityActions({ fac }: { fac: Facility }): React.ReactElement 
                     );
                   })}
                 </span>
-                <button
-                  title={`Ships to ${getTradeCity(best.cityId).name} (best net price today)`}
-                  onClick={() =>
-                    dispatch({ type: 'EXPORT_GOODS', firmId: fac.ownerFirmId, facilityId: fac.id, productId: pid, quantity: qty })
-                  }
-                >
-                  Export all
-                </button>
+                <span className="row" style={{ gap: 4 }}>
+                  <button
+                    title={`Ships to ${getTradeCity(best.cityId).name} (best net price today)`}
+                    onClick={() =>
+                      dispatch({ type: 'EXPORT_GOODS', firmId: fac.ownerFirmId, facilityId: fac.id, productId: pid, quantity: qty })
+                    }
+                  >
+                    Export all
+                  </button>
+                  {isFreightDest(state, PARTNER_TOWN_ID) && (
+                    <button
+                      title={`Freight ${qty} ${getProduct(pid).name} to ${getTradeCity(PARTNER_TOWN_ID).name} — the live partner town. Goods leave now, land and pay (at today's locked price) in ${FREIGHT_LEAD_DAYS} days.`}
+                      onClick={() =>
+                        dispatch({ type: 'EXPORT_GOODS', firmId: fac.ownerFirmId, facilityId: fac.id, productId: pid, quantity: qty, cityId: PARTNER_TOWN_ID })
+                      }
+                    >
+                      {getTradeCity(PARTNER_TOWN_ID).emoji} Freight to Port Rosa
+                    </button>
+                  )}
+                </span>
               </div>
             );
           })}
