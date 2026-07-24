@@ -28,7 +28,11 @@ Headless-browser checks against the production build (`vite preview`):
   Gazette Trade Desk renders the live-partner cover, then builds a warehouse,
   buys a staple into it, and freights it to Port Rosa: asserts the dispatch
   event, runs past the lead time, and asserts the delivery event (the shipment
-  round-trips). Zero page errors; polls the day counter and the event log.
+  round-trips). Zero page errors; polls the day counter and the event log. Also
+  the region media-capture pass: snaps `shot-region-main.png` (town switcher),
+  `shot-region-tradedesk.png` (Port Rosa's live-partner book) and
+  `shot-region-freight.png` (the in-flight freight chip) into `e2e/.artifacts/`
+  (non-fatal captures) — the docs/media refresh curates the README shots from these.
 
 ```bash
 npm run build && npx vite preview --port 4173 &   # serve dist/

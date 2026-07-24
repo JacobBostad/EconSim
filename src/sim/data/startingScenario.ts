@@ -274,6 +274,7 @@ export function createInitialState(
     poolFeedsWhileThin: 0,
     poolCoversRestored: 0,
     landlordRepossessions: 0,
+    freightBestSpikePct: 0,
     emigrationPressure: 0,
     emigrationDepartures: 0,
     marketGapDays: {},

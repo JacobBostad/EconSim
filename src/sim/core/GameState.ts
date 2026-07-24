@@ -233,6 +233,19 @@ export interface GameState {
    * landlord side of the repossession rung) — landlord_repossession. */
   landlordRepossessions: number;
   /**
+   * The best PARTNER-freight price the player has ever LOCKED, as a whole-percent
+   * of that product's base at the destination city (`round(priceLocked * 100 /
+   * base)`), taken across every player freight the FreightSystem settles. It's the
+   * region era's arbitrage read made observable: the read-the-market mission reads
+   * it above 100 (a Port Rosa freight locked above base), the shock achievement at
+   * ≥130 (a 1.3× spike locked in). A max, so a later cheaper freight never lowers a
+   * peak already earned — the marketShareByProduct idiom (one signal, tiered bars).
+   * Written ONLY on the player's own freight settlement (the deskTrades idiom), so
+   * it perturbs no trajectory, and structurally inert in Village: `state.freight`
+   * is always empty there (no partner), so FreightSystem never writes it. Default
+   * 0 (normalize-only, mirroring the other era tallies). */
+  freightBestSpikePct: number;
+  /**
    * Consecutive days the town has met the emigration misery bar (worker-heavy
    * AND deeply unsatisfied). Past the grace period families start leaving;
    * a single day above the bar resets it to zero.

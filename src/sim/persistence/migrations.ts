@@ -140,6 +140,10 @@ function normalize(state: GameState): GameState {
   state.poolFeedsWhileThin = state.poolFeedsWhileThin ?? 0;
   state.poolCoversRestored = state.poolCoversRestored ?? 0;
   state.landlordRepossessions = state.landlordRepossessions ?? 0;
+  // Region-era freight arbitrage read (best locked price as %-of-base): saves
+  // predating it load at 0 and stay inert until a region game freights to a
+  // live partner. Normalize-only, mirroring the other era tallies above.
+  state.freightBestSpikePct = state.freightBestSpikePct ?? 0;
   state.emigrationPressure = state.emigrationPressure ?? 0;
   state.emigrationDepartures = state.emigrationDepartures ?? 0;
   state.marketGapDays = state.marketGapDays ?? {};

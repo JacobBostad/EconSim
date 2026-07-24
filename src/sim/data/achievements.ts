@@ -534,6 +534,36 @@ export const ACHIEVEMENT_DEFS: AchievementDef[] = [
       return up > cits.length / 2;
     },
   },
+  // --- Region era (City new-game default) ----------------------------------
+  // The region opens a FREIGHT edge to a second live economy, the partner port
+  // Port Rosa (region.md step 4). Both checks gate on `regionEnabled` FIRST and
+  // return false when it's off (Village always, Metropolis too): the freight
+  // record never exists without a live partner, but the explicit gate makes the
+  // inertness structural, not incidental — these can never fire in a Village run,
+  // so its serialized achievement list stays byte-identical. Same discipline as
+  // the world-scale era gates above.
+  {
+    id: 'port_rosa_run',
+    name: 'Port Rosa Run',
+    icon: '⚓',
+    description: 'Landed your first freight in Port Rosa, the partner port.',
+    hint: 'Freight a staple from your warehouse to Port Rosa and let it arrive (region on).',
+    check: (s) => {
+      if (!s.config.regionEnabled) return false;
+      return ((player(s)?.exportRevenueByCity ?? {})['port_rosa'] ?? 0) > 0;
+    },
+  },
+  {
+    id: 'shock_trader',
+    name: 'Rode the Spike',
+    icon: '🌩️',
+    description: 'Settled a Port Rosa freight locked at a 1.3× price spike.',
+    hint: "Freight when Port Rosa's quote has spiked, so the price you lock lands at 1.3× base or more (region on).",
+    check: (s) => {
+      if (!s.config.regionEnabled) return false;
+      return s.freightBestSpikePct >= 130;
+    },
+  },
 ];
 
 const DEF_BY_ID: Record<string, AchievementDef> = Object.fromEntries(

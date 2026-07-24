@@ -285,3 +285,48 @@ describe('World-scale era achievements', () => {
     expect(fires.length).toBe(1);
   });
 });
+
+/** A City state with the region wired on — the only world the region-era
+ * achievements can fire in. */
+function regionState(seed: number) {
+  return createInitialState(seed, {
+    ...DEFAULT_CONFIG,
+    sizePreset: 'city',
+    servicesEnabled: true,
+    realEstateEnabled: true,
+    investorsEnabled: true,
+    tradeDemandPoolsEnabled: true,
+    regionEnabled: true,
+  });
+}
+
+describe('Region-era achievements', () => {
+  it('are provably inert in Village — the gate returns false even with the condition forced', () => {
+    const state = newSim(1).getState(); // Village preset, region off
+    const p = state.firms[state.playerFirmId]!;
+    // Force both underlying conditions; every region check must still return false.
+    p.exportRevenueByCity['port_rosa'] = dollars(5000);
+    state.freightBestSpikePct = 200;
+    for (const id of ['port_rosa_run', 'shock_trader']) {
+      expect(getAchievementDef(id)!.check(state)).toBe(false);
+    }
+  });
+
+  it('port_rosa_run: unlocks when a freight has landed in Port Rosa', () => {
+    const state = regionState(11);
+    const p = state.firms[state.playerFirmId]!;
+    const def = getAchievementDef('port_rosa_run')!;
+    expect(def.check(state)).toBe(false);
+    p.exportRevenueByCity['port_rosa'] = dollars(10);
+    expect(def.check(state)).toBe(true);
+  });
+
+  it('shock_trader: unlocks at a 1.3× locked spike, not just under it', () => {
+    const state = regionState(11);
+    const def = getAchievementDef('shock_trader')!;
+    state.freightBestSpikePct = 129; // just under the 1.3× bar
+    expect(def.check(state)).toBe(false);
+    state.freightBestSpikePct = 130; // 1.3× base locked in
+    expect(def.check(state)).toBe(true);
+  });
+});

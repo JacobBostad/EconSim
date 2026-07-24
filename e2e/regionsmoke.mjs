@@ -14,6 +14,13 @@
  * run past the lead time and assert the DELIVERY event — the shipment round-trips.
  * Zero page errors throughout. Polls the day counter / event log, so it is robust
  * to machine speed.
+ *
+ * It also doubles as the region MEDIA-CAPTURE pass (same page.screenshot →
+ * e2e/.artifacts idiom smoke.mjs uses): it snaps the warmed region view (town
+ * switcher chrome), the Gazette Trade Desk (Port Rosa's live-partner book), and
+ * the in-flight freight (the warehouse freight action + dispatch chip) into
+ * e2e/.artifacts/shot-region-*.png. Captures are non-fatal (.catch), so they
+ * never fail the smoke; the docs/media refresh curates from these artifacts.
  */
 import { chromium } from 'playwright-core';
 
@@ -73,6 +80,13 @@ await clearOverlays();
 const reachedDay = await currentDay();
 if (reachedDay < 20) throw new Error(`region sim only reached day ${reachedDay} — too slow to warm the partner economy`);
 
+// Media capture (the README-refresh mechanism — same page.screenshot →
+// e2e/.artifacts idiom smoke.mjs/switchersmoke.mjs use). Non-fatal (.catch): a
+// capture failure must never fail the smoke. The warmed region view carries the
+// town switcher chrome (a City game now opts into the region), the shot the docs
+// media refresh recaptures for the switcher.
+await page.screenshot({ path: 'e2e/.artifacts/shot-region-main.png' }).catch(() => {});
+
 // Gazette Trade Desk: the live-partner era surfaces cover at the ports — assert
 // the desk renders (it reads the partner's real book), then close.
 await page.getByRole('button', { name: 'Gazette', exact: true }).click();
@@ -81,6 +95,9 @@ if (!(await page.getByRole('heading', { name: /Trade Desk/ }).count())
     && !(await page.getByText(/Trade Desk/).count())) {
   throw new Error('Gazette shows no Trade Desk in a region-enabled City game');
 }
+// Capture the Trade Desk showing Port Rosa's live-partner book — the docs media
+// refresh for the Port Rosa "book" shot.
+await page.screenshot({ path: 'e2e/.artifacts/shot-region-tradedesk.png' }).catch(() => {});
 await page.getByRole('button', { name: /Close/ }).click().catch(() => {});
 await page.waitForTimeout(150);
 
@@ -129,6 +146,10 @@ while (Date.now() < deadline) {
   await page.waitForTimeout(300);
 }
 if (!dispatched) throw new Error('no freight-dispatch event appeared after shipping to Port Rosa');
+
+// Capture the in-flight state — the warehouse export card's freight action + the
+// dispatch event chip in the log — the docs media refresh for the freight chip.
+await page.screenshot({ path: 'e2e/.artifacts/shot-region-freight.png' }).catch(() => {});
 
 // Run past the lead time; the shipment must ROUND-TRIP — land and pay, logging a
 // delivery event ("Freight delivered to Port Rosa").

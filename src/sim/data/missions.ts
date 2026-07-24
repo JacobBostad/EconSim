@@ -318,6 +318,47 @@ export const MISSION_DEFS: MissionDef[] = [
       return retail && rent && dividends && boost;
     },
   },
+
+  // --- Region era (City new-game default) ----------------------------------
+  // The region wires a SECOND live economy — the partner port, Port Rosa — that
+  // home trades with across a FREIGHT edge with a lead time (region.md step 4).
+  // These teach that loop: ship the lane, read its price, then live on it. Each
+  // gates on `regionEnabled` (OFF at Village and Metropolis presets), so the
+  // Village chain stays byte-identical (state.missions never gains a region id)
+  // and the arc only surfaces in a City region game. Same gating idiom as the
+  // world-scale era missions above. The switcher itself is UI state invisible to
+  // the sim, so the lane is taught through the sim-observable freight signals
+  // (delivered revenue by city; the settled locked-price read) instead.
+  {
+    id: 'freight_to_port_rosa',
+    name: 'Open the Freight Lane',
+    icon: '🚢',
+    description:
+      "Ship to the partner port: build a warehouse, stage a staple, and hit Freight to Port Rosa in its inspector — the goods leave now and pay on arrival a few days later, at the price you lock today.",
+    reward: dollars(3000),
+    eligible: (s) => s.config.regionEnabled,
+    check: (s) => ((player(s)?.exportRevenueByCity ?? {})['port_rosa'] ?? 0) > 0,
+  },
+  {
+    id: 'read_the_market',
+    name: 'Read the Market',
+    icon: '🧭',
+    description:
+      "Trade the spread: Port Rosa's quote drifts on its own supply — freight a staple there when its price sits ABOVE base (the Gazette's Trade Desk shows today's quote), so the price you lock beats what the good is worth at home.",
+    reward: dollars(3500),
+    eligible: (s) => s.config.regionEnabled,
+    check: (s) => s.freightBestSpikePct > 100,
+  },
+  {
+    id: 'freight_lane_established',
+    name: 'Establish the Lane',
+    icon: '⚓',
+    description:
+      'Make the port a habit: earn $1,000 of freight revenue delivered to Port Rosa — a second demand pool your warehouse feeds while the home town buys the rest.',
+    reward: dollars(4000),
+    eligible: (s) => s.config.regionEnabled,
+    check: (s) => ((player(s)?.exportRevenueByCity ?? {})['port_rosa'] ?? 0) >= dollars(1000),
+  },
 ];
 
 const DEF_BY_ID: Record<string, MissionDef> = Object.fromEntries(

@@ -27,7 +27,8 @@ import { totalMoneySupply } from '../core/GameState';
 import { addStock } from '../entities/Inventory';
 import { performExport, exportFreightFee, isFreightDest, settleExportLanding } from '../core/Trade';
 import { partnerLarderStock } from '../core/PartnerMarket';
-import { getTradeCity } from '../data/tradeCities';
+import { getTradeCity, cityBias } from '../data/tradeCities';
+import { getProduct } from '../data/products';
 import { FREIGHT_LEAD_DAYS } from '../data/constants';
 import { PARTNER_TOWN_ID } from '../data/seedTown';
 import { normalizedSerialize } from './helpers';
@@ -180,6 +181,34 @@ describe('Region slice 4 — the freight edge dispatches, not settles', () => {
       expect(totalMoneySupply(state)).toBe(money0);
     }
     expect(state.freight.length).toBe(0); // delivered
+  });
+});
+
+describe('Region era — the settled locked price is recorded as the arbitrage read', () => {
+  it('a player freight settlement stamps freightBestSpikePct = round(priceLocked*100/base)', () => {
+    const sim = regionSim(11);
+    const state = sim.getState();
+    expect(state.freightBestSpikePct).toBe(0); // nothing settled yet
+    const wh = loadedWarehouse(sim, 'bread', QTY);
+    performExport(state, state.playerFirmId, wh.id, 'bread', QTY, 'Exported', PARTNER_TOWN_ID);
+    const ship = { ...state.freight[0]! };
+    const tpd = ticksPerDay(state.config);
+    // Not stamped while in flight.
+    expect(state.freightBestSpikePct).toBe(0);
+    while (computeTime(state.tick, state.config).day < ship.arrivalDay) sim.run(tpd);
+    // Stamped on arrival, at the locked price as a %-of-base — the hook the
+    // read-the-market mission (>100) and shock achievement (>=130) read.
+    const base = getProduct('bread').basePrice * cityBias(PARTNER_TOWN_ID, 'bread');
+    expect(state.freightBestSpikePct).toBe(Math.round((ship.priceLocked * 100) / base));
+    expect(state.freightBestSpikePct).toBeGreaterThan(0);
+  });
+
+  it('a City game with the region OFF never stamps the read (structurally inert)', () => {
+    const s = createInitialState(11, { ...DEFAULT_CONFIG, sizePreset: 'city' });
+    const sim = new Simulation(s);
+    sim.dispatch({ type: 'RESUME' });
+    sim.run(ticksPerDay(s.config) * 60);
+    expect(s.freightBestSpikePct).toBe(0); // no freight ever flies flag-off
   });
 });
 

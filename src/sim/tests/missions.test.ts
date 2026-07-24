@@ -249,3 +249,72 @@ describe('World-scale era missions', () => {
     expect(def.check(state)).toBe(true); // all four streams held
   });
 });
+
+/** A City state with the region wired on — a live partner port (Port Rosa) home
+ * trades with across the freight edge. This is the only world the region-era
+ * missions are offered in. */
+function regionState(seed: number) {
+  return createInitialState(seed, {
+    ...DEFAULT_CONFIG,
+    sizePreset: 'city',
+    servicesEnabled: true,
+    realEstateEnabled: true,
+    investorsEnabled: true,
+    tradeDemandPoolsEnabled: true,
+    regionEnabled: true,
+  });
+}
+
+describe('Region-era missions', () => {
+  const REGION_IDS = ['freight_to_port_rosa', 'read_the_market', 'freight_lane_established'];
+
+  it('are offered only where the region is wired — Village drops them, a City region game keeps them', () => {
+    const village = newSim(1).getState(); // regionEnabled off
+    const vElig = new Set(eligibleMissions(village).map((d) => d.id));
+    for (const id of REGION_IDS) expect(vElig.has(id)).toBe(false);
+    // A flag-off City (region NOT wired) also drops them — the gate is the flag,
+    // not the preset.
+    const cityNoRegion = cityState(11); // region off
+    const cElig = new Set(eligibleMissions(cityNoRegion).map((d) => d.id));
+    for (const id of REGION_IDS) expect(cElig.has(id)).toBe(false);
+    // With every classic + world-scale mission marked done, the Village chain
+    // TERMINATES — a region mission never becomes active, so state.missions can
+    // never gain a region id and the serialized Village list stays byte-identical.
+    for (const d of MISSION_DEFS) if (!d.eligible) village.missions.push({ id: d.id, day: 0 });
+    expect(activeMission(village)).toBeNull();
+    // A City region game offers every region mission.
+    const rElig = new Set(eligibleMissions(regionState(11)).map((d) => d.id));
+    for (const id of REGION_IDS) expect(rElig.has(id)).toBe(true);
+  });
+
+  it('freight_to_port_rosa: flips once a freight has been delivered to the partner port', () => {
+    const state = regionState(11);
+    const player = state.firms[state.playerFirmId]!;
+    const def = getMissionDef('freight_to_port_rosa')!;
+    expect(def.check(state)).toBe(false); // nothing shipped yet
+    // Export revenue by city credits ONLY on freight delivery in a region game
+    // (the instant path is off for a live partner) — the honest delivered signal.
+    player.exportRevenueByCity['port_rosa'] = dollars(50);
+    expect(def.check(state)).toBe(true);
+  });
+
+  it('read_the_market: flips once a freight is locked above base, not at/below it', () => {
+    const state = regionState(11);
+    const def = getMissionDef('read_the_market')!;
+    expect(def.check(state)).toBe(false);
+    state.freightBestSpikePct = 100; // exactly base — not a read
+    expect(def.check(state)).toBe(false);
+    state.freightBestSpikePct = 108; // 8% above base
+    expect(def.check(state)).toBe(true);
+  });
+
+  it('freight_lane_established: flips at $1,000 of delivered Port Rosa revenue', () => {
+    const state = regionState(11);
+    const player = state.firms[state.playerFirmId]!;
+    const def = getMissionDef('freight_lane_established')!;
+    player.exportRevenueByCity['port_rosa'] = dollars(999);
+    expect(def.check(state)).toBe(false);
+    player.exportRevenueByCity['port_rosa'] = dollars(1000);
+    expect(def.check(state)).toBe(true);
+  });
+});

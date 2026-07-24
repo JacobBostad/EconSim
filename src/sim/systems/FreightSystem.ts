@@ -29,7 +29,7 @@ import { townOf } from '../core/Town';
 import { firmAccount, WORLD_ACCOUNT } from '../core/Transactions';
 import { isDayBoundary } from '../core/Tick';
 import { getProduct } from '../data/products';
-import { getTradeCity } from '../data/tradeCities';
+import { getTradeCity, cityBias } from '../data/tradeCities';
 import { exportFreightFee, settleExportLanding, creditRushOrder } from '../core/Trade';
 import { formatMoney } from '../../utils/formatMoney';
 
@@ -82,6 +82,18 @@ function settleFreight(ctx: SimContext, ship: FreightShipment): void {
     firm.exportRevenue += revenue;
     firm.exportRevenueByCity[ship.destTownId] =
       (firm.exportRevenueByCity[ship.destTownId] ?? 0) + revenue;
+    // The arbitrage read, made observable at settlement (region era teaching/
+    // mastery): record the LOCKED price as a whole-percent of this product's base
+    // at the destination, keeping the running peak — the read-the-market mission
+    // reads it above 100, the shock achievement at ≥130. Player-only (the
+    // deskTrades idiom): AI freight settles the same way but never touches the
+    // tally, so no trajectory shifts. `base` is a positive product price, so the
+    // divide is always safe.
+    if (ship.firmId === state.playerFirmId) {
+      const base = product.basePrice * cityBias(ship.destTownId, ship.productId);
+      const spikePct = Math.round((ship.priceLocked * 100) / base);
+      if (spikePct > state.freightBestSpikePct) state.freightBestSpikePct = spikePct;
+    }
     // The origin warehouse books the earnings on the day they land, mirroring
     // the instant path (Trade.settleExportLanding) so the P&L table sees
     // freight deliveries too. The facility may have been sold mid-flight.
