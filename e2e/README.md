@@ -11,6 +11,12 @@ Headless-browser checks against the production build (`vite preview`):
   era's panels — Population/Districts, Standings & Stock Market, a facility
   inspector, and the Build panel's lease-from-landlord option. Asserts zero
   page errors. Polls the day counter, so it is robust to machine speed.
+- `switchersmoke.mjs` — the town switcher (region.md step 5). Asserts the
+  FLAG-OFF guarantee in the shipped UI: a normally-started City game renders no
+  `.town-switcher` chrome (region is off at every New Game preset), with zero
+  page errors. The partner-view operate-guard is store-verified
+  (`src/sim/tests/townSwitcher.test.ts`) because no in-app path enables the
+  region flag yet; extend this smoke once a preset wires it.
 - `metrosmoke.mjs` — the Metropolis (biggest world scale) smoke: starts a
   Metropolis game on a pinned seed, runs a few days (short horizon — booting the
   390×276 crowd/district render paths and the wider catalog, not chasing a

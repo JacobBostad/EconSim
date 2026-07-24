@@ -14,7 +14,7 @@
  */
 
 import type { GameState } from '../sim/core/GameState';
-import { townOf } from '../sim/core/Town';
+import { townOf, HOME_TOWN_ID, type TownId, type Town } from '../sim/core/Town';
 import type { FacilityType } from '../sim/entities/Facility';
 import type { CitizenActivity } from '../sim/entities/Citizen';
 import { computeTime } from '../sim/core/Tick';
@@ -149,6 +149,14 @@ export interface RendererCallbacks {
   getFollowId: () => string | null;
   /** Manual pan/zoom broke the follow — clear it upstream. */
   onFollowBroken: () => void;
+  /**
+   * Which town the map is LOOKING at (region.md step 5, the town switcher).
+   * Defaults to home; every `townOf` read in the renderer routes through it, so
+   * pointing it at a partner renders THAT town's map/crowd/facilities. Flag-off
+   * games always return `home`, so `townOf(s,'home') === townOf(s)` and the
+   * render is byte-identical to the pre-switcher renderer. Optional so a test or
+   * embedder that omits it gets the home view unchanged. */
+  getTownId?: () => TownId;
 }
 
 export class TownRenderer {
@@ -208,6 +216,17 @@ export class TownRenderer {
     this.unbindEvents();
   }
 
+  /**
+   * The town view every render/hit-test read routes through — the town the
+   * switcher is LOOKING at (region.md step 5). With no `getTownId` callback, or
+   * with it returning `home` (every flag-off game), this is exactly `townOf(s)`,
+   * so the render is byte-identical to the pre-switcher renderer. Pointing the
+   * switcher at a partner returns THAT town's records so its map draws.
+   */
+  private town(s: GameState): Town {
+    return townOf(s, this.cb.getTownId?.() ?? HOME_TOWN_ID);
+  }
+
   // --- sizing -----------------------------------------------------------
   private resize(): void {
     const rect = this.canvas.getBoundingClientRect();
@@ -224,7 +243,7 @@ export class TownRenderer {
   private view = { scale: 1, cx: 65, cy: 46, minX: 0, minY: 0, maxX: 1, maxY: 1 };
 
   private updateView(s: GameState): void {
-    const town = townOf(s);
+    const town = this.town(s);
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
     for (const id in town.facilities) {
       const f = town.facilities[id]!;
@@ -233,7 +252,7 @@ export class TownRenderer {
       if (f.location.x > maxX) maxX = f.location.x;
       if (f.location.y > maxY) maxY = f.location.y;
     }
-    if (!isFinite(minX)) { const town = townOf(s); minX = 0; minY = 0; maxX = town.mapWidth; maxY = town.mapHeight; }
+    if (!isFinite(minX)) { const town = this.town(s); minX = 0; minY = 0; maxX = town.mapWidth; maxY = town.mapHeight; }
     const padW = 14, padH = 12;
     minX -= padW; maxX += padW; minY -= padH; maxY += padH;
     const w = Math.max(1, maxX - minX), h = Math.max(1, maxY - minY);
@@ -265,7 +284,7 @@ export class TownRenderer {
   /** Where a selectable entity stands right now (facilities, citizens,
    * vehicles — firms have no location). */
   private entityLocation(s: GameState, id: string): Vec | null {
-    const town = townOf(s);
+    const town = this.town(s);
     return town.facilities[id]?.location
       ?? town.citizens[id]?.currentLocation
       ?? s.vehicles[id]?.currentLocation
@@ -284,7 +303,7 @@ export class TownRenderer {
     // drag/wheel/arrow input breaks the follow (see those handlers).
     const followId = this.cb.getFollowId();
     if (followId) {
-      const cit = townOf(s).citizens[followId];
+      const cit = this.town(s).citizens[followId];
       if (!cit) {
         this.cb.onFollowBroken();
       } else {
@@ -487,7 +506,7 @@ export class TownRenderer {
       if (d <= r && d < best.d) { best.id = id; best.d = d; }
     };
     const psc = this.effScale();
-    const town = townOf(s);
+    const town = this.town(s);
     for (const id in town.facilities) {
       const f = town.facilities[id]!;
       consider(id, this.drawPos(id, f.location), Math.max(11, (f.type === 'home' ? 1.7 : 2.9) * psc));
@@ -621,7 +640,7 @@ export class TownRenderer {
       ctx.fill();
     };
 
-    const town = townOf(s);
+    const town = this.town(s);
     for (const cid in s.contracts) {
       const c = s.contracts[cid]!;
       if (!c.active) continue;
@@ -662,7 +681,7 @@ export class TownRenderer {
 
   /** Sampled land-value grid, cached until homes/residents change. */
   private landValues(s: GameState): NonNullable<TownRenderer['landGrid']> {
-    const town = townOf(s);
+    const town = this.town(s);
     let homes = 0, residents = 0;
     for (const fid in town.facilities) {
       const f = town.facilities[fid]!;
@@ -738,7 +757,7 @@ export class TownRenderer {
     const size = (isApartment ? 2.0 : def.type === 'home' ? 1.45 : 2.6) * sc;
     const sp = this.mouse;
     const cost = Math.round(def.buildCost * landCostMultiplier(landValueAt(s, world)));
-    const cash = townOf(s).firms[s.playerFirmId]?.cash ?? 0;
+    const cash = this.town(s).firms[s.playerFirmId]?.cash ?? 0;
     const blocker = placementBlocker(s, world);
     const affordable = cash >= cost && !blocker;
 
@@ -884,7 +903,7 @@ export class TownRenderer {
   private decorKey = '';
 
   private buildDecor(s: GameState): void {
-    const town = townOf(s);
+    const town = this.town(s);
     const key = `${Math.round(this.view.minX)},${Math.round(this.view.maxX)},${Object.keys(town.facilities).length}`;
     if (key === this.decorKey) return;
     this.decorKey = key;
@@ -922,7 +941,7 @@ export class TownRenderer {
 
   private drawGround(s: GameState, _hour: number): void {
     const ctx = this.ctx;
-    const town = townOf(s);
+    const town = this.town(s);
     const season = seasonOf(s);
     const winter = season === 'winter';
     // Beyond the town plate: muted neutral so the daylight plate pops.
@@ -1118,7 +1137,7 @@ export class TownRenderer {
     // driveways for businesses only — homes sit on their residential streets,
     // and a driveway per house turned the neighborhoods into a picket fence.
     ctx.lineCap = 'round';
-    const town = townOf(s);
+    const town = this.town(s);
     for (const id in town.facilities) {
       const f = town.facilities[id]!;
       if (f.type === 'home') continue;
@@ -1151,7 +1170,7 @@ export class TownRenderer {
     if (lodEnabled(s) && sc < LOD_CITIZEN_SKIP_SCALE) return; // dots would be sub-pixel — skip
     // The renderer draws the home town (one-town region → identical reference);
     // it gains a town selector at the endgame move.
-    const town = townOf(s);
+    const town = this.town(s);
     const cohortIds = Object.keys(town.cohorts);
     if (cohortIds.length === 0) return;
 
@@ -1215,7 +1234,7 @@ export class TownRenderer {
 
   private drawFacilities(s: GameState, hour: number): void {
     const ctx = this.ctx;
-    const town = townOf(s);
+    const town = this.town(s);
     const selected = this.cb.getSelectedId();
     const night = Math.max(0, this.nightAmount(hour) - 0.2);
     // Painter's order: draw north-most first so nearer buildings overlap
@@ -1396,7 +1415,7 @@ export class TownRenderer {
     // lit-building halos: homes glow softly, shops brighter, working factories
     // give off a cooler industrial light
     const cull = this.visibleWorldRect(s, FACILITY_CULL_MARGIN);
-    const town = townOf(s);
+    const town = this.town(s);
     for (const id in town.facilities) {
       const f = town.facilities[id]!;
       if (f.status === 'closed') continue;
@@ -1444,7 +1463,7 @@ export class TownRenderer {
     const ctx = this.ctx;
     const k = Math.min(1, dt * 8);
     const cull = this.visibleWorldRect(s, FACILITY_CULL_MARGIN);
-    const town = townOf(s);
+    const town = this.town(s);
     for (const id in s.vehicles) {
       const v = s.vehicles[id]!;
       if (v.status !== 'enroute') continue;
@@ -1505,7 +1524,7 @@ export class TownRenderer {
       entry = { origin, key, route, walkRoads };
       this.citRouteCache.set(id, entry);
       if (this.citRouteCache.size > 400) {
-        const town = townOf(s);
+        const town = this.town(s);
         for (const cid of this.citRouteCache.keys()) if (!town.citizens[cid]) this.citRouteCache.delete(cid);
       }
     }
@@ -1523,7 +1542,7 @@ export class TownRenderer {
     // whole per-agent pass is skipped (trails still decay below). Positions are
     // not eased while skipped — they resnap when the player zooms back in.
     const drawSprites = !lodEnabled(s) || this.effScale() >= LOD_CITIZEN_SKIP_SCALE;
-    const town = townOf(s);
+    const town = this.town(s);
     if (drawSprites) for (const id in town.citizens) {
       const c = town.citizens[id]!;
       const prev = this.smooth.get(id);
@@ -1587,7 +1606,7 @@ export class TownRenderer {
     // instead of bursting a backlog. Village (glyphLod false) is unaffected —
     // floaters spawn at every zoom exactly as before.
     const quiet = this.glyphLod(s);
-    const town = townOf(s);
+    const town = this.town(s);
     for (const id in town.facilities) {
       const f = town.facilities[id]!;
       const prev = this.prevStats.get(id) ?? { revenue: 0, received: 0, produced: 0 };
@@ -1775,7 +1794,7 @@ export class TownRenderer {
     }
     ctx.stroke();
 
-    const town = townOf(s);
+    const town = this.town(s);
     for (const id in town.facilities) {
       const f = town.facilities[id]!;
       const p = toMini(f.location);
@@ -1817,7 +1836,7 @@ export class TownRenderer {
   }
 
   private hoverLabel(s: GameState, id: string): string | null {
-    const town = townOf(s);
+    const town = this.town(s);
     const f = town.facilities[id];
     if (f) return f.type === 'home' ? f.name : `${f.name} — ${f.status}`;
     const c = town.citizens[id];

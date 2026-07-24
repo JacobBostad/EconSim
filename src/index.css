@@ -98,6 +98,38 @@ canvas { display: block; width: 100%; height: 100%; }
 
 .mission-card { border-color: rgba(88,166,255,0.45); }
 
+/* Town switcher (region.md step 5) — only renders in a region game with a
+ * partner; sits below the map-hint on the right so it clears the world-event
+ * ticker and objective banner. */
+.town-switcher {
+  position: absolute; top: 46px; right: 12px; z-index: 6;
+  display: flex; flex-direction: column; gap: 6px; align-items: flex-end;
+  pointer-events: auto; max-width: 260px;
+}
+.town-switcher-tabs {
+  display: flex; gap: 4px;
+  background: rgba(13,17,23,0.82); border: 1px solid var(--border);
+  border-radius: 7px; padding: 4px; box-shadow: 0 4px 14px rgba(0,0,0,0.4);
+}
+.town-switcher-tabs button { padding: 3px 9px; font-size: 12px; }
+.town-switcher-tabs button.active { background: rgba(88,166,255,0.16); border-color: var(--accent); color: var(--text); }
+.town-book {
+  width: 100%;
+  background: rgba(13,17,23,0.9); border: 1px solid var(--border);
+  border-radius: 8px; padding: 8px 10px; font-size: 12px; color: var(--text);
+  box-shadow: 0 6px 18px rgba(0,0,0,0.5);
+}
+.town-book-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.town-book-title { font-weight: 600; }
+.town-book-crowd { color: var(--muted); font-size: 11px; }
+.town-book-note { color: var(--amber); font-size: 11px; margin: 3px 0 6px; }
+.town-book-note.muted { color: var(--muted); }
+.town-book-table { width: 100%; border-collapse: collapse; }
+.town-book-table th { text-align: left; color: var(--muted); font-weight: 500; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; padding-bottom: 2px; }
+.town-book-table td { padding: 1px 0; }
+.town-book-table td.mono, .town-book-table th:nth-child(n+2) { text-align: right; }
+.town-book-table td:first-child, .town-book-table th:first-child { text-align: left; }
+
 .report-grade { font-size: 34px; font-weight: 800; line-height: 1; }
 
 .gazette { max-width: 760px; margin: 0 auto; }

@@ -1703,3 +1703,52 @@ regardless: `tsc --noEmit` clean; full `npx vitest run` green (**587** tests,
 116 files); the shipped probe `second-town-isolation.ts` passes all checks
 (exit 0) — flag-off anchor `3274842624`, isolation byte-identity, the
 222,364,897-cent money debt quantified, and the id-collision hazard demonstrated.
+
+## What ships now — the town switcher (step 5, first slice)
+
+Step 5's first move is the smallest useful one: the player can **LOOK** at Port
+Rosa. It is deliberately **view-only** — you may watch the live partner, you may
+not act there yet (multi-town PLAYER firms stay out, exactly as §3b scoped them).
+
+**The state seam step 4 named, now filled.** `selectedTownId` lands as a
+`useGameStore` field defaulting to `HOME_TOWN_ID` — **view/store state, NOT
+serialized sim state** (§3b's call), so switching the view leaves
+`normalizedSerialize(state)` byte-identical and flag-on determinism is untouched.
+It resets to home on every new game / load / backup-restore.
+
+**The render seam.** `TownRenderer` gains one optional `getTownId` callback; its
+20 home-default `townOf(s)` reads route through a single `this.town(s)` helper
+(`townOf(s, getTownId() ?? home)`). Flag-off (and any embedder that omits the
+callback) resolves to `home`, so `this.town(s) === townOf(s)` — the render is
+byte-identical to the pre-switcher renderer. Pointing it at `port_rosa` draws
+THAT town's map, crowd, and facilities; nothing on the partner map is
+player-owned, so no player highlight appears (correct — you own nothing there).
+
+**The guard (the honest core of a view-only slice).** `isHomeView(selectedTownId)`
+is the single predicate the map's mutating callbacks gate on: `onBuildAt` and the
+entity-select `onPick` no-op on a partner view, and `getBuildMode` reads false, so
+no command crosses towns and no facility lands on a partner map. Panel commands
+(pricing/hire/export/loan/acquire) never read `selectedTownId` — they stay
+home-scoped by construction (§3b), so viewing a partner cannot misdirect them.
+The map surfaces the promise as an affordance: "you don't operate here yet".
+
+**The read-only info panel** (`TownSwitcher.tsx` + pure `townView.ts`) shows the
+partner's book — its crowd size and per-product price + export cover, read off its
+REAL `marketStats`/facilities via the same `partnerCoverDays` the freight quote
+uses. The Gazette trade desk gains one cheap per-town tag: the best-port row notes
+"live economy" when it is the live partner (`isLivePartnerCity`).
+
+**Flag-off is byte-identical — no new chrome.** `showSwitcher` is false whenever
+the region flag is off or no partner exists, so `TownSwitcher` renders `null` and
+not one pixel changes for every shipped game (region is off at every New Game
+preset). That contract is the DOM assertion in `e2e/switchersmoke.mjs`.
+
+**Verification.** `tsc -b --noEmit` clean; full `npx vitest run` green
+(**648** tests, 123 files — +11 in `townSwitcher.test.ts`); the flag-off pins are
+exact (village 11/4/7 300-day rngState `3274842624`/`2896139677`/`4253583594`;
+City seed 11 rngState `2546912297`, money `316900000`), untouched by construction
+(no sim code changed). The partner-view operate-guard is click-verified at the
+store level (no in-app path enables the region flag yet, so a browser smoke cannot
+reach the partner view); `e2e/switchersmoke.mjs` verifies the flag-off no-chrome
+guarantee in the shipped UI and documents the extension point for when a preset
+wires the flag on.

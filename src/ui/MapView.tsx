@@ -2,6 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import { useGameStore } from '../store/useGameStore';
 import { TownRenderer } from '../render/TownRenderer';
 import { placementBlocker } from '../sim/core/Placement';
+import { isHomeView } from './townView';
 
 /**
  * MapView mounts the self-contained TownRenderer once. The renderer runs its own
@@ -12,6 +13,8 @@ export function MapView(): React.ReactElement {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const rendererRef = useRef<TownRenderer | null>(null);
   const buildDefId = useGameStore((s) => s.buildDefId);
+  const selectedTownId = useGameStore((s) => s.selectedTownId);
+  const homeView = isHomeView(selectedTownId);
 
   useEffect(() => {
     if (!canvasRef.current) return;
@@ -19,9 +22,21 @@ export function MapView(): React.ReactElement {
       canvasRef.current,
       () => useGameStore.getState().sim.getState(),
       {
-        onPick: (id) => useGameStore.getState().select(id),
+        // The map is LOOKING at whichever town the switcher points to; every
+        // renderer read routes through this (region.md step 5). Every mutating
+        // callback below is gated on `isHomeView`: the player OPERATES only in
+        // home this slice, so a partner view is strictly read-only — no build,
+        // no entity-select command crosses towns (region.md §3b).
+        getTownId: () => useGameStore.getState().selectedTownId,
+        onPick: (id) => {
+          const store = useGameStore.getState();
+          if (!isHomeView(store.selectedTownId)) return; // view-only: no select command on a partner
+          store.select(id);
+        },
         getSelectedId: () => useGameStore.getState().sim.getState().selectedEntityId,
-        getBuildMode: () => useGameStore.getState().buildDefId != null,
+        getBuildMode: () =>
+          isHomeView(useGameStore.getState().selectedTownId) &&
+          useGameStore.getState().buildDefId != null,
         getBuildDefId: () => useGameStore.getState().buildDefId,
         getFlowOverlay: () => useGameStore.getState().flowOverlay,
         getFollowId: () => useGameStore.getState().followedCitizenId,
@@ -30,6 +45,7 @@ export function MapView(): React.ReactElement {
         },
         onBuildAt: (world) => {
           const store = useGameStore.getState();
+          if (!isHomeView(store.selectedTownId)) return; // guard: never place onto a partner map
           const defId = store.buildDefId;
           if (!defId) return;
           // Blocked ground: stay in build mode so the player can just move
@@ -64,10 +80,14 @@ export function MapView(): React.ReactElement {
     <div style={{ position: 'absolute', inset: 0 }}>
       <canvas
         ref={canvasRef}
-        style={{ width: '100%', height: '100%', cursor: buildDefId ? 'copy' : 'grab' }}
+        style={{ width: '100%', height: '100%', cursor: buildDefId && homeView ? 'copy' : 'grab' }}
       />
       <div className="map-hint">
-        {buildDefId ? '🏗 Click to place · Esc/Cancel to stop' : '🖱 Drag · Scroll/± zoom · Arrows pan · Space pause · 1-4 speed · G gazette · F flows'}
+        {!homeView
+          ? '👀 Viewing a partner city — you don’t operate here yet · 🖱 Drag · Scroll/± zoom'
+          : buildDefId
+            ? '🏗 Click to place · Esc/Cancel to stop'
+            : '🖱 Drag · Scroll/± zoom · Arrows pan · Space pause · 1-4 speed · G gazette · F flows'}
         <button onClick={() => rendererRef.current?.resetView()}>Reset view</button>
       </div>
     </div>
