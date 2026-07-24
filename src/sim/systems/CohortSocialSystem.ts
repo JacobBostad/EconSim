@@ -554,15 +554,6 @@ function runMigration(state: GameState, cohortIds: string[]): void {
   }
   const townAvg = headcount > 0 ? satMass / headcount : 0;
 
-  // Employment-aware immigration gate (City cast-parity pass). The satisfaction
-  // gate below never reads job supply, so a well-served town floods its worker
-  // cohort faster than founders add jobs and empShare craters — the wall the
-  // cast-parity mechanism hit (closing the cast gap raises town satisfaction and
-  // re-triggers the flood). When `immigrationEmpFloor` > 0, inflow is scaled by
-  // the worker cohort's employment headroom above the floor, so immigration halts
-  // when jobs are scarce and resumes as they fill. 0 = disabled = shipped gate.
-  const empFloor = SIZE_PRESETS[state.config.sizePreset].immigrationEmpFloor;
-
   // Inflow to worker cohorts while the town is attractive and there is room.
   if (townAvg >= IMMIGRATION_MIN_SATISFACTION) {
     for (const cid of cohortIds) {
@@ -572,11 +563,6 @@ function runMigration(state: GameState, cohortIds: string[]): void {
       if (room <= 0) break;
       const desirability = town.districts[cohort.districtId]?.desirability ?? 0;
       let inflow = Math.floor(cohort.population * INFLOW_RATE * (0.5 + desirability));
-      if (empFloor > 0) {
-        const empShare = cohort.population > 0 ? cohort.employed / cohort.population : 0;
-        const jobFactor = clamp((empShare - empFloor) / (1 - empFloor), 0, 1);
-        inflow = Math.floor(inflow * jobFactor);
-      }
       inflow = Math.min(inflow, room);
       if (inflow <= 0) continue;
       cohort.population += inflow;

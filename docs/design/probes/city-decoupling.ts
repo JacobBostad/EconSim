@@ -54,7 +54,6 @@ if (process.env.SYNTH) city.catchupSyntheticSignal = process.env.SYNTH === '1';
 if (process.env.SINKFLOOR) city.prosperityDrainFloor = Math.round(Number(process.env.SINKFLOOR) * 100);
 if (process.env.SINKRATE) city.prosperityDrainRate = Number(process.env.SINKRATE);
 if (process.env.FCASH) city.founderCash = Math.round(Number(process.env.FCASH) * 100);
-if (process.env.IMMIGFLOOR) city.immigrationEmpFloor = Number(process.env.IMMIGFLOOR);
 
 function aiFirmCount(state: GameState): number {
   return Object.values(state.firms).filter((f) => f.ownerType === 'ai').length;
@@ -75,8 +74,7 @@ console.log(
   `CONFIG fill=${city.founderUndersupplyFillRate} wage=$${(Number(city.founderCrowdWage) / 100).toFixed(0)} ` +
   `wcb=${city.catchupBaskets} synth=${city.catchupSyntheticSignal ? 1 : 0} ` +
   `sinkFloor=$${(Number(city.prosperityDrainFloor) / 100).toFixed(0)} sinkRate=${city.prosperityDrainRate} ` +
-  `fcash=$${(Number(city.founderCash) / 100).toFixed(0)} cooldown=${city.founderUndersupplyCooldown} ` +
-  `immigFloor=${city.immigrationEmpFloor}`,
+  `fcash=$${(Number(city.founderCash) / 100).toFixed(0)} cooldown=${city.founderUndersupplyCooldown}`,
 );
 
 // A single per-seed PASS/FAIL against the committed guards, printed as one line.

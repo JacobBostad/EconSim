@@ -1147,6 +1147,12 @@ All four ingredients (`founderCrowdWage`, `catchupSyntheticSignal` + `catchupBas
 `prosperityDrainFloor`/`Rate`, `immigrationEmpFloor`) remain in `SIZE_PRESETS` at their inert
 defaults as measured dark foundations for the next attempt.
 
+> **Pruned (hygiene pass, atop `2e8fb1b`).** `immigrationEmpFloor` — the employment-aware
+> immigration gate this pass built — was removed from the config and `SIZE_PRESETS`: attempt #4
+> (below) measured it **byte-inert across the entire joint regime** (no headcount flood exists
+> post the `INFLOW_RATE = 0.002` pin), so it never earned its keep. This verdict stays as the
+> record of why it was built and measured. The three surviving ingredients above stay live.
+
 **The root cause, now three-layered (the pass's contribution over the prior diagnosis).** The
 prior verdict named ONE wall (the cast gap is trip-limited and bistable). This pass measured that
 the three levers are mutually locked: (1) the gap mechanism's honest accounting SUPPRESSES the
@@ -1362,6 +1368,11 @@ current no-flood City regime — a candidate for removal or re-scoping once atte
 crowd stays at bootstrap). An honest NO-SHIP with a full grid, per the standing rule, is a
 complete result.
 
+> **Pruned (hygiene pass, atop `2e8fb1b`).** Finding 1's refutation is now acted on:
+> `immigrationEmpFloor` was removed from the config and `SIZE_PRESETS` — **measured dead** (byte-
+> inert across every cell of this grid). Its `cast-joint.ts`/`city-decoupling.ts` probe axes went
+> with it. This verdict and its grid stay as the measurement of record.
+
 ### Cast-parity attempt #5 — the signal-neutral revisit × CWBD relaxation, measured, and NOT shipped
 
 This pass executed attempt #4's corrected hypothesis verbatim: a **founder-signal-neutral
@@ -1473,6 +1484,15 @@ composition dynamics, not the demand timing or the hiring cash buffer.
 their determinism/conservation when engaged. The pass added the two knobs, the probe axes, the
 tests, and this verdict. An honest NO-SHIP with a full grid, per the standing rule, is a complete
 result.
+
+> **Pruned (hygiene pass, atop `2e8fb1b`).** Finding 3's refutation is now acted on:
+> `crowdWageBufferDays` was removed as a preset knob — **measured dead** at the shipped $16 wage
+> (byte-identical across CWBD 1‑20; the buffer never binds). The crowd-hiring throttle itself stays
+> live in `CohortLaborSystem` as the historical constant `CROWD_WAGE_BUFFER_DAYS = 7` (the value
+> every pin was measured against); only the never-diverging preset axis went, along with its
+> `castParity5.test.ts` guards and the `cast-joint.ts` `CWBD` probe axis. `restockRevisitSyntheticSignal`
+> STAYS — Finding 1 named it the cleanest gap lever the roadmap has produced, and its guards remain
+> in `castParity5.test.ts`. This verdict and its grid stay as the measurement of record.
 
 ## Open questions
 

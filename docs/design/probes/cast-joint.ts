@@ -1,9 +1,13 @@
 /**
  * Cast-parity attempt #4 — the JOINT landing probe. Extends the city-decoupling
  * probe with the restockRevisit demand-timing half, so one probe process measures
- * the JOINT candidate regime (revisit + immigrationEmpFloor + founder trigger +
- * the decoupling knobs) against ALL committed guards, per seed. Every SIZE_PRESETS
- * override is local to the probe process (restored at exit); source stays inert.
+ * the JOINT candidate regime (revisit + founder trigger + the decoupling knobs)
+ * against ALL committed guards, per seed. Every SIZE_PRESETS override is local to
+ * the probe process (restored at exit); source stays inert.
+ *
+ * (The `immigrationEmpFloor` and `crowdWageBufferDays` axes were pruned with the
+ * knobs at 2e8fb1b — both measured dead; see docs/design/cohorts-and-districts.md
+ * verdicts #2/#4/#5. This probe no longer sweeps them.)
  *
  * Per seed it reports the committed City guards + the cast-parity metrics:
  *   - AI firm count / insolvency / distressed;
@@ -25,17 +29,15 @@
  *   SINKRATE   prosperityDrainRate                            default 0
  *   FCASH      founderCash in DOLLARS                         default 22000
  *   COOLDOWN   founderUndersupplyCooldown                     default 20
- *   IMMIGFLOOR immigrationEmpFloor                            default 0
  *   REVISIT    restockRevisit (1/0)                           default 0
  *   REVISITSYNTH restockRevisitSyntheticSignal (1/0)          default 0
- *   CWBD       crowdWageBufferDays (crowd-hiring throttle)     default 7
  *   DAYS/SEEDS as usual                                       default 300 / 11,4,7
  *
- * Runnable: `REVISIT=1 IMMIGFLOOR=0.5 FILLRATE=0.78 WAGE=18 SYNTH=1 WCB=4 \
+ * Runnable: `REVISIT=1 FILLRATE=0.78 WAGE=18 SYNTH=1 WCB=4 \
  *   SINKFLOOR=450 SINKRATE=0.08 npx tsx docs/design/probes/cast-joint.ts`
  *
- * Cast-parity attempt #5 grid (signal-neutral revisit × CWBD relaxation, shipped
- * trigger): `REVISIT=1 REVISITSYNTH=1 CWBD=5 npx tsx docs/design/probes/cast-joint.ts`
+ * Cast-parity attempt #5 grid (signal-neutral revisit, shipped trigger):
+ * `REVISIT=1 REVISITSYNTH=1 npx tsx docs/design/probes/cast-joint.ts`
  */
 import { Simulation } from '../../../src/sim/core/Simulation';
 import { createInitialState } from '../../../src/sim/data/startingScenario';
@@ -59,10 +61,8 @@ if (process.env.SYNTH) city.catchupSyntheticSignal = process.env.SYNTH === '1';
 if (process.env.SINKFLOOR) city.prosperityDrainFloor = Math.round(Number(process.env.SINKFLOOR) * 100);
 if (process.env.SINKRATE) city.prosperityDrainRate = Number(process.env.SINKRATE);
 if (process.env.FCASH) city.founderCash = Math.round(Number(process.env.FCASH) * 100);
-if (process.env.IMMIGFLOOR) city.immigrationEmpFloor = Number(process.env.IMMIGFLOOR);
 if (process.env.REVISIT) city.restockRevisit = process.env.REVISIT === '1';
 if (process.env.REVISITSYNTH) city.restockRevisitSyntheticSignal = process.env.REVISITSYNTH === '1';
-if (process.env.CWBD) city.crowdWageBufferDays = Number(process.env.CWBD);
 
 function aiFirmCount(state: GameState): number {
   return Object.values(state.firms).filter((f) => f.ownerType === 'ai').length;
@@ -90,8 +90,8 @@ console.log(
   `wcb=${city.catchupBaskets} synth=${city.catchupSyntheticSignal ? 1 : 0} ` +
   `sinkFloor=$${(Number(city.prosperityDrainFloor) / 100).toFixed(0)} sinkRate=${city.prosperityDrainRate} ` +
   `fcash=$${(Number(city.founderCash) / 100).toFixed(0)} cooldown=${city.founderUndersupplyCooldown} ` +
-  `immigFloor=${city.immigrationEmpFloor} revisit=${city.restockRevisit ? 1 : 0} ` +
-  `revisitSynth=${city.restockRevisitSyntheticSignal ? 1 : 0} cwbd=${city.crowdWageBufferDays}`,
+  `revisit=${city.restockRevisit ? 1 : 0} ` +
+  `revisitSynth=${city.restockRevisitSyntheticSignal ? 1 : 0}`,
 );
 
 const mean = (a: number[]) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : 0);

@@ -244,15 +244,6 @@ export interface SimulationConfig {
  *    any firm count (the flat rent sink was calibrated for the ~9-firm
  *    equilibrium and runs away at the raised trigger's ~0.5 employment). rate 0
  *    everywhere = disabled = the shipped flat-rent-only regime.
- *  - `immigrationEmpFloor`: an employment-aware immigration gate. Cohort inflow
- *    reads town SATISFACTION only (≥ 55), never job supply — so once the cast/
- *    crowd is well-served the worker cohort floods faster than founders add jobs
- *    and crowd empShare craters (the A4 flood, and the wall the cast-parity pass
- *    hit: closing the cast gap RAISES town satisfaction, re-triggering the flood).
- *    When > 0, inflow is scaled by `clamp((empShare − floor)/(1 − floor), 0, 1)`,
- *    so immigration halts at/below the floor and recovers as jobs fill — capital
- *    attracts labor only where there is work. 0 everywhere = disabled = the
- *    shipped satisfaction-only gate.
  *  - `restockRevisit`: the cast "restocked-shelf revisit" (cast-parity attempt
  *    #3; see docs/design/cohorts-and-districts.md). When true, a cast WORKER
  *    whose urgent need stocked out at an OPEN store earlier the same day gets
@@ -275,19 +266,11 @@ export interface SimulationConfig {
  *    Finding 2: the revisit-as-market-demand re-widened the gap it was meant to
  *    close). Only read when `restockRevisit` is on; false everywhere = the shipped
  *    accounting (a revisit counts as market demand, byte-identical).
- *  - `crowdWageBufferDays`: the crowd-hiring cash-buffer throttle
- *    (CohortLaborSystem) — a firm hires crowd only while its cash covers this many
- *    days of the projected wage bill. 7 everywhere = the historical constant
- *    (byte-identical; Village never reaches the code — no crowd). Cast-parity
- *    attempt #5's empShare lever: relaxing it downward lets the EXISTING firms
- *    employ more of the fixed-300 crowd (lift empShare toward 0.5 for the wage leg)
- *    WITHOUT founding the extra sellers that over-serve the frictionless cohort and
- *    blow the cast-worker gap (attempt #4 Finding 3).
  */
 export const SIZE_PRESETS = {
-  village: { castTarget: 80, cohortCap: 0, crowdStart: 0, founderMaxAiFirms: 6, founderUndersupplyCooldown: 20, founderUndersupplyFillRate: 0.65, founderCash: 22000_00, mapWidth: 130, mapHeight: 92, founderCrowdWage: 16_00, catchupBaskets: 2, catchupSyntheticSignal: false, prosperityDrainFloor: 0, prosperityDrainRate: 0, immigrationEmpFloor: 0, restockRevisit: false, restockRevisitSyntheticSignal: false, crowdWageBufferDays: 7 },
-  city: { castTarget: 150, cohortCap: 2000, crowdStart: 300, founderMaxAiFirms: 18, founderUndersupplyCooldown: 20, founderUndersupplyFillRate: 0.65, founderCash: 22000_00, mapWidth: 260, mapHeight: 184, founderCrowdWage: 16_00, catchupBaskets: 2, catchupSyntheticSignal: false, prosperityDrainFloor: 0, prosperityDrainRate: 0, immigrationEmpFloor: 0, restockRevisit: false, restockRevisitSyntheticSignal: false, crowdWageBufferDays: 7 },
-  metropolis: { castTarget: 150, cohortCap: 10000, crowdStart: 1500, founderMaxAiFirms: 30, founderUndersupplyCooldown: 7, founderUndersupplyFillRate: 0.80, founderCash: 28000_00, mapWidth: 390, mapHeight: 276, founderCrowdWage: 16_00, catchupBaskets: 2, catchupSyntheticSignal: false, prosperityDrainFloor: 0, prosperityDrainRate: 0, immigrationEmpFloor: 0, restockRevisit: false, restockRevisitSyntheticSignal: false, crowdWageBufferDays: 7 },
+  village: { castTarget: 80, cohortCap: 0, crowdStart: 0, founderMaxAiFirms: 6, founderUndersupplyCooldown: 20, founderUndersupplyFillRate: 0.65, founderCash: 22000_00, mapWidth: 130, mapHeight: 92, founderCrowdWage: 16_00, catchupBaskets: 2, catchupSyntheticSignal: false, prosperityDrainFloor: 0, prosperityDrainRate: 0, restockRevisit: false, restockRevisitSyntheticSignal: false },
+  city: { castTarget: 150, cohortCap: 2000, crowdStart: 300, founderMaxAiFirms: 18, founderUndersupplyCooldown: 20, founderUndersupplyFillRate: 0.65, founderCash: 22000_00, mapWidth: 260, mapHeight: 184, founderCrowdWage: 16_00, catchupBaskets: 2, catchupSyntheticSignal: false, prosperityDrainFloor: 0, prosperityDrainRate: 0, restockRevisit: false, restockRevisitSyntheticSignal: false },
+  metropolis: { castTarget: 150, cohortCap: 10000, crowdStart: 1500, founderMaxAiFirms: 30, founderUndersupplyCooldown: 7, founderUndersupplyFillRate: 0.80, founderCash: 28000_00, mapWidth: 390, mapHeight: 276, founderCrowdWage: 16_00, catchupBaskets: 2, catchupSyntheticSignal: false, prosperityDrainFloor: 0, prosperityDrainRate: 0, restockRevisit: false, restockRevisitSyntheticSignal: false },
 } as const;
 
 export const DEFAULT_CONFIG: SimulationConfig = {

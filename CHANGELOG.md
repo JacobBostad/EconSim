@@ -7,17 +7,21 @@ thousands via statistical cohorts plus a fully-simulated cast, districts,
 25-30 firms, a broad product catalog, and specialist firm archetypes
 (real estate, investing, business services).
 
-The work runs in four arcs, and the fragments below are told newest-first
+The work runs in five arcs, and the fragments below are told newest-first
 within the section — so this navigation map reads the opposite way, oldest
 foundation first: **A — the engine** (data-driven demand, districts + dark
 cohorts, the live crowd economy, and the founder scaling that fills a
 Metropolis); **B — investing** (fair takeovers and the minority-stake control
 ladder); **C — breadth** (a wider consumer catalog, the B2B services channel,
 deep 3-stage chains); **D — the specialists** (the firm-archetype framework,
-then the landlord, holdco, and service-provider archetypes that ride it). A
-real City or Metropolis game switches the whole stack on together (crowd +
-districts + all three specialist channels); Village stays the classic,
-bit-identical, every-resident-simulated town.
+then the landlord, holdco, and service-provider archetypes that ride it);
+**E — the region** (a second simulated town, Port Rosa, that home trades with
+across a freight edge — live as the City new-game default). A real City game
+switches the whole stack on together (crowd + districts + all three specialist
+channels + the live region); a Metropolis runs the same crowd, districts,
+landlord, and service channels but keeps the holdco and the region City-scoped
+for now; Village stays the classic, bit-identical, every-resident-simulated
+town.
 
 - **Loan interest reads like a real economy — and is finally SHOWN.** A
   playtester took a **$40,000** loan and watched **$36/day** drain off with no
@@ -153,7 +157,7 @@ bit-identical, every-resident-simulated town.
   is now the test oracle (`tests/regionMoney.test.ts`): `totalMoneySupply` equals
   it on a live City state, and the primitive resolves/sums across a hand-attached
   second town while conservation holds through an inter-town settlement. `tsc`
-  clean; full suite 589 green (587 + 2 new); goldenSave corpus green unmodified.
+  clean; full suite 600 green (598 + 2 new); goldenSave corpus green unmodified.
 - **The region — step 4, slice 1: the town factory + the flag (Arc E).** The
   seam that grows the world from one town to a region. `seedTown(region, townId,
   spec)` (`src/sim/data/seedTown.ts`), carved from `startingScenario`, mints ONLY
