@@ -23,8 +23,23 @@ describe('worldScaleConfig — New Game world-scale wiring', () => {
     expect(cfg.realEstateEnabled).toBe(false);
     expect(cfg.investorsEnabled).toBe(false);
     expect(cfg.tradeDemandPoolsEnabled).toBe(false);
-    // bit-identity: a Village New Game is exactly the difficulty config.
-    expect(cfg).toEqual({ ...configForDifficulty('standard'), challengeMode: false });
+    // Phase 2 opt-in (docs/design/interest-rates.md): every New Game at every
+    // preset gets the better, realistic loan pricing (proven zero-AI-impact —
+    // no founder or passive player borrows on the pinned paths, so the pins are
+    // bit-identical flag-on). Old saves keep the flat rate via normalize false.
+    expect(cfg.riskTieredInterestEnabled).toBe(true);
+    // Otherwise a Village New Game is exactly the difficulty config.
+    expect(cfg).toEqual({
+      ...configForDifficulty('standard'),
+      challengeMode: false,
+      riskTieredInterestEnabled: true,
+    });
+  });
+
+  it('every preset opts into risk-tiered interest for a New Game', () => {
+    for (const world of ['village', 'city', 'metropolis'] as const) {
+      expect(worldScaleConfig('standard', false, 'cozy', world).riskTieredInterestEnabled).toBe(true);
+    }
   });
 
   it('city turns the whole stack on together (all four channels)', () => {

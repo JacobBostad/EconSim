@@ -110,7 +110,7 @@ realistic rate is, in this economy, **~0–2%/yr**. That argues for a *low* base
 | candidate | what it does | verdict |
 |---|---|---|
 | **(a) flat, lower + amortization/term** | drop base to ~10%/yr; add a repayment schedule that forces paydown | **defer.** Correct real-finance answer, but needs a term/schedule/payment-cadence machinery, a save-shape addition (`loanTermDays`, `nextPaymentDay`), and new AI repayment behavior. Heavy for the hole it fills. A lower flat rate *without* a term makes the free-money problem in Finding 3 **worse** (cheaper permanent debt). |
-| **(b) risk-tiered: base + spread × leverage** | cheap first dollar, expensive last dollar; spread from `debt / operatingNetWorth` | **ship.** A leverage-priced REPRICING, not a new deterrent — the spread rises toward the old rate as leverage approaches the credit limit, but the LOAN_CREDIT_LIMIT_MULTIPLE cap (Finding 3's real brake) is what bounds the exploit, unchanged. Reuses fields that already exist (`debt`, `operatingNetWorth` — both computed today for the credit limit), and directly answers the owner: the first bridge dollar reads realistic, maxing leverage stays as costly as today. |
+| **(b) risk-tiered: base + spread × leverage** | cheap first dollar, expensive last dollar; spread from `debt / loanNetWorth` (the credit limit's own liquid basis, shared code) | **ship.** A leverage-priced REPRICING, not a new deterrent — the spread rises toward the old rate as leverage approaches the credit limit, but the LOAN_CREDIT_LIMIT_MULTIPLE cap (Finding 3's real brake) is what bounds the exploit, unchanged. Reuses the exact collateral basis the credit limit computes today (`loanNetWorth` = cash + inventory at base prices, extracted into one shared function so the two can never drift), and directly answers the owner: the first bridge dollar reads realistic, maxing leverage stays as costly as today. |
 | **(c) cycle-linked base** | base shifts with the `worldEvents` boom/slump cycle (booms cheap, slumps dear) | **phase-2 additive.** Good flavor and couples to an existing system, but it is a *seasoning* on the base, not the structural fix. Layer it onto (b)'s base once (b) has landed. |
 
 **Chosen shape: (b) risk-tiered, with (c) reserved as a later additive on the
@@ -122,7 +122,7 @@ Replace the flat all-in rate with a base ("prime", the rate on the first dollar)
 plus a leverage spread computed at accrual:
 
 ```
-leverage      = debt / max(operatingNetWorth, MIN_NET_WORTH)     // 0 when unlevered
+leverage      = debt / max(loanNetWorth, MIN_NET_WORTH)          // 0 when unlevered
 effectiveRate = BASE_RATE + SPREAD_SLOPE × clamp(leverage, 0, LEVERAGE_CAP)
 dailyInterest = round(debt × effectiveRate)
 ```
@@ -133,7 +133,7 @@ Constants **derived from the measurements** (Findings 3–4):
 |---|---|---|---|
 | `BASE_RATE` | `0.0003` /day | **≈ 11%/yr** | inflation (~0–2%, Finding 4) + bank margin + baseline risk. Reads like a real small-business loan — the first dollar of the owner's bridge. |
 | `SPREAD_SLOPE` | `0.0004` /day per unit leverage | up to **+22%/yr** | tuned so that at the credit-limit leverage (1.5) the all-in rate returns to **exactly 0.0009 = 32.9%/yr** — the deep-leverage deterrent is *unchanged* from today, preserving Finding 3's ceiling. |
-| `LEVERAGE_CAP` | `1.5` | — | equals `LOAN_CREDIT_LIMIT_MULTIPLE`; the spread saturates exactly where borrowing is cut off, so it never over-punishes past the limit. |
+| `LEVERAGE_CAP` | `1.5` | — | equals `LOAN_CREDIT_LIMIT_MULTIPLE`; measured on the SAME liquid basis the limit prices against (shared `loanNetWorth`), the spread saturates at the limit's multiple. Honest dynamics: leverage is debt over CURRENT liquid worth — a firm still holding borrowed cash sits below its draw-time ratio; one that spent a maxed line into buildings pays the full ceiling. Encumbrance, not the draw, is what the spread prices. |
 | `MIN_NET_WORTH` | `dollars(5000)` | — | equals `LOAN_MIN_CREDIT`; a near-zero-net-worth firm (receivership) is priced against the same floor the credit line uses, not a divide-by-zero. |
 
 Resulting curve:
@@ -155,12 +155,13 @@ does not strengthen the leverage brake; the unchanged 1.5x credit limit is and
 remains the sole bound on exploit magnitude. That trade is accepted knowingly:
 the limit already caps the damage, and the realism win is the point.
 
-### Where it lives in code (design only — nothing ships in this slice)
+### Where it lives in code (SHIPPED — phases 1+2)
 
 - **`FinanceSystem.ts:36`** stops reading `firm.interestRatePerDay` as the
   all-in rate and instead computes `effectiveRate` from the firm's `debt` and
-  `companyValuation(state, firm.id).operatingNetWorth` (the same
-  `operatingNetWorth` the credit limit already uses — holdings excluded, so a
+  `loanNetWorth(state, firm.id)` (cash + inventory at base prices — the ONE
+  shared function `Simulation.takeLoan`'s credit limit also delegates to, so
+  the coupling is structural, not aspirational — holdings excluded, so a
   marked-up equity book can't cheapen leverage). `firm.interestRatePerDay`
   becomes the **base** the firm was quoted (its "prime"), not the all-in cost.
 - **The four founder constructors + `startingScenario`/`seedTown`** reprice the
@@ -183,7 +184,7 @@ displayed number), so they land in phase 1:
    e.g. *"Borrow $20k — 16%/yr at your current leverage"*, and a hint that the
    rate rises as debt approaches the credit limit.
 2. **`src/ui/ReceivershipModal.tsx` — the emergency-loan button (line ~98).** A
-   firm in receivership has near-zero `operatingNetWorth`, so its leverage is
+   firm in receivership has near-zero `loanNetWorth`, so its leverage is
    high and its emergency loan is priced near the 33% ceiling — the player must
    see that this bridge is expensive *because* they are distressed, so *"a loan
    only buys time if the losses continue"* (existing copy) is quantified.
@@ -214,22 +215,39 @@ their own fresh seeds, off the pinned set.
 
 **Phased landing:**
 
-1. **Phase 1 — formula + UI, dark behind a flag.** Add
-   `riskTieredInterestEnabled: false` to `SimulationConfig`. `FinanceSystem`
-   branches: flag **off** → read `firm.interestRatePerDay` as the flat all-in
-   rate, exactly as today (every pin and fixture byte-identical); flag **on** →
-   compute `base + spread`. Land the four UI surfacings unconditionally (they
-   only *display*, and at a flat rate they display the flat rate — still correct).
-   Ship the formula's unit tests on dedicated seeds that force borrowing and
-   assert the curve (11% at leverage 0, 33% at leverage 1.5, monotone between).
-   **Zero pins move.** This is the `servicesEnabled` / `realEstateEnabled` house
-   pattern (see `real-estate.md`) applied to finance.
-2. **Phase 2 — new games opt in.** `useGameStore` / `worldScaleConfig` turn the
-   flag on for new games and reprice the founder/player base literal to `0.0003`.
-   Because AI never borrows, even flag-**on** city/village founder pins stay
-   byte-identical; only a test that *makes* a firm borrow under the flag needs
-   its own baseline (and it is new, so there is nothing to re-mint). Add a
-   flag-on soak-conservation test.
+1. **Phase 1 — formula + UI, dark behind a flag. — SHIPPED.** Added
+   `riskTieredInterestEnabled: false` to `SimulationConfig` (`DEFAULT_CONFIG`
+   false; normalize default false in `migrations.ts`). The formula lives in
+   `src/sim/systems/interestRates.ts` (`effectiveInterestRatePerDay`,
+   `chargedInterestRatePerDay`, `effectiveRateForLeverage/ForDebt`,
+   `firmLeverage`, `annualRatePercent`). `FinanceSystem.ts:36` now charges
+   `chargedInterestRatePerDay(firm, state)`: flag **off** → the flat
+   `firm.interestRatePerDay` (byte-identical to today, verified); flag **on** →
+   `base + spread`. All four UI surfacings landed unconditionally (they only
+   *display*, showing the flat rate at a flat rate). Unit tests
+   (`interestRates.test.ts`) assert the curve: **0.0003 at leverage 0 (11%/yr)**,
+   **exactly 0.0009 at leverage 1.5 (33%/yr)**, clamp above the cap, the
+   `MIN_NET_WORTH` floor, monotone between. This is the `servicesEnabled` /
+   `realEstateEnabled` house pattern applied to finance.
+2. **Phase 2 — new games opt in. — SHIPPED.** `worldScaleConfig` sets
+   `riskTieredInterestEnabled: true` for New Games at **every** preset (the
+   `useGameStore` New Game path). The stored per-firm base literal stays `0.0009`
+   for now (it is the firm's quoted "prime"; the formula reads leverage live) —
+   repricing the stored base is Phase 3's versioned migration, unshipped. Because
+   no AI founder or passive player borrows on the pinned paths, the four pins are
+   **bit-identical flag-on vs flag-off**, verified in `interestRates.test.ts` and
+   measured directly:
+
+   | pin | flag OFF | flag ON | verdict |
+   |---|---|---|---|
+   | village 11 rngState | `3274842624` | `3274842624` | identical |
+   | village 4 rngState | `2896139677` | `2896139677` | identical |
+   | village 7 rngState | `4253583594` | `4253583594` | identical |
+   | city 11 rngState / money | `2546912297` / `316900000` | `2546912297` / `316900000` | identical |
+
+   A flag-on player-loan scenario test charges the tiered rate day-by-day and
+   asserts money conserved to the cent. `playtestV8`'s bot never borrows (no
+   `TAKE_LOAN` in its script), so its P&L floor bands are untouched — no re-pin.
 3. **Phase 3 — reprice existing saves (optional).** A versioned `v3→v4`
    migration sets `f.interestRatePerDay = 0.0003` on load so in-progress games
    inherit the cheaper base. This is the only step that changes a loaded game's

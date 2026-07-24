@@ -26,6 +26,7 @@ import { createInitialState } from '../data/startingScenario';
 import { createFacility, createCitizen } from '../entities/factories';
 import { Rng } from './Random';
 import { townOf, HOME_TOWN_ID, sortedTownIds, type TownId } from './Town';
+import { loanNetWorth } from '../systems/interestRates';
 import { getFacilityDef } from '../data/facilityDefinitions';
 import { getRecipe } from '../data/recipes';
 import { getProduct, productAvailableInPreset } from '../data/products';
@@ -698,21 +699,12 @@ export class Simulation {
       `🏡 ${firm.name} funded ${home.name} — two new citizens moved to town.`, home.id);
   }
 
-  /** Net worth used for credit limits: cash + inventory value. */
+  /** Net worth used for credit limits: cash + inventory value. Delegates to
+   *  the ONE shared liquid-collateral basis (interestRates.ts) — the credit
+   *  limit and the tiered loan rate must price against the same numbers, so
+   *  the computation lives in a single function. */
   private netWorth(firmId: FirmId): number {
-    // Home-town view (identity in a one-town region, so the returned record is
-    // the same reference); gains a `townId` param at the endgame move.
-    const firm = townOf(this.state).firms[firmId];
-    if (!firm) return 0;
-    let inv = 0;
-    for (const facId of firm.facilities) {
-      const fac = townOf(this.state).facilities[facId];
-      if (!fac) continue;
-      for (const bag of [fac.inputInventory, fac.outputInventory]) {
-        for (const pid in bag) inv += bag[pid]!.quantity * getProduct(pid).basePrice;
-      }
-    }
-    return firm.cash + inv;
+    return loanNetWorth(this.state, firmId);
   }
 
   private investRnd(command: Extract<Command, { type: 'INVEST_RND' }>): void {

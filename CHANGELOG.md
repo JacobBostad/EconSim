@@ -19,6 +19,24 @@ real City or Metropolis game switches the whole stack on together (crowd +
 districts + all three specialist channels); Village stays the classic,
 bit-identical, every-resident-simulated town.
 
+- **Loan interest reads like a real economy — and is finally SHOWN.** A
+  playtester took a **$40,000** loan and watched **$36/day** drain off with no
+  rate anywhere on screen — they had to divide $36 by $40k to discover it was
+  ~33%/yr, credit-card pricing for a business loan. Loans are now **risk-tiered**
+  (`docs/design/interest-rates.md`): a cheap first dollar (`BASE_RATE 0.0003` ≈
+  **11%/yr**) plus a spread that rises with leverage (`debt ÷ operating net
+  worth`), climbing back to exactly the old **0.0009 ≈ 33%/yr** at the credit
+  limit — so low-leverage debt reads like inflation + a bank margin + risk, while
+  maxing leverage still costs today's ceiling. That same $40k loan on a healthy
+  ~$120k book now costs **~$17/day** (16%/yr), less than half of before. And the
+  rate is no longer invisible: it is surfaced in **four** places — the borrow
+  buttons and Debt line in the company inspector, the Debt card on the dashboard
+  (effective APR), the advisor's debt-service tip, and the Receivership emergency
+  loan (priced near the ceiling *because* you are distressed). New games at every
+  preset get the new pricing; in-progress saves keep their current behavior.
+  Behind `riskTieredInterestEnabled` — proven zero-impact on the AI economy (no
+  AI or passive player borrows on the pinned paths, so the village 11/4/7 and
+  city-11 pins are bit-identical flag-on).
 - **Region step 4, slice 5 — the partner quotes from its real economy (STEP 4
   COMPLETE).** The gradient's END: the `TradeCityPool` is RETIRED for the live
   partner. Its export quote no longer reads a seeded pool table — it reads the

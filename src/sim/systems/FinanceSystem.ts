@@ -15,6 +15,7 @@ import { townOf } from '../core/Town';
 import { firmAccount, WORLD_ACCOUNT } from '../core/Transactions';
 import { isDayBoundary } from '../core/Tick';
 import { SHARE_SHIFT_DECAY } from '../data/constants';
+import { chargedInterestRatePerDay } from './interestRates';
 
 export function runFinanceSystem(ctx: SimContext): void {
   if (!isDayBoundary(ctx.state.tick, ctx.config)) return;
@@ -33,7 +34,9 @@ export function runFinanceSystem(ctx: SimContext): void {
     const firm = town.firms[fid]!;
     if (firm.debt <= 0) continue;
     if (firm.ownerType !== 'player' && firm.ownerType !== 'ai') continue;
-    const interest = Math.round(firm.debt * firm.interestRatePerDay);
+    // Flag OFF → the stored flat per-firm rate (byte-identical to pre-formula);
+    // flag ON → the leverage-priced effective rate. See interestRates.ts.
+    const interest = Math.round(firm.debt * chargedInterestRatePerDay(firm, state));
     if (interest <= 0) continue;
     recordTransaction(state, {
       from: firmAccount(firm.id),

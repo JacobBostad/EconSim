@@ -18,6 +18,14 @@ import { formatMoney } from '../utils/formatMoney';
 import { getProduct } from '../sim/data/products';
 import { citizenActionLabel, populationStats } from '../sim/selectors/citizenSelectors';
 import { firmPnLToday, firmPnLLifetime, firmFacilities, firmWarnings, rivalTopWage } from '../sim/selectors/companySelectors';
+import {
+  chargedInterestRatePerDay,
+  effectiveRateForDebt,
+  loanNetWorth,
+  effectiveRateForLeverage,
+  annualRatePercent,
+  LEVERAGE_CAP,
+} from '../sim/systems/interestRates';
 import { getPersonality } from '../sim/data/personalities';
 import { morningBriefing } from '../sim/selectors/advisorSelectors';
 import { managerCandidates, managerDuties } from '../sim/systems/ManagerSystem';
@@ -253,7 +261,7 @@ function FirmView({ firm, state }: { firm: Firm; state: GameState }): React.Reac
       </div>
       {firm.ownerType === 'player' && <AdvisorCard state={state} />}
       {firm.ownerType === 'player' && <ExecutiveTeamCard firm={firm} state={state} />}
-      {firm.ownerType === 'player' && <FinanceControls firmId={firm.id} />}
+      {firm.ownerType === 'player' && <FinanceControls firm={firm} state={state} />}
       {firm.ownerType === 'player' && <WageControls firm={firm} state={state} />}
 
       <div className="section-title">P&L Today</div>
@@ -425,18 +433,46 @@ function WageControls({ firm, state }: { firm: Firm; state: GameState }): React.
   );
 }
 
-function FinanceControls({ firmId }: { firmId: string }): React.ReactElement {
+function FinanceControls({ firm, state }: { firm: Firm; state: GameState }): React.ReactElement {
   const dispatch = useGameStore((s) => s.dispatch);
+  const tiered = state.config.riskTieredInterestEnabled;
+  const basis = loanNetWorth(state, firm.id);
+  // The rate this firm's debt accrues at right now (its "current" APR).
+  const currentApr = Math.round(annualRatePercent(chargedInterestRatePerDay(firm, state)));
+  // The rate a fresh dollar of debt would bear at today's leverage.
+  const marginalApr = Math.round(
+    annualRatePercent(tiered ? effectiveRateForDebt(firm.debt, basis) : firm.interestRatePerDay),
+  );
+  // Each button quotes the rate the loan would accrue at AFTER that draw (the
+  // borrowed cash lands in the basis too, so the honest post-draw leverage).
+  const aprAfterDraw = (amtCents: number): number =>
+    Math.round(annualRatePercent(
+      tiered ? effectiveRateForDebt(firm.debt + amtCents, basis + amtCents) : firm.interestRatePerDay,
+    ));
   return (
-    <div className="row" style={{ gap: 6, marginTop: 4 }}>
-      {[5000, 20000].map((amt) => (
-        <button key={amt} onClick={() => dispatch({ type: 'TAKE_LOAN', firmId, amount: amt * 100 })}>
-          Borrow ${(amt / 1000).toFixed(0)}k
+    <div style={{ marginTop: 4 }}>
+      <div className="row" style={{ gap: 6 }}>
+        {[5000, 20000].map((amt) => (
+          <button
+            key={amt}
+            title={`~${aprAfterDraw(amt * 100)}%/yr after this draw`}
+            onClick={() => dispatch({ type: 'TAKE_LOAN', firmId: firm.id, amount: amt * 100 })}
+          >
+            Borrow ${(amt / 1000).toFixed(0)}k
+          </button>
+        ))}
+        <button onClick={() => dispatch({ type: 'REPAY_LOAN', firmId: firm.id, amount: 1_000_000_00 })} title="Repay as much as cash allows">
+          Repay
         </button>
-      ))}
-      <button onClick={() => dispatch({ type: 'REPAY_LOAN', firmId, amount: 1_000_000_00 })} title="Repay as much as cash allows">
-        Repay
-      </button>
+      </div>
+      <div className="small muted" style={{ marginTop: 3 }}>
+        {firm.debt > 0
+          ? `Loan rate ${currentApr}%/yr on current debt`
+          : `Loan rate ${marginalApr}%/yr on your first dollar`}
+        {tiered && (
+          <> · rises to {Math.round(annualRatePercent(effectiveRateForLeverage(LEVERAGE_CAP)))}%/yr as debt nears your credit limit</>
+        )}
+      </div>
     </div>
   );
 }

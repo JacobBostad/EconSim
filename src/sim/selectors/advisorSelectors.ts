@@ -22,6 +22,7 @@ import { PRODUCT_IDS_BY_PRESET } from '../data/products';
 import { FOUNDER_GAP_DAYS, TRADE_POOL_THIN_COVER_DAYS } from '../data/constants';
 import { founderMaxAiFirms } from '../systems/AIFounderSystem';
 import { townOf } from '../core/Town';
+import { chargedInterestRatePerDay, annualRatePercent } from '../systems/interestRates';
 
 export interface Advice {
   icon: string;
@@ -73,10 +74,11 @@ export function morningBriefing(state: GameState): Advice[] {
   // never shows up as a decision — only as a quiet daily drain.
   const lastDay = player.accounting.dailyHistory[player.accounting.dailyHistory.length - 1];
   if (lastDay && player.debt > 0 && lastDay.interest >= Math.max(50, lastDay.revenue * 0.15)) {
+    const apr = Math.round(annualRatePercent(chargedInterestRatePerDay(player, state)));
     items.push({
       icon: '🏦',
       severity: 'warning',
-      text: `Debt service cost ${formatMoney(lastDay.interest)} yesterday on ${formatMoney(player.debt)} of loans — repay from your company's Loans panel when cash allows.`,
+      text: `Debt service cost ${formatMoney(lastDay.interest)} yesterday (${apr}%/yr) on ${formatMoney(player.debt)} of loans — ${state.config.riskTieredInterestEnabled ? 'deleverage to drop the rate, or repay' : 'repay'} from your company's Loans panel when cash allows.`,
     });
   }
 

@@ -154,6 +154,20 @@ export interface SimulationConfig {
    * one town). Dispatch, the region-wide money primitive, and the freight edge
    * are later slices. */
   regionEnabled: boolean;
+  /**
+   * Risk-tiered loan pricing (see docs/design/interest-rates.md). Off by
+   * default — including for the plain village/city/metropolis presets the pins
+   * are tuned against — so probes, tests, and old saves keep the flat all-in
+   * rate byte-identical. When on, FinanceSystem charges a leverage-priced
+   * effective rate (a cheap first dollar rising toward the old flat rate at the
+   * credit limit) instead of the stored flat `interestRatePerDay`. New games at
+   * EVERY preset opt in (worldScaleConfig): the probe proved no AI or passive
+   * player ever borrows on the pinned paths, so the interest transaction (gated
+   * on debt > 0) is never reached — every rngState/money pin is bit-identical
+   * flag-on vs flag-off (verified in interestRates.test.ts). Phase 3's migration
+   * that reprices existing saved firms' base stays unshipped, so loaded games
+   * keep their behavior (normalize default false). */
+  riskTieredInterestEnabled: boolean;
 }
 
 /**
@@ -305,6 +319,7 @@ export const DEFAULT_CONFIG: SimulationConfig = {
   investorsEnabled: false,
   tradeDemandPoolsEnabled: false,
   regionEnabled: false,
+  riskTieredInterestEnabled: false,
 };
 
 /** Difficulty presets: starting capital, news volatility, AI aggressiveness. */
@@ -395,6 +410,12 @@ export function worldScaleConfig(
   const config: SimulationConfig = {
     ...configForDifficulty(difficulty),
     challengeMode: challenge,
+    // Phase 2 opt-in (docs/design/interest-rates.md): every new game gets the
+    // better, realistic loan pricing. Proven zero-AI-impact — no founder or
+    // passive player borrows on the pinned paths, so the pins are bit-identical
+    // flag-on (interestRates.test.ts). Old saves keep the flat rate via the
+    // normalize default false; Phase 3's repricing migration stays unshipped.
+    riskTieredInterestEnabled: true,
     ...sizeOverrides,
     ...worldOverride,
   };

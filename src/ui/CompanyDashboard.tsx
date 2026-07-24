@@ -29,6 +29,7 @@ import { TrendCard } from './Sparkline';
 import { SHOW_CHRONICLE_EVENT } from './ChronicleModal';
 import { getPersonality } from '../sim/data/personalities';
 import { townOf } from '../sim/core/Town';
+import { chargedInterestRatePerDay, annualRatePercent } from '../sim/systems/interestRates';
 
 /** Rows shown in the standings table before the "show all" reveal. A Village
  * (≤7 firms) never trips this; it exists for City/Metropolis (18/30 firms),
@@ -281,7 +282,11 @@ export function CompanyDashboard(): React.ReactElement {
 
       <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
         <Card label="Cash" value={formatMoney(firm.cash)} color={firm.cash < 0 ? 'var(--red)' : 'var(--green)'} />
-        <Card label="Debt" value={formatMoney(firm.debt)} color={firm.debt > 0 ? 'var(--amber)' : undefined} />
+        <Card
+          label={firm.debt > 0 ? `Debt · ${Math.round(annualRatePercent(chargedInterestRatePerDay(firm, state)))}%/yr` : 'Debt'}
+          value={formatMoney(firm.debt)}
+          color={firm.debt > 0 ? 'var(--amber)' : undefined}
+        />
         <Card label="Inventory value" value={formatMoney(firmInventoryValue(state, firm.id))} />
         <Card label="Net profit (today)" value={formatMoney(today.netProfit)} color={today.netProfit < 0 ? 'var(--red)' : 'var(--green)'} />
         <Card label="Operating profit (life)" value={formatMoney(life.operatingProfit)} color={life.operatingProfit < 0 ? 'var(--red)' : 'var(--green)'} />

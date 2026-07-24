@@ -164,6 +164,11 @@ function normalize(state: GameState): GameState {
   // The region (Arc E step 4): saves predating it load with the flag off and no
   // partner town — a one-town region, byte-identical to a pre-region game.
   state.config.regionEnabled = state.config.regionEnabled ?? false;
+  // Risk-tiered loan pricing (docs/design/interest-rates.md): saves predating it
+  // load with the flag OFF so an in-progress game keeps the flat all-in rate it
+  // was playing — no repricing on load (Phase 3's opt-in migration is unshipped).
+  // Only NEW games (worldScaleConfig) turn it on.
+  state.config.riskTieredInterestEnabled = state.config.riskTieredInterestEnabled ?? false;
   // Per-town map dims (Arc E step 4, slice 1): the six-family town record now
   // carries its own mapWidth/mapHeight. A v3 save written before this slice (and
   // every wrapped v2 save) has them absent under `towns.*`; default each town's
