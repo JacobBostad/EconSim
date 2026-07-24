@@ -20,10 +20,15 @@ import { townOf, HOME_TOWN_ID, type TownId } from '../core/Town';
 import { isDayBoundary } from '../core/Tick';
 import { crowdCount } from '../entities/Facility';
 import { isWorkTime } from './CitizenScheduleSystem';
+import { SIZE_PRESETS } from '../core/SimulationConfig';
 
-/** A firm hires crowd only while its cash covers this many days of the
- * projected wage bill — the same instinct the AI applies to cast hiring. */
-const CROWD_WAGE_BUFFER_DAYS = 7;
+/** A firm hires crowd only while its cash covers this many days of the projected
+ * wage bill — the same instinct the AI applies to cast hiring. Preset-keyed
+ * (cast-parity attempt #5's empShare lever); 7 everywhere = the historical
+ * constant, byte-identical (Village never reaches this code — no crowd). */
+function crowdWageBufferDays(state: GameState): number {
+  return SIZE_PRESETS[state.config.sizePreset].crowdWageBufferDays;
+}
 
 function anyCrowd(state: GameState, townId: TownId = HOME_TOWN_ID): boolean {
   // Town-scoped: reads THIS town's crowd (the scheduler passes ctx.townId so the
@@ -165,7 +170,7 @@ function reconcileCrowdJobs(state: GameState, townId: TownId = HOME_TOWN_ID): vo
       if (idle <= 0) continue;
       let take = Math.min(room, idle);
       // Affordability: shrink the intake until the buffered bill fits.
-      while (take > 0 && (dailyBill() + take * wage) * CROWD_WAGE_BUFFER_DAYS > firm.cash) {
+      while (take > 0 && (dailyBill() + take * wage) * crowdWageBufferDays(state) > firm.cash) {
         take -= 1;
       }
       if (take <= 0) continue;

@@ -60,6 +60,13 @@ function catchupSyntheticSignal(state: GameState): boolean {
 function restockRevisitEnabled(state: GameState): boolean {
   return SIZE_PRESETS[state.config.sizePreset].restockRevisit;
 }
+/** Founder-signal-neutral split for the revisit (cast-parity attempt #5). When
+ * true, a revisit's purchase is excluded from the founder-visible market shortage
+ * gauge — the same synthetic-accounting idiom `catchupSyntheticSignal` gives the
+ * catch-up tranche. Only meaningful when `restockRevisit` is on. */
+function restockRevisitSyntheticSignal(state: GameState): boolean {
+  return SIZE_PRESETS[state.config.sizePreset].restockRevisitSyntheticSignal;
+}
 /** Cap on a citizen's pending-revisit queue: the shoppable staples are few and a
  * store restocks within a day, so this only bounds pathological growth. */
 const MAX_PENDING_REVISITS = 6;
@@ -330,8 +337,20 @@ function attemptPurchase(
   // physically buys. With the flag off (shipped) the two are equal and every stat
   // path is byte-identical to before. City-gated via anyCohortPopulation +
   // preset, so Village is untouched.
-  const marketWant =
-    doCatchup && catchupSyntheticSignal(state) ? baseWantQty : wantQty;
+  // A signal-neutral revisit (attempt #5) is a synthetic extra VISIT in its
+  // entirety — it stands in for an URGENT_TRIP the after-work window denied, not
+  // market demand — so the WHOLE revisit is excluded from the founder gauge
+  // (marketWant 0), where the catch-up excludes only its extra tranche (baseWantQty
+  // stays visible). A revisit never runs the catch-up branch (opts.revisit gates
+  // doCatchup off), so the two cases don't overlap. Flag off (shipped) → wantQty,
+  // byte-identical.
+  const marketWant = opts.revisit
+    ? restockRevisitSyntheticSignal(state)
+      ? 0
+      : wantQty
+    : doCatchup && catchupSyntheticSignal(state)
+      ? baseWantQty
+      : wantQty;
 
   if (!open || stock <= 0) {
     // Stockout / store closed -> lost sale. Both cases keep feeding
