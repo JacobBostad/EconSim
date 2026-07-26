@@ -25,7 +25,13 @@ import type { GameState } from '../sim/core/GameState';
 import type { Command, Speed } from '../sim/core/Commands';
 import type { EntityId, FacilityDefId } from '../sim/core/Id';
 import { HOME_TOWN_ID, type TownId } from '../sim/core/Town';
-import { saveGame, loadGame, hasSave, BACKUP_SLOT } from '../sim/persistence/saveLoad';
+import {
+  saveGame,
+  loadGame,
+  hasSave,
+  BACKUP_SLOT,
+  type SaveFailureReason,
+} from '../sim/persistence/saveLoad';
 import { recordTownFounded } from '../ui/records';
 
 const DEFAULT_SEED = 20260601;
@@ -76,6 +82,17 @@ interface GameStore {
   lastTickAt: number;
   tickIntervalMs: number;
 
+  /**
+   * Set when a save failed. Autosave runs every few seconds with no UI of its
+   * own, so without this the player's only signal that their town stopped
+   * being persisted is discovering it gone. Cleared by the next save that
+   * succeeds, or by dismissing it.
+   */
+  saveError: { reason: SaveFailureReason; bytes?: number; at: number } | null;
+  dismissSaveError: () => void;
+  /** Persists state and records saveError on failure. Returns whether it stuck. */
+  persistState: (state: GameState, slot?: string) => boolean;
+
   getState: () => GameState;
   dispatch: (command: Command) => void;
   tickOnce: () => void;
@@ -122,7 +139,39 @@ export const useGameStore = create<GameStore>((set, get) => {
     }
   }
 
+  /**
+   * The ONLY way this store writes a save. Every call site used to drop
+   * saveGame's return value on the floor, so a full quota lost the player's
+   * town without a word — the autosave just stopped working and nothing said
+   * so. Route writes through here and the failure becomes visible state.
+   *
+   * 'no-storage' is deliberately not surfaced: it is the SSR/test case, not
+   * something a player can act on.
+   */
+  function persist(state: GameState, slot?: string): boolean {
+    const result = slot === undefined ? saveGame(state) : saveGame(state, slot);
+
+    if (result.ok) {
+      if (get().saveError) set({ saveError: null });
+      return true;
+    }
+
+    if (result.reason !== 'no-storage') {
+      set({
+        saveError: {
+          reason: result.reason ?? 'unknown',
+          bytes: result.bytes,
+          at: Date.now(),
+        },
+      });
+    }
+    return false;
+  }
+
   return {
+    saveError: null,
+    dismissSaveError: () => set({ saveError: null }),
+    persistState: persist,
     sim,
     version: 0,
     buildDefId: null,
@@ -174,7 +223,7 @@ export const useGameStore = create<GameStore>((set, get) => {
       // The 4s autosave would overwrite the old town within seconds of a new
       // game — stash it in the backup slot so a mis-click never costs a run.
       const old = get().sim.getState();
-      if (old.tick > 0) saveGame(old, BACKUP_SLOT);
+      if (old.tick > 0) persist(old, BACKUP_SLOT);
       // World scale drives the cohort economy: 'city'/'metropolis' turn the crowd
       // on AND open the archetype/services/trade channels their founder baselines
       // are gated for; Metropolis is the biggest map + full 18-product catalog and
@@ -192,7 +241,7 @@ export const useGameStore = create<GameStore>((set, get) => {
     },
 
     save: () => {
-      saveGame(get().sim.getState());
+      persist(get().sim.getState());
       bump(true);
     },
 
@@ -260,13 +309,15 @@ export const useGameStore = create<GameStore>((set, get) => {
 
         if (now - lastAutosave >= AUTOSAVE_MS) {
           lastAutosave = now;
-          saveGame(get().sim.getState());
+          // A failed autosave now raises saveError; the banner tells the player
+          // their run has stopped being written before they lose it.
+          if (!persist(get().sim.getState())) bump(true);
         }
         requestAnimationFrame(frame);
       };
       requestAnimationFrame(frame);
 
-      window.addEventListener('beforeunload', () => saveGame(get().sim.getState()));
+      window.addEventListener('beforeunload', () => persist(get().sim.getState()));
     },
   };
 });

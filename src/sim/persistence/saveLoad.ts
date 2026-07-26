@@ -36,13 +36,63 @@ function hasStorage(): boolean {
   }
 }
 
-export function saveGame(state: GameState, slot: string = DEFAULT_SLOT): boolean {
-  if (!hasStorage()) return false;
+export type SaveFailureReason =
+  /** No localStorage at all (SSR, tests, hardened browser settings). */
+  | 'no-storage'
+  /** The origin's storage quota is full. The likely one: saves grow with the town. */
+  | 'quota'
+  | 'unknown';
+
+export interface SaveResult {
+  ok: boolean;
+  reason?: SaveFailureReason;
+  /** Payload size we attempted to write. Only useful for diagnosing 'quota'. */
+  bytes?: number;
+}
+
+/**
+ * Browsers disagree on how they signal a full quota: Chrome throws a
+ * DOMException named QuotaExceededError (code 22), Firefox uses
+ * NS_ERROR_DOM_QUOTA_REACHED (code 1014), Safari has historically thrown a
+ * bare QuotaExceededError. Treat all of them as the same condition.
+ */
+function isQuotaError(err: unknown): boolean {
+  if (typeof err !== 'object' || err === null) return false;
+  const e = err as { name?: string; code?: number };
+  return (
+    e.name === 'QuotaExceededError' ||
+    e.name === 'NS_ERROR_DOM_QUOTA_REACHED' ||
+    e.code === 22 ||
+    e.code === 1014
+  );
+}
+
+/**
+ * Persists a town. Returns WHY it failed rather than a bare false, because the
+ * caller has to tell the player something: a save that fails silently costs a
+ * run, and a full quota is the failure this game will actually hit. Golden
+ * fixtures already reach ~1.8 MB at Village scale against a ~5 MB origin quota,
+ * and a Metropolis save is larger still.
+ */
+export function saveGame(state: GameState, slot: string = DEFAULT_SLOT): SaveResult {
+  if (!hasStorage()) return { ok: false, reason: 'no-storage' };
+
+  let payload: string;
   try {
-    localStorage.setItem(PREFIX + slot, serialize(state));
-    return true;
+    payload = serialize(state);
   } catch {
-    return false;
+    return { ok: false, reason: 'unknown' };
+  }
+
+  try {
+    localStorage.setItem(PREFIX + slot, payload);
+    return { ok: true, bytes: payload.length };
+  } catch (err) {
+    return {
+      ok: false,
+      reason: isQuotaError(err) ? 'quota' : 'unknown',
+      bytes: payload.length,
+    };
   }
 }
 

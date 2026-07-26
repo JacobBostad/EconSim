@@ -12,6 +12,7 @@ import { Intro } from './Intro';
 import { ObjectiveBanner } from './ObjectiveBanner';
 import { WorldEventTicker } from './WorldEventTicker';
 import { AchievementToast } from './AchievementToast';
+import { SaveErrorBanner } from './SaveErrorBanner';
 import { NewGameModal } from './NewGameModal';
 import { MissionPanel } from './MissionPanel';
 import { SoundDirector } from './SoundDirector';
@@ -45,6 +46,7 @@ export function App(): React.ReactElement {
         <WorldEventTicker />
         <ObjectiveBanner />
         <AchievementToast />
+        <SaveErrorBanner />
         {dashboard !== 'none' && <Dashboard />}
       </div>
       <div className="right panel">
