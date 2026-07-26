@@ -57,7 +57,7 @@ export function Intro(): React.ReactElement | null {
               18-product catalog with <strong>deep chains</strong>.</p>
           </div>
           <div>
-            <h4>Trade, seasons, and the town</h4>
+            <h4>Trade, seasons, and the region</h4>
             <p>Export to <strong>Port Rosa</strong> or industrial
               <strong> Ironvale</strong> — the Gazette's Trade Desk shows which
               port pays, and a warehouse unlocks the whole trading game:
@@ -65,7 +65,12 @@ export function Intro(): React.ReactElement | null {
               <strong> commodity desk</strong> (buy dips, hold, export
               spikes — big trades move the market), and
               <strong> forwards</strong> that lock today's spike for delivery
-              within the week. Brace for <strong>winter</strong>, sponsor
+              within the week. In a <strong>City</strong>, 🚢 <strong>Port
+              Rosa</strong> is a live <strong>partner town</strong> with its own
+              economy: <strong>freight</strong> a load there and it arrives (at
+              the price locked on dispatch) a few days later, and its price
+              answers to its own supply — glut it and the price sags, starve it
+              and it pays up. Brace for <strong>winter</strong>, sponsor
               <strong> festivals</strong>, and unlock
               <strong> luxury</strong> with R&amp;D.</p>
           </div>
@@ -86,7 +91,9 @@ export function Intro(): React.ReactElement | null {
             <p><strong>Brand</strong> (ads), <strong>quality</strong> (R&amp;D),
               <strong> wages</strong> (out-pay rivals by 15% to poach their
               veterans — they answer back — or 🎓 <strong>train</strong> your
-              own crew up from the facility view), <strong>finance</strong> (loans,
+              own crew up from the facility view), <strong>finance</strong> (loans —
+              now priced like a real bank, a cheap first dollar and
+              <strong> the rate you see is the rate you pay</strong>;
               shares, outright <strong>acquisitions</strong> — and 🏷️
               <strong> fire-sale bargains</strong> in the ticker when a rival
               stumbles), and

@@ -9,12 +9,14 @@
 
 import type { SimContext } from '../core/GameState';
 import { moveToward } from '../entities/Location';
+import { townOf } from '../core/Town';
 
 export function runMovementSystem(ctx: SimContext): void {
   const { state, config } = ctx;
 
-  for (const id in state.citizens) {
-    const cit = state.citizens[id]!;
+  const town = townOf(state, ctx.townId);
+  for (const id in town.citizens) {
+    const cit = town.citizens[id]!;
     if (cit.movementState !== 'moving') continue;
     const { pos, arrived } = moveToward(
       cit.currentLocation,

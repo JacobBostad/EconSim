@@ -33,6 +33,7 @@
 
 import type { SimContext, GameState } from '../core/GameState';
 import { recordTransaction } from '../core/GameState';
+import { townOf } from '../core/Town';
 import { cohortAccount, WORLD_ACCOUNT } from '../core/Transactions';
 import { isDayBoundary } from '../core/Tick';
 import type { Cohort } from '../entities/Cohort';
@@ -184,8 +185,11 @@ const ARRIVAL_CASH_PER_CAPITA = dollars(50);
 const ORDER: CitizenTier[] = ['worker', 'comfortable', 'affluent'];
 
 function anyCrowd(state: GameState): boolean {
-  for (const cid in state.cohorts) {
-    if (state.cohorts[cid]!.population > 0) return true;
+  // Bare-`state` helper mid-gradient: home town by default (one-town region →
+  // same reference); gains a `townId` param at the endgame move.
+  const cohorts = townOf(state).cohorts;
+  for (const cid in cohorts) {
+    if (cohorts[cid]!.population > 0) return true;
   }
   return false;
 }
@@ -198,23 +202,24 @@ export function runCohortSocialSystem(ctx: SimContext): void {
   const { state } = ctx;
   if (!anyCrowd(state)) return;
   if (!isDayBoundary(state.tick, ctx.config)) return;
+  const town = townOf(state, ctx.townId);
 
   // Which needSpec products some staffed store sells today — a craving nobody
   // can satisfy hurts half as much (mirrors SatisfactionSystem.pressureOf).
   const soldCache: Record<string, boolean> = {};
 
   // Snapshot the id list before the gates mint new tier cohorts.
-  const cohortIds = Object.keys(state.cohorts).sort();
-  const facilityIds = Object.keys(state.facilities).sort();
+  const cohortIds = Object.keys(town.cohorts).sort();
+  const facilityIds = Object.keys(town.facilities).sort();
 
   // --- a. satisfaction ----------------------------------------------------
   for (const cid of cohortIds) {
-    updateSatisfaction(ctx, state.cohorts[cid]!, soldCache);
+    updateSatisfaction(ctx, town.cohorts[cid]!, soldCache);
   }
 
   // --- b. tier gates ------------------------------------------------------
   for (const cid of cohortIds) {
-    runTierGates(state, ctx.config.subsistenceIncomePerDay, state.cohorts[cid]!, facilityIds);
+    runTierGates(state, ctx.config.subsistenceIncomePerDay, town.cohorts[cid]!, facilityIds);
   }
 
   // --- c. migration -------------------------------------------------------
@@ -303,6 +308,9 @@ function runTierGates(
 ): void {
   const pop = cohort.population;
   if (pop <= 0) return;
+  // Bare-`state` helper mid-gradient: home town by default (one-town region →
+  // same reference); gains a `townId` param at the endgame move.
+  const town = townOf(state);
   const idx = ORDER.indexOf(cohort.tier);
   const empShare = cohort.employed / pop;
   const perCapitaCash = cohort.cashPool / pop;
@@ -315,10 +323,10 @@ function runTierGates(
   const wageFracAtLeast = (wageBar: number): number => {
     let atOrAbove = 0;
     for (const fid of facilityIds) {
-      const fac = state.facilities[fid]!;
+      const fac = town.facilities[fid]!;
       const n = fac.crowdByCohort[cohort.id] ?? 0;
       if (n <= 0) continue;
-      const firm = state.firms[fac.ownerFirmId];
+      const firm = town.firms[fac.ownerFirmId];
       if ((firm?.wagePolicy.baseWage ?? 0) >= wageBar) atOrAbove += n;
     }
     return atOrAbove / pop;
@@ -441,8 +449,13 @@ function moveMass(
 ): void {
   if (m <= 0 || m > source.population) m = Math.min(m, source.population);
   if (m <= 0) return;
+  // Bare-`state` helper mid-gradient: home town by default (one-town region →
+  // same reference); gains a `townId` param at the endgame move.
+  const town = townOf(state);
   const popS = source.population;
 
+  // Cohort CREATION site — a writer, kept on the flat path until records move
+  // in option (c); the guard read + assign stay on `state.cohorts`.
   const destId = cohortId(source.districtId, targetTier);
   let dest = state.cohorts[destId];
   if (!dest) {
@@ -493,7 +506,7 @@ function moveMass(
   let remaining = workersToMove;
   for (const fid of facilityIds) {
     if (remaining <= 0) break;
-    const fac = state.facilities[fid]!;
+    const fac = town.facilities[fid]!;
     const n = fac.crowdByCohort[source.id] ?? 0;
     if (n <= 0) continue;
     const take = Math.min(n, remaining);
@@ -519,48 +532,37 @@ function moveMass(
  * account, so money supply is conserved.
  */
 function runMigration(state: GameState, cohortIds: string[]): void {
+  // Bare-`state` helper mid-gradient: home town by default (one-town region →
+  // same reference); gains a `townId` param at the endgame move.
+  const town = townOf(state);
   const cap = SIZE_PRESETS[state.config.sizePreset].cohortCap;
 
   // Town average satisfaction — the crowd is most of the town now, so the gate
   // reads a population-weighted mean over the cast AND the cohorts.
   let satMass = 0;
   let headcount = 0;
-  for (const id in state.citizens) {
-    satMass += state.citizens[id]!.satisfaction;
+  for (const id in town.citizens) {
+    satMass += town.citizens[id]!.satisfaction;
     headcount += 1;
   }
   let totalCrowd = 0;
-  for (const cid in state.cohorts) {
-    const co = state.cohorts[cid]!;
+  for (const cid in town.cohorts) {
+    const co = town.cohorts[cid]!;
     satMass += co.avgSatisfaction * co.population;
     headcount += co.population;
     totalCrowd += co.population;
   }
   const townAvg = headcount > 0 ? satMass / headcount : 0;
 
-  // Employment-aware immigration gate (City cast-parity pass). The satisfaction
-  // gate below never reads job supply, so a well-served town floods its worker
-  // cohort faster than founders add jobs and empShare craters — the wall the
-  // cast-parity mechanism hit (closing the cast gap raises town satisfaction and
-  // re-triggers the flood). When `immigrationEmpFloor` > 0, inflow is scaled by
-  // the worker cohort's employment headroom above the floor, so immigration halts
-  // when jobs are scarce and resumes as they fill. 0 = disabled = shipped gate.
-  const empFloor = SIZE_PRESETS[state.config.sizePreset].immigrationEmpFloor;
-
   // Inflow to worker cohorts while the town is attractive and there is room.
   if (townAvg >= IMMIGRATION_MIN_SATISFACTION) {
     for (const cid of cohortIds) {
-      const cohort = state.cohorts[cid];
+      const cohort = town.cohorts[cid];
       if (!cohort || cohort.tier !== 'worker' || cohort.population <= 0) continue;
       const room = cap - totalCrowd;
       if (room <= 0) break;
-      const desirability = state.districts[cohort.districtId]?.desirability ?? 0;
+      const desirability = town.districts[cohort.districtId]?.desirability ?? 0;
       let inflow = Math.floor(cohort.population * INFLOW_RATE * (0.5 + desirability));
-      if (empFloor > 0) {
-        const empShare = cohort.population > 0 ? cohort.employed / cohort.population : 0;
-        const jobFactor = clamp((empShare - empFloor) / (1 - empFloor), 0, 1);
-        inflow = Math.floor(inflow * jobFactor);
-      }
       inflow = Math.min(inflow, room);
       if (inflow <= 0) continue;
       cohort.population += inflow;
@@ -580,7 +582,7 @@ function runMigration(state: GameState, cohortIds: string[]): void {
   // per-capita savings leaving with them (clamp employment; CohortLaborSystem
   // reconciles the freed slots).
   for (const cid of cohortIds) {
-    const cohort = state.cohorts[cid];
+    const cohort = town.cohorts[cid];
     if (!cohort || cohort.population <= 0) continue;
     if (cohort.avgSatisfaction >= EMIGRATION_MAX_SATISFACTION) continue;
     const leavers = Math.floor(cohort.population * OUTFLOW_RATE);

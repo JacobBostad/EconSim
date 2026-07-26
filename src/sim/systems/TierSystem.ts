@@ -23,6 +23,7 @@
  */
 
 import type { SimContext, GameState } from '../core/GameState';
+import { townOf } from '../core/Town';
 import { emitEvent } from '../core/GameState';
 import { isDayBoundary } from '../core/Tick';
 import type { Citizen, CitizenTier } from '../entities/Citizen';
@@ -131,7 +132,9 @@ export function positioningPriceImage(positioning: string, avgQuality: number): 
 }
 
 function livesInApartment(state: GameState, cit: Citizen): boolean {
-  return state.facilities[cit.homeFacilityId]?.defId === 'apartment';
+  // Bare-`state` helper mid-gradient: home town by default (one-town region →
+  // same reference); gains a `townId` param at the endgame move.
+  return townOf(state).facilities[cit.homeFacilityId]?.defId === 'apartment';
 }
 
 /** Does this citizen meet the ENTRY bar for `tier` right now? */
@@ -190,8 +193,9 @@ export function runTierSystem(ctx: SimContext): void {
   const { state } = ctx;
   if (!isDayBoundary(state.tick, ctx.config)) return;
 
-  for (const cid in state.citizens) {
-    const cit = state.citizens[cid]!;
+  const town = townOf(state, ctx.townId);
+  for (const cid in town.citizens) {
+    const cit = town.citizens[cid]!;
     const idx = ORDER.indexOf(cit.tier);
     const next = ORDER[idx + 1];
 

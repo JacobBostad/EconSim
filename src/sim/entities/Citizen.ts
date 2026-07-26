@@ -93,4 +93,14 @@ export interface Citizen {
    * slightly while unemployed. Averaged per crew in ProductionSystem.
    */
   skill: number;
+  /**
+   * Cast "restocked-shelf revisit" queue (cast-parity attempt #3, City-only,
+   * flag-gated — SIZE_PRESETS.restockRevisit). When a cast worker's urgent need
+   * stocks out at an OPEN store, the (store, product) is queued here; once that
+   * store restocks the same day, RetailDemandSystem grants ONE extra purchase
+   * attempt and clears the entry. Left UNDEFINED unless the flag is on (and a
+   * crowd is present), so a flag-off / Village citizen never carries the field
+   * and serialization stays byte-identical to before it existed. Cleared at every
+   * day boundary. */
+  pendingRevisits?: { storeId: FacilityId; productId: ProductId }[];
 }

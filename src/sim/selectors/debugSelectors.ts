@@ -8,6 +8,7 @@ import type { Transaction } from '../core/Transactions';
 import { computeTime } from '../core/Tick';
 import { PRODUCT_IDS_BY_PRESET, CONSUMER_PRODUCT_IDS_BY_PRESET, getProduct } from '../data/products';
 import { getQuantity } from '../entities/Inventory';
+import { townOf } from '../core/Town';
 
 export interface DebugSnapshot {
   tick: number;
@@ -32,8 +33,9 @@ export function debugSnapshot(state: GameState): DebugSnapshot {
   const productIds = PRODUCT_IDS_BY_PRESET[state.config.sizePreset];
   const productQuantities: Record<string, number> = {};
   for (const pid of productIds) productQuantities[pid] = 0;
-  for (const fid in state.facilities) {
-    const f = state.facilities[fid]!;
+  const facilities = townOf(state).facilities;
+  for (const fid in facilities) {
+    const f = facilities[fid]!;
     for (const pid of productIds) {
       productQuantities[pid]! += getQuantity(f.inputInventory, pid) + getQuantity(f.outputInventory, pid);
     }
@@ -49,9 +51,9 @@ export function debugSnapshot(state: GameState): DebugSnapshot {
     rngState: state.rngState,
     totalMoneySupply: totalMoneySupply(state),
     worldCash: state.worldCash,
-    citizenCount: Object.keys(state.citizens).length,
-    firmCount: Object.keys(state.firms).length,
-    facilityCount: Object.keys(state.facilities).length,
+    citizenCount: Object.keys(townOf(state).citizens).length,
+    firmCount: Object.keys(townOf(state).firms).length,
+    facilityCount: Object.keys(facilities).length,
     activeShipments: active,
     contractCount: Object.keys(state.contracts).length,
     productQuantities,
@@ -82,8 +84,9 @@ export interface MacroIndicators {
 /** Live, transparent macro indicators derived from current state. */
 export function macroIndicators(state: GameState): MacroIndicators {
   let idxSum = 0, idxN = 0, spend = 0, sold = 0, unmet = 0, inv = 0;
+  const marketStats = townOf(state).marketStats;
   for (const pid of CONSUMER_PRODUCT_IDS_BY_PRESET[state.config.sizePreset]) {
-    const stat = state.marketStats[pid];
+    const stat = marketStats[pid];
     if (!stat) continue;
     const base = getProduct(pid).basePrice;
     if (stat.averagePrice > 0 && base > 0) { idxSum += stat.averagePrice / base; idxN++; }
@@ -93,8 +96,9 @@ export function macroIndicators(state: GameState): MacroIndicators {
     inv += stat.totalInventory;
   }
   let activeFirms = 0;
-  for (const id in state.firms) {
-    const f = state.firms[id]!;
+  const firms = townOf(state).firms;
+  for (const id in firms) {
+    const f = firms[id]!;
     if ((f.ownerType === 'player' || f.ownerType === 'ai') && f.bankruptcyStatus !== 'insolvent') activeFirms++;
   }
   return {

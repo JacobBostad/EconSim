@@ -209,9 +209,10 @@ describe('Managers', () => {
   it('old saves migrate with an empty manager roster', () => {
     const sim = newSim(3);
     const raw = JSON.parse(serialize(sim.getState())) as {
-      firms: Record<string, Record<string, unknown>>;
+      towns: { home: { firms: Record<string, Record<string, unknown>> } };
     };
-    for (const fid in raw.firms) delete raw.firms[fid]!.managers;
+    const home = raw.towns.home; // the six families live under towns.home now
+    for (const fid in home.firms) delete home.firms[fid]!.managers;
     const migrated = deserialize(JSON.stringify(raw));
     for (const fid in migrated.firms) {
       expect(migrated.firms[fid]!.managers).toEqual([]);

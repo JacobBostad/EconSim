@@ -15,6 +15,7 @@ import { TrendCard } from './Sparkline';
 import { cyclePhase } from '../sim/systems/TownStatsSystem';
 import { satisfactionAnatomy } from '../sim/selectors/satisfactionSelectors';
 import { districtAt, type DistrictKind } from '../sim/entities/District';
+import { townOf } from '../sim/core/Town';
 
 const DISTRICT_KIND_ICONS: Record<DistrictKind, string> = {
   industrial: '🏭',
@@ -38,11 +39,14 @@ export function PopulationDashboard(): React.ReactElement {
   const phase = cyclePhase(history);
   const anatomy = satisfactionAnatomy(state);
   const maxBucket = Math.max(1, ...labor.skillBuckets.map((b) => b.count));
-  const districts = Object.values(state.districts).sort((a, b) => a.id.localeCompare(b.id));
+  // The dashboard renders the home town (one-town region → identical reference);
+  // it gains a town selector at the endgame move.
+  const town = townOf(state);
+  const districts = Object.values(town.districts).sort((a, b) => a.id.localeCompare(b.id));
   const crowdByDistrict: Record<string, number> = {};
   const employedByDistrict: Record<string, number> = {};
-  for (const id in state.cohorts) {
-    const co = state.cohorts[id]!;
+  for (const id in town.cohorts) {
+    const co = town.cohorts[id]!;
     crowdByDistrict[co.districtId] = (crowdByDistrict[co.districtId] ?? 0) + co.population;
     employedByDistrict[co.districtId] = (employedByDistrict[co.districtId] ?? 0) + co.employed;
   }
@@ -53,9 +57,9 @@ export function PopulationDashboard(): React.ReactElement {
   for (const did in crowdByDistrict) totalCrowd += crowdByDistrict[did]!;
   const anyCrowd = totalCrowd > 0;
   const buildingsByDistrict: Record<string, number> = {};
-  for (const id in state.facilities) {
-    const loc = state.facilities[id]!.location;
-    const d = districtAt(state.districts, loc.x, loc.y);
+  for (const id in town.facilities) {
+    const loc = town.facilities[id]!.location;
+    const d = districtAt(town.districts, loc.x, loc.y);
     if (d) buildingsByDistrict[d.id] = (buildingsByDistrict[d.id] ?? 0) + 1;
   }
 

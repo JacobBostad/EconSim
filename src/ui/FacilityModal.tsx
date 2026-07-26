@@ -17,14 +17,15 @@ import { facilityEmployees } from '../sim/selectors/facilitySelectors';
 import { contractsByDestination } from '../sim/selectors/supplyChainSelectors';
 import { getQuantity } from '../sim/entities/Inventory';
 import { formatMoney } from '../utils/formatMoney';
-import { CENTS, WHOLESALE_DISCOUNT } from '../sim/data/constants';
+import { CENTS, WHOLESALE_DISCOUNT, FREIGHT_LEAD_DAYS } from '../sim/data/constants';
 import { WHOLESALE_MULT_MIN, WHOLESALE_MULT_MAX } from '../sim/core/Wholesale';
 import { upgradeCost } from '../sim/core/Upgrades';
 import { TRAINING_COST_PER_WORKER, TRAINING_SKILL_GAIN, SKILL_MAX } from '../sim/systems/LaborSystem';
 import { sellRefund } from '../sim/core/Demolition';
 import { pricingInsight } from '../sim/selectors/marketSelectors';
-import { pickBestCity, cityPrice, exportFreightFee } from '../sim/core/Trade';
+import { pickBestCity, cityPrice, exportFreightFee, isFreightDest } from '../sim/core/Trade';
 import { TRADE_CITY_IDS, getTradeCity } from '../sim/data/tradeCities';
+import { PARTNER_TOWN_ID } from '../sim/data/seedTown';
 import { managerCandidates, managerDuties } from '../sim/systems/ManagerSystem';
 import { FORWARD_MAX_OPEN, FORWARD_CLOSE_FEE, forwardMark } from '../sim/systems/ForwardSystem';
 import { computeTime } from '../sim/core/Tick';
@@ -35,13 +36,17 @@ import {
 } from '../sim/systems/ServiceBillingSystem';
 import { SERVICES, COMPUTE_SERVICE_ID, getServiceDef } from '../sim/data/services';
 import type { ServiceDef } from '../sim/data/services';
+import { townOf } from '../sim/core/Town';
 
 export function FacilityActions({ fac }: { fac: Facility }): React.ReactElement {
   const sim = useGameStore((s) => s.sim);
   const dispatch = useGameStore((s) => s.dispatch);
   const state = sim.getState();
+  // The modal renders the home town (one-town region → identical reference);
+  // it gains a town selector at the endgame move.
+  const town = townOf(state);
   const isPlayer = fac.ownerFirmId === state.playerFirmId;
-  const firm = state.firms[fac.ownerFirmId];
+  const firm = town.firms[fac.ownerFirmId];
   const def = getFacilityDef(fac.defId);
   const employees = facilityEmployees(state, fac.id);
 
@@ -129,7 +134,7 @@ export function FacilityActions({ fac }: { fac: Facility }): React.ReactElement 
           {(() => {
             const customers = Object.values(state.contracts).filter(
               (c) => c.active && c.sourceFacilityId === fac.id
-                && state.facilities[c.destinationFacilityId]?.ownerFirmId !== fac.ownerFirmId,
+                && town.facilities[c.destinationFacilityId]?.ownerFirmId !== fac.ownerFirmId,
             );
             if (customers.length === 0) {
               return (
@@ -145,7 +150,7 @@ export function FacilityActions({ fac }: { fac: Facility }): React.ReactElement 
                 {customers.map((c) => (
                   <div key={c.id} className="row between">
                     <span>
-                      {state.firms[state.facilities[c.destinationFacilityId]?.ownerFirmId ?? '']?.name ?? '?'}
+                      {town.firms[town.facilities[c.destinationFacilityId]?.ownerFirmId ?? '']?.name ?? '?'}
                       {' buys '}{getProduct(c.productId).name}
                     </span>
                     <span className="mono muted">target {c.targetQuantity}</span>
@@ -167,6 +172,13 @@ export function FacilityActions({ fac }: { fac: Facility }): React.ReactElement 
             ~8% (more during fuel spikes, more to inland Ironvale). Ship to
             whichever port pays — the button routes each product to today's best
             net price.
+            {isFreightDest(state, PARTNER_TOWN_ID) && (
+              <>
+                {' '}Port Rosa is now a <strong>live partner town</strong>: a
+                shipment there is real freight — it leaves the warehouse now and
+                arrives (paying the locked price) in {FREIGHT_LEAD_DAYS} days.
+              </>
+            )}
           </p>
           {PRODUCT_IDS_BY_PRESET[state.config.sizePreset].map((pid) => {
             const qty = getQuantity(fac.inputInventory, pid) + getQuantity(fac.outputInventory, pid);
@@ -196,14 +208,26 @@ export function FacilityActions({ fac }: { fac: Facility }): React.ReactElement 
                     );
                   })}
                 </span>
-                <button
-                  title={`Ships to ${getTradeCity(best.cityId).name} (best net price today)`}
-                  onClick={() =>
-                    dispatch({ type: 'EXPORT_GOODS', firmId: fac.ownerFirmId, facilityId: fac.id, productId: pid, quantity: qty })
-                  }
-                >
-                  Export all
-                </button>
+                <span className="row" style={{ gap: 4 }}>
+                  <button
+                    title={`Ships to ${getTradeCity(best.cityId).name} (best net price today)`}
+                    onClick={() =>
+                      dispatch({ type: 'EXPORT_GOODS', firmId: fac.ownerFirmId, facilityId: fac.id, productId: pid, quantity: qty })
+                    }
+                  >
+                    Export all
+                  </button>
+                  {isFreightDest(state, PARTNER_TOWN_ID) && (
+                    <button
+                      title={`Freight ${qty} ${getProduct(pid).name} to ${getTradeCity(PARTNER_TOWN_ID).name} — the live partner town. Goods leave now, land and pay (at today's locked price) in ${FREIGHT_LEAD_DAYS} days.`}
+                      onClick={() =>
+                        dispatch({ type: 'EXPORT_GOODS', firmId: fac.ownerFirmId, facilityId: fac.id, productId: pid, quantity: qty, cityId: PARTNER_TOWN_ID })
+                      }
+                    >
+                      {getTradeCity(PARTNER_TOWN_ID).emoji} Freight to Port Rosa
+                    </button>
+                  )}
+                </span>
               </div>
             );
           })}
@@ -520,7 +544,7 @@ export function FacilityActions({ fac }: { fac: Facility }): React.ReactElement 
         {contractsByDestination(state, fac.id).map((c) => (
           <div className="row between small" key={c.id} style={{ opacity: c.active ? 1 : 0.55 }}>
             <span>
-              {state.facilities[c.sourceFacilityId]?.name} → {getProduct(c.productId).name}
+              {town.facilities[c.sourceFacilityId]?.name} → {getProduct(c.productId).name}
               {!c.active && ' (paused)'}
             </span>
             {isPlayer ? (
@@ -571,15 +595,15 @@ export function FacilityActions({ fac }: { fac: Facility }): React.ReactElement 
             <div className="row">
               <select value={src} onChange={(e) => setSrc(e.target.value)}>
                 <option value="">source facility…</option>
-                {Object.values(state.facilities)
+                {Object.values(town.facilities)
                   .filter((f) => f.id !== fac.id && f.type !== 'home')
                   .sort((a, b) =>
                     Number(b.ownerFirmId === fac.ownerFirmId) - Number(a.ownerFirmId === fac.ownerFirmId))
                   .map((f) => (
                     <option key={f.id} value={f.id}>
-                      {f.ownerFirmId === fac.ownerFirmId || state.firms[f.ownerFirmId]?.ownerType === 'external'
+                      {f.ownerFirmId === fac.ownerFirmId || town.firms[f.ownerFirmId]?.ownerType === 'external'
                         ? f.name
-                        : `${f.name} — ${state.firms[f.ownerFirmId]?.name ?? '?'} (wholesale)`}
+                        : `${f.name} — ${town.firms[f.ownerFirmId]?.name ?? '?'} (wholesale)`}
                     </option>
                   ))}
               </select>
@@ -678,8 +702,9 @@ function ServiceProviderCard({ fac }: { fac: Facility }): React.ReactElement {
   const sim = useGameStore((s) => s.sim);
   const dispatch = useGameStore((s) => s.dispatch);
   const state = sim.getState();
+  const town = townOf(state);
   const def = serviceForFacility(fac);
-  const provider = state.firms[fac.ownerFirmId];
+  const provider = town.firms[fac.ownerFirmId];
   const capacity = provider ? serviceCapacity(state, provider, def) : 0;
   const price = provider ? listedPrice(provider, def) : 0;
   const customers = Object.values(state.serviceContracts).filter(
@@ -688,7 +713,7 @@ function ServiceProviderCard({ fac }: { fac: Facility }): React.ReactElement {
   const sold = customers.reduce((s, c) => s + c.seats, 0);
   const util = capacity > 0 ? sold / capacity : 0;
 
-  const playerFirm = state.firms[state.playerFirmId];
+  const playerFirm = town.firms[state.playerFirmId];
   const isPlayerProvider = fac.ownerFirmId === state.playerFirmId;
   // Player subscribe/cancel is wired for compute only (SUBSCRIBE_SERVICE).
   const playerCanSubscribe = def.id === COMPUTE_SERVICE_ID;
@@ -751,7 +776,7 @@ function ServiceProviderCard({ fac }: { fac: Facility }): React.ReactElement {
           .sort((a, b) => (a.subscriberFirmId < b.subscriberFirmId ? -1 : 1))
           .map((c) => (
             <div className="row between" key={c.id}>
-              <span>{state.firms[c.subscriberFirmId]?.name ?? c.subscriberFirmId}</span>
+              <span>{town.firms[c.subscriberFirmId]?.name ?? c.subscriberFirmId}</span>
               <span className="mono muted">{c.seats} seats · {formatMoney(c.pricePerSeatDay * c.seats)}/day</span>
             </div>
           ))}
@@ -815,6 +840,7 @@ function CommodityDesk({ fac }: { fac: Facility }): React.ReactElement {
   const sim = useGameStore((s) => s.sim);
   const dispatch = useGameStore((s) => s.dispatch);
   const state = sim.getState();
+  const town = townOf(state);
   const [buyPid, setBuyPid] = useState('grain');
   const [buyQty, setBuyQty] = useState(50);
   const base = getProduct(buyPid).basePrice;
@@ -857,7 +883,7 @@ function CommodityDesk({ fac }: { fac: Facility }): React.ReactElement {
         );
       })}
       {(() => {
-        const firm = state.firms[fac.ownerFirmId];
+        const firm = town.firms[fac.ownerFirmId];
         if (!firm) return null;
         const day = computeTime(state.tick, state.config).day;
         const canLock = firm.forwards.length < FORWARD_MAX_OPEN;

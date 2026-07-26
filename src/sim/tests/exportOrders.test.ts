@@ -58,7 +58,8 @@ describe('Standing export orders', () => {
     expect(loadedWh.exportOrders['bread']).toEqual({ minMult: 1.3, keep: 5 });
 
     const raw = JSON.parse(serialize(sim.getState()));
-    for (const fid in raw.facilities) delete raw.facilities[fid].exportOrders;
+    const home = raw.towns.home; // the six families live under towns.home now
+    for (const fid in home.facilities) delete home.facilities[fid].exportOrders;
     const migrated = deserialize(JSON.stringify(raw));
     for (const fid in migrated.facilities) {
       expect(migrated.facilities[fid]!.exportOrders).toEqual({});

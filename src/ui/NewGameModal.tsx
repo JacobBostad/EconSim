@@ -171,7 +171,11 @@ export function NewGameModal(): React.ReactElement | null {
         </div>
         <label className="small" style={{ display: 'block', marginTop: 10 }}>
           <input type="checkbox" checked={challenge} onChange={(e) => setChallenge(e.target.checked)} />{' '}
-          🏁 Challenge run — final score at day 200, recorded on your leaderboard
+          🏁 Challenge run — final score at day 200, recorded on your{' '}
+          {world === 'village' ? 'Village' : world === 'city' ? 'City' : 'Metropolis'} leaderboard
+          {world !== 'village' && (
+            <span className="muted"> (scored on the full crowd economy — rent, seats, dividends, and pool exports all count)</span>
+          )}
         </label>
         <p className="small muted" style={{ marginTop: 10 }}>
           Your current town is kept as a backup — “↩ Undo New” in the sidebar

@@ -78,37 +78,68 @@ export function updateRecords(input: {
 // Challenge leaderboard (completed day-200 runs)
 // ---------------------------------------------------------------------------
 
+/** World scale a challenge run was played at — leaderboards key on this. */
+export type ChallengeWorld = 'village' | 'city' | 'metropolis';
+
+export const CHALLENGE_WORLDS: ChallengeWorld[] = ['village', 'city', 'metropolis'];
+
+/** Display name for a world scale (used in the share summary and the board). */
+export function challengeWorldLabel(world: ChallengeWorld): string {
+  return world === 'city' ? 'City' : world === 'metropolis' ? 'Metropolis' : 'Village';
+}
+
 export interface ChallengeRun {
   score: number;
   valuation: number;
   scenarioId: string;
   difficulty: string;
   seed: number;
+  /**
+   * World scale the run was played at. A Village 200-day score and a City one
+   * are different games (a City run carries the whole era economy — crowd
+   * demand, rent, seats, dividends, pool exports), so runs are leaderboarded
+   * SEPARATELY per world. Legacy runs (all Village, recorded before the
+   * world-scale era) have no field and read as 'village'.
+   */
+  world: ChallengeWorld;
   /** ISO date the run finished (wall clock, UI-side only). */
   at: string;
 }
 
+// The Village board keeps the original key untouched, so every pre-world-scale
+// score survives byte-for-byte with no migration; City/Metropolis get their own
+// slots (the named-save-slot idiom, `${KEY}.${world}`). A run is stored in and
+// read from the slot for its own world only — the boards never mix.
 const CHALLENGE_KEY = 'econsim.challenges';
 const MAX_CHALLENGE_RUNS = 50;
 
-export function loadChallengeRuns(): ChallengeRun[] {
+function challengeKey(world: ChallengeWorld): string {
+  return world === 'village' ? CHALLENGE_KEY : `${CHALLENGE_KEY}.${world}`;
+}
+
+export function loadChallengeRuns(world: ChallengeWorld = 'village'): ChallengeRun[] {
   try {
-    const raw = localStorage.getItem(CHALLENGE_KEY);
-    if (raw) return JSON.parse(raw) as ChallengeRun[];
+    const raw = localStorage.getItem(challengeKey(world));
+    if (raw) {
+      const runs = JSON.parse(raw) as ChallengeRun[];
+      // Stamp the world onto legacy entries (the Village board predates the
+      // field) so display and share text read a world for every run.
+      return runs.map((r) => ({ ...r, world: r.world ?? world }));
+    }
   } catch {
     /* ignore */
   }
   return [];
 }
 
-/** Store a finished run; keeps the list sorted by score, capped. */
+/** Store a finished run in its world's board; keeps the list sorted, capped. */
 export function recordChallengeRun(run: ChallengeRun): void {
-  const runs = loadChallengeRuns();
+  const runs = loadChallengeRuns(run.world);
   runs.push(run);
   runs.sort((a, b) => b.score - a.score);
   runs.length = Math.min(runs.length, MAX_CHALLENGE_RUNS);
   try {
-    localStorage.setItem(CHALLENGE_KEY, JSON.stringify(runs));
+    localStorage.setItem(challengeKey(run.world), JSON.stringify(runs));
   } catch {
     /* ignore */
   }
@@ -139,16 +170,19 @@ export function dailyDateFromSeed(seed: number): string | null {
   return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
 }
 
-/** Compact, paste-anywhere summary of a challenge run — a deterministic dare. */
+/** Compact, paste-anywhere summary of a challenge run — a deterministic dare.
+ * The world scale is named because a Village and a City score are different
+ * games with their own boards; the seed still makes the run replayable. */
 export function challengeShareText(run: ChallengeRun, scenarioName: string): string {
   const daily = dailyDateFromSeed(run.seed);
+  const world = challengeWorldLabel(run.world ?? 'village');
   return [
     daily
-      ? `📅 EconSim Daily Challenge ${daily} — ${scenarioName} · ${run.difficulty}`
-      : `🏁 EconSim Challenge — ${scenarioName} · ${run.difficulty} · seed ${run.seed}`,
+      ? `📅 EconSim Daily Challenge ${daily} — ${scenarioName} · ${world} · ${run.difficulty}`
+      : `🏁 EconSim Challenge — ${scenarioName} · ${world} · ${run.difficulty} · seed ${run.seed}`,
     `Score ${run.score}/1000 · valuation $${(run.valuation / 100).toLocaleString('en-US', { maximumFractionDigits: 0 })}`,
     daily
-      ? `Everyone races the same town today — beat me.`
-      : `Same seed + scenario + difficulty replays identically — beat me.`,
+      ? `Everyone races the same ${world} town today — beat me.`
+      : `Same seed + scenario + world + difficulty replays identically — beat me.`,
   ].join('\n');
 }

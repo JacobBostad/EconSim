@@ -238,7 +238,14 @@ markets is also how you keep competitors out.
   quality term in demand + willingness-to-pay.
 - **Finance / Loans** (`FinanceSystem.ts`, `TAKE_LOAN`/`REPAY_LOAN`): borrow up to
   1.5× net worth; daily interest is a real cost; `net profit = operating − interest`.
-  Heavy debt deepens insolvency — leverage is genuine risk/reward.
+  Heavy debt deepens insolvency — leverage is genuine risk/reward. Interest is now
+  **risk-tiered and shown** (`docs/design/interest-rates.md`): rather than one flat
+  ~33%/yr, new games price the loan like a real bank — a cheap **first dollar**
+  (~11%/yr "prime") that rises toward the old ceiling only as your debt climbs to
+  the credit limit. Crucially **the rate you SEE is the rate you pay**: the finance
+  card prints your current effective rate instead of leaving you to reverse-engineer
+  it from the daily drain. (Old saves keep their flat rate; the pinned worlds are
+  byte-identical because no founder or passive player ever borrows on those paths.)
 
 The AI uses all three (advertises, invests in quality when flush, borrows to
 **open new outlets** where demand is unmet), so the world grows on its own.
@@ -388,6 +395,22 @@ exception — its founder row is city-only), and the player opens with a cash
 uplift ($28k at standard, AI-founder parity) for the bigger board and pricier
 chains. City and Metropolis are beta; Village stays the reference world the
 determinism and conservation guarantees are pinned against.
+
+**The region** (`docs/design/region.md`): a City game is no longer one town
+trading against price stubs — it opts into a live **partner town**. 🚢 **Port
+Rosa** graduates from a random-walk quote into a real (small) economy of its own:
+its crowd shops, its firms produce, and its export price now comes from *that
+town's* actual supply and demand — dump 500 bread on it and the price sags for
+days as the glut works off; starve its larder and it pays a premium until the
+shelves refill. Trading with it rides a **freight edge with a lead time**: a
+shipment to Port Rosa leaves your warehouse now and arrives — paying the price
+locked at dispatch — three days later, an in-flight cargo rather than an instant
+sale (the warehouse's export card grows a *Freight to Port Rosa* action, and the
+Gazette's trade desk reads the partner's real cover). 🚂 **Ironvale** stays a
+price stub on the classic walk, and a Village is one town by definition. Region
+money is conserved to the cent *across both towns*, two flag-on runs are
+bit-identical, and a region-off game reproduces the pinned City baseline exactly —
+so the second economy is a real feature, not a drift.
 
 The first scenario authored *for* this era is **🌆 Grand Junction** — a City-only
 town (it appears in the New Game scenario picker only when City is selected, never

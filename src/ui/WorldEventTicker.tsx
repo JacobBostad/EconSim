@@ -5,6 +5,7 @@ import { computeTime } from '../sim/core/Tick';
 import { getProduct } from '../sim/data/products';
 import { getTradeCity } from '../sim/data/tradeCities';
 import { formatMoney } from '../utils/formatMoney';
+import { townOf } from '../sim/core/Town';
 
 /**
  * News ticker for active world events (booms, droughts, fads...) plus the
@@ -17,13 +18,16 @@ export function WorldEventTicker(): React.ReactElement | null {
   const sim = useGameStore((s) => s.sim);
   const dispatch = useGameStore((s) => s.dispatch);
   const state = sim.getState();
+  // The ticker renders the home town (one-town region → identical reference);
+  // it gains a town selector at the endgame move.
+  const town = townOf(state);
   const active = activeWorldEvents(state);
   const rush = state.rushOrder;
   const offer = state.facilityOffer;
   const ann = state.tradeAnnouncement;
-  const offerFac = offer ? state.facilities[offer.facilityId] : null;
-  const offerSeller = offer ? state.firms[offer.sellerFirmId] : null;
-  const playerCash = state.firms[state.playerFirmId]?.cash ?? 0;
+  const offerFac = offer ? town.facilities[offer.facilityId] : null;
+  const offerSeller = offer ? town.firms[offer.sellerFirmId] : null;
+  const playerCash = town.firms[state.playerFirmId]?.cash ?? 0;
   if (active.length === 0 && !rush && !offer && !ann) return null;
 
   const day = computeTime(state.tick, state.config).day;

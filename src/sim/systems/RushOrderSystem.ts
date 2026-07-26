@@ -22,6 +22,7 @@
 
 import type { SimContext, GameState, RushOrder } from '../core/GameState';
 import { emitEvent } from '../core/GameState';
+import { townOf } from '../core/Town';
 import { isDayBoundary } from '../core/Tick';
 import type { ProductId } from '../core/Id';
 import { getProduct } from '../data/products';
@@ -49,10 +50,13 @@ function rushRoll(seed: number, day: number, salt: number): number {
 
 /** Products the player could plausibly deliver, best candidates first. */
 function candidateProducts(state: GameState): ProductId[] {
+  // Bare-`state` helper mid-gradient: home town by default (one-town region →
+  // same reference); gains a `townId` param at the endgame move.
+  const town = townOf(state);
   const staged = new Set<ProductId>();
   const produced = new Set<ProductId>();
-  for (const fid in state.facilities) {
-    const f = state.facilities[fid]!;
+  for (const fid in town.facilities) {
+    const f = town.facilities[fid]!;
     if (f.ownerFirmId !== state.playerFirmId) continue;
     if (f.type === 'warehouse') {
       for (const inv of [f.inputInventory, f.outputInventory]) {
@@ -73,6 +77,7 @@ function candidateProducts(state: GameState): ProductId[] {
 
 export function runRushOrderSystem(ctx: SimContext): void {
   const { state } = ctx;
+  const town = townOf(state, ctx.townId);
   if (!isDayBoundary(state.tick, ctx.config)) return;
   const day = ctx.time.day;
 
@@ -88,7 +93,7 @@ export function runRushOrderSystem(ctx: SimContext): void {
   }
 
   if (day < RUSH_EARLIEST_DAY) return;
-  const hasWarehouse = Object.values(state.facilities).some(
+  const hasWarehouse = Object.values(town.facilities).some(
     (f) => f.ownerFirmId === state.playerFirmId && f.type === 'warehouse',
   );
   if (!hasWarehouse) return;

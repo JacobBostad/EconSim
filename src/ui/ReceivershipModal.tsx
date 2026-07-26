@@ -4,6 +4,13 @@ import { dailyInsight, companyValuation } from '../sim/selectors/companySelector
 import { formatMoney } from '../utils/formatMoney';
 import { computeTime } from '../sim/core/Tick';
 import { LOAN_CREDIT_LIMIT_MULTIPLE, LOAN_MIN_CREDIT } from '../sim/data/constants';
+import { townOf } from '../sim/core/Town';
+import {
+  chargedInterestRatePerDay,
+  effectiveRateForDebt,
+  loanNetWorth,
+  annualRatePercent,
+} from '../sim/systems/interestRates';
 
 /**
  * The defeat moment. When the player firm first turns 'insolvent' the sim
@@ -17,7 +24,10 @@ export function ReceivershipModal(): React.ReactElement | null {
   const dispatch = useGameStore((s) => s.dispatch);
   const setShowNewGame = useGameStore((s) => s.setShowNewGame);
   const state = sim.getState();
-  const player = state.firms[state.playerFirmId];
+  // The modal renders the home town (one-town region → identical reference);
+  // it gains a town selector at the endgame move.
+  const town = townOf(state);
+  const player = town.firms[state.playerFirmId];
   const insolvent = player?.bankruptcyStatus === 'insolvent';
   const handled = useRef(false);
   const [show, setShow] = useState(false);
@@ -54,6 +64,17 @@ export function ReceivershipModal(): React.ReactElement | null {
   );
   const headroom = Math.max(0, creditLimit - player.debt);
   const emergencyLoan = Math.min(headroom, Math.max(0, -player.cash) + 2000_00);
+  // The rate this bridge accrues at: distress means near-zero operating net
+  // worth, so leverage is high and (when tiered) the loan prices near the
+  // ceiling — the player should see the bridge is expensive *because* they are
+  // distressed. Flag off → the flat rate. Priced against the post-borrow debt.
+  const emergencyApr = Math.round(
+    annualRatePercent(
+      state.config.riskTieredInterestEnabled
+        ? effectiveRateForDebt(player.debt + emergencyLoan, loanNetWorth(state, player.id) + emergencyLoan)
+        : chargedInterestRatePerDay(player, state),
+    ),
+  );
 
   return (
     <div className="intro-backdrop">
@@ -93,14 +114,14 @@ export function ReceivershipModal(): React.ReactElement | null {
           </button>
           {emergencyLoan > 0 && (
             <button
-              title="Borrow enough to clear the negative balance plus a small buffer"
+              title={`Borrow enough to clear the negative balance plus a small buffer — ${emergencyApr}%/yr while distressed`}
               onClick={() => {
                 dispatch({ type: 'TAKE_LOAN', firmId: player.id, amount: emergencyLoan });
                 setShow(false);
                 dispatch({ type: 'RESUME' });
               }}
             >
-              🏦 Emergency loan ({formatMoney(emergencyLoan)})
+              🏦 Emergency loan ({formatMoney(emergencyLoan)} · {emergencyApr}%/yr)
             </button>
           )}
           <button className="active" onClick={() => { setShow(false); dispatch({ type: 'RESUME' }); }}>

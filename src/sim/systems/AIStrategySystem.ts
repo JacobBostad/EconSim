@@ -18,6 +18,7 @@
  */
 
 import type { SimContext } from '../core/GameState';
+import { townOf } from '../core/Town';
 import { isDayBoundary } from '../core/Tick';
 import type { FirmArchetype } from '../entities/Firm';
 import {
@@ -81,20 +82,21 @@ export function dispatchFirmBehavior(
   firmId: string,
   digest: DigestBuffer | undefined,
 ): void {
-  const archetype = ctx.state.firms[firmId]!.strategy.archetype ?? 'operator';
+  const archetype = townOf(ctx.state, ctx.townId).firms[firmId]!.strategy.archetype ?? 'operator';
   BEHAVIOR_BY_ARCHETYPE[archetype](ctx, firmId, digest);
 }
 
 export function runAIStrategySystem(ctx: SimContext): void {
   if (!isDayBoundary(ctx.state.tick, ctx.config)) return;
   const { state } = ctx;
+  const town = townOf(state, ctx.townId);
 
   // Crowd towns collapse routine per-firm chatter into daily digests; Village
   // keeps every line (undefined buffer => individual emits, bit-identity).
   const digest = ctx.config.sizePreset === 'village' ? undefined : newDigestBuffer();
 
-  for (const fid in state.firms) {
-    const firm = state.firms[fid]!;
+  for (const fid in town.firms) {
+    const firm = town.firms[fid]!;
     if (firm.ownerType !== 'ai') continue;
     dispatchFirmBehavior(ctx, firm.id, digest);
   }
@@ -104,7 +106,7 @@ export function runAIStrategySystem(ctx: SimContext): void {
   // supply contracts sized to demand, and ad spend drifts down toward the
   // floor while the store loses money (downward only — raising the player's
   // spend is the player's call). Deterministic; no rng-stream impact.
-  const player = state.firms[state.playerFirmId];
+  const player = town.firms[state.playerFirmId];
   if (player && Object.values(player.autoPriceByProduct).some(Boolean)) {
     adjustPrices(ctx, player.id, true);
     maybeWidenShelves(ctx, player.id, true);

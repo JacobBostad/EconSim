@@ -21,6 +21,7 @@ import { CHAIN_BLUEPRINTS, stageOutput } from '../data/chains';
 import { landCostMultiplier, landValueAt } from './LandValue';
 import { firstFreeDistrictSlot, type SlotSpec } from './DistrictSlots';
 import { findUnemployed, hireCitizen } from '../systems/LaborSystem';
+import { townOf } from './Town';
 
 export interface BuiltChain {
   /** Production-stage facilities in order (stage[0] = the raw producer, the
@@ -55,26 +56,31 @@ export function buildStarterChain(
   productId: string,
 ): BuiltChain | null {
   const s = state;
-  const firm = s.firms[firmId];
+  // Home-town view (identity in a one-town region, so the returned record is the
+  // same reference); gains a `townId` param at the endgame move.
+  const town = townOf(s);
+  const firm = town.firms[firmId];
+  const facilities = town.facilities;
   const bp = CHAIN_BLUEPRINTS[productId];
   if (!firm || !bp) return null;
 
   // Prefer clear ground nearest the homes' center of mass — a store on the
-  // town edge never sees foot traffic, whatever it costs.
-  let homeCx = s.config.mapWidth / 2;
+  // town edge never sees foot traffic, whatever it costs. Map bounds are
+  // town-scoped, hoisted through the same view.
+  let homeCx = town.mapWidth / 2;
   let homeCount = 0;
-  for (const fid in s.facilities) {
-    const f = s.facilities[fid]!;
+  for (const fid in facilities) {
+    const f = facilities[fid]!;
     if (f.type === 'home') { homeCx += f.location.x; homeCount++; }
   }
-  if (homeCount > 0) homeCx = (homeCx - s.config.mapWidth / 2) / homeCount;
+  if (homeCount > 0) homeCx = (homeCx - town.mapWidth / 2) / homeCount;
   const findSpot = (y: number): { x: number; y: number } | null => {
     let best: { x: number; y: number } | null = null;
     let bestDist = Infinity;
-    for (let x = 12; x <= s.config.mapWidth - 8; x += 6) {
+    for (let x = 12; x <= town.mapWidth - 8; x += 6) {
       let clear = true;
-      for (const fid in s.facilities) {
-        const loc = s.facilities[fid]!.location;
+      for (const fid in facilities) {
+        const loc = facilities[fid]!.location;
         const dx = loc.x - x;
         const dy = loc.y - y;
         if (dx * dx + dy * dy < 36) {

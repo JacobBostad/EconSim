@@ -92,9 +92,9 @@ describe('Firm archetype dispatcher', () => {
   });
 });
 
-describe('SAVE_VERSION 2 archetype migration', () => {
-  it('is at version 2', () => {
-    expect(SAVE_VERSION).toBe(2);
+describe('SAVE_VERSION archetype migration', () => {
+  it('is at version 3 (region.md step 3 endgame: records moved into towns)', () => {
+    expect(SAVE_VERSION).toBe(3);
   });
 
   it('the v1->v2 step stamps operator on firms lacking an archetype', () => {
@@ -123,7 +123,7 @@ describe('SAVE_VERSION 2 archetype migration', () => {
     expect(rawJson.includes('"archetype"')).toBe(false);
 
     const state = deserialize(rawJson);
-    expect(state.saveVersion).toBe(2);
+    expect(state.saveVersion).toBe(SAVE_VERSION); // full chain: v1 -> v2 -> v3
     const firmIds = Object.keys(state.firms);
     expect(firmIds.length).toBeGreaterThan(0);
     for (const id of firmIds) {

@@ -24,6 +24,7 @@ import { worldScaleConfig, type Difficulty } from '../sim/core/SimulationConfig'
 import type { GameState } from '../sim/core/GameState';
 import type { Command, Speed } from '../sim/core/Commands';
 import type { EntityId, FacilityDefId } from '../sim/core/Id';
+import { HOME_TOWN_ID, type TownId } from '../sim/core/Town';
 import { saveGame, loadGame, hasSave, BACKUP_SLOT } from '../sim/persistence/saveLoad';
 import { recordTownFounded } from '../ui/records';
 
@@ -55,6 +56,18 @@ interface GameStore {
    * instead of bought — the landlord fronts the cost and collects daily rent. */
   leaseFromFirmId: string | null;
   dashboard: DashboardTab;
+  /**
+   * Which town the map + info panel are LOOKING at (region.md step 5, the town
+   * switcher). Pure VIEW state — it lives on the store, NOT in serialized sim
+   * state (region.md §3b names it a view-store field), so switching the view
+   * never touches the run's bytes. Defaults to `home` and resets to `home` on
+   * every new game / load. The player still OPERATES only in `home` this slice:
+   * commands are gated to the home view (see MapView), so a partner view is
+   * strictly read-only. When `regionEnabled` is off there is only ever `home`,
+   * this stays `home`, and no switcher chrome renders (flag-off byte-identity).
+   */
+  selectedTownId: TownId;
+  setSelectedTownId: (id: TownId) => void;
   showIntro: boolean;
   setShowIntro: (v: boolean) => void;
   showNewGame: boolean;
@@ -115,6 +128,11 @@ export const useGameStore = create<GameStore>((set, get) => {
     buildDefId: null,
     leaseFromFirmId: null,
     dashboard: 'none',
+    selectedTownId: HOME_TOWN_ID,
+    // Switching towns also leaves build mode: the ghost preview is a home-town
+    // affordance, and returning from a view-only partner in build mode was a
+    // confusing leftover (review finding).
+    setSelectedTownId: (id) => set({ selectedTownId: id, buildDefId: null, leaseFromFirmId: null }),
     showIntro: (() => {
       try { return localStorage.getItem('econsim.introSeen') !== '1'; } catch { return true; }
     })(),
@@ -167,7 +185,9 @@ export const useGameStore = create<GameStore>((set, get) => {
         createInitialState(seed, worldScaleConfig(difficulty, challenge, size, world), scenarioId),
       );
       recordTownFounded();
-      set({ buildDefId: null, showNewGame: false });
+      // A fresh world starts on the home view — never leave the switcher
+      // pointing at the old run's partner.
+      set({ buildDefId: null, showNewGame: false, selectedTownId: HOME_TOWN_ID });
       bump(true);
     },
 
@@ -180,6 +200,9 @@ export const useGameStore = create<GameStore>((set, get) => {
       const loaded = loadGame();
       if (loaded) {
         get().sim.setState(loaded);
+        // The loaded world may have no partner (or a different one) — snap the
+        // view back home so we never render a town that isn't there.
+        set({ selectedTownId: HOME_TOWN_ID });
         bump(true);
       }
     },
@@ -190,6 +213,7 @@ export const useGameStore = create<GameStore>((set, get) => {
       const loaded = loadGame(BACKUP_SLOT);
       if (loaded) {
         get().sim.setState(loaded);
+        set({ selectedTownId: HOME_TOWN_ID });
         bump(true);
       }
     },

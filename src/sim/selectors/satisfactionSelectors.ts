@@ -12,6 +12,7 @@ import { pressureOf, basketNormalization } from '../systems/SatisfactionSystem';
 import { getProduct } from '../data/products';
 import { clamp } from '../../utils/clamp';
 import { APARTMENT_SATISFACTION_BONUS } from '../data/constants';
+import { townOf } from '../core/Town';
 
 export interface ProductDrag {
   productId: string;
@@ -31,7 +32,8 @@ export interface SatisfactionAnatomy {
 }
 
 export function satisfactionAnatomy(state: GameState): SatisfactionAnatomy {
-  const citizens = Object.values(state.citizens);
+  const citizens = Object.values(townOf(state).citizens);
+  const facilities = townOf(state).facilities;
   if (citizens.length === 0) {
     return { average: 0, equilibrium: 0, base: 50, employmentTerm: 0, housingTerm: 0, provisioningTerm: 0, productDrag: [] };
   }
@@ -47,7 +49,7 @@ export function satisfactionAnatomy(state: GameState): SatisfactionAnatomy {
     satisfaction += cit.satisfaction;
     const emp = cit.employmentStatus === 'employed' ? 20 : -5;
     employment += emp;
-    const house = state.facilities[cit.homeFacilityId]?.defId === 'apartment' ? APARTMENT_SATISFACTION_BONUS : 0;
+    const house = facilities[cit.homeFacilityId]?.defId === 'apartment' ? APARTMENT_SATISFACTION_BONUS : 0;
     housing += house;
     let pressure = 0;
     // Same basket normalization as the engine (SatisfactionSystem) so the

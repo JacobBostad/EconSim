@@ -17,9 +17,12 @@ import { formatMoney } from '../../utils/formatMoney';
 import { pickBestCity } from '../core/Trade';
 import { getTradeCity, TRADE_CITY_IDS } from '../data/tradeCities';
 import { poolCoverDays } from '../data/tradePool';
+import { isLivePartnerCity, partnerCoverDaysOrUndefined } from '../core/PartnerMarket';
 import { PRODUCT_IDS_BY_PRESET } from '../data/products';
 import { FOUNDER_GAP_DAYS, TRADE_POOL_THIN_COVER_DAYS } from '../data/constants';
 import { founderMaxAiFirms } from '../systems/AIFounderSystem';
+import { townOf } from '../core/Town';
+import { chargedInterestRatePerDay, annualRatePercent } from '../systems/interestRates';
 
 export interface Advice {
   icon: string;
@@ -30,7 +33,11 @@ export interface Advice {
 const MAX_ITEMS = 5;
 
 export function morningBriefing(state: GameState): Advice[] {
-  const player = state.firms[state.playerFirmId];
+  // Home-town view (identity in a one-town region, so the returned record is the
+  // same reference); gains a `townId` param at the endgame move.
+  const firms = townOf(state).firms;
+  const facilities = townOf(state).facilities;
+  const player = firms[state.playerFirmId];
   if (!player) return [];
   const items: Advice[] = [];
 
@@ -67,17 +74,18 @@ export function morningBriefing(state: GameState): Advice[] {
   // never shows up as a decision — only as a quiet daily drain.
   const lastDay = player.accounting.dailyHistory[player.accounting.dailyHistory.length - 1];
   if (lastDay && player.debt > 0 && lastDay.interest >= Math.max(50, lastDay.revenue * 0.15)) {
+    const apr = Math.round(annualRatePercent(chargedInterestRatePerDay(player, state)));
     items.push({
       icon: '🏦',
       severity: 'warning',
-      text: `Debt service cost ${formatMoney(lastDay.interest)} yesterday on ${formatMoney(player.debt)} of loans — repay from your company's Loans panel when cash allows.`,
+      text: `Debt service cost ${formatMoney(lastDay.interest)} yesterday (${apr}%/yr) on ${formatMoney(player.debt)} of loans — ${state.config.riskTieredInterestEnabled ? 'deleverage to drop the rate, or repay' : 'repay'} from your company's Loans panel when cash allows.`,
     });
   }
 
   // 2. Production blocked all day. Reads the closed-day snapshot, not the
   // mid-day partial stats — otherwise the alert only appeared late in the day.
   for (const facId of player.facilities) {
-    const fac = state.facilities[facId];
+    const fac = facilities[facId];
     if (!fac || fac.status === 'closed') continue;
     if (fac.activeRecipeId && fac.yesterdayStats.ticksActive === 0 && fac.yesterdayStats.bottleneck) {
       // Saturation reads differently from starvation: a full output buffer
@@ -103,7 +111,7 @@ export function morningBriefing(state: GameState): Advice[] {
     if (worst && worst.emaNet <= -20_00 && worst.status !== 'closed') {
       // A producer drowning in its own output isn't broken — it's oversized
       // for the chain's sales. "Sell it" is terrible advice for that case.
-      const fac = state.facilities[worst.facilityId];
+      const fac = facilities[worst.facilityId];
       let full = 0;
       if (fac) for (const pid in fac.outputInventory) full += fac.outputInventory[pid]!.quantity;
       const saturated =
@@ -162,12 +170,12 @@ export function morningBriefing(state: GameState): Advice[] {
   outer: for (const cid in state.contracts) {
     const ctr = state.contracts[cid]!;
     if (!ctr.active || ctr.ownerFirmId !== player.id) continue;
-    const src = state.facilities[ctr.sourceFacilityId];
+    const src = facilities[ctr.sourceFacilityId];
     if (!src || src.type !== 'importer') continue;
-    for (const fid in state.facilities) {
-      const fac = state.facilities[fid]!;
+    for (const fid in facilities) {
+      const fac = facilities[fid]!;
       if (fac.ownerFirmId === player.id || fac.type === 'importer') continue;
-      if (state.firms[fac.ownerFirmId]?.ownerType !== 'ai') continue;
+      if (firms[fac.ownerFirmId]?.ownerType !== 'ai') continue;
       if (getQuantity(fac.outputInventory, ctr.productId) >= 30) {
         items.push({
           icon: '🤝',
@@ -181,10 +189,10 @@ export function morningBriefing(state: GameState): Advice[] {
 
   // 5. Trade: some port pays a premium for something you actually hold.
   for (const facId of player.facilities) {
-    const fac = state.facilities[facId];
+    const fac = facilities[facId];
     if (!fac) continue;
     let found = false;
-    for (const pid of Object.keys(state.marketStats)) {
+    for (const pid of Object.keys(townOf(state).marketStats)) {
       const best = pickBestCity(state, pid);
       const base = getProduct(pid).basePrice;
       if (best.price < base * 1.3) continue;
@@ -212,22 +220,29 @@ export function morningBriefing(state: GameState): Advice[] {
   // every pinned (flag-off) run by construction (pool is undefined → skipped).
   // Sorted-product iteration; fires on the first held short product, one line.
   poolThin: for (const facId of player.facilities) {
-    const fac = state.facilities[facId];
+    const fac = facilities[facId];
     if (!fac) continue;
     for (const cid of TRADE_CITY_IDS) {
+      const livePartner = isLivePartnerCity(state, cid);
       const pool = state.tradeCities[cid]?.pool;
-      if (!pool) continue;
+      if (!livePartner && !pool) continue;
       for (const pid of PRODUCT_IDS_BY_PRESET[state.config.sizePreset]) {
-        const stock = pool.inventory[pid];
-        if (stock === undefined) continue; // not a product this city stocks
-        if (poolCoverDays(cid, pid, stock) >= TRADE_POOL_THIN_COVER_DAYS) continue; // not thin
+        // Cover routes the two supply models (slice 5): a live partner reads its
+        // real shelf/demand, a stub city its pool. Undefined ⇒ nothing to nudge.
+        const cover = livePartner
+          ? partnerCoverDaysOrUndefined(state, cid, pid)
+          : pool!.inventory[pid] === undefined
+            ? undefined
+            : poolCoverDays(cid, pid, pool!.inventory[pid]!);
+        if (cover === undefined) continue; // not a product this city stocks/demands
+        if (cover >= TRADE_POOL_THIN_COVER_DAYS) continue; // not thin
         const held = getQuantity(fac.inputInventory, pid) + getQuantity(fac.outputInventory, pid);
         if (held < 10) continue; // nothing exportable to ship in
         const city = getTradeCity(cid);
         items.push({
           icon: '🔥',
           severity: 'info',
-          text: `${city.name} is running thin on ${getProduct(pid).name} (${poolCoverDays(cid, pid, stock).toFixed(1)}d cover) and you hold ${held} — stage them in a warehouse and export into the premium before its larder refills.`,
+          text: `${city.name} is running thin on ${getProduct(pid).name} (${cover.toFixed(1)}d cover) and you hold ${held} — stage them in a warehouse and export into the premium before its larder refills.`,
         });
         break poolThin;
       }
@@ -248,13 +263,13 @@ export function morningBriefing(state: GameState): Advice[] {
   // Open market closing: a staple gap has run half the founder clock. Capital
   // is watching the same counter the founder system reads — warn while the
   // player can still claim the market instead of meeting a new rival in it.
-  const aiFirms = Object.values(state.firms).filter((f) => f.ownerType === 'ai').length;
+  const aiFirms = Object.values(firms).filter((f) => f.ownerType === 'ai').length;
   if (aiFirms < founderMaxAiFirms(state.config)) {
     for (const pid of ['bread', 'tools', 'clothes']) {
       const gap = state.marketGapDays[pid] ?? 0;
       if (gap < FOUNDER_GAP_DAYS / 2) continue;
       const playerSells = player.facilities.some((fid) => {
-        const fac = state.facilities[fid];
+        const fac = facilities[fid];
         return (
           !!fac &&
           fac.status !== 'closed' &&
@@ -281,7 +296,7 @@ export function morningBriefing(state: GameState): Advice[] {
   if (ann) {
     const day = computeTime(state.tick, state.config).day;
     const ownsWarehouse = player.facilities.some(
-      (fid) => state.facilities[fid]?.type === 'warehouse',
+      (fid) => facilities[fid]?.type === 'warehouse',
     );
     if (day < ann.effectDay && ownsWarehouse) {
       const city = getTradeCity(ann.cityId);

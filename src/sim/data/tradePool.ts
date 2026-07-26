@@ -99,16 +99,28 @@ export function poolCoverDays(cityId: string, pid: ProductId, inventory: number)
 }
 
 /**
- * The multiplier the pool applies to a product's walked quote. 1.0 at the
- * target buffer; > 1 (premium) when cover is thin, < 1 (discount) when an
- * export overhang has piled stock up — clamped so the pool layers WITHIN the
- * walk's band, never beyond it. A product the city doesn't consume returns 1.
+ * The cover-curve itself, factored out so the STUB pool (this file) and the LIVE
+ * partner's real-book quote (core/PartnerMarket.ts, Arc E step 4 slice 5) apply
+ * the IDENTICAL curve — a target buffer and a stock, unit-elastic and clamped to
+ * the walk-layering band. 1.0 at `stock == target`; > 1 (premium) when stock is
+ * thin, < 1 (discount) when an overhang piled it up. `target <= 0` (an unconsumed
+ * product) ⇒ 1 (no effect). The two paths differ ONLY in where `target`/`stock`
+ * come from: the stub reads the def population + the pool inventory dict; the
+ * live partner reads its real cohort demand + its real shelf stock.
  */
-export function poolCoverMult(cityId: string, pid: ProductId, inventory: number): number {
-  const target = poolTargetInventory(cityId, pid);
-  if (target <= 0) return 1; // unconsumed here — no pool effect
-  const stock = Math.max(inventory, 1); // avoid div-by-zero; a bare shelf pins the max premium
-  const ratio = target / stock; // > 1 when short, < 1 when overstocked
+export function coverMult(target: number, stock: number): number {
+  if (target <= 0) return 1; // unconsumed — no cover effect
+  const s = Math.max(stock, 1); // avoid div-by-zero; a bare shelf pins the max premium
+  const ratio = target / s; // > 1 when short, < 1 when overstocked
   const mult = Math.pow(ratio, TRADE_POOL_COVER_ELASTICITY);
   return Math.min(TRADE_POOL_MULT_MAX, Math.max(TRADE_POOL_MULT_MIN, mult));
+}
+
+/**
+ * The multiplier the STUB pool applies to a product's walked quote (the live
+ * partner uses `partnerCoverMult` on its real book instead — see PartnerMarket).
+ * A product the city doesn't consume returns 1.
+ */
+export function poolCoverMult(cityId: string, pid: ProductId, inventory: number): number {
+  return coverMult(poolTargetInventory(cityId, pid), inventory);
 }

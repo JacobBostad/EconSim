@@ -36,6 +36,8 @@ import { defaultPersonalityFor, defaultCeoFor } from './personalities';
 import { getScenario, DEFAULT_SCENARIO_ID } from './scenarios';
 import { defaultDistrictPartition } from './districts';
 import { SAVE_VERSION } from '../core/GameState';
+import { townOf, HOME_TOWN_ID, installTownAliases, type TownRecords } from '../core/Town';
+import { seedTown, PARTNER_TOWN_ID, PORT_ROSA_SPEC, willBeLivePartner } from './seedTown';
 
 const NUM_HOMES = 20;
 const CITIZENS_PER_HOME = 2;
@@ -93,7 +95,7 @@ function newFacility(
     wholesaleEnabled: true,
   };
   b.state.facilities[id] = fac;
-  b.state.firms[ownerFirmId]!.facilities.push(id);
+  townOf(b.state).firms[ownerFirmId]!.facilities.push(id);
   return fac;
 }
 
@@ -180,7 +182,7 @@ function newCitizen(b: Builder, homeId: string, homeLoc: Vec2): Citizen {
     skill: b.rng.range(0.85, 1.05),
   };
   b.state.citizens[id] = cit;
-  b.state.facilities[homeId]!.residentIds.push(id);
+  townOf(b.state).facilities[homeId]!.residentIds.push(id);
   return cit;
 }
 
@@ -193,14 +195,14 @@ function employ(
   role: string,
   wage: number,
 ): void {
-  const cit = b.state.citizens[citizenId]!;
+  const cit = townOf(b.state).citizens[citizenId]!;
   cit.employerFirmId = firmId;
   cit.workplaceFacilityId = facilityId;
   cit.role = role;
   cit.wage = wage;
   cit.employmentStatus = 'employed';
-  b.state.facilities[facilityId]!.employees.push(citizenId);
-  b.state.firms[firmId]!.employees.push(citizenId);
+  townOf(b.state).facilities[facilityId]!.employees.push(citizenId);
+  townOf(b.state).firms[firmId]!.employees.push(citizenId);
 }
 
 function stock(inv: Inventory, productId: string, qty: number): void {
@@ -214,6 +216,26 @@ export function createInitialState(
 ): GameState {
   const scenario = getScenario(scenarioId);
   const counters: IdCounters = {};
+  // The six town-scoped families live under `towns[HOME_TOWN_ID]` (region.md step
+  // 3 endgame). Build them once here; the flat `citizens`/`firms`/... fields below
+  // reference the SAME objects so the literal type-checks, then
+  // `installTownAliases` demotes those flat keys to non-enumerable accessors onto
+  // the home town — every writer in this builder (and every reader) keeps working,
+  // and only `towns` serializes.
+  const homeRecords: TownRecords = {
+    districts: {},
+    cohorts: {},
+    citizens: {},
+    marketStats: {},
+    firms: {},
+    facilities: {},
+    // Per-town map dims (region.md step 4, slice 1). Seeded from the passed
+    // config here and RE-SET to the final config below, after the size-preset
+    // block may raise them — so home.mapWidth === config.mapWidth exactly (the
+    // getter swap in townOf is a value-identity for every existing game).
+    mapWidth: config.mapWidth,
+    mapHeight: config.mapHeight,
+  };
   const state: GameState = {
     saveVersion: SAVE_VERSION,
     seed,
@@ -223,13 +245,14 @@ export function createInitialState(
     speed: 1,
     paused: false, // the world starts alive; the player can pause anytime
     config: { ...config },
-    citizens: {},
-    firms: {},
-    facilities: {},
+    towns: { [HOME_TOWN_ID]: homeRecords },
+    citizens: homeRecords.citizens,
+    firms: homeRecords.firms,
+    facilities: homeRecords.facilities,
     vehicles: {},
     contracts: {},
     serviceContracts: {},
-    marketStats: {},
+    marketStats: homeRecords.marketStats,
     worldCash: dollars(1_000_000),
     playerFirmId: '',
     worldFirmId: '',
@@ -239,6 +262,7 @@ export function createInitialState(
     achievements: [],
     missions: [],
     tradeCities: {},
+    freight: [],
     rushOrder: null,
     tradeAnnouncement: null,
     rushOrdersCompleted: 0,
@@ -250,6 +274,7 @@ export function createInitialState(
     poolFeedsWhileThin: 0,
     poolCoversRestored: 0,
     landlordRepossessions: 0,
+    freightBestSpikePct: 0,
     emigrationPressure: 0,
     emigrationDepartures: 0,
     marketGapDays: {},
@@ -264,14 +289,19 @@ export function createInitialState(
     sharePriceShift: {},
     // Districts are built AFTER the size-preset block below (which may raise
     // the map dimensions), so the partition tiles the preset's real map.
-    districts: {},
-    cohorts: {},
+    districts: homeRecords.districts,
+    cohorts: homeRecords.cohorts,
     lastLapsedFireSale: null,
     townHistory: [],
     idCounters: counters,
     selectedEntityId: null,
     perf: { lastTickMs: 0, avgTickMs: 0, ticksSimulated: 0 },
   };
+  // Demote the six flat family keys to non-enumerable aliases onto towns.home
+  // (they reference the same objects, so this is invisible to construction that
+  // follows — every writer below routes through them) and keep only `towns` in a
+  // save. Must run before any townOf(...) read or family writer in this builder.
+  installTownAliases(state);
   const b: Builder = { state, rng: new Rng(state), counters };
 
   // World-scale cast ceiling: a non-Village preset lifts the immigration caps
@@ -288,6 +318,10 @@ export function createInitialState(
     state.config.mapWidth = Math.max(state.config.mapWidth, preset.mapWidth);
     state.config.mapHeight = Math.max(state.config.mapHeight, preset.mapHeight);
   }
+  // Map dims are final: record the home town's OWN copy (= config, exactly), so
+  // townOf(...).mapWidth reads the town field and stays value-identical.
+  homeRecords.mapWidth = state.config.mapWidth;
+  homeRecords.mapHeight = state.config.mapHeight;
   // Now that map dimensions are final, tile the authored district partition.
   state.districts = defaultDistrictPartition(state.config);
 
@@ -306,8 +340,15 @@ export function createInitialState(
   // Arc E (opt-in): each trade city grows a demand pool seeded AT its target
   // buffer, so a fresh game opens in equilibrium (cover mult 1.0). Flag off ⇒
   // no pool key is written and the book stays byte-identical to pre-Arc-E.
+  //
+  // Slice 5 RETIRES the pool for the LIVE partner: when `port_rosa` graduates to
+  // a real simulated town (region flag on, non-Village — the `seedTown` gate
+  // below), its export quote reads its REAL shelf/demand, so it carries NO pool
+  // row. A flag-off `port_rosa` is still a stub — its pool row STAYS (this is the
+  // byte-identity gate: flag-off is unchanged). `ironvale` always keeps its pool.
   if (state.config.tradeDemandPoolsEnabled) {
     for (const cid of TRADE_CITY_IDS) {
+      if (willBeLivePartner(state.config, cid)) continue; // retired: real book, no pool
       const book = state.tradeCities[cid]!;
       book.pool = { population: getTradeCity(cid).population, inventory: {} };
       for (const pid of PRODUCT_IDS_BY_PRESET[state.config.sizePreset]) {
@@ -334,16 +375,17 @@ export function createInitialState(
   }
 
   // --- Citizens ----------------------------------------------------------
-  const homeFacilityIds = Object.keys(state.facilities).filter(
-    (id) => state.facilities[id]!.type === 'home',
+  const facilities = townOf(state).facilities;
+  const homeFacilityIds = Object.keys(facilities).filter(
+    (id) => facilities[id]!.type === 'home',
   );
   for (let h = 0; h < homeFacilityIds.length; h++) {
     const homeId = homeFacilityIds[h]!;
     for (let c = 0; c < CITIZENS_PER_HOME; c++) {
-      newCitizen(b, homeId, state.facilities[homeId]!.location);
+      newCitizen(b, homeId, facilities[homeId]!.location);
     }
   }
-  const allCitizenIds = Object.keys(state.citizens);
+  const allCitizenIds = Object.keys(townOf(state).citizens);
   let nextWorker = 0;
   const takeWorker = (): string | null =>
     nextWorker < allCitizenIds.length ? allCitizenIds[nextWorker++]! : null;
@@ -459,6 +501,17 @@ export function createInitialState(
   seedCrowd(state);
   seedComputeProvider(b);
 
+  // Region (Arc E step 4, slice 1): with the flag on at a non-Village preset,
+  // seed ONE inert partner town (`port_rosa`) into state.towns alongside home.
+  // Built LAST, off the region's SHARED idCounters (town-namespaced prefixes)
+  // and a LOCAL rng, so it shifts NONE of home's ids and draws NOTHING from the
+  // shared rng — a flag-off game (default) is byte-identical, and a flag-on
+  // game's home is byte-identical to flag-off (the partner is unticked in this
+  // slice). Village never seeds a partner (definitionally one town).
+  if (state.config.regionEnabled && state.config.sizePreset !== 'village') {
+    seedTown(state, PARTNER_TOWN_ID, PORT_ROSA_SPEC);
+  }
+
   return state;
 }
 
@@ -488,9 +541,11 @@ function seedComputeProvider(b: Builder): void {
   firm.personalityId = personality;
   firm.ceoName = defaultCeoFor(personality, 1);
   // Place it in the commercial-ish middle of the map, clear of the homes band.
+  // Placement is town-scoped, so it reads the town's dims through the view.
+  const town = townOf(state);
   const loc: Vec2 = {
-    x: Math.round(state.config.mapWidth * 0.5),
-    y: Math.round(state.config.mapHeight * 0.35),
+    x: Math.round(town.mapWidth * 0.5),
+    y: Math.round(town.mapHeight * 0.35),
   };
   newFacility(b, 'datacenter', firm.id, loc, { name: 'Cirrus Datacenter' });
 }
@@ -507,7 +562,7 @@ const CROWD_START_CASH_PER_CAPITA = dollars(50);
 function seedCrowd(state: GameState): void {
   const preset = SIZE_PRESETS[state.config.sizePreset];
   if (preset.crowdStart <= 0) return;
-  const residential = Object.values(state.districts)
+  const residential = Object.values(townOf(state).districts)
     .filter((d) => d.kind === 'residential')
     .sort((a, b) => (a.id < b.id ? -1 : 1));
   if (residential.length === 0) return;

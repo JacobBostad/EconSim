@@ -25,6 +25,8 @@ import { computeTime } from './Tick';
 import { createInitialState } from '../data/startingScenario';
 import { createFacility, createCitizen } from '../entities/factories';
 import { Rng } from './Random';
+import { townOf, HOME_TOWN_ID, sortedTownIds, type TownId } from './Town';
+import { loanNetWorth } from '../systems/interestRates';
 import { getFacilityDef } from '../data/facilityDefinitions';
 import { getRecipe } from '../data/recipes';
 import { getProduct, productAvailableInPreset } from '../data/products';
@@ -74,6 +76,7 @@ import { runMarketStatsSystem } from '../systems/MarketStatsSystem';
 import { runAIStrategySystem } from '../systems/AIStrategySystem';
 import { runManagerSystem, managerCandidates } from '../systems/ManagerSystem';
 import { runForwardSystem, sellForward, closeForward } from '../systems/ForwardSystem';
+import { runFreightSystem } from '../systems/FreightSystem';
 import { runTradeAnnouncementSystem } from '../systems/TradeAnnouncementSystem';
 import { runEventLogSystem } from '../systems/EventLogSystem';
 import { runBankruptcySystem } from '../systems/BankruptcySystem';
@@ -99,8 +102,9 @@ import { runLaborSystem, hireCitizen, fireCitizen, findUnemployed, trainCrew } f
 import { runCohortLaborSystem } from '../systems/CohortLaborSystem';
 import { runCohortDemandSystem } from '../systems/CohortDemandSystem';
 import { runProductionSystem } from '../systems/ProductionSystem';
+import { runPartnerMarketSystem } from '../systems/PartnerMarketSystem';
 import { runLogisticsSystem } from '../systems/LogisticsSystem';
-import { runRetailDemandSystem } from '../systems/RetailDemandSystem';
+import { runRetailDemandSystem, runRestockRevisitSystem } from '../systems/RetailDemandSystem';
 
 type SystemFn = (ctx: SimContext) => void;
 
@@ -115,6 +119,7 @@ const SYSTEMS: SystemFn[] = [
   runTradeAnnouncementSystem, // roll/expire announced shocks (own rng stream)
   runTradeCitySystem, // Port Rosa price walk (daily; reads announcement mult)
   runForwardSystem, // settle due forwards right after prices land (no rng)
+  runFreightSystem, // land + pay arrived inter-town freight (region.md s4/slice4; no rng; no-op flag-off)
   runRushOrderSystem, // rush offers/expiry after prices land (own rng stream)
   runFireSaleSystem, // rival fire-sale offers/expiry (own rng stream)
   runMarketStatsSystem, // finalize previous day's stats; hourly inventory totals
@@ -148,9 +153,76 @@ const SYSTEMS: SystemFn[] = [
   runProductionSystem,
   runLogisticsSystem,
   runRetailDemandSystem,
+  runRestockRevisitSystem, // cast restocked-shelf revisit (cast-parity #3; dark by default)
   runAchievementSystem, // hourly; sees the fully-updated tick
   runMissionSystem, // hourly; guided chain advances after achievements
 ];
+
+/**
+ * PARTNER_SYSTEMS — the light, cast-less subset a partner trade city runs each
+ * tick (region.md step 4, slice 3; DISPATCH decision (c): TownScheduler with
+ * per-town system lists). A partner (`port_rosa`) is a CROWD-ONLY town — no
+ * simulated cast, no founders/rush/fire-sale, no player UI — so its schedule is
+ * exactly the town-scoped economic core the crowd needs, and nothing else. Every
+ * system here is TOWN-SCOPED (operates on `townOf(ctx.state, ctx.townId)`) and
+ * draws ZERO shared rng, which is what keeps a flag-on home byte-identical to
+ * flag-off: the partner's pass advances no rng and touches only its own records.
+ *
+ * Order MIRRORS the relative order these systems hold in `SYSTEMS` above (daily
+ * roll-ups finalize the previous day before the per-tick sim runs), so the
+ * partner's internal day boundary sequences exactly as home's does.
+ *
+ * The WORLD-scoped systems (time, world events, the trade-city price walk,
+ * forwards, achievements, AI strategy, ...) are NOT in this list — they run
+ * exactly ONCE, in home's full `SYSTEMS` pass, since the scheduler runs the full
+ * list only for home. The clock is advanced once per tick (in `tick()`), not per
+ * town.
+ *
+ * DELTA vs the design's named subset (region.md § "Which systems must run for
+ * it"), documented with reasons:
+ *   - SatisfactionSystem / TierSystem are EXCLUDED: both iterate the CAST
+ *     (`town.citizens`) only — a crowd-only partner has an empty cast, so they
+ *     are pure no-ops there (the crowd's satisfaction/tier machinery lives in
+ *     CohortSocialSystem, not these). Running them would burn cycles for nothing.
+ *   - CohortSocialSystem is EXCLUDED for slice 3: its tier-promotion CREATION
+ *     sites (`moveMass` mints a new tier cohort) and its migration path are
+ *     bare-`state` writers still pinned to the home town (region.md step 3 left
+ *     them flat "until multi-town"), so running them for the partner would mint
+ *     `port_rosa` cohorts into `towns.home` — a cross-town write leak. Threading
+ *     those region-wide is the analogue of the money-primitive debt and is
+ *     deferred (a follow-up slice), exactly the honest-scope discipline the arc
+ *     uses. Consequence: the partner crowd stays a single `worker`-tier block
+ *     (no tier mobility / migration) — sufficient for slice 3's acceptance
+ *     (the crowd consumes, its firms produce, its book updates) and coherent.
+ *   - LogisticsSystem is EXCLUDED: it iterates the WORLD-scoped `state.vehicles`
+ *     / `state.contracts` and is paired with the cast-only MovementSystem (which
+ *     marks vehicles 'delivered'); the partner mints no contracts (intra- and
+ *     inter-town freight is slice 4's `FreightSystem`), so it would be a no-op at
+ *     best and a cross-town vehicle-corruption risk at worst. The partner's
+ *     production and retail are therefore SEEDED to run without a logistics
+ *     linkage (its factory output and its retail shelf are stocked directly by
+ *     the factory — freight connects the two economies in slice 4).
+ */
+const PARTNER_SYSTEMS: SystemFn[] = [
+  runMarketStatsSystem, // finalize the partner's book; hourly inventory totals
+  runDistrictSystem, // daily desirability cache for the partner's districts
+  runCrowdRentSystem, // the crowd pays for a roof (pool-drift sink)
+  runAccountingSystem, // maintenance + snapshot + reset daily accumulators
+  runPayrollSystem, // wages: partner firms -> partner cohort; idle stipend
+  runCohortLaborSystem, // crowd staffs the partner's factories + stores
+  runCohortDemandSystem, // the crowd shops the partner's shelves
+  runProductionSystem, // the partner's factories turn inputs + labor into output
+  runPartnerMarketSystem, // slice 5: refill the export larder toward its cover buffer (retired-pool supply side)
+];
+
+/** The system list a town runs each tick. Home runs the full `SYSTEMS`
+ * sequence (the bit-identity crux — flag-off, `sortedTownIds` is `['home']`, so
+ * the scheduler runs exactly this list once, in exactly today's order); any
+ * partner runs the light `PARTNER_SYSTEMS` subset. The schedule is DATA — one
+ * reviewable table — per the DISPATCH decision (region.md step 4, § 2). */
+function systemsForTown(townId: TownId): SystemFn[] {
+  return townId === HOME_TOWN_ID ? SYSTEMS : PARTNER_SYSTEMS;
+}
 
 export class Simulation {
   private state: GameState;
@@ -173,8 +245,21 @@ export class Simulation {
     const start =
       typeof performance !== 'undefined' ? performance.now() : Date.now();
     this.state.tick += 1;
-    const ctx = makeContext(this.state);
-    for (const system of SYSTEMS) system(ctx);
+    // The TownScheduler (region.md step 4, slice 3): run each town's system list
+    // in SORTED town order. Sorted order is the ONE new deterministic axis, and
+    // home sorts first ('home' < 'port_rosa'), so home's rng draws land in
+    // exactly today's position while a cast-less partner draws none. Flag off ⇒
+    // `sortedTownIds` is `['home']`, so this loop runs exactly ONCE with
+    // `makeContext(state, 'home')` (identity with the pre-scheduler
+    // `makeContext(state)`) over the full `SYSTEMS` list — byte-identical to the
+    // pre-region tick. Both towns draw from the single shared region rng stream
+    // (`state.rngState` is world-scoped), so the schedule's town order IS the
+    // draw order — which is why it lives in this one auditable place.
+    for (const townId of sortedTownIds(this.state)) {
+      const ctx = makeContext(this.state, townId);
+      const systems = systemsForTown(townId);
+      for (const system of systems) system(ctx);
+    }
 
     const end =
       typeof performance !== 'undefined' ? performance.now() : Date.now();
@@ -195,6 +280,9 @@ export class Simulation {
   /** Apply a command. Meta commands (save/load) are handled by the caller. */
   dispatch(command: Command): void {
     const s = this.state;
+    // Home-town view (identity in a one-town region, so the returned record is
+    // the same reference); gains a `townId` param at the endgame move.
+    const firms = townOf(s).firms;
     switch (command.type) {
       case 'START_NEW_GAME':
         this.state = createInitialState(command.seed);
@@ -235,7 +323,7 @@ export class Simulation {
         this.setPrice(command);
         return;
       case 'SET_AUTO_PRICE': {
-        const firm = s.firms[command.firmId];
+        const firm = firms[command.firmId];
         if (firm) firm.autoPriceByProduct[command.productId] = command.enabled;
         return;
       }
@@ -246,7 +334,7 @@ export class Simulation {
         this.exportGoods(command);
         return;
       case 'SET_EXPORT_ORDER': {
-        const fac = s.facilities[command.facilityId];
+        const fac = townOf(s).facilities[command.facilityId];
         if (!fac || fac.type !== 'warehouse') return;
         if (command.minMult === null) {
           delete fac.exportOrders[command.productId];
@@ -277,17 +365,17 @@ export class Simulation {
         this.setWage(command);
         return;
       case 'TOGGLE_WHOLESALE': {
-        const fac = s.facilities[command.facilityId];
+        const fac = townOf(s).facilities[command.facilityId];
         if (fac) fac.wholesaleEnabled = command.enabled;
         return;
       }
       case 'SET_POSITIONING': {
-        const fac = s.facilities[command.facilityId];
+        const fac = townOf(s).facilities[command.facilityId];
         if (fac && fac.type === 'retail') fac.positioning = command.positioning;
         return;
       }
       case 'HIRE_MANAGER': {
-        const firm = s.firms[command.firmId];
+        const firm = firms[command.firmId];
         if (!firm) return;
         const role = command.role ?? 'store';
         const day = computeTime(s.tick, s.config).day;
@@ -296,7 +384,7 @@ export class Simulation {
         let facilityId: string | null = null;
         let where = `${firm.name}'s ${role} desk`;
         if (role === 'store') {
-          const fac = command.facilityId ? s.facilities[command.facilityId] : undefined;
+          const fac = command.facilityId ? townOf(s).facilities[command.facilityId] : undefined;
           if (!fac || fac.type !== 'retail' || fac.ownerFirmId !== command.firmId) return;
           if (firm.managers.some((m) => m.role === 'store' && m.facilityId === fac.id)) return;
           facilityId = fac.id;
@@ -333,20 +421,20 @@ export class Simulation {
         );
         return;
       case 'FIRE_MANAGER': {
-        const firm = s.firms[command.firmId];
+        const firm = firms[command.firmId];
         if (!firm) return;
         const mgr = firm.managers.find((m) => m.id === command.managerId);
         if (!mgr) return;
         firm.managers = firm.managers.filter((m) => m.id !== command.managerId);
         const post = mgr.facilityId
-          ? (s.facilities[mgr.facilityId]?.name ?? 'their store')
+          ? (townOf(s).facilities[mgr.facilityId]?.name ?? 'their store')
           : `the ${mgr.role} desk`;
         emitEvent(s, 'info', 'player',
           `${mgr.name} was let go from ${post}.`, mgr.facilityId ?? command.firmId);
         return;
       }
       case 'SET_WHOLESALE_PRICE': {
-        const fac = s.facilities[command.facilityId];
+        const fac = townOf(s).facilities[command.facilityId];
         if (!fac || !Number.isFinite(command.mult)) return;
         fac.wholesalePriceMult =
           Math.round(Math.min(WHOLESALE_MULT_MAX, Math.max(WHOLESALE_MULT_MIN, command.mult)) * 100) / 100;
@@ -383,7 +471,7 @@ export class Simulation {
         this.buyFromImporter(command);
         return;
       case 'SET_AD_BUDGET': {
-        const firm = s.firms[command.firmId];
+        const firm = firms[command.firmId];
         if (firm && command.dailyBudget >= 0) {
           firm.adBudgetByProduct[command.productId] = Math.round(command.dailyBudget);
         }
@@ -431,8 +519,9 @@ export class Simulation {
   private subscribeService(firmId: FirmId, providerFirmId: FirmId): void {
     const s = this.state;
     if (!s.config.servicesEnabled || s.config.sizePreset === 'village') return;
-    const firm = s.firms[firmId];
-    const provider = s.firms[providerFirmId];
+    const firms = townOf(s).firms;
+    const firm = firms[firmId];
+    const provider = firms[providerFirmId];
     if (!firm || !provider || firmId === providerFirmId) return;
     const capacity = computeCapacity(s, provider);
     if (capacity <= 0) return;
@@ -470,7 +559,7 @@ export class Simulation {
    */
   private buildChain(firmId: FirmId, productId: string): void {
     const s = this.state;
-    const firm = s.firms[firmId];
+    const firm = townOf(s).firms[firmId];
     const bp = CHAIN_BLUEPRINTS[productId];
     if (!firm || !bp) return;
     // C1: the wizard only builds chains whose product exists at this preset —
@@ -520,7 +609,7 @@ export class Simulation {
    */
   private exportGoods(command: Extract<Command, { type: 'EXPORT_GOODS' }>): void {
     const s = this.state;
-    const fac = s.facilities[command.facilityId];
+    const fac = townOf(s).facilities[command.facilityId];
     if (fac && fac.type !== 'warehouse') {
       emitEvent(s, 'warning', 'logistics', 'Exports ship from warehouses — stage goods there first.', fac.id);
       return;
@@ -538,7 +627,7 @@ export class Simulation {
    */
   private civicAction(firmId: FirmId, action: 'festival' | 'fund_home'): void {
     const s = this.state;
-    const firm = s.firms[firmId];
+    const firm = townOf(s).firms[firmId];
     if (!firm) return;
     const day = Math.floor(s.tick / (s.config.ticksPerHour * 24));
 
@@ -562,8 +651,9 @@ export class Simulation {
     }
 
     // fund_home
-    const citizens = Object.keys(s.citizens).length;
-    const homes = Object.values(s.facilities).filter((f) => f.type === 'home').length;
+    const citizens = Object.keys(townOf(s).citizens).length;
+    const facilities = townOf(s).facilities;
+    const homes = Object.values(facilities).filter((f) => f.type === 'home').length;
     if (citizens >= s.config.maxCitizens || homes >= s.config.maxHomes) {
       emitEvent(s, 'warning', 'player', 'The town is at capacity — no room for another home.', firmId);
       return;
@@ -573,12 +663,15 @@ export class Simulation {
       return;
     }
     // Deterministic placement: scan the residential band for clear ground.
+    // Map bounds are town-scoped, hoisted out of the scan loop (home-town view,
+    // identity in a one-town region); gains a real per-town map at the endgame.
+    const town = townOf(s);
     let loc: { x: number; y: number } | null = null;
-    for (let y = 60; y <= s.config.mapHeight - 4 && !loc; y += 8) {
-      for (let x = 14; x <= s.config.mapWidth - 8; x += 6) {
+    for (let y = 60; y <= town.mapHeight - 4 && !loc; y += 8) {
+      for (let x = 14; x <= town.mapWidth - 8; x += 6) {
         let clear = true;
-        for (const fid in s.facilities) {
-          const l = s.facilities[fid]!.location;
+        for (const fid in facilities) {
+          const l = facilities[fid]!.location;
           const dx = l.x - x, dy = l.y - y;
           if (dx * dx + dy * dy < 30) { clear = false; break; }
         }
@@ -595,7 +688,7 @@ export class Simulation {
     });
     const home = createFacility(s, 'home', s.worldFirmId, loc, { name: `Home ${homes + 1}` });
     const rng = new Rng(s);
-    for (let i = 0; i < 2 && Object.keys(s.citizens).length < s.config.maxCitizens; i++) {
+    for (let i = 0; i < 2 && Object.keys(townOf(s).citizens).length < s.config.maxCitizens; i++) {
       const cit = createCitizen(s, rng, home.id);
       recordTransaction(s, {
         from: WORLD_ACCOUNT, to: { kind: 'citizen', id: cit.id }, amount: IMMIGRANT_START_CASH,
@@ -606,24 +699,17 @@ export class Simulation {
       `🏡 ${firm.name} funded ${home.name} — two new citizens moved to town.`, home.id);
   }
 
-  /** Net worth used for credit limits: cash + inventory value. */
+  /** Net worth used for credit limits: cash + inventory value. Delegates to
+   *  the ONE shared liquid-collateral basis (interestRates.ts) — the credit
+   *  limit and the tiered loan rate must price against the same numbers, so
+   *  the computation lives in a single function. */
   private netWorth(firmId: FirmId): number {
-    const firm = this.state.firms[firmId];
-    if (!firm) return 0;
-    let inv = 0;
-    for (const facId of firm.facilities) {
-      const fac = this.state.facilities[facId];
-      if (!fac) continue;
-      for (const bag of [fac.inputInventory, fac.outputInventory]) {
-        for (const pid in bag) inv += bag[pid]!.quantity * getProduct(pid).basePrice;
-      }
-    }
-    return firm.cash + inv;
+    return loanNetWorth(this.state, firmId);
   }
 
   private investRnd(command: Extract<Command, { type: 'INVEST_RND' }>): void {
     const s = this.state;
-    const firm = s.firms[command.firmId];
+    const firm = townOf(s).firms[command.firmId];
     if (!firm || command.amount <= 0) return;
     if (!canAfford(s, firmAccount(firm.id), command.amount)) {
       emitEvent(s, 'danger', 'player', 'Not enough cash for R&D.', firm.id);
@@ -648,7 +734,7 @@ export class Simulation {
 
   private takeLoan(command: Extract<Command, { type: 'TAKE_LOAN' }>): void {
     const s = this.state;
-    const firm = s.firms[command.firmId];
+    const firm = townOf(s).firms[command.firmId];
     if (!firm || command.amount <= 0) return;
     const limit = Math.max(LOAN_MIN_CREDIT, Math.round(this.netWorth(firm.id) * LOAN_CREDIT_LIMIT_MULTIPLE));
     const available = limit - firm.debt;
@@ -671,7 +757,7 @@ export class Simulation {
 
   private repayLoan(command: Extract<Command, { type: 'REPAY_LOAN' }>): void {
     const s = this.state;
-    const firm = s.firms[command.firmId];
+    const firm = townOf(s).firms[command.firmId];
     if (!firm || command.amount <= 0 || firm.debt <= 0) return;
     const amount = Math.min(Math.round(command.amount), firm.debt, Math.max(0, firm.cash));
     if (amount <= 0) return;
@@ -690,7 +776,7 @@ export class Simulation {
   // ---- command handlers -------------------------------------------------
 
   private createCompany(name: string, startingCash: number): void {
-    const firm = this.state.firms[this.state.playerFirmId];
+    const firm = townOf(this.state).firms[this.state.playerFirmId];
     if (!firm) return;
     firm.name = name;
     if (startingCash > firm.cash) {
@@ -710,7 +796,8 @@ export class Simulation {
     command: Extract<Command, { type: 'BUILD_FACILITY' }>,
   ): void {
     const s = this.state;
-    const firm = s.firms[command.firmId];
+    const firms = townOf(s).firms;
+    const firm = firms[command.firmId];
     if (!firm) return;
     const def = getFacilityDef(command.defId);
     // The service facilities (datacenter, office) are city-scale only and gated on
@@ -740,7 +827,7 @@ export class Simulation {
         emitEvent(s, 'warning', 'player', 'A firm cannot lease premises from itself.', firm.id);
         return;
       }
-      const landlord = s.firms[command.leaseFrom];
+      const landlord = firms[command.leaseFrom];
       if (!landlord || (landlord.ownerType !== 'ai' && landlord.ownerType !== 'player')) {
         emitEvent(s, 'warning', 'player', 'No such landlord to lease from.', firm.id);
         return;
@@ -795,7 +882,7 @@ export class Simulation {
   private selectRecipe(
     command: Extract<Command, { type: 'SELECT_RECIPE' }>,
   ): void {
-    const fac = this.state.facilities[command.facilityId];
+    const fac = townOf(this.state).facilities[command.facilityId];
     if (!fac) return;
     if (command.recipeId !== null && !fac.recipes.includes(command.recipeId)) return;
     fac.activeRecipeId = command.recipeId;
@@ -809,7 +896,7 @@ export class Simulation {
   private setRetailProduct(
     command: Extract<Command, { type: 'SET_RETAIL_PRODUCT' }>,
   ): void {
-    const fac = this.state.facilities[command.facilityId];
+    const fac = townOf(this.state).facilities[command.facilityId];
     if (!fac || fac.type !== 'retail') return;
     const def = getFacilityDef(fac.defId);
     if (command.productId !== null && !def.allowedProductsForSale.includes(command.productId)) {
@@ -829,7 +916,7 @@ export class Simulation {
   private toggleRetailProduct(
     command: Extract<Command, { type: 'TOGGLE_RETAIL_PRODUCT' }>,
   ): void {
-    const fac = this.state.facilities[command.facilityId];
+    const fac = townOf(this.state).facilities[command.facilityId];
     if (!fac || fac.type !== 'retail') return;
     const def = getFacilityDef(fac.defId);
     if (!def.allowedProductsForSale.includes(command.productId)) return;
@@ -849,24 +936,24 @@ export class Simulation {
   }
 
   private seedDefaultPrice(firmId: FirmId, productId: string): void {
-    const firm = this.state.firms[firmId];
+    const firm = townOf(this.state).firms[firmId];
     if (firm && !firm.pricesByProduct[productId]) {
       firm.pricesByProduct[productId] = getProduct(productId).basePrice;
     }
   }
 
   private setPrice(command: Extract<Command, { type: 'SET_PRICE' }>): void {
-    const firm = this.state.firms[command.firmId];
+    const firm = townOf(this.state).firms[command.firmId];
     if (!firm || command.price <= 0) return;
     firm.pricesByProduct[command.productId] = Math.round(command.price);
   }
 
   private setWage(command: Extract<Command, { type: 'SET_WAGE' }>): void {
-    const firm = this.state.firms[command.firmId];
+    const firm = townOf(this.state).firms[command.firmId];
     if (!firm || command.wage < 0) return;
     firm.wagePolicy.baseWage = Math.round(command.wage);
     for (const cid of firm.employees) {
-      const cit = this.state.citizens[cid];
+      const cit = townOf(this.state).citizens[cid];
       if (cit) cit.wage = firm.wagePolicy.baseWage;
     }
   }
@@ -879,9 +966,9 @@ export class Simulation {
       return;
     }
     const ok = hireCitizen(s, command.facilityId, citizenId);
-    const fac = s.facilities[command.facilityId];
+    const fac = townOf(s).facilities[command.facilityId];
     if (ok && fac) {
-      const cit = s.citizens[citizenId];
+      const cit = townOf(s).citizens[citizenId];
       emitEvent(s, 'success', 'player', `Hired ${cit?.name ?? citizenId} at ${fac.name}.`, fac.id);
     } else if (fac) {
       emitEvent(s, 'warning', 'player', `Could not hire at ${fac.name} (full or invalid).`, fac.id);
@@ -892,8 +979,8 @@ export class Simulation {
     command: Extract<Command, { type: 'CREATE_SUPPLY_CONTRACT' }>,
   ): void {
     const s = this.state;
-    const source = s.facilities[command.sourceFacilityId];
-    const dest = s.facilities[command.destinationFacilityId];
+    const source = townOf(s).facilities[command.sourceFacilityId];
+    const dest = townOf(s).facilities[command.destinationFacilityId];
     if (!source || !dest) return;
     const id = nextId(s.idCounters, 'ctr');
     const contract: Contract = {
@@ -922,11 +1009,12 @@ export class Simulation {
     command: Extract<Command, { type: 'BUY_FROM_IMPORTER' }>,
   ): void {
     const s = this.state;
-    const firm = s.firms[command.firmId];
-    const dest = s.facilities[command.destinationFacilityId];
+    const firms = townOf(s).firms;
+    const firm = firms[command.firmId];
+    const dest = townOf(s).facilities[command.destinationFacilityId];
     if (!firm || !dest) return;
     const product = getProduct(command.productId);
-    const importer = Object.values(s.firms).find((f) => f.ownerType === 'external');
+    const importer = Object.values(firms).find((f) => f.ownerType === 'external');
     const unitPrice = Math.round(product.basePrice * IMPORT_MARKUP * worldImportMult(s));
     const room = dest.storageCapacity - totalUnits(dest.inputInventory);
     const qty = Math.min(command.quantity, Math.max(0, room));

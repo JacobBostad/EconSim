@@ -11,6 +11,7 @@
 
 import type { GameState } from '../core/GameState';
 import { companyValuation } from '../selectors/companySelectors';
+import { townOf } from '../core/Town';
 import { activeWorldEvents } from './worldEvents';
 import { seasonOf, seasonOfDay } from './seasons';
 import { ticksPerDay } from '../core/Tick';
@@ -29,7 +30,9 @@ export interface AchievementDef {
 }
 
 function player(state: GameState) {
-  return state.firms[state.playerFirmId];
+  // Home-town view (identity in a one-town region, so the returned record is the
+  // same reference); gains a `townId` param at the endgame move.
+  return townOf(state).firms[state.playerFirmId];
 }
 
 function latestNetProfit(state: GameState): number | null {
@@ -83,8 +86,9 @@ export const ACHIEVEMENT_DEFS: AchievementDef[] = [
       const p = player(s);
       if (!p) return false;
       let raw = false, fact = false, shop = false;
+      const facilities = townOf(s).facilities;
       for (const fid of p.facilities) {
-        const t = s.facilities[fid]?.type;
+        const t = facilities[fid]?.type;
         if (t === 'farm' || t === 'mine') raw = true;
         else if (t === 'factory') fact = true;
         else if (t === 'retail') shop = true;
@@ -270,13 +274,14 @@ export const ACHIEVEMENT_DEFS: AchievementDef[] = [
     check: (s) => {
       const p = player(s);
       if (!p) return false;
+      const facilities = townOf(s).facilities;
       for (const fid of p.facilities) {
-        const fac = s.facilities[fid];
+        const fac = facilities[fid];
         if (!fac || (fac.wholesalePriceMult ?? 1) > 0.6) continue;
         for (const cid in s.contracts) {
           const c = s.contracts[cid]!;
           if (!c.active || c.sourceFacilityId !== fac.id) continue;
-          if (s.facilities[c.destinationFacilityId]?.ownerFirmId !== p.id) return true;
+          if (facilities[c.destinationFacilityId]?.ownerFirmId !== p.id) return true;
         }
       }
       return false;
@@ -291,10 +296,11 @@ export const ACHIEVEMENT_DEFS: AchievementDef[] = [
     check: (s) => {
       const p = player(s);
       if (!p) return false;
+      const facilities = townOf(s).facilities;
       for (const fid of p.facilities) {
-        const fac = s.facilities[fid];
+        const fac = facilities[fid];
         if (!fac || fac.employees.length < 2) continue;
-        const avg = fac.employees.reduce((sum, cid) => sum + (s.citizens[cid]?.skill ?? 0), 0) / fac.employees.length;
+        const avg = fac.employees.reduce((sum, cid) => sum + (townOf(s).citizens[cid]?.skill ?? 0), 0) / fac.employees.length;
         if (avg >= 1.25) return true;
       }
       return false;
@@ -333,7 +339,7 @@ export const ACHIEVEMENT_DEFS: AchievementDef[] = [
     icon: '🏘️',
     description: 'The town grew to 60 citizens.',
     hint: 'Keep satisfaction and jobs high so 20 new citizens move in.',
-    check: (s) => Object.keys(s.citizens).length >= 60,
+    check: (s) => Object.keys(townOf(s).citizens).length >= 60,
   },
   {
     id: 'landlord_baron',
@@ -345,8 +351,9 @@ export const ACHIEVEMENT_DEFS: AchievementDef[] = [
       const p = player(s);
       if (!p) return false;
       let full = 0;
+      const facilities = townOf(s).facilities;
       for (const fid of p.facilities) {
-        const f = s.facilities[fid];
+        const f = facilities[fid];
         if (f?.defId === 'apartment' && f.residentIds.length >= 1) full += 1;
       }
       return full >= 3;
@@ -369,8 +376,9 @@ export const ACHIEVEMENT_DEFS: AchievementDef[] = [
     check: (s) => {
       const p = player(s);
       if (!p || p.employees.length < 5) return false;
-      for (const fid in s.firms) {
-        const f = s.firms[fid]!;
+      const firms = townOf(s).firms;
+      for (const fid in firms) {
+        const f = firms[fid]!;
         if (f.id === p.id || (f.ownerType !== 'ai' && f.ownerType !== 'player')) continue;
         if (p.wagePolicy.baseWage < f.wagePolicy.baseWage * 1.15) return false;
       }
@@ -403,7 +411,7 @@ export const ACHIEVEMENT_DEFS: AchievementDef[] = [
     icon: '🥂',
     description: 'The town has its first affluent citizen.',
     hint: 'Prosperity takes weeks of steady income, high satisfaction, and savings or fine housing — pay above market and build apartments to hurry it along.',
-    check: (s) => Object.values(s.citizens).some((c) => c.tier === 'affluent'),
+    check: (s) => Object.values(townOf(s).citizens).some((c) => c.tier === 'affluent'),
   },
   {
     id: 'rising_tide',
@@ -412,7 +420,7 @@ export const ACHIEVEMENT_DEFS: AchievementDef[] = [
     description: 'Most of the town lives comfortably (or better).',
     hint: 'When comfortable + affluent citizens outnumber workers, your economy is genuinely lifting people — wages, satisfaction, and full shelves all feed the climb.',
     check: (s) => {
-      const cits = Object.values(s.citizens);
+      const cits = Object.values(townOf(s).citizens);
       if (cits.length < 10) return false;
       const up = cits.filter((c) => c.tier !== 'worker').length;
       return up > cits.length / 2;
@@ -426,7 +434,7 @@ export const ACHIEVEMENT_DEFS: AchievementDef[] = [
     hint: 'When emigration starts, the fix is jobs and full shelves: build supply for the town, employ people, and hold satisfaction until nobody wants to leave anymore.',
     check: (s) => {
       if (s.emigrationDepartures < 1 || s.emigrationPressure !== 0) return false;
-      const cits = Object.values(s.citizens);
+      const cits = Object.values(townOf(s).citizens);
       if (cits.length === 0) return false;
       const avg = cits.reduce((a, c) => a + c.satisfaction, 0) / cits.length;
       return avg >= 50;
@@ -449,7 +457,7 @@ export const ACHIEVEMENT_DEFS: AchievementDef[] = [
       if (!s.config.realEstateEnabled) return false;
       const p = player(s);
       if (!p) return false;
-      return p.facilities.some((fid) => s.facilities[fid]?.landlordFirmId !== undefined);
+      return p.facilities.some((fid) => townOf(s).facilities[fid]?.landlordFirmId !== undefined);
     },
   },
   {
@@ -520,10 +528,40 @@ export const ACHIEVEMENT_DEFS: AchievementDef[] = [
     hint: 'Mill Country stays a worker town on its own: import prices eat every paycheck. Build local farms and mines, cut the cost of living, and raise wages until most citizens climb out of the worker tier.',
     check: (s) => {
       if (s.scenarioId !== 'mill_country') return false;
-      const cits = Object.values(s.citizens);
+      const cits = Object.values(townOf(s).citizens);
       if (cits.length < 10) return false;
       const up = cits.filter((c) => c.tier !== 'worker').length;
       return up > cits.length / 2;
+    },
+  },
+  // --- Region era (City new-game default) ----------------------------------
+  // The region opens a FREIGHT edge to a second live economy, the partner port
+  // Port Rosa (region.md step 4). Both checks gate on `regionEnabled` FIRST and
+  // return false when it's off (Village always, Metropolis too): the freight
+  // record never exists without a live partner, but the explicit gate makes the
+  // inertness structural, not incidental — these can never fire in a Village run,
+  // so its serialized achievement list stays byte-identical. Same discipline as
+  // the world-scale era gates above.
+  {
+    id: 'port_rosa_run',
+    name: 'Port Rosa Run',
+    icon: '⚓',
+    description: 'Landed your first freight in Port Rosa, the partner port.',
+    hint: 'Freight a staple from your warehouse to Port Rosa and let it arrive (region on).',
+    check: (s) => {
+      if (!s.config.regionEnabled) return false;
+      return ((player(s)?.exportRevenueByCity ?? {})['port_rosa'] ?? 0) > 0;
+    },
+  },
+  {
+    id: 'shock_trader',
+    name: 'Rode the Spike',
+    icon: '🌩️',
+    description: 'Settled a Port Rosa freight locked at a 1.3× price spike.',
+    hint: "Freight when Port Rosa's quote has spiked, so the price you lock lands at 1.3× base or more (region on).",
+    check: (s) => {
+      if (!s.config.regionEnabled) return false;
+      return s.freightBestSpikePct >= 130;
     },
   },
 ];

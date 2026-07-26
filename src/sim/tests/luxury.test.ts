@@ -51,10 +51,11 @@ describe('Luxury tier', () => {
   it('old saves gain luxury needs and market stats', () => {
     const sim = newSim(1);
     const raw = JSON.parse(serialize(sim.getState()));
-    delete raw.marketStats.pastries;
-    delete raw.marketStats.jewelry;
-    for (const cid in raw.citizens) {
-      raw.citizens[cid].needs = raw.citizens[cid].needs.filter(
+    const home = raw.towns.home; // the six families live under towns.home now
+    delete home.marketStats.pastries;
+    delete home.marketStats.jewelry;
+    for (const cid in home.citizens) {
+      home.citizens[cid].needs = home.citizens[cid].needs.filter(
         (n: { productId: string }) => n.productId !== 'pastries' && n.productId !== 'jewelry',
       );
     }

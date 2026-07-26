@@ -23,6 +23,7 @@
 import type { GameState } from './GameState';
 import { formatMoney } from '../../utils/formatMoney';
 import { canAfford, emitEvent, recordTransaction } from './GameState';
+import { townOf } from './Town';
 import { firmAccount, WORLD_ACCOUNT } from './Transactions';
 import type { FirmId } from './Id';
 import {
@@ -36,7 +37,9 @@ import { tradeShares } from './Shares';
 
 /** Premium multiple applied to a target's marketCap for a full takeover. */
 function acquisitionPremium(state: GameState, targetId: FirmId): number {
-  return state.firms[targetId]?.bankruptcyStatus === 'healthy'
+  // Home-town view (identity in a one-town region, so the returned record is the
+  // same reference); gains a `townId` param at the endgame move.
+  return townOf(state).firms[targetId]?.bankruptcyStatus === 'healthy'
     ? ACQUISITION_PREMIUM_HEALTHY
     : ACQUISITION_PREMIUM_DISTRESSED;
 }
@@ -45,8 +48,9 @@ function acquisitionPremium(state: GameState, targetId: FirmId): number {
  * Priced off marketCap — the same number 1% trades at ×100 — so a creeping
  * acquisition and a clean takeover value the firm identically. */
 export function acquisitionCost(state: GameState, buyerId: FirmId, targetId: FirmId): number {
-  const target = state.firms[targetId];
-  const buyer = state.firms[buyerId];
+  const firms = townOf(state).firms;
+  const target = firms[targetId];
+  const buyer = firms[buyerId];
   if (!target || !buyer) return 0;
   const val = marketCap(state, targetId);
   const premium = acquisitionPremium(state, targetId);
@@ -66,9 +70,10 @@ export function acquisitionBlocker(
   buyerId: FirmId,
   targetId: FirmId,
 ): FirmId | null {
-  for (const hid of Object.keys(state.firms).sort()) {
+  const firms = townOf(state).firms;
+  for (const hid of Object.keys(firms).sort()) {
     if (hid === buyerId) continue;
-    if ((state.firms[hid]!.sharesHeld[targetId] ?? 0) >= CONTROL_BLOCK_PCT) return hid;
+    if ((firms[hid]!.sharesHeld[targetId] ?? 0) >= CONTROL_BLOCK_PCT) return hid;
   }
   return null;
 }
@@ -80,8 +85,9 @@ export function performAcquisition(
   targetId: FirmId,
 ): boolean {
   const s = state;
-  const buyer = s.firms[buyerId];
-  const target = s.firms[targetId];
+  const firms = townOf(s).firms;
+  const buyer = firms[buyerId];
+  const target = firms[targetId];
   if (!buyer || !target || buyerId === targetId) return false;
   if (target.ownerType !== 'ai') return false;
   if (buyer.ownerType !== 'player' && buyer.ownerType !== 'ai') return false;
@@ -90,7 +96,7 @@ export function performAcquisition(
   const blockerId = acquisitionBlocker(s, buyerId, targetId);
   if (blockerId) {
     if (buyer.ownerType === 'player') {
-      const blocker = s.firms[blockerId]!;
+      const blocker = firms[blockerId]!;
       emitEvent(s, 'warning', 'finance',
         `${blocker.name} holds a blocking ${blocker.sharesHeld[targetId]}% of ${target.name} — its board rejects the takeover.`,
         buyer.id);
@@ -118,9 +124,9 @@ export function performAcquisition(
   // float's share and leaks to the world. Rounding is clamped to the remaining
   // budget so the sum can never mint or burn a cent.
   let remaining = cost;
-  for (const hid of Object.keys(s.firms).sort()) {
+  for (const hid of Object.keys(firms).sort()) {
     if (hid === buyerId) continue;
-    const holder = s.firms[hid]!;
+    const holder = firms[hid]!;
     const pct = holder.sharesHeld[targetId] ?? 0;
     if (pct <= 0) continue;
     const pay = Math.min(remaining, Math.round((val * premium * pct) / 100));
@@ -192,14 +198,16 @@ export function performAcquisition(
   buyer.debt += target.debt;
 
   // Facilities, staff, shipments, contracts.
+  const facilities = townOf(s).facilities;
   for (const facId of target.facilities) {
-    const fac = s.facilities[facId];
+    const fac = facilities[facId];
     if (!fac) continue;
     fac.ownerFirmId = buyer.id;
     buyer.facilities.push(facId);
   }
+  const citizens = townOf(s).citizens;
   for (const cid of target.employees) {
-    const cit = s.citizens[cid];
+    const cit = citizens[cid];
     if (!cit) continue;
     cit.employerFirmId = buyer.id;
     buyer.employees.push(cid);

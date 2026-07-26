@@ -11,6 +11,7 @@
 
 import { SAVE_VERSION } from '../core/GameState';
 import type { GameState } from '../core/GameState';
+import { HOME_TOWN_ID, TOWN_RECORD_KEYS, installTownAliases } from '../core/Town';
 import type { AccountingPeriod } from '../entities/Accounting';
 import { PRODUCT_IDS_BY_PRESET, CONSUMER_PRODUCT_IDS_BY_PRESET } from '../data/products';
 import { emptyMarketStat } from '../entities/Market';
@@ -43,6 +44,20 @@ export const MIGRATIONS: Record<number, (raw: Raw) => Raw> = {
     }
     return { ...raw, saveVersion: 2 };
   },
+  // v2 -> v3 (region.md step 3 endgame): the six town-scoped record families
+  // MOVE from the flat top level into `towns[HOME_TOWN_ID]`. An old save carries
+  // them flat (`raw.firms`, `raw.districts`, ...) with no `towns` key; wrap them
+  // into the home town and drop the flat keys. The flat back-compat accessor
+  // aliases are (re)installed by `installTownAliases` after the version loop, so
+  // every reader/writer keeps working. Money, rng, contracts are untouched — the
+  // loaded world is the same run, its records now one level down.
+  2: (raw) => {
+    const home: Record<string, unknown> = {};
+    for (const key of TOWN_RECORD_KEYS) home[key] = raw[key];
+    const next: Raw = { ...raw, towns: { [HOME_TOWN_ID]: home }, saveVersion: 3 };
+    for (const key of TOWN_RECORD_KEYS) delete next[key];
+    return next;
+  },
 };
 
 export function migrate(raw: Raw): GameState {
@@ -58,7 +73,14 @@ export function migrate(raw: Raw): GameState {
     }
     version += 1;
   }
-  return normalize(current as unknown as GameState);
+  // Both paths land here with the records under `towns[HOME_TOWN_ID]` (a v3-native
+  // save deserialized them there directly; an older save was wrapped by the v2->v3
+  // step). Install the flat back-compat aliases BEFORE normalize, so its reads and
+  // wholesale-replacement writes (`state.districts = state.districts ?? ...`) route
+  // through them onto the home town.
+  const state = current as unknown as GameState;
+  installTownAliases(state);
+  return normalize(state);
 }
 
 function normPeriod(p: Partial<AccountingPeriod> | undefined): AccountingPeriod {
@@ -99,6 +121,12 @@ function normalize(state: GameState): GameState {
     d.affluent = d.affluent ?? 0;
   }
   state.rushOrder = state.rushOrder ?? null;
+  // In-flight freight (Arc E step 4, slice 4): a SAVE-SHAPE addition kept at
+  // SAVE_VERSION 3 (normalize-only). Saves predating it — and every flag-off game
+  // — load with an empty array (the derivable default) and are byte-identical; a
+  // save taken MID-FLIGHT carries its shipments and they still land on schedule
+  // (arrivalDay is an absolute day). Mirrors the map-dims default above.
+  state.freight = state.freight ?? [];
   state.tradeAnnouncement = state.tradeAnnouncement ?? null;
   state.rushOrdersCompleted = state.rushOrdersCompleted ?? 0;
   state.rushOrdersMissed = state.rushOrdersMissed ?? 0;
@@ -112,6 +140,10 @@ function normalize(state: GameState): GameState {
   state.poolFeedsWhileThin = state.poolFeedsWhileThin ?? 0;
   state.poolCoversRestored = state.poolCoversRestored ?? 0;
   state.landlordRepossessions = state.landlordRepossessions ?? 0;
+  // Region-era freight arbitrage read (best locked price as %-of-base): saves
+  // predating it load at 0 and stay inert until a region game freights to a
+  // live partner. Normalize-only, mirroring the other era tallies above.
+  state.freightBestSpikePct = state.freightBestSpikePct ?? 0;
   state.emigrationPressure = state.emigrationPressure ?? 0;
   state.emigrationDepartures = state.emigrationDepartures ?? 0;
   state.marketGapDays = state.marketGapDays ?? {};
@@ -133,6 +165,25 @@ function normalize(state: GameState): GameState {
   // Real-estate firms channel (Arc D2, HD4): saves predating it load with the
   // channel off — no landlord ever founds until a City game turns it on.
   state.config.realEstateEnabled = state.config.realEstateEnabled ?? false;
+  // The region (Arc E step 4): saves predating it load with the flag off and no
+  // partner town — a one-town region, byte-identical to a pre-region game.
+  state.config.regionEnabled = state.config.regionEnabled ?? false;
+  // Risk-tiered loan pricing (docs/design/interest-rates.md): saves predating it
+  // load with the flag OFF so an in-progress game keeps the flat all-in rate it
+  // was playing — no repricing on load (Phase 3's opt-in migration is unshipped).
+  // Only NEW games (worldScaleConfig) turn it on.
+  state.config.riskTieredInterestEnabled = state.config.riskTieredInterestEnabled ?? false;
+  // Per-town map dims (Arc E step 4, slice 1): the six-family town record now
+  // carries its own mapWidth/mapHeight. A v3 save written before this slice (and
+  // every wrapped v2 save) has them absent under `towns.*`; default each town's
+  // from config. For HOME this is exactly `config.mapWidth`/`.mapHeight`, so the
+  // getter swap is value-identical — every old save loads unchanged. A partner
+  // town serialized WITH its own dims keeps them (the `??` is a no-op there).
+  for (const tid of Object.keys(state.towns)) {
+    const t = state.towns[tid]!;
+    t.mapWidth = t.mapWidth ?? state.config.mapWidth;
+    t.mapHeight = t.mapHeight ?? state.config.mapHeight;
+  }
   state.housingTightDays = state.housingTightDays ?? 0;
   state.lastLandlordEntryDay = state.lastLandlordEntryDay ?? 0;
   state.districts = state.districts ?? defaultDistrictPartition(state.config);

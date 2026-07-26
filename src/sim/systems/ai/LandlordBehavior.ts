@@ -39,6 +39,7 @@
 import type { SimContext, GameState } from '../../core/GameState';
 import type { Firm } from '../../entities/Firm';
 import { emitEvent, recordTransaction } from '../../core/GameState';
+import { townOf } from '../../core/Town';
 import { firmAccount, WORLD_ACCOUNT } from '../../core/Transactions';
 import { getFacilityDef } from '../../data/facilityDefinitions';
 import { createFacility } from '../../entities/factories';
@@ -71,10 +72,13 @@ export const COMMERCIAL_TARGET_YIELD = 0.15;
  * no housing. Exported for the founder row and probes. Deterministic read.
  */
 export function townHousingOccupancy(state: GameState): number {
+  // Bare-`state` helper mid-gradient: home town by default (one-town region →
+  // same reference); gains a `townId` param at the endgame move.
+  const town = townOf(state);
   let filled = 0;
   let capacity = 0;
-  for (const fid in state.facilities) {
-    const f = state.facilities[fid]!;
+  for (const fid in town.facilities) {
+    const f = town.facilities[fid]!;
     if (f.type !== 'home') continue;
     if (f.defId === 'apartment') {
       capacity += APARTMENT_CAPACITY;
@@ -127,10 +131,13 @@ function landlordRoll(seed: number, day: number, firmId: string, chance: number)
  * — the same housing-squeeze read the operator's maybeBuildApartment uses, so a
  * landlord develops under exactly the conditions that warrant new stock. */
 function housingSqueezed(state: GameState): boolean {
+  // Bare-`state` helper mid-gradient: home town by default (one-town region →
+  // same reference); gains a `townId` param at the endgame move.
+  const town = townOf(state);
   let homes = 0;
   let vacancies = 0;
-  for (const fid in state.facilities) {
-    const f = state.facilities[fid]!;
+  for (const fid in town.facilities) {
+    const f = town.facilities[fid]!;
     if (f.type !== 'home') continue;
     homes += 1;
     if (f.residentIds.length < 2) vacancies += 1;
@@ -142,11 +149,12 @@ function housingSqueezed(state: GameState): boolean {
  * Returns true if a block was sold. */
 function sellWeakestBlock(ctx: SimContext, firmId: string): boolean {
   const { state } = ctx;
-  const firm = state.firms[firmId]!;
+  const town = townOf(state, ctx.townId);
+  const firm = town.firms[firmId]!;
   let target: string | null = null;
   let lowest = Infinity;
   for (const facId of firm.facilities) {
-    const fac = state.facilities[facId];
+    const fac = town.facilities[facId];
     if (!fac || fac.defId !== 'apartment') continue;
     const bv = facilityBookValue(fac);
     if (bv < lowest) {
@@ -155,7 +163,7 @@ function sellWeakestBlock(ctx: SimContext, firmId: string): boolean {
     }
   }
   if (!target) return false;
-  const name = state.facilities[target]!.name;
+  const name = town.facilities[target]!.name;
   const sold = sellFacility(state, firmId, target);
   if (sold) {
     emitEvent(state, 'warning', 'ai',
@@ -169,13 +177,14 @@ function sellWeakestBlock(ctx: SimContext, firmId: string): boolean {
  * deterministic apart from the paced hash gate. */
 function developBlock(ctx: SimContext, firmId: string): void {
   const { state } = ctx;
-  const firm = state.firms[firmId]!;
+  const town = townOf(state, ctx.townId);
+  const firm = town.firms[firmId]!;
   if (!housingSqueezed(state)) return;
   if (!landlordRoll(state.seed, ctx.time.day, firmId, LANDLORD_BUILD_CHANCE)) return;
 
   const loc = {
-    x: clamp(40 + ((ctx.time.day * 37 + firm.facilities.length * 13) % 49) - 24, 8, state.config.mapWidth - 8),
-    y: clamp(64 + ((ctx.time.day * 17) % 13) - 6, 8, state.config.mapHeight - 8),
+    x: clamp(40 + ((ctx.time.day * 37 + firm.facilities.length * 13) % 49) - 24, 8, town.mapWidth - 8),
+    y: clamp(64 + ((ctx.time.day * 17) % 13) - 6, 8, town.mapHeight - 8),
   };
   const def = getFacilityDef('apartment');
   const mult = landCostMultiplier(landValueAt(state, loc));
@@ -207,7 +216,8 @@ export function runLandlordBehavior(
   _digest: DigestBuffer | undefined,
 ): void {
   const { state } = ctx;
-  const firm = state.firms[firmId];
+  const town = townOf(state, ctx.townId);
+  const firm = town.firms[firmId];
   if (!firm) return;
   // Insolvent landlords are BankruptcySystem's to wind down; do nothing.
   if (firm.bankruptcyStatus === 'insolvent') return;

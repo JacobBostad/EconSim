@@ -19,6 +19,7 @@
 
 import type { SimContext } from '../core/GameState';
 import { emitEvent } from '../core/GameState';
+import { townOf } from '../core/Town';
 import { isDayBoundary } from '../core/Tick';
 import { PRODUCT_IDS_BY_PRESET, getProduct } from '../data/products';
 import {
@@ -38,6 +39,7 @@ import {
 import { clamp } from '../../utils/clamp';
 import { getQuantity } from '../entities/Inventory';
 import { performExport, pickBestCity } from '../core/Trade';
+import { isLivePartnerCity } from '../core/PartnerMarket';
 import { worldTradePriceMult } from '../data/worldEvents';
 import { tradeAnnouncementMult } from './TradeAnnouncementSystem';
 import { TRADE_CITY_IDS, getTradeCity, cityBias } from '../data/tradeCities';
@@ -80,6 +82,12 @@ export function runTradeCitySystem(ctx: SimContext): void {
 function updatePools(ctx: SimContext): void {
   const { state } = ctx;
   for (const cid of TRADE_CITY_IDS) {
+    // A LIVE partner (slice 5) has RETIRED its pool: its export larder is real
+    // shelf stock refilled by PartnerMarketSystem, so it carries no `pool` row to
+    // tick here. `updatePools` is the STUB-city supply side only (ironvale, and a
+    // flag-off port_rosa where the pool row stays). The `!pool` guard already
+    // skips a live partner (it has no pool); this is the explicit statement of it.
+    if (isLivePartnerCity(state, cid)) continue;
     const pool = state.tradeCities[cid]?.pool;
     if (!pool) continue;
     for (const pid of PRODUCT_IDS_BY_PRESET[state.config.sizePreset]) {
@@ -154,8 +162,9 @@ function updatePrices(ctx: SimContext): void {
  */
 function runStandingOrders(ctx: SimContext): void {
   const { state } = ctx;
-  for (const fid in state.facilities) {
-    const fac = state.facilities[fid]!;
+  const town = townOf(state, ctx.townId);
+  for (const fid in town.facilities) {
+    const fac = town.facilities[fid]!;
     if (fac.type !== 'warehouse') continue;
     for (const pid in fac.exportOrders) {
       const order = fac.exportOrders[pid]!;

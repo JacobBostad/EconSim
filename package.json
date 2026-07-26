@@ -14,7 +14,9 @@
     "e2e": "node e2e/smoke.mjs",
     "e2e:deep": "node e2e/deepsmoke.mjs",
     "e2e:city": "node e2e/citysmoke.mjs",
-    "e2e:metro": "node e2e/metrosmoke.mjs"
+    "e2e:metro": "node e2e/metrosmoke.mjs",
+    "e2e:region": "node e2e/regionsmoke.mjs",
+    "e2e:switcher": "node e2e/switchersmoke.mjs"
   },
   "dependencies": {
     "react": "^18.3.1",

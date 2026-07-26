@@ -17,6 +17,7 @@
 import type { SimContext, GameState } from '../../core/GameState';
 import type { Firm } from '../../entities/Firm';
 import { emitEvent, recordTransaction, addContract } from '../../core/GameState';
+import { townOf } from '../../core/Town';
 import { commercialLeaseAsk, landlordCanFinance } from './LandlordBehavior';
 import { firmAccount, WORLD_ACCOUNT } from '../../core/Transactions';
 import { nextId } from '../../core/Id';
@@ -42,9 +43,12 @@ import { getPersonality, ceoQuote } from '../../data/personalities';
  * lease branch that calls it is inert. A pure sorted read — draws no rng.
  */
 function findLandlordLessor(state: GameState, firmId: string, cost: number): Firm | null {
-  for (const id of Object.keys(state.firms).sort()) {
+  // Bare-`state` helper mid-gradient: home town by default (one-town region →
+  // same reference); gains a `townId` param at the endgame move.
+  const town = townOf(state);
+  for (const id of Object.keys(town.firms).sort()) {
     if (id === firmId) continue;
-    const f = state.firms[id]!;
+    const f = town.firms[id]!;
     if (f.ownerType !== 'ai' || f.strategy.archetype !== 'landlord') continue;
     if (landlordCanFinance(f, cost)) return f;
   }
@@ -58,21 +62,22 @@ function findLandlordLessor(state: GameState, firmId: string, cost: number): Fir
  */
 export function maybeExpand(ctx: SimContext, firmId: string): void {
   const { state, rng } = ctx;
-  const firm = state.firms[firmId]!;
-  const stores = firm.facilities.filter((id) => state.facilities[id]?.type === 'retail');
+  const town = townOf(state, ctx.townId);
+  const firm = town.firms[firmId]!;
+  const stores = firm.facilities.filter((id) => town.facilities[id]?.type === 'retail');
   if (stores.length >= 3) return; // cap stores per firm
 
   // Which product does this firm sell, and is demand unmet?
   let product: string | null = null;
   let lost = 0;
   for (const id of stores) {
-    const fac = state.facilities[id]!;
+    const fac = town.facilities[id]!;
     if (fac.retailProductIds.length === 0) continue;
     product = fac.retailProductIds[0]!;
     lost += fac.dailyStats.lostSales;
   }
   if (!product) return;
-  const stat = state.marketStats[product]!;
+  const stat = town.marketStats[product]!;
   if (stat.unmetDemand < 14 || lost < 6) return; // only under real shortage
   const expandChance = Math.min(1, ctx.config.aiExpandChance * getPersonality(firm.personalityId).expandChanceMult);
   if (!rng.chance(expandChance)) return; // not every eligible day
@@ -80,8 +85,8 @@ export function maybeExpand(ctx: SimContext, firmId: string): void {
   const def = getFacilityDef('retail');
   // Location + land premium: AI pays market rates like everyone else.
   const loc = {
-    x: clamp(54 + stores.length * 12 + rng.jitter(5), 8, state.config.mapWidth - 8),
-    y: clamp(50 + rng.jitter(6), 8, state.config.mapHeight - 8),
+    x: clamp(54 + stores.length * 12 + rng.jitter(5), 8, town.mapWidth - 8),
+    y: clamp(50 + rng.jitter(6), 8, town.mapHeight - 8),
   };
   const mult = landCostMultiplier(landValueAt(state, loc));
   const cost = Math.round(def.buildCost * mult);
@@ -116,7 +121,7 @@ export function maybeExpand(ctx: SimContext, firmId: string): void {
   // Find the firm's factory that produces this product (supply source).
   let sourceId: string | null = null;
   for (const id of firm.facilities) {
-    const fac = state.facilities[id];
+    const fac = town.facilities[id];
     if (fac?.activeRecipeId && getRecipe(fac.activeRecipeId).outputs.some((o) => o.productId === product)) {
       sourceId = id; break;
     }
@@ -149,7 +154,7 @@ export function maybeExpand(ctx: SimContext, firmId: string): void {
     addContract(ctx, contract);
   }
   const how = lessor
-    ? `leased a new outlet from ${state.firms[lessor.id]!.name}`
+    ? `leased a new outlet from ${town.firms[lessor.id]!.name}`
     : 'opened a new outlet';
   emitEvent(state, 'info', 'ai', `${firm.name} ${how} to meet demand for ${getProduct(product).name}.${ceoQuote(rng, firm, 'expand')}`, fac.id);
 }
@@ -168,11 +173,12 @@ const LUXURY_RND_COST = 6000_00;
 
 export function maybeEnterLuxury(ctx: SimContext, firmId: string): void {
   const { state, rng } = ctx;
-  const firm = state.firms[firmId]!;
+  const town = townOf(state, ctx.townId);
+  const firm = town.firms[firmId]!;
   if (ctx.time.day < LUXURY_ENTRY_DAY || firm.cash < LUXURY_ENTRY_CASH) return;
   // Already in luxury? One entry per firm.
   for (const facId of firm.facilities) {
-    const pids = state.facilities[facId]?.retailProductIds ?? [];
+    const pids = town.facilities[facId]?.retailProductIds ?? [];
     if (pids.some((p) => getProduct(p).needType === 'luxury')) return;
   }
   if (!rng.chance(LUXURY_ENTRY_CHANCE)) return;
@@ -182,7 +188,7 @@ export function maybeEnterLuxury(ctx: SimContext, firmId: string): void {
   let hasMine = false;
   let producerId: string | null = null;
   for (const facId of firm.facilities) {
-    const fac = state.facilities[facId];
+    const fac = town.facilities[facId];
     if (!fac) continue;
     if (fac.activeRecipeId === 'grow_grain') { hasGrainFarm = true; producerId = producerId ?? fac.id; }
     if (fac.type === 'mine') { hasMine = true; producerId = hasGrainFarm ? producerId : fac.id; }
@@ -192,8 +198,8 @@ export function maybeEnterLuxury(ctx: SimContext, firmId: string): void {
   const recipe = luxury === 'jewelry' ? 'craft_jewelry' : 'bake_pastries';
 
   // Costs: R&D to mastery + workshop + boutique (land-adjusted).
-  const wsLoc = { x: clamp(70 + rng.jitter(10), 8, state.config.mapWidth - 8), y: clamp(30 + rng.jitter(4), 8, state.config.mapHeight - 8) };
-  const shopLoc = { x: clamp(60 + rng.jitter(12), 8, state.config.mapWidth - 8), y: clamp(49 + rng.jitter(5), 8, state.config.mapHeight - 8) };
+  const wsLoc = { x: clamp(70 + rng.jitter(10), 8, town.mapWidth - 8), y: clamp(30 + rng.jitter(4), 8, town.mapHeight - 8) };
+  const shopLoc = { x: clamp(60 + rng.jitter(12), 8, town.mapWidth - 8), y: clamp(49 + rng.jitter(5), 8, town.mapHeight - 8) };
   const wsCost = Math.round(getFacilityDef('factory').buildCost * landCostMultiplier(landValueAt(state, wsLoc)));
   const shopCost = Math.round(getFacilityDef('retail').buildCost * landCostMultiplier(landValueAt(state, shopLoc)));
   const total = LUXURY_RND_COST + wsCost + shopCost;
@@ -223,7 +229,7 @@ export function maybeEnterLuxury(ctx: SimContext, firmId: string): void {
   // Wire input supply: own producer if compatible, otherwise the importer.
   let sourceId = producerId;
   if (!sourceId || (luxury === 'jewelry' && !hasMine) || (luxury === 'pastries' && !hasGrainFarm)) {
-    sourceId = Object.values(state.facilities).find((f) => f.type === 'importer')?.id ?? null;
+    sourceId = Object.values(town.facilities).find((f) => f.type === 'importer')?.id ?? null;
   }
   const wire = (src: string, dest: string, pid: string, t: number, r: number, m: number): void => {
     const id = nextId(state.idCounters, 'ctr');
@@ -254,18 +260,19 @@ const COFFEE_ENTRY_CHANCE = 0.06;
 
 export function maybeEnterCoffee(ctx: SimContext, firmId: string): void {
   const { state, rng } = ctx;
-  const firm = state.firms[firmId]!;
+  const town = townOf(state, ctx.townId);
+  const firm = town.firms[firmId]!;
   if (ctx.time.day < COFFEE_ENTRY_DAY || firm.cash < COFFEE_ENTRY_CASH) return;
   // One entry per firm. Multiple entrants are fine — coffee on several
   // staple shelves rides existing shopping trips via baskets (measured
   // healthier than a single scarce seller that pulls dedicated trips).
   for (const facId of firm.facilities) {
-    if (state.facilities[facId]?.retailProductIds.includes('coffee')) return;
+    if (town.facilities[facId]?.retailProductIds.includes('coffee')) return;
   }
   // A store with a free assortment slot is required.
   let store: import('../../entities/Facility').Facility | null = null;
   for (const facId of firm.facilities) {
-    const fac = state.facilities[facId];
+    const fac = town.facilities[facId];
     if (fac?.type === 'retail' && fac.status !== 'closed' && fac.retailProductIds.length < MAX_RETAIL_PRODUCTS) {
       store = fac;
       break;
@@ -275,8 +282,8 @@ export function maybeEnterCoffee(ctx: SimContext, firmId: string): void {
   if (!rng.chance(COFFEE_ENTRY_CHANCE)) return;
 
   const loc = {
-    x: clamp(52 + rng.jitter(10), 8, state.config.mapWidth - 8),
-    y: clamp(33 + rng.jitter(4), 8, state.config.mapHeight - 8),
+    x: clamp(52 + rng.jitter(10), 8, town.mapWidth - 8),
+    y: clamp(33 + rng.jitter(4), 8, town.mapHeight - 8),
   };
   const cost = Math.round(getFacilityDef('factory').buildCost * landCostMultiplier(landValueAt(state, loc)));
   if (firm.cash - cost < 15000_00) return;
@@ -290,7 +297,7 @@ export function maybeEnterCoffee(ctx: SimContext, firmId: string): void {
   // Grain comes from the importer, never the local farms: measured on seed 5,
   // roasteries siphoning farm grain cut the town's bread supply ~30% and
   // crashed satisfaction to 9 — coffee must be additive, not cannibalizing.
-  const grainSource = Object.values(state.facilities).find((f) => f.type === 'importer')?.id ?? null;
+  const grainSource = Object.values(town.facilities).find((f) => f.type === 'importer')?.id ?? null;
   const wire = (src: string, dest: string, pid: string, t: number, r: number, m: number): void => {
     const id = nextId(state.idCounters, 'ctr');
     const contract: Contract = {
@@ -327,14 +334,15 @@ const LANDLORD_MAX_APARTMENTS = 2;
 
 export function maybeBuildApartment(ctx: SimContext, firmId: string): void {
   const { state, rng } = ctx;
-  const firm = state.firms[firmId]!;
+  const town = townOf(state, ctx.townId);
+  const firm = town.firms[firmId]!;
   if (ctx.time.day < LANDLORD_DAY || firm.cash < LANDLORD_CASH) return;
 
   let owned = 0;
   let homes = 0;
   let vacancies = 0;
-  for (const fid in state.facilities) {
-    const f = state.facilities[fid]!;
+  for (const fid in town.facilities) {
+    const f = town.facilities[fid]!;
     if (f.type !== 'home') continue;
     homes += 1;
     if (f.residentIds.length < 2) vacancies += 1;
@@ -345,8 +353,8 @@ export function maybeBuildApartment(ctx: SimContext, firmId: string): void {
   if (!rng.chance(LANDLORD_CHANCE)) return;
 
   const loc = {
-    x: clamp(40 + rng.jitter(24), 8, state.config.mapWidth - 8),
-    y: clamp(64 + rng.jitter(6), 8, state.config.mapHeight - 8),
+    x: clamp(40 + rng.jitter(24), 8, town.mapWidth - 8),
+    y: clamp(64 + rng.jitter(6), 8, town.mapHeight - 8),
   };
   const def = getFacilityDef('apartment');
   const cost = Math.round(def.buildCost * landCostMultiplier(landValueAt(state, loc)));
@@ -368,10 +376,11 @@ export function maybeBuildApartment(ctx: SimContext, firmId: string): void {
 /** Flush AI firms level up a production facility now and then. */
 export function maybeUpgrade(ctx: SimContext, firmId: string): void {
   const { state, rng } = ctx;
-  const firm = state.firms[firmId]!;
+  const town = townOf(state, ctx.townId);
+  const firm = town.firms[firmId]!;
   if (firm.cash < 45000_00 || !rng.chance(0.08)) return;
   for (const facId of firm.facilities) {
-    const fac = state.facilities[facId];
+    const fac = town.facilities[facId];
     if (!fac || (fac.type !== 'farm' && fac.type !== 'mine' && fac.type !== 'factory')) continue;
     if (fac.level >= MAX_FACILITY_LEVEL) continue;
     const cost = upgradeCost(state, facId);

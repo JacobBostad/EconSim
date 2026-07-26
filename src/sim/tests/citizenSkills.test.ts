@@ -61,8 +61,9 @@ describe('Citizen skills & job market', () => {
   it('old saves get neutral skill and presentSkill defaults', () => {
     const sim = newSim(1);
     const raw = JSON.parse(serialize(sim.getState()));
-    for (const cid in raw.citizens) delete raw.citizens[cid].skill;
-    for (const fid in raw.facilities) delete raw.facilities[fid].presentSkill;
+    const home = raw.towns.home; // the six families live under towns.home now
+    for (const cid in home.citizens) delete home.citizens[cid].skill;
+    for (const fid in home.facilities) delete home.facilities[fid].presentSkill;
     const loaded = deserialize(JSON.stringify(raw));
     for (const cid in loaded.citizens) expect(loaded.citizens[cid]!.skill).toBe(1.0);
     for (const fid in loaded.facilities) expect(loaded.facilities[fid]!.presentSkill).toBe(0);

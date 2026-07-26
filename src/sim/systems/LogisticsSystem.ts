@@ -12,6 +12,7 @@
 
 import type { SimContext } from '../core/GameState';
 import { recordTransaction } from '../core/GameState';
+import { townOf } from '../core/Town';
 import { contractsBySource } from '../core/ContractIndex';
 import { firmAccount, WORLD_ACCOUNT } from '../core/Transactions';
 import { nextId } from '../core/Id';
@@ -36,7 +37,9 @@ import { seasonTransportMult, seasonOf } from '../data/seasons';
 
 /** Value of an internal shipment at today's market price (base as fallback). */
 function transferValue(state: SimContext['state'], productId: string, qty: number): number {
-  const avg = state.marketStats[productId]?.averagePrice ?? 0;
+  // Bare-`state` helper mid-gradient: home town by default (one-town region →
+  // same reference); gains a `townId` param at the endgame move.
+  const avg = townOf(state).marketStats[productId]?.averagePrice ?? 0;
   const price = avg > 0 ? avg : getProduct(productId).basePrice;
   return Math.round(qty * price);
 }
@@ -50,12 +53,13 @@ export function runLogisticsSystem(ctx: SimContext): void {
 
 function processArrivals(ctx: SimContext): void {
   const { state } = ctx;
+  const town = townOf(state, ctx.townId);
   const delivered: string[] = [];
   for (const vid in state.vehicles) {
     const v = state.vehicles[vid]!;
     if (v.status !== 'delivered') continue;
     delivered.push(vid);
-    const dest = state.facilities[v.destinationFacilityId];
+    const dest = town.facilities[v.destinationFacilityId];
     if (dest) {
       addStock(dest.inputInventory, v.cargo.productId, v.cargo.quantity, v.cargo.quality);
       dest.dailyStats.unitsReceived += v.cargo.quantity;
@@ -84,6 +88,7 @@ function processArrivals(ctx: SimContext): void {
 
 function processReorders(ctx: SimContext): void {
   const { state } = ctx;
+  const town = townOf(state, ctx.townId);
   // Contracts that already have an in-flight shipment.
   const inFlight = new Set<string>();
   for (const vid in state.vehicles) {
@@ -94,8 +99,8 @@ function processReorders(ctx: SimContext): void {
   for (const cid in state.contracts) {
     const contract = state.contracts[cid]!;
     if (!contract.active || inFlight.has(cid)) continue;
-    const source = state.facilities[contract.sourceFacilityId];
-    const dest = state.facilities[contract.destinationFacilityId];
+    const source = town.facilities[contract.sourceFacilityId];
+    const dest = town.facilities[contract.destinationFacilityId];
     if (!source || !dest) continue;
 
     const destHave = getQuantity(dest.inputInventory, contract.productId);
@@ -104,7 +109,7 @@ function processReorders(ctx: SimContext): void {
     // deeper (reorder sooner, hold more) so the 65%-output season doesn't
     // starve their chains. Player contracts are untouched — stockpiling is
     // the player's own call.
-    const owner = state.firms[contract.ownerFirmId];
+    const owner = town.firms[contract.ownerFirmId];
     const season = seasonOf(state);
     const bracing =
       owner?.ownerType === 'ai' && (season === 'autumn' || season === 'winter');
@@ -176,7 +181,7 @@ function processReorders(ctx: SimContext): void {
           const c2 = state.contracts[cid2]!;
           if (!c2.active || c2.id === contract.id) continue;
           if (c2.productId !== contract.productId) continue;
-          if (state.facilities[c2.destinationFacilityId]?.ownerFirmId !== source.ownerFirmId) continue;
+          if (town.facilities[c2.destinationFacilityId]?.ownerFirmId !== source.ownerFirmId) continue;
           reserved += c2.targetQuantity;
         }
         avail = Math.max(0, avail - reserved);
@@ -188,7 +193,7 @@ function processReorders(ctx: SimContext): void {
       if (crossFirm) {
         const unit = wholesaleUnitPrice(state, source, contract.productId);
         wholesalePaid = unit * qty;
-        const buyer = state.firms[dest.ownerFirmId];
+        const buyer = town.firms[dest.ownerFirmId];
         if (!buyer || buyer.cash < wholesalePaid) continue; // can't pay -> no shipment
         recordTransaction(state, {
           from: firmAccount(dest.ownerFirmId),
@@ -198,11 +203,11 @@ function processReorders(ctx: SimContext): void {
           category: 'cogs',
           productId: contract.productId,
           quantity: qty,
-          note: `Wholesale ${qty} ${product.name} from ${state.firms[source.ownerFirmId]?.name ?? 'supplier'}`,
+          note: `Wholesale ${qty} ${product.name} from ${town.firms[source.ownerFirmId]?.name ?? 'supplier'}`,
           counterparty: { firmId: source.ownerFirmId, category: 'revenue' },
         });
         buyer.wholesaleSpend += wholesalePaid;
-        const wholesaler = state.firms[source.ownerFirmId];
+        const wholesaler = town.firms[source.ownerFirmId];
         if (wholesaler) wholesaler.wholesaleEarned += wholesalePaid;
       }
       removeStock(bag, contract.productId, qty);

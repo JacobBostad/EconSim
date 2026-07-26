@@ -164,11 +164,12 @@ describe('Prosperity tiers', () => {
     cit.satisfaction = 80;
     cit.cash = 700_00;
     const raw = JSON.parse(serialize(state)) as {
-      citizens: Record<string, Record<string, unknown>>;
+      towns: { home: { citizens: Record<string, Record<string, unknown>> } };
     };
-    for (const cid in raw.citizens) {
-      delete raw.citizens[cid]!.tier;
-      delete raw.citizens[cid]!.tierStreak;
+    const home = raw.towns.home; // the six families live under towns.home now
+    for (const cid in home.citizens) {
+      delete home.citizens[cid]!.tier;
+      delete home.citizens[cid]!.tierStreak;
     }
     const migrated = deserialize(JSON.stringify(raw));
     const mcit = migrated.citizens[Object.keys(migrated.citizens)[0]!]!;

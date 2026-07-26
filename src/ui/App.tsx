@@ -4,6 +4,7 @@ import { TopBar } from './TopBar';
 import { BuildPanel } from './BuildPanel';
 import { Controls } from './Controls';
 import { MapView } from './MapView';
+import { TownSwitcher } from './TownSwitcher';
 import { InspectorPanel } from './InspectorPanel';
 import { BottomBar } from './BottomBar';
 import { Dashboard } from './Dashboard';
@@ -40,6 +41,7 @@ export function App(): React.ReactElement {
       </div>
       <div className="center">
         <MapView />
+        <TownSwitcher />
         <WorldEventTicker />
         <ObjectiveBanner />
         <AchievementToast />

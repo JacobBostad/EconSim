@@ -8,6 +8,7 @@
  */
 
 import type { SimContext } from '../core/GameState';
+import { townOf, HOME_TOWN_ID, type TownId } from '../core/Town';
 import { isDayBoundary } from '../core/Tick';
 import { getProduct } from '../data/products';
 import { clamp } from '../../utils/clamp';
@@ -61,9 +62,17 @@ export function basketNormalization(
 
 /** Whether any staffed store in town currently sells the product. Shared
  * with the AI founder system's market-gap tracking. */
-export function soldSomewhere(state: import('../core/GameState').GameState, productId: string): boolean {
-  for (const fid in state.facilities) {
-    const f = state.facilities[fid]!;
+export function soldSomewhere(
+  state: import('../core/GameState').GameState,
+  productId: string,
+  townId: TownId = HOME_TOWN_ID,
+): boolean {
+  // Town-scoped: whether any staffed store IN THIS TOWN sells the product. The
+  // crowd-demand path passes ctx.townId so the partner's crowd only shops for
+  // what the PARTNER stocks. Home default keeps every one-town caller identical.
+  const town = townOf(state, townId);
+  for (const fid in town.facilities) {
+    const f = town.facilities[fid]!;
     if (
       f.retailProductIds.includes(productId) &&
       f.status !== 'closed' &&
@@ -98,8 +107,9 @@ export function runSatisfactionSystem(ctx: SimContext): void {
   if (!isDayBoundary(ctx.state.tick, ctx.config)) return;
   const { state, config } = ctx;
 
-  for (const cid in state.citizens) {
-    const cit = state.citizens[cid]!;
+  const town = townOf(state, ctx.townId);
+  for (const cid in town.citizens) {
+    const cit = town.citizens[cid]!;
     let unmetPressure = 0;
     for (const need of cit.needs) {
       // Tiered demand: the prosperity ladder scales each tier's appetite.
@@ -123,7 +133,7 @@ export function runSatisfactionSystem(ctx: SimContext): void {
     let target = 50;
     target += cit.employmentStatus === 'employed' ? 20 : -5;
     // Premium housing: apartment residents live a little better.
-    if (state.facilities[cit.homeFacilityId]?.defId === 'apartment') {
+    if (town.facilities[cit.homeFacilityId]?.defId === 'apartment') {
       target += APARTMENT_SATISFACTION_BONUS;
     }
     // Smooth provisioning curve: fully provided = +15, and small chronic

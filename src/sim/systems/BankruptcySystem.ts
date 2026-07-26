@@ -11,6 +11,7 @@
 
 import type { SimContext } from '../core/GameState';
 import { emitEvent, reindexContracts } from '../core/GameState';
+import { townOf } from '../core/Town';
 import { isDayBoundary } from '../core/Tick';
 import { getProduct } from '../data/products';
 import { tradeShares } from '../core/Shares';
@@ -20,6 +21,7 @@ import { fireCitizen } from './LaborSystem';
 export function runBankruptcySystem(ctx: SimContext): void {
   if (!isDayBoundary(ctx.state.tick, ctx.config)) return;
   const { state, config } = ctx;
+  const town = townOf(state, ctx.townId);
 
   // Arc B2 (city-scale only): a distressed AI liquidates its portfolio before
   // shuttering facilities — stakes are its most liquid asset, and a real
@@ -29,8 +31,8 @@ export function runBankruptcySystem(ctx: SimContext): void {
   // baseline invariance structural, not empirical.
   const cityScale = state.config.sizePreset !== 'village';
 
-  for (const fid in state.firms) {
-    const firm = state.firms[fid]!;
+  for (const fid in town.firms) {
+    const firm = town.firms[fid]!;
     if (firm.ownerType !== 'player' && firm.ownerType !== 'ai') continue;
 
     if (firm.cash >= 0) {
@@ -89,7 +91,7 @@ export function runBankruptcySystem(ctx: SimContext): void {
  */
 function liquidatePortfolio(ctx: SimContext, firmId: string): boolean {
   const { state } = ctx;
-  const firm = state.firms[firmId]!;
+  const firm = townOf(state, ctx.townId).firms[firmId]!;
   const targets = Object.keys(firm.sharesHeld).sort();
   if (targets.length === 0) return false;
   emitEvent(
@@ -120,11 +122,12 @@ function liquidatePortfolio(ctx: SimContext, firmId: string): boolean {
  */
 function sellLeastProductiveFacility(ctx: SimContext, firmId: string): boolean {
   const { state } = ctx;
-  const firm = state.firms[firmId]!;
+  const town = townOf(state, ctx.townId);
+  const firm = town.firms[firmId]!;
   let target: string | null = null;
   let worst = Infinity;
   for (const facId of [...firm.facilities].sort()) {
-    const fac = state.facilities[facId];
+    const fac = town.facilities[facId];
     if (!fac || fac.status === 'closed') continue;
     // Shed machinery, not housing: the importer is never an asset, and selling
     // a home would displace its residents (a distress firm dumping tenants onto
@@ -141,7 +144,7 @@ function sellLeastProductiveFacility(ctx: SimContext, firmId: string): boolean {
 }
 
 function liquidate(ctx: SimContext, firmId: string): void {
-  const firm = ctx.state.firms[firmId]!;
+  const firm = townOf(ctx.state, ctx.townId).firms[firmId]!;
   for (const pid in firm.pricesByProduct) {
     const base = getProduct(pid).basePrice;
     firm.pricesByProduct[pid] = Math.max(
@@ -153,11 +156,12 @@ function liquidate(ctx: SimContext, firmId: string): void {
 
 function closeCostliestFacility(ctx: SimContext, firmId: string): void {
   const { state } = ctx;
-  const firm = state.firms[firmId]!;
+  const town = townOf(state, ctx.townId);
+  const firm = town.firms[firmId]!;
   let target: string | null = null;
   let worst = -1;
   for (const facId of firm.facilities) {
-    const fac = state.facilities[facId];
+    const fac = town.facilities[facId];
     if (!fac || fac.status === 'closed') continue;
     if (fac.operatingCostPerDay > worst) {
       worst = fac.operatingCostPerDay;
@@ -171,7 +175,7 @@ function closeCostliestFacility(ctx: SimContext, firmId: string): void {
   // build capital) recovers its asset. Reached identically on the player path
   // (this same function is the only insolvency close-point for player and AI).
   if (repossessLeasedFacility(ctx, firmId, target)) return;
-  const fac = state.facilities[target]!;
+  const fac = town.facilities[target]!;
   for (const cid of [...fac.employees]) fireCitizen(state, target, cid);
   fac.status = 'closed';
   fac.bottleneckReason = 'Closed (insolvency cost-cutting)';
@@ -203,13 +207,14 @@ function closeCostliestFacility(ctx: SimContext, firmId: string): void {
  */
 function repossessLeasedFacility(ctx: SimContext, tenantId: string, facilityId: string): boolean {
   const { state } = ctx;
-  const fac = state.facilities[facilityId];
+  const town = townOf(state, ctx.townId);
+  const fac = town.facilities[facilityId];
   if (!fac) return false;
   const landlordId = fac.landlordFirmId;
   // Not a lease, or a self-lease shell (never billed; nothing to hand back).
   if (landlordId === undefined || landlordId === tenantId) return false;
-  const landlord = state.firms[landlordId];
-  const tenant = state.firms[tenantId];
+  const landlord = town.firms[landlordId];
+  const tenant = town.firms[tenantId];
   if (!landlord || !tenant) return false;
 
   // Crew back to the labor pool (fireCitizen cleans both employee lists).
@@ -220,7 +225,7 @@ function repossessLeasedFacility(ctx: SimContext, tenantId: string, facilityId: 
   // importer instead of severed — the sellFacility idiom (Demolition.ts), so a
   // rival's chain never silently loses its supply line to someone else's
   // repossession (review note: the first cut deleted them).
-  const importer = Object.values(state.facilities).find((f) => f.type === 'importer');
+  const importer = Object.values(town.facilities).find((f) => f.type === 'importer');
   for (const ctrId of Object.keys(state.contracts).sort()) {
     const c = state.contracts[ctrId]!;
     if (c.destinationFacilityId === facilityId) {

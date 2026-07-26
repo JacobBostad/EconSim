@@ -13,6 +13,7 @@
 
 import type { GameState } from './GameState';
 import { canAfford, emitEvent, recordTransaction } from './GameState';
+import { townOf } from './Town';
 import { firmAccount } from './Transactions';
 import { formatMoney } from '../../utils/formatMoney';
 
@@ -23,9 +24,10 @@ export const FIRE_SALE_RATE = 0.75;
 export function acceptFacilityOffer(state: GameState): boolean {
   const offer = state.facilityOffer;
   if (!offer) return false;
-  const fac = state.facilities[offer.facilityId];
-  const seller = state.firms[offer.sellerFirmId];
-  const buyer = state.firms[state.playerFirmId];
+  const fac = townOf(state).facilities[offer.facilityId];
+  const firms = townOf(state).firms;
+  const seller = firms[offer.sellerFirmId];
+  const buyer = firms[state.playerFirmId];
   // The world may have moved on: facility sold/closed, seller acquired.
   if (!fac || !seller || !buyer || fac.ownerFirmId !== offer.sellerFirmId) {
     state.facilityOffer = null;
@@ -51,8 +53,9 @@ export function acceptFacilityOffer(state: GameState): boolean {
   fac.ownerFirmId = buyer.id;
   seller.facilities = seller.facilities.filter((id) => id !== fac.id);
   buyer.facilities.push(fac.id);
+  const citizens = townOf(state).citizens;
   for (const cid of fac.employees) {
-    const cit = state.citizens[cid];
+    const cit = citizens[cid];
     if (!cit) continue;
     seller.employees = seller.employees.filter((id) => id !== cid);
     if (!buyer.employees.includes(cid)) buyer.employees.push(cid);

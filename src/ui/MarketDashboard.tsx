@@ -8,10 +8,14 @@ import { CONSUMER_PRODUCT_IDS_BY_PRESET, getProduct } from '../sim/data/products
 import { pickBestCity } from '../sim/core/Trade';
 import { getTradeCity } from '../sim/data/tradeCities';
 import { wholesaleBoard } from '../sim/selectors/wholesaleSelectors';
+import { townOf } from '../sim/core/Town';
 
 export function MarketDashboard(): React.ReactElement {
   const sim = useGameStore((s) => s.sim);
   const state = sim.getState();
+  // The dashboard renders the home town (one-town region → identical reference);
+  // it gains a town selector at the endgame move.
+  const town = townOf(state);
   const rows = marketRows(state, false);
   const playerId = state.playerFirmId;
 
@@ -117,7 +121,7 @@ export function MarketDashboard(): React.ReactElement {
       <h3>Trends (last 60 days)</h3>
       <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
         {CONSUMER_PRODUCT_IDS_BY_PRESET[state.config.sizePreset].map((pid) => {
-          const stat = state.marketStats[pid];
+          const stat = town.marketStats[pid];
           const hist = (stat?.history ?? []).slice(-60);
           if (hist.length < 2) return null;
           const name = getProduct(pid).name;
@@ -153,7 +157,7 @@ export function MarketDashboard(): React.ReactElement {
           );
         })}
       </div>
-      {CONSUMER_PRODUCT_IDS_BY_PRESET[state.config.sizePreset].every((pid) => (state.marketStats[pid]?.history ?? []).length < 2) && (
+      {CONSUMER_PRODUCT_IDS_BY_PRESET[state.config.sizePreset].every((pid) => (town.marketStats[pid]?.history ?? []).length < 2) && (
         <p className="muted small">Trend charts appear after a couple of in-game days.</p>
       )}
     </div>

@@ -35,6 +35,7 @@
 
 import type { SimContext, GameState } from '../core/GameState';
 import { recordTransaction } from '../core/GameState';
+import { townOf, HOME_TOWN_ID, type TownId } from '../core/Town';
 import { cohortAccount, firmAccount } from '../core/Transactions';
 import { isDayBoundary, isHourBoundary } from '../core/Tick';
 import type { Cohort } from '../entities/Cohort';
@@ -155,9 +156,12 @@ const ATTEMPT_EPS = 0.0002;
 // pinned A3/A4 city tier calibration stays byte-stable and a crowd never craves
 // an unserved product into a founder-blocking satisfaction drag. See products.ts.
 
-function anyCrowd(state: GameState): boolean {
-  for (const cid in state.cohorts) {
-    if (state.cohorts[cid]!.population > 0) return true;
+function anyCrowd(state: GameState, townId: TownId = HOME_TOWN_ID): boolean {
+  // Town-scoped: the scheduler passes ctx.townId so the partner's guard reads
+  // the partner's crowd. Home default keeps every one-town caller byte-identical.
+  const cohorts = townOf(state, townId).cohorts;
+  for (const cid in cohorts) {
+    if (cohorts[cid]!.population > 0) return true;
   }
   return false;
 }
@@ -165,7 +169,7 @@ function anyCrowd(state: GameState): boolean {
 export function runCohortDemandSystem(ctx: SimContext): void {
   const { state } = ctx;
   // Village stays dark: no crowd means no new code path touches state.
-  if (!anyCrowd(state)) return;
+  if (!anyCrowd(state, ctx.townId)) return;
 
   // Daily: grow every cohort's appetite (mirrors SatisfactionSystem's need
   // growth, per bucket rather than per citizen).
@@ -185,9 +189,10 @@ export function runCohortDemandSystem(ctx: SimContext): void {
  * decays toward 0 (exactly SatisfactionSystem's rule, applied per bucket). */
 function growBuckets(ctx: SimContext): void {
   const { state } = ctx;
+  const town = townOf(state, ctx.townId);
   const needspecIds = COHORT_DEMAND_PRODUCT_IDS;
-  for (const cid of Object.keys(state.cohorts).sort()) {
-    const cohort = state.cohorts[cid]!;
+  for (const cid of Object.keys(town.cohorts).sort()) {
+    const cohort = town.cohorts[cid]!;
     if (cohort.population <= 0) continue;
     for (const pid of needspecIds) {
       const spec = PRODUCTS[pid]!.needSpec!;
@@ -217,11 +222,12 @@ function runSlice(ctx: SimContext): void {
   // town here (Village exits before runSlice via anyCrowd), so every crowd town
   // is district-local by construction.
   const openStores: OpenStore[] = [];
-  for (const fid of Object.keys(state.facilities).sort()) {
-    const fac = state.facilities[fid]!;
+  const town = townOf(state, ctx.townId);
+  for (const fid of Object.keys(town.facilities).sort()) {
+    const fac = town.facilities[fid]!;
     if (fac.retailProductIds.length === 0) continue;
     if (!storeIsOpen(ctx, fac)) continue;
-    const d = districtAt(state.districts, fac.location.x, fac.location.y);
+    const d = districtAt(town.districts, fac.location.x, fac.location.y);
     openStores.push({ facility: fac, districtId: d ? d.id : '' });
   }
   if (openStores.length === 0) return;
@@ -230,21 +236,21 @@ function runSlice(ctx: SimContext): void {
   // never target a trip (else capped urgency for a product nobody stocks
   // swallows the softmax and the crowd stops shopping for what it CAN buy).
   const sold: Record<string, boolean> = {};
-  for (const pid of COHORT_DEMAND_PRODUCT_IDS) sold[pid] = soldSomewhere(state, pid);
+  for (const pid of COHORT_DEMAND_PRODUCT_IDS) sold[pid] = soldSomewhere(state, pid, ctx.townId);
 
   // Cast reservation share, computed ONCE per slice (not per store): the cast's
   // town population against the total demand (cast + crowd). A coarse but honest
   // population-proportional proxy for each side's claim on a contended shelf —
   // see RESERVE_FACTOR. Integer sums are order-independent, but iterate sorted
   // to keep with the system's deterministic economic iteration.
-  const castPop = Object.keys(state.citizens).length;
+  const castPop = Object.keys(town.citizens).length;
   let crowdPop = 0;
-  for (const cid of Object.keys(state.cohorts).sort()) crowdPop += state.cohorts[cid]!.population;
+  for (const cid of Object.keys(town.cohorts).sort()) crowdPop += town.cohorts[cid]!.population;
   const denom = castPop + crowdPop;
   const castShare = denom > 0 ? castPop / denom : 0;
 
-  for (const cid of Object.keys(state.cohorts).sort()) {
-    const cohort = state.cohorts[cid]!;
+  for (const cid of Object.keys(town.cohorts).sort()) {
+    const cohort = town.cohorts[cid]!;
     if (cohort.population <= 0) continue;
     shopCohortSlice(ctx, cohort, openStores, sold, castShare);
   }
@@ -257,9 +263,16 @@ interface OpenStore {
   districtId: string;
 }
 
-/** Center of a cohort's home district — its representative shopper's origin. */
-function districtCenter(state: GameState, districtId: string): Vec2 {
-  const d = state.districts[districtId];
+/** Center of a cohort's home district — its representative shopper's origin.
+ * Bare-`state` helper mid-gradient: reads the home town by default (one-town
+ * region → identical reference). Gains a `townId` param when the endgame move
+ * lands and a second town exists — see the recipe in region.md § step 3. */
+function districtCenter(state: GameState, districtId: string, townId: TownId = HOME_TOWN_ID): Vec2 {
+  // Town-scoped: the cohort's home district lives in ITS town, so the partner's
+  // shopper origin must read the partner's districts (ctx.townId), not home's —
+  // a home default would return {0,0} for a partner district id and misplace the
+  // representative shopper. Home default is byte-identical for one-town callers.
+  const d = townOf(state, townId).districts[districtId];
   if (!d) return { x: 0, y: 0 };
   return { x: d.bounds.x + d.bounds.w / 2, y: d.bounds.y + d.bounds.h / 2 };
 }
@@ -281,9 +294,10 @@ function cohortStoreScore(
   home: Vec2,
 ): number | null {
   const { state, config } = ctx;
+  const town = townOf(state, ctx.townId);
   if (!facility.retailProductIds.includes(productId)) return null;
   const product = getProduct(productId);
-  const price = storePrice(state, facility, productId);
+  const price = storePrice(state, facility, productId, ctx.townId);
   const stock = getQuantity(facility.inputInventory, productId);
   const quality = getQuality(facility.inputInventory, productId);
 
@@ -292,7 +306,7 @@ function cohortStoreScore(
   const dist = distance(home, facility.location);
   const distanceScore = 1 - clamp(dist / config.maxShoppingDistance, 0, 1);
   const qualityScore = quality / 100;
-  const firm = state.firms[facility.ownerFirmId];
+  const firm = town.firms[facility.ownerFirmId];
   const brandScore = clamp((firm?.brandByProduct[productId] ?? 0) / 100, 0, 1);
   const reliabilityScore = COHORT_RELIABILITY;
   const ageDays = (state.tick - facility.builtAtTick) / (config.ticksPerHour * 24);
@@ -301,7 +315,7 @@ function cohortStoreScore(
   const affinity = positioningAffinity(facility.positioning, cohort.tier, {
     avgQuality: quality,
     price,
-    marketAvgPrice: state.marketStats[productId]?.averagePrice || product.basePrice,
+    marketAvgPrice: town.marketStats[productId]?.averagePrice || product.basePrice,
   });
 
   return (
@@ -326,15 +340,16 @@ function shopCohortSlice(
   castShare: number,
 ): void {
   const { state } = ctx;
+  const town = townOf(state, ctx.townId);
   const pop = cohort.population;
   const empShare = pop > 0 ? cohort.employed / pop : 0;
   // Per-slice trip budget: the daily per-capita rate split across the 5 slices.
   const totalVisits = (pop * (T_EMP * empShare + T_UNEMP * (1 - empShare))) / SLICES;
-  const home = districtCenter(state, cohort.districtId);
+  const home = districtCenter(state, cohort.districtId, ctx.townId);
   // District-local shopping (A4): the cohort only reaches stores in its home
   // district plus adjacent quarters — the crowd analogue of the cast's
   // chooseBestStore restriction. Stores outside are dropped from its store split.
-  const allowed = shoppingDistrictIds(state.districts, cohort.districtId);
+  const allowed = shoppingDistrictIds(townOf(state, ctx.townId).districts, cohort.districtId);
   const reachable = openStores.filter((s) => allowed.has(s.districtId));
   if (reachable.length === 0) return;
 
@@ -405,7 +420,7 @@ function shopCohortSlice(
   for (const stid of Object.keys(visitsByStore).sort()) {
     const v = visitsByStore[stid]!;
     if (v <= VISIT_EPS) continue;
-    const store = state.facilities[stid]!;
+    const store = town.facilities[stid]!;
     for (const pid of [...store.retailProductIds].sort()) {
       const spec = PRODUCTS[pid]?.needSpec;
       if (!spec) continue;
@@ -443,13 +458,14 @@ function attemptCohortPurchase(
   castShare: number,
 ): number {
   const { state } = ctx;
+  const town = townOf(state, ctx.townId);
   const product = getProduct(productId);
   const spec = product.needSpec!;
-  const stat = state.marketStats[productId]!;
-  const price = storePrice(state, store, productId);
+  const stat = town.marketStats[productId]!;
+  const price = storePrice(state, store, productId, ctx.townId);
   const stock = getQuantity(store.inputInventory, productId);
   const quality = getQuality(store.inputInventory, productId);
-  const firm = state.firms[store.ownerFirmId];
+  const firm = town.firms[store.ownerFirmId];
   const brand = firm?.brandByProduct[productId] ?? 0;
 
   // Strong brands and quality raise what shoppers will pay; booms/recessions,

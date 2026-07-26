@@ -15,6 +15,7 @@
 
 import type { SimContext } from '../../core/GameState';
 import { emitEvent, canAfford, recordTransaction, addContract, reindexContracts } from '../../core/GameState';
+import { townOf } from '../../core/Town';
 import { contractsBySource, contractsByDest, contractsByOwner } from '../../core/ContractIndex';
 import { firmAccount, WORLD_ACCOUNT } from '../../core/Transactions';
 import { formatMoney } from '../../../utils/formatMoney';
@@ -64,7 +65,8 @@ import {
  */
 function managePositioning(ctx: SimContext, firmId: string): void {
   const { state } = ctx;
-  const firm = state.firms[firmId]!;
+  const town = townOf(state, ctx.townId);
+  const firm = town.firms[firmId]!;
   const desired =
     firm.personalityId === 'price_fighter'
       ? 'discount'
@@ -74,7 +76,7 @@ function managePositioning(ctx: SimContext, firmId: string): void {
   if (!desired) return;
   let converted = false;
   for (const facId of firm.facilities) {
-    const fac = state.facilities[facId];
+    const fac = town.facilities[facId];
     if (!fac || fac.type !== 'retail' || fac.positioning !== 'standard') continue;
     if (desired === 'premium') {
       const qualityReady = fac.retailProductIds.some(
@@ -105,12 +107,13 @@ const AD_BUDGET_FLOOR = 8_00;
 
 function manageAdBudget(ctx: SimContext, firmId: string): void {
   const { state, rng } = ctx;
-  const firm = state.firms[firmId]!;
+  const town = townOf(state, ctx.townId);
+  const firm = town.firms[firmId]!;
   const persona = getPersonality(firm.personalityId);
   const cap = Math.round(AD_BUDGET_CAP * persona.adMult);
   const step = Math.round(AD_BUDGET_STEP * persona.adMult);
   for (const facId of firm.facilities) {
-    const fac = state.facilities[facId];
+    const fac = town.facilities[facId];
     if (!fac || fac.type !== 'retail') continue;
     for (const pid of fac.retailProductIds) {
     const share = firm.marketShareByProduct[pid] ?? 0;
@@ -139,9 +142,10 @@ function manageAdBudget(ctx: SimContext, firmId: string): void {
  */
 export function trimManagedAds(ctx: SimContext, firmId: string): void {
   const { state } = ctx;
-  const firm = state.firms[firmId]!;
+  const town = townOf(state, ctx.townId);
+  const firm = town.firms[firmId]!;
   for (const facId of firm.facilities) {
-    const fac = state.facilities[facId];
+    const fac = town.facilities[facId];
     if (!fac || fac.type !== 'retail' || fac.pnlEma.net >= 0) continue;
     for (const pid of fac.retailProductIds) {
       if (!firm.autoPriceByProduct[pid]) continue;
@@ -155,10 +159,11 @@ export function trimManagedAds(ctx: SimContext, firmId: string): void {
 
 /** Best quality any OTHER firm has for a product (the bar to beat). */
 function bestRivalQuality(ctx: SimContext, firmId: string, pid: string): number {
+  const town = townOf(ctx.state, ctx.townId);
   let best = 0;
-  for (const fid in ctx.state.firms) {
+  for (const fid in town.firms) {
     if (fid === firmId) continue;
-    best = Math.max(best, ctx.state.firms[fid]!.qualityByProduct[pid] ?? 0);
+    best = Math.max(best, town.firms[fid]!.qualityByProduct[pid] ?? 0);
   }
   return best;
 }
@@ -169,10 +174,11 @@ function bestRivalQuality(ctx: SimContext, firmId: string, pid: string): number 
  */
 function maybeInvestQuality(ctx: SimContext, firmId: string): void {
   const { state, rng } = ctx;
-  const firm = state.firms[firmId]!;
+  const town = townOf(state, ctx.townId);
+  const firm = town.firms[firmId]!;
   if (firm.cash < 25000_00 /* $25k buffer */) return;
   for (const facId of firm.facilities) {
-    const fac = state.facilities[facId];
+    const fac = town.facilities[facId];
     if (!fac || fac.type !== 'retail') continue;
     const pid = fac.retailProductIds[0];
     if (!pid) continue;
@@ -200,7 +206,8 @@ export function adjustPrices(
   digest?: DigestBuffer,
 ): void {
   const { state, config, rng } = ctx;
-  const firm = state.firms[firmId]!;
+  const town = townOf(state, ctx.townId);
+  const firm = town.firms[firmId]!;
   const losing = firm.strategy.lossStreak >= 3;
   // Personality tilts cut depth and the penetration target (neutral for the
   // player's auto-priced products — firm.personalityId is null there).
@@ -208,7 +215,7 @@ export function adjustPrices(
 
   for (const facId of firm.facilities) {
     if (onlyFacilityId && facId !== onlyFacilityId) continue;
-    const fac = state.facilities[facId];
+    const fac = town.facilities[facId];
     if (!fac || fac.type !== 'retail') continue;
     for (const pid of fac.retailProductIds) {
     if (onlyAutoPriced && !firm.autoPriceByProduct[pid]) continue;
@@ -301,13 +308,14 @@ const AI_WAGE_DECAY = 0.98; // per slack day above the floor
 
 function manageWages(ctx: SimContext, firmId: string, digest?: DigestBuffer): void {
   const { state } = ctx;
-  const firm = state.firms[firmId]!;
+  const town = townOf(state, ctx.townId);
+  const firm = town.firms[firmId]!;
   const floor = firm.strategy.startingWage ?? firm.wagePolicy.baseWage;
   if (!firm.strategy.startingWage) firm.strategy.startingWage = floor;
 
   let unfilled = 0;
   for (const facId of firm.facilities) {
-    const fac = state.facilities[facId];
+    const fac = town.facilities[facId];
     if (!fac || fac.status === 'closed') continue;
     const desired = fac.activeRecipeId
       ? Math.min(fac.workerCapacity, getRecipe(fac.activeRecipeId).laborRequired)
@@ -317,8 +325,8 @@ function manageWages(ctx: SimContext, firmId: string, digest?: DigestBuffer): vo
     unfilled += Math.max(0, desired - fac.employees.length);
   }
   let unemployed = 0;
-  for (const cid in state.citizens) {
-    if (state.citizens[cid]!.employmentStatus === 'unemployed') unemployed += 1;
+  for (const cid in town.citizens) {
+    if (town.citizens[cid]!.employmentStatus === 'unemployed') unemployed += 1;
   }
 
   const wage = firm.wagePolicy.baseWage;
@@ -332,7 +340,7 @@ function manageWages(ctx: SimContext, firmId: string, digest?: DigestBuffer): vo
     firm.wagePolicy.baseWage = next;
     // Current staff ride the same wage — retention parity with SET_WAGE.
     for (const cid of firm.employees) {
-      const cit = state.citizens[cid];
+      const cit = town.citizens[cid];
       if (cit) cit.wage = next;
     }
     if (next > wage) {
@@ -351,7 +359,8 @@ function manageWages(ctx: SimContext, firmId: string, digest?: DigestBuffer): vo
  */
 function maybeBoostProduction(ctx: SimContext, firmId: string): void {
   const { state } = ctx;
-  const firm = state.firms[firmId]!;
+  const town = townOf(state, ctx.townId);
+  const firm = town.firms[firmId]!;
   // Expansion only while the business is actually working: without the
   // loss-streak brake, chronic-shortage hiring bloats payroll past revenue
   // and the whole AI economy death-spirals by day ~300 (measured in soak).
@@ -360,12 +369,12 @@ function maybeBoostProduction(ctx: SimContext, firmId: string): void {
     return;
   }
   for (const facId of firm.facilities) {
-    const fac = state.facilities[facId];
+    const fac = town.facilities[facId];
     if (!fac || fac.status === 'closed' || !fac.activeRecipeId) continue;
     const outPid = getRecipe(fac.activeRecipeId).outputs[0]?.productId;
     if (!outPid) continue;
-    const yesterday = state.marketStats[outPid]?.history.slice(-1)[0];
-    const finished = state.marketStats[
+    const yesterday = town.marketStats[outPid]?.history.slice(-1)[0];
+    const finished = town.marketStats[
       getFinishedProductFor(state, fac, outPid, ctx.contractIndex)
     ]?.history.slice(-1)[0];
     const signal = finished ?? yesterday;
@@ -400,9 +409,12 @@ function maybeBoostProduction(ctx: SimContext, firmId: string): void {
 /** How many of this firm's facilities run the given recipe. */
 function countRecipe(state: import('../../core/GameState').GameState, firmId: string, recipeId: string): number {
   let n = 0;
-  const firm = state.firms[firmId]!;
+  // Bare-`state` helper mid-gradient: home town by default (one-town region →
+  // same reference); gains a `townId` param at the endgame move.
+  const town = townOf(state);
+  const firm = town.firms[firmId]!;
   for (const fid of firm.facilities) {
-    if (state.facilities[fid]?.activeRecipeId === recipeId) n += 1;
+    if (town.facilities[fid]?.activeRecipeId === recipeId) n += 1;
   }
   return n;
 }
@@ -411,8 +423,9 @@ const SIBLING_CAP_PER_RECIPE = 2;
 
 function buildSiblingChain(ctx: SimContext, firmId: string, factoryId: string): boolean {
   const { state, rng } = ctx;
-  const firm = state.firms[firmId]!;
-  const factory = state.facilities[factoryId]!;
+  const town = townOf(state, ctx.townId);
+  const firm = town.firms[firmId]!;
+  const factory = town.facilities[factoryId]!;
   if (!factory.activeRecipeId) return false;
   if (countRecipe(state, firmId, factory.activeRecipeId) >= SIBLING_CAP_PER_RECIPE) return false;
 
@@ -424,15 +437,15 @@ function buildSiblingChain(ctx: SimContext, firmId: string, factoryId: string): 
     const c = state.contracts[cid]!;
     if (!c.active) continue;
     inputContract = c;
-    const src = state.facilities[c.sourceFacilityId];
+    const src = town.facilities[c.sourceFacilityId];
     if (src && src.ownerFirmId === firmId && src.activeRecipeId) producer = src;
     break;
   }
 
   const jit = () => rng.jitter(4);
   const facLoc = {
-    x: clamp(factory.location.x + (rng.chance(0.5) ? 12 : -12) + jit(), 8, state.config.mapWidth - 8),
-    y: clamp(factory.location.y + jit(), 8, state.config.mapHeight - 8),
+    x: clamp(factory.location.x + (rng.chance(0.5) ? 12 : -12) + jit(), 8, town.mapWidth - 8),
+    y: clamp(factory.location.y + jit(), 8, town.mapHeight - 8),
   };
   const facDef = getFacilityDef(factory.defId);
   const facCost = Math.round(facDef.buildCost * landCostMultiplier(landValueAt(state, facLoc)));
@@ -440,8 +453,8 @@ function buildSiblingChain(ctx: SimContext, firmId: string, factoryId: string): 
   let prodLoc: { x: number; y: number } | null = null;
   if (producer) {
     prodLoc = {
-      x: clamp(producer.location.x + (rng.chance(0.5) ? 12 : -12) + jit(), 8, state.config.mapWidth - 8),
-      y: clamp(producer.location.y + jit(), 8, state.config.mapHeight - 8),
+      x: clamp(producer.location.x + (rng.chance(0.5) ? 12 : -12) + jit(), 8, town.mapWidth - 8),
+      y: clamp(producer.location.y + jit(), 8, town.mapHeight - 8),
     };
     prodCost = Math.round(getFacilityDef(producer.defId).buildCost * landCostMultiplier(landValueAt(state, prodLoc)));
   }
@@ -516,10 +529,11 @@ export function maybeWidenShelves(
   onlyFacilityId?: string,
 ): void {
   const { state } = ctx;
-  const firm = state.firms[firmId]!;
+  const town = townOf(state, ctx.townId);
+  const firm = town.firms[firmId]!;
   for (const facId of firm.facilities) {
     if (onlyFacilityId && facId !== onlyFacilityId) continue;
-    const fac = state.facilities[facId];
+    const fac = town.facilities[facId];
     if (!fac || fac.type !== 'retail') continue;
     if (fac.dailyStats.lostSales <= SHELF_WIDEN_LOST_SALES) continue;
     for (const cid of contractsByDest(ctx.contractIndex, facId)) {
@@ -543,11 +557,12 @@ export function maybeWidenShelves(
  */
 function trimProduction(ctx: SimContext, firmId: string): void {
   const { state } = ctx;
-  const firm = state.firms[firmId]!;
+  const town = townOf(state, ctx.townId);
+  const firm = town.firms[firmId]!;
   let target: string | null = null;
   let mostExcess = 0;
   for (const facId of firm.facilities) {
-    const fac = state.facilities[facId];
+    const fac = town.facilities[facId];
     if (!fac || !fac.activeRecipeId) continue;
     const excess = fac.employees.length - getRecipe(fac.activeRecipeId).laborRequired;
     if (excess > mostExcess) {
@@ -556,7 +571,7 @@ function trimProduction(ctx: SimContext, firmId: string): void {
     }
   }
   if (!target) return;
-  const fac = state.facilities[target]!;
+  const fac = town.facilities[target]!;
   const cid = fac.employees[fac.employees.length - 1];
   if (cid) fireCitizen(state, target, cid);
 }
@@ -572,10 +587,13 @@ function getFinishedProductFor(
   outPid: string,
   index: import('../../core/ContractIndex').ContractIndex,
 ): string {
+  // Bare-`state` helper mid-gradient: home town by default (one-town region →
+  // same reference); gains a `townId` param at the endgame move.
+  const town = townOf(state);
   for (const cid of contractsBySource(index, fac.id)) {
     const c = state.contracts[cid]!;
     if (!c.active || c.productId !== outPid) continue;
-    const dest = state.facilities[c.destinationFacilityId];
+    const dest = town.facilities[c.destinationFacilityId];
     if (dest?.activeRecipeId) {
       const finished = getRecipe(dest.activeRecipeId).outputs[0]?.productId;
       if (finished && finished !== outPid) return finished;
@@ -586,9 +604,10 @@ function getFinishedProductFor(
 
 function restaff(ctx: SimContext, firmId: string): void {
   const { state } = ctx;
-  const firm = state.firms[firmId]!;
+  const town = townOf(state, ctx.townId);
+  const firm = town.firms[firmId]!;
   for (const facId of firm.facilities) {
-    const fac = state.facilities[facId];
+    const fac = town.facilities[facId];
     if (!fac || fac.status === 'closed') continue;
     let desired = Math.min(fac.workerCapacity, 2);
     if (fac.activeRecipeId) {
@@ -625,13 +644,14 @@ const LOCAL_SOURCE_SAVINGS = 0.9; // switch only if wholesale < importer × this
 
 export function manageSourcing(ctx: SimContext, firmId: string, digest?: DigestBuffer): void {
   const { state } = ctx;
-  const firm = state.firms[firmId]!;
+  const town = townOf(state, ctx.townId);
+  const firm = town.firms[firmId]!;
 
   for (const cid of contractsByOwner(ctx.contractIndex, firmId)) {
     const contract = state.contracts[cid]!;
     if (!contract.active) continue;
-    const source = state.facilities[contract.sourceFacilityId];
-    const dest = state.facilities[contract.destinationFacilityId];
+    const source = town.facilities[contract.sourceFacilityId];
+    const dest = town.facilities[contract.destinationFacilityId];
     if (!source || !dest || dest.ownerFirmId !== firmId) continue;
     const pid = contract.productId;
 
@@ -642,13 +662,13 @@ export function manageSourcing(ctx: SimContext, firmId: string, digest?: DigestB
       const product = getProduct(pid);
       const importerUnit = Math.round(product.basePrice * IMPORT_MARKUP * worldImportMult(state));
       let best: { fac: import('../../entities/Facility').Facility; unit: number } | null = null;
-      for (const fid in state.facilities) {
-        const fac = state.facilities[fid]!;
+      for (const fid in town.facilities) {
+        const fac = town.facilities[fid]!;
         if (fac.ownerFirmId === firmId || fac.type === 'importer' || fac.status === 'closed') continue;
         // Warehouses are staging areas (often export stockpiles) — never
         // treat them as shops; and respect the owner's wholesale opt-out.
         if (fac.type === 'warehouse' || fac.wholesaleEnabled === false) continue;
-        const sellerType = state.firms[fac.ownerFirmId]?.ownerType;
+        const sellerType = town.firms[fac.ownerFirmId]?.ownerType;
         if (sellerType !== 'ai' && sellerType !== 'player') continue;
         if (localSurplus(state, fac, pid, ctx.contractIndex) < LOCAL_SOURCE_MIN_SURPLUS) continue;
         const unit = wholesaleUnitPrice(state, fac, pid);
@@ -659,7 +679,7 @@ export function manageSourcing(ctx: SimContext, firmId: string, digest?: DigestB
         contract.sourceFacilityId = best.fac.id;
         reindexContracts(ctx); // source key changed — rebucket before any later reader
         routeRoutine(state, digest, 'sourcing', firm.id,
-          `${firm.name} now sources ${product.name} locally from ${state.firms[best.fac.ownerFirmId]!.name} — wholesale beats the importer.`,
+          `${firm.name} now sources ${product.name} locally from ${town.firms[best.fac.ownerFirmId]!.name} — wholesale beats the importer.`,
           dest.id);
         return; // one switch per firm per day
       }
@@ -678,31 +698,31 @@ export function manageSourcing(ctx: SimContext, firmId: string, digest?: DigestB
       if (!cutOff && !gouged && (destHave > 0 || localSurplus(state, source, pid, ctx.contractIndex) >= 10)) {
         // Healthy relationship — but loyalty has a price. If a rival supplier
         // undercuts the current one by 10%+, take the better deal.
-        for (const fid in state.facilities) {
-          const fac = state.facilities[fid]!;
+        for (const fid in town.facilities) {
+          const fac = town.facilities[fid]!;
           if (fac.id === source.id || fac.ownerFirmId === firmId) continue;
           if (fac.type === 'importer' || fac.type === 'warehouse' || fac.status === 'closed') continue;
           if (fac.wholesaleEnabled === false) continue;
-          const sellerType = state.firms[fac.ownerFirmId]?.ownerType;
+          const sellerType = town.firms[fac.ownerFirmId]?.ownerType;
           if (sellerType !== 'ai' && sellerType !== 'player') continue;
           if (localSurplus(state, fac, pid, ctx.contractIndex) < LOCAL_SOURCE_MIN_SURPLUS) continue;
           if (wholesaleUnitPrice(state, fac, pid) > curUnit * 0.9) continue;
           contract.sourceFacilityId = fac.id;
           reindexContracts(ctx); // source key changed — rebucket before any later reader
           routeRoutine(state, digest, 'sourcing', firm.id,
-            `${firm.name} moved its ${getProduct(pid).name} order to ${state.firms[fac.ownerFirmId]!.name} — a sharper wholesale price.`,
+            `${firm.name} moved its ${getProduct(pid).name} order to ${town.firms[fac.ownerFirmId]!.name} — a sharper wholesale price.`,
             dest.id);
           return; // one switch per firm per day
         }
         continue;
       }
-      const importer = Object.values(state.facilities).find((f) => f.type === 'importer');
+      const importer = Object.values(town.facilities).find((f) => f.type === 'importer');
       if (!importer) continue;
       contract.sourceFacilityId = importer.id;
       reindexContracts(ctx); // source key changed — rebucket before any later reader
       routeRoutine(state, digest, 'sourcing', firm.id,
         gouged && !cutOff
-          ? `${firm.name} dropped ${state.firms[source.ownerFirmId]?.name ?? 'a supplier'} for ${getProduct(pid).name} — pricier than importing.`
+          ? `${firm.name} dropped ${town.firms[source.ownerFirmId]?.name ?? 'a supplier'} for ${getProduct(pid).name} — pricier than importing.`
           : `${firm.name} switched ${getProduct(pid).name} sourcing back to the importer — the local supplier ran dry.`,
         dest.id);
       return;
@@ -723,11 +743,12 @@ const WHOLESALE_PRICE_STEP = 0.02;
 
 function manageWholesalePricing(ctx: SimContext, firmId: string): void {
   const { state } = ctx;
-  const firm = state.firms[firmId]!;
+  const town = townOf(state, ctx.townId);
+  const firm = town.firms[firmId]!;
   const floor = getPersonality(firm.personalityId).wholesaleFloor;
 
   for (const facId of firm.facilities) {
-    const fac = state.facilities[facId];
+    const fac = town.facilities[facId];
     if (!fac || fac.type === 'retail' || fac.type === 'home' || fac.type === 'warehouse') continue;
     if (fac.wholesaleEnabled === false || fac.status === 'closed') continue;
 
@@ -735,7 +756,7 @@ function manageWholesalePricing(ctx: SimContext, firmId: string): void {
     for (const cid of contractsBySource(ctx.contractIndex, fac.id)) {
       const c = state.contracts[cid]!;
       if (!c.active) continue;
-      if (state.facilities[c.destinationFacilityId]?.ownerFirmId !== firmId) customers++;
+      if (town.facilities[c.destinationFacilityId]?.ownerFirmId !== firmId) customers++;
     }
     const mult = fac.wholesalePriceMult ?? WHOLESALE_DISCOUNT;
     if (customers > 0) {
@@ -770,7 +791,8 @@ export function runOperatorBehavior(
   digest: DigestBuffer | undefined,
 ): void {
   const { state } = ctx;
-  const firm = state.firms[firmId]!;
+  const town = townOf(state, ctx.townId);
+  const firm = town.firms[firmId]!;
   if (firm.bankruptcyStatus !== 'insolvent') {
     manageWages(ctx, firm.id, digest);
     restaff(ctx, firm.id);

@@ -7,6 +7,7 @@ import type { MarketStat } from '../entities/Market';
 import type { ProductId } from '../core/Id';
 import { PRODUCT_IDS_BY_PRESET, CONSUMER_PRODUCT_IDS_BY_PRESET, getProduct } from '../data/products';
 import { crowdCount } from '../entities/Facility';
+import { townOf } from '../core/Town';
 
 export interface MarketRow {
   productId: ProductId;
@@ -25,15 +26,19 @@ export interface MarketRow {
 }
 
 export function marketStat(state: GameState, productId: ProductId): MarketStat | undefined {
-  return state.marketStats[productId];
+  // Bare-`state` selector mid-gradient: home town by default (one-town region →
+  // same reference); gains a `townId` param at the endgame move.
+  return townOf(state).marketStats[productId];
 }
 
 export function marketRows(state: GameState, consumerOnly = true): MarketRow[] {
   const ids = consumerOnly
     ? CONSUMER_PRODUCT_IDS_BY_PRESET[state.config.sizePreset]
     : PRODUCT_IDS_BY_PRESET[state.config.sizePreset];
+  const marketStats = townOf(state).marketStats;
+  const firms = townOf(state).firms;
   return ids.map((pid) => {
-    const stat = state.marketStats[pid]!;
+    const stat = marketStats[pid]!;
     const product = getProduct(pid);
     let topFirm = '';
     let topShare = 0;
@@ -41,7 +46,7 @@ export function marketRows(state: GameState, consumerOnly = true): MarketRow[] {
       const share = stat.marketShareByFirm[fid]!;
       if (share > topShare) {
         topShare = share;
-        topFirm = state.firms[fid]?.name ?? fid;
+        topFirm = firms[fid]?.name ?? fid;
       }
     }
     return {
@@ -90,7 +95,7 @@ export function pricingInsight(
   firmId: string,
   productId: string,
 ): PricingInsight {
-  const firm = state.firms[firmId];
+  const firm = townOf(state).firms[firmId];
   const product = getProduct(productId);
   const brand = firm?.brandByProduct[productId] ?? 0;
   const quality = firm?.qualityByProduct[productId] ?? product.defaultQuality;
@@ -100,8 +105,9 @@ export function pricingInsight(
   // read the live range from the population for honesty.
   let lo = Infinity;
   let hi = 0;
-  for (const cid in state.citizens) {
-    const need = state.citizens[cid]!.needs.find((n) => n.productId === productId);
+  const citizens = townOf(state).citizens;
+  for (const cid in citizens) {
+    const need = citizens[cid]!.needs.find((n) => n.productId === productId);
     if (!need) continue;
     lo = Math.min(lo, need.maxAffordablePriceMultiplier);
     hi = Math.max(hi, need.maxAffordablePriceMultiplier);
@@ -109,8 +115,9 @@ export function pricingInsight(
   if (!isFinite(lo)) { lo = 1.2; hi = 1.6; }
 
   let competitors = 0;
-  for (const fid in state.facilities) {
-    const f = state.facilities[fid]!;
+  const facilities = townOf(state).facilities;
+  for (const fid in facilities) {
+    const f = facilities[fid]!;
     if (f.retailProductIds.includes(productId) && f.ownerFirmId !== firmId &&
         f.status !== 'closed' && (f.employees.length > 0 || crowdCount(f) > 0)) {
       competitors++;
@@ -119,7 +126,7 @@ export function pricingInsight(
 
   return {
     yourPrice: firm?.pricesByProduct[productId] ?? product.basePrice,
-    marketAvgPrice: state.marketStats[productId]?.averagePrice ?? 0,
+    marketAvgPrice: townOf(state).marketStats[productId]?.averagePrice ?? 0,
     basePrice: product.basePrice,
     wtpLow: Math.round(product.basePrice * lo * premium),
     wtpHigh: Math.round(product.basePrice * hi * premium),

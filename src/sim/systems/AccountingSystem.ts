@@ -11,6 +11,7 @@
  */
 
 import type { SimContext } from '../core/GameState';
+import { townOf } from '../core/Town';
 import { recordTransaction } from '../core/GameState';
 import { firmAccount, WORLD_ACCOUNT } from '../core/Transactions';
 import { isDayBoundary } from '../core/Tick';
@@ -28,14 +29,15 @@ import { companyValuation } from '../selectors/companySelectors';
 export function runAccountingSystem(ctx: SimContext): void {
   if (!isDayBoundary(ctx.state.tick, ctx.config)) return;
   const { state } = ctx;
+  const town = townOf(state, ctx.townId);
   const completedDay = ctx.time.day - 1;
 
-  for (const fid in state.firms) {
-    const firm = state.firms[fid]!;
+  for (const fid in town.firms) {
+    const firm = town.firms[fid]!;
     if (firm.ownerType === 'player' || firm.ownerType === 'ai') {
       // 1) Maintenance.
       for (const facId of firm.facilities) {
-        const fac = state.facilities[facId];
+        const fac = town.facilities[facId];
         if (!fac || fac.status === 'closed') continue;
         if (fac.operatingCostPerDay > 0) {
           recordTransaction(state, {
@@ -91,12 +93,12 @@ export function runAccountingSystem(ctx: SimContext): void {
   // fold the closed day into the 7-day P&L EMA: ship-day/idle-day rhythms
   // make single days flip-flop, so ranking/advice keys off this instead.
   const EMA_ALPHA = 1 / 7;
-  for (const facId in state.facilities) {
-    const fac = state.facilities[facId]!;
+  for (const facId in town.facilities) {
+    const fac = town.facilities[facId]!;
     fac.yesterdayStats = fac.dailyStats;
     fac.dailyStats = emptyFacilityDailyStats();
 
-    const owner = state.firms[fac.ownerFirmId];
+    const owner = town.firms[fac.ownerFirmId];
     const y = fac.yesterdayStats;
     const revenue = y.revenue + y.transferOutValue;
     const wages = owner
@@ -107,8 +109,8 @@ export function runAccountingSystem(ctx: SimContext): void {
     fac.pnlEma.cost += (cost - fac.pnlEma.cost) * EMA_ALPHA;
     fac.pnlEma.net = fac.pnlEma.revenue - fac.pnlEma.cost;
   }
-  for (const cid in state.citizens) {
-    const cit = state.citizens[cid]!;
+  for (const cid in town.citizens) {
+    const cit = town.citizens[cid]!;
     cit.dailyStats = {
       day: ctx.time.day,
       wagesEarned: 0,
@@ -120,9 +122,10 @@ export function runAccountingSystem(ctx: SimContext): void {
 }
 
 function computeInventoryValue(ctx: SimContext, facilityIds: string[]): number {
+  const town = townOf(ctx.state, ctx.townId);
   let value = 0;
   for (const fid of facilityIds) {
-    const fac = ctx.state.facilities[fid];
+    const fac = town.facilities[fid];
     if (!fac) continue;
     for (const inv of [fac.inputInventory, fac.outputInventory]) {
       for (const pid in inv) {

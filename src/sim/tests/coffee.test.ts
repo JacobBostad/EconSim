@@ -20,8 +20,9 @@ describe('Coffee', () => {
   it('old saves gain the coffee need on load', () => {
     const sim = newSim(2);
     const raw = JSON.parse(serialize(sim.getState()));
-    for (const cid in raw.citizens) {
-      raw.citizens[cid].needs = raw.citizens[cid].needs.filter(
+    const home = raw.towns.home; // the six families live under towns.home now
+    for (const cid in home.citizens) {
+      home.citizens[cid].needs = home.citizens[cid].needs.filter(
         (n: { productId: string }) => n.productId !== 'coffee',
       );
     }

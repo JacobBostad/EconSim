@@ -9,6 +9,7 @@
 
 import type { SimContext, GameState } from '../core/GameState';
 import { recordTransaction, emitEvent, canAfford } from '../core/GameState';
+import { townOf, HOME_TOWN_ID, type TownId } from '../core/Town';
 import { firmAccount, citizenAccount, cohortAccount, WORLD_ACCOUNT } from '../core/Transactions';
 import { isDayBoundary } from '../core/Tick';
 import { clamp } from '../../utils/clamp';
@@ -19,12 +20,13 @@ export function runPayrollSystem(ctx: SimContext): void {
   if (!isDayBoundary(ctx.state.tick, ctx.config)) return;
   if (ctx.time.day % ctx.config.payrollIntervalDays !== 0) return;
   const { state } = ctx;
+  const town = townOf(state, ctx.townId);
 
   // Subsistence income for the unemployed (keeps consumer demand alive).
   const stipend = ctx.config.subsistenceIncomePerDay * ctx.config.payrollIntervalDays;
   if (stipend > 0) {
-    for (const cid in state.citizens) {
-      const cit = state.citizens[cid]!;
+    for (const cid in town.citizens) {
+      const cit = town.citizens[cid]!;
       if (cit.employmentStatus !== 'unemployed') continue;
       recordTransaction(state, {
         from: WORLD_ACCOUNT,
@@ -37,14 +39,14 @@ export function runPayrollSystem(ctx: SimContext): void {
     }
   }
 
-  for (const fid in state.firms) {
-    const firm = state.firms[fid]!;
+  for (const fid in town.firms) {
+    const firm = town.firms[fid]!;
     if (firm.ownerType === 'world' || firm.ownerType === 'external') continue;
     if (firm.employees.length === 0) continue;
 
     const quitters: string[] = [];
     for (const cid of firm.employees) {
-      const cit = state.citizens[cid];
+      const cit = town.citizens[cid];
       if (!cit) continue;
       const wage = cit.wage;
       if (wage > 0 && canAfford(state, firmAccount(firm.id), wage)) {
@@ -89,14 +91,15 @@ export function runPayrollSystem(ctx: SimContext): void {
  */
 function payCrowd(ctx: SimContext): void {
   const { state } = ctx;
-  const cohortIds = Object.keys(state.cohorts).sort();
+  const town = townOf(state, ctx.townId);
+  const cohortIds = Object.keys(town.cohorts).sort();
   if (cohortIds.length === 0) return;
   const days = ctx.config.payrollIntervalDays;
 
   // Idle-crowd stipend, one transaction per cohort.
   const stipend = ctx.config.subsistenceIncomePerDay * days;
   for (const cid of cohortIds) {
-    const cohort = state.cohorts[cid]!;
+    const cohort = town.cohorts[cid]!;
     const idle = cohort.population - cohort.employed;
     if (idle <= 0 || stipend <= 0) continue;
     recordTransaction(state, {
@@ -110,12 +113,12 @@ function payCrowd(ctx: SimContext): void {
   }
 
   // Wages, one transaction per firm × cohort.
-  for (const fid of Object.keys(state.firms).sort()) {
-    const firm = state.firms[fid]!;
+  for (const fid of Object.keys(town.firms).sort()) {
+    const firm = town.firms[fid]!;
     if (firm.ownerType === 'world' || firm.ownerType === 'external') continue;
     const byCohort: Record<string, number> = {};
     for (const facId of [...firm.facilities].sort()) {
-      const fac = state.facilities[facId];
+      const fac = town.facilities[facId];
       if (!fac) continue;
       for (const cid of Object.keys(fac.crowdByCohort)) {
         byCohort[cid] = (byCohort[cid] ?? 0) + fac.crowdByCohort[cid]!;
@@ -135,7 +138,7 @@ function payCrowd(ctx: SimContext): void {
           note: `Crowd wages (${workers})`,
         });
       } else {
-        releaseCrowd(state, firm.id, cid);
+        releaseCrowd(state, firm.id, cid, ctx.townId);
         emitEvent(state, 'warning', 'payroll',
           `${firm.name} couldn't pay its ${workers} crowd workers — they walked off the job.`, firm.id);
       }
@@ -144,12 +147,15 @@ function payCrowd(ctx: SimContext): void {
 }
 
 /** Remove every worker of one cohort from one firm's facilities. */
-function releaseCrowd(state: GameState, firmId: string, cohortId: string): void {
-  const firm = state.firms[firmId];
-  const cohort = state.cohorts[cohortId];
+function releaseCrowd(state: GameState, firmId: string, cohortId: string, townId: TownId = HOME_TOWN_ID): void {
+  // Town-scoped (region.md step 4, slice 3): releases within the town whose
+  // payroll is running (ctx.townId). Home default is byte-identical for one-town.
+  const town = townOf(state, townId);
+  const firm = town.firms[firmId];
+  const cohort = town.cohorts[cohortId];
   if (!firm || !cohort) return;
   for (const facId of [...firm.facilities].sort()) {
-    const fac = state.facilities[facId];
+    const fac = town.facilities[facId];
     if (!fac) continue;
     const n = fac.crowdByCohort[cohortId] ?? 0;
     if (n <= 0) continue;
@@ -160,12 +166,13 @@ function releaseCrowd(state: GameState, firmId: string, cohortId: string): void 
 
 function quit(ctx: SimContext, firmId: string, citizenId: string): void {
   const { state } = ctx;
-  const firm = state.firms[firmId]!;
-  const cit = state.citizens[citizenId];
+  const town = townOf(state, ctx.townId);
+  const firm = town.firms[firmId]!;
+  const cit = town.citizens[citizenId];
   if (!cit) return;
   firm.employees = firm.employees.filter((id) => id !== citizenId);
   if (cit.workplaceFacilityId) {
-    const fac = state.facilities[cit.workplaceFacilityId];
+    const fac = town.facilities[cit.workplaceFacilityId];
     if (fac) fac.employees = fac.employees.filter((id) => id !== citizenId);
   }
   cit.employerFirmId = null;

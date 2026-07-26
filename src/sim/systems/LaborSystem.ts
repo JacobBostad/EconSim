@@ -12,6 +12,7 @@
 import type { GameState, SimContext } from '../core/GameState';
 import { formatMoney } from '../../utils/formatMoney';
 import { canAfford, emitEvent, recordTransaction } from '../core/GameState';
+import { townOf } from '../core/Town';
 import { firmAccount, citizenAccount, WORLD_ACCOUNT } from '../core/Transactions';
 import type { AccountRef } from '../core/Transactions';
 import { isDayBoundary } from '../core/Tick';
@@ -51,11 +52,15 @@ export function trainCrew(
   firmId: import('../core/Id').FirmId,
   facilityId: FacilityId,
 ): boolean {
-  const firm = state.firms[firmId];
-  const fac = state.facilities[facilityId];
+  // Bare-`state` helper mid-gradient: home town by default (one-town region →
+  // same reference); gains a `townId` param at the endgame move.
+  const town = townOf(state);
+  const firm = town.firms[firmId];
+  const fac = town.facilities[facilityId];
   if (!firm || !fac || fac.ownerFirmId !== firmId) return false;
+  const citizens = town.citizens;
   const trainees = fac.employees
-    .map((cid) => state.citizens[cid])
+    .map((cid) => citizens[cid])
     .filter((c): c is NonNullable<typeof c> => !!c && c.skill < SKILL_MAX - 1e-9);
   if (trainees.length === 0) {
     emitEvent(state, 'info', 'player', `${fac.name}'s crew is already at peak skill — nothing to train.`, facilityId);
@@ -92,11 +97,14 @@ export function hireCitizen(
   facilityId: FacilityId,
   citizenId: CitizenId,
 ): boolean {
-  const fac = state.facilities[facilityId];
+  // Bare-`state` helper mid-gradient: home town by default (one-town region →
+  // same reference); gains a `townId` param at the endgame move.
+  const town = townOf(state);
+  const fac = town.facilities[facilityId];
   if (!fac) return false;
-  const firm = state.firms[fac.ownerFirmId];
+  const firm = town.firms[fac.ownerFirmId];
   if (!firm) return false;
-  const cit = state.citizens[citizenId];
+  const cit = town.citizens[citizenId];
   if (!cit || cit.employmentStatus === 'employed') return false;
   if (fac.employees.length >= fac.workerCapacity) return false;
 
@@ -117,11 +125,14 @@ export function fireCitizen(
   facilityId: FacilityId,
   citizenId: CitizenId,
 ): boolean {
-  const fac = state.facilities[facilityId];
+  // Bare-`state` helper mid-gradient: home town by default (one-town region →
+  // same reference); gains a `townId` param at the endgame move.
+  const town = townOf(state);
+  const fac = town.facilities[facilityId];
   if (!fac) return false;
-  const firm = state.firms[fac.ownerFirmId];
+  const firm = town.firms[fac.ownerFirmId];
   if (!firm) return false;
-  const cit = state.citizens[citizenId];
+  const cit = town.citizens[citizenId];
   if (!cit) return false;
   fac.employees = fac.employees.filter((id) => id !== citizenId);
   firm.employees = firm.employees.filter((id) => id !== citizenId);
@@ -153,7 +164,9 @@ export function removeCitizen(
   note: string,
 ): void {
   if (citizen.workplaceFacilityId) fireCitizen(state, citizen.workplaceFacilityId, citizen.id);
-  const home = state.facilities[citizen.homeFacilityId];
+  // Bare-`state` helper mid-gradient: home town by default (one-town region →
+  // same reference); gains a `townId` param at the endgame move.
+  const home = townOf(state).facilities[citizen.homeFacilityId];
   if (home) home.residentIds = home.residentIds.filter((id) => id !== citizen.id);
   if (citizen.cash > 0) {
     recordTransaction(state, {
@@ -171,27 +184,29 @@ export function removeCitizen(
 
 /** First unemployed citizen id, or null. Deterministic by insertion order. */
 export function findUnemployed(state: GameState): CitizenId | null {
-  for (const cid in state.citizens) {
-    if (state.citizens[cid]!.employmentStatus === 'unemployed') return cid;
+  const citizens = townOf(state).citizens;
+  for (const cid in citizens) {
+    if (citizens[cid]!.employmentStatus === 'unemployed') return cid;
   }
   return null;
 }
 
 export function runLaborSystem(ctx: SimContext): void {
   const { state } = ctx;
+  const town = townOf(state, ctx.townId);
   if (isDayBoundary(state.tick, ctx.config)) {
     growSkills(state);
     runJobMarket(ctx);
   }
-  for (const fid in state.facilities) {
-    state.facilities[fid]!.presentWorkers = 0;
-    state.facilities[fid]!.presentSkill = 0;
+  for (const fid in town.facilities) {
+    town.facilities[fid]!.presentWorkers = 0;
+    town.facilities[fid]!.presentSkill = 0;
   }
-  for (const cid in state.citizens) {
-    const cit = state.citizens[cid]!;
+  for (const cid in town.citizens) {
+    const cit = town.citizens[cid]!;
     if (cit.activity !== 'working' || cit.movementState !== 'idle') continue;
     if (!cit.workplaceFacilityId) continue;
-    const fac = state.facilities[cit.workplaceFacilityId];
+    const fac = town.facilities[cit.workplaceFacilityId];
     if (fac) {
       fac.presentWorkers += 1;
       fac.presentSkill += cit.skill;
@@ -201,8 +216,9 @@ export function runLaborSystem(ctx: SimContext): void {
 
 /** Employed citizens get better at their jobs; idle skills rust slowly. */
 function growSkills(state: GameState): void {
-  for (const cid in state.citizens) {
-    const cit = state.citizens[cid]!;
+  const citizens = townOf(state).citizens;
+  for (const cid in citizens) {
+    const cit = citizens[cid]!;
     cit.skill =
       cit.employmentStatus === 'employed'
         ? Math.min(SKILL_MAX, cit.skill + SKILL_GAIN_PER_WORKDAY)
@@ -218,17 +234,18 @@ function growSkills(state: GameState): void {
  */
 function runJobMarket(ctx: SimContext): void {
   const { state, rng } = ctx;
-  for (const cid in state.citizens) {
-    const cit = state.citizens[cid]!;
+  const town = townOf(state, ctx.townId);
+  for (const cid in town.citizens) {
+    const cit = town.citizens[cid]!;
     if (cit.employmentStatus !== 'employed' || cit.wage <= 0) continue;
     if (!rng.chance(POACH_DAILY_CHANCE)) continue;
 
     let best: FacilityId | null = null;
     let bestWage = cit.wage * POACH_WAGE_PREMIUM;
-    for (const fid in state.facilities) {
-      const fac = state.facilities[fid]!;
+    for (const fid in town.facilities) {
+      const fac = town.facilities[fid]!;
       if (fac.status === 'closed' || fac.id === cit.workplaceFacilityId) continue;
-      const firm = state.firms[fac.ownerFirmId];
+      const firm = town.firms[fac.ownerFirmId];
       if (!firm || (firm.ownerType !== 'player' && firm.ownerType !== 'ai')) continue;
       if (firm.id === cit.employerFirmId) continue;
       if (fac.workerCapacity <= 0 || fac.employees.length >= fac.workerCapacity) continue;
@@ -243,7 +260,7 @@ function runJobMarket(ctx: SimContext): void {
     const oldWorkplace = cit.workplaceFacilityId;
     if (oldWorkplace) fireCitizen(state, oldWorkplace, cid);
     hireCitizen(state, best, cid);
-    const newFirm = state.firms[state.facilities[best]!.ownerFirmId]!;
+    const newFirm = town.firms[town.facilities[best]!.ownerFirmId]!;
     if (from === state.playerFirmId) {
       emitEvent(state, 'warning', 'payroll',
         `${cit.name} left you for ${newFirm.name}'s higher wages (${formatMoney(newFirm.wagePolicy.baseWage)}/day).`, cid);

@@ -12,6 +12,7 @@
 import type { SimContext } from '../core/GameState';
 import { formatMoney } from '../../utils/formatMoney';
 import { emitEvent } from '../core/GameState';
+import { townOf } from '../core/Town';
 import { isDayBoundary } from '../core/Tick';
 import { operatingProfit } from '../entities/Accounting';
 import { getProduct } from '../data/products';
@@ -19,11 +20,12 @@ import { getProduct } from '../data/products';
 export function runEventLogSystem(ctx: SimContext): void {
   if (!isDayBoundary(ctx.state.tick, ctx.config)) return;
   const { state } = ctx;
-  const player = state.firms[state.playerFirmId];
+  const town = townOf(state, ctx.townId);
+  const player = town.firms[state.playerFirmId];
   if (!player) return;
 
   for (const facId of player.facilities) {
-    const fac = state.facilities[facId];
+    const fac = town.facilities[facId];
     if (!fac || fac.status === 'closed') continue;
 
     // Daily production digest from yesterday's stats (EventLog runs before the
@@ -64,7 +66,7 @@ export function runEventLogSystem(ctx: SimContext): void {
         );
       }
       const price = player.pricesByProduct[pid] ?? product.basePrice;
-      const avg = state.marketStats[pid]!.averagePrice;
+      const avg = town.marketStats[pid]!.averagePrice;
       if (avg > 0 && price > avg * 1.2) {
         const pct = Math.round(((price - avg) / avg) * 100);
         emitEvent(

@@ -139,6 +139,35 @@ export interface SimulationConfig {
    * byte-identical to pre-Arc-E; a City/Metropolis game opts in, the trade-pool
    * probe and tests opt in explicitly. */
   tradeDemandPoolsEnabled: boolean;
+  /**
+   * The region (Arc E step 4; see docs/design/region.md § "What step 4 will
+   * take"). Off by default at EVERY preset, and NO preset turns it on yet (slice
+   * 1). When on at state construction, `createInitialState` seeds ONE partner
+   * town (`port_rosa`) into `state.towns` alongside home via `seedTown`, minting
+   * only that town's six record families off the region's SHARED `idCounters`
+   * (town-namespaced id prefixes, so home's runtime id stream is untouched) and a
+   * LOCAL rng (so the shared rng stream is untouched). In slice 1 the partner is
+   * INERT: no system ticks it and no home tick reads it, so a flag-on City game's
+   * home is byte-identical to flag-off (rngState, serialized home records, money)
+   * — proven in regionSeed.test.ts and the isolation probe. Village never seeds a
+   * partner regardless (double-gated on sizePreset — a Village is definitionally
+   * one town). Dispatch, the region-wide money primitive, and the freight edge
+   * are later slices. */
+  regionEnabled: boolean;
+  /**
+   * Risk-tiered loan pricing (see docs/design/interest-rates.md). Off by
+   * default — including for the plain village/city/metropolis presets the pins
+   * are tuned against — so probes, tests, and old saves keep the flat all-in
+   * rate byte-identical. When on, FinanceSystem charges a leverage-priced
+   * effective rate (a cheap first dollar rising toward the old flat rate at the
+   * credit limit) instead of the stored flat `interestRatePerDay`. New games at
+   * EVERY preset opt in (worldScaleConfig): the probe proved no AI or passive
+   * player ever borrows on the pinned paths, so the interest transaction (gated
+   * on debt > 0) is never reached — every rngState/money pin is bit-identical
+   * flag-on vs flag-off (verified in interestRates.test.ts). Phase 3's migration
+   * that reprices existing saved firms' base stays unshipped, so loaded games
+   * keep their behavior (normalize default false). */
+  riskTieredInterestEnabled: boolean;
 }
 
 /**
@@ -215,20 +244,33 @@ export interface SimulationConfig {
  *    any firm count (the flat rent sink was calibrated for the ~9-firm
  *    equilibrium and runs away at the raised trigger's ~0.5 employment). rate 0
  *    everywhere = disabled = the shipped flat-rent-only regime.
- *  - `immigrationEmpFloor`: an employment-aware immigration gate. Cohort inflow
- *    reads town SATISFACTION only (≥ 55), never job supply — so once the cast/
- *    crowd is well-served the worker cohort floods faster than founders add jobs
- *    and crowd empShare craters (the A4 flood, and the wall the cast-parity pass
- *    hit: closing the cast gap RAISES town satisfaction, re-triggering the flood).
- *    When > 0, inflow is scaled by `clamp((empShare − floor)/(1 − floor), 0, 1)`,
- *    so immigration halts at/below the floor and recovers as jobs fill — capital
- *    attracts labor only where there is work. 0 everywhere = disabled = the
- *    shipped satisfaction-only gate.
+ *  - `restockRevisit`: the cast "restocked-shelf revisit" (cast-parity attempt
+ *    #3; see docs/design/cohorts-and-districts.md). When true, a cast WORKER
+ *    whose urgent need stocked out at an OPEN store earlier the same day gets
+ *    ONE extra purchase attempt at that store once it restocks (models "swung by
+ *    on the way home"), reusing the RetailDemandSystem purchase path so every
+ *    stat stays coherent. The forward path the cast-parity verdict named — give
+ *    the trip-limited worker the cohort's throughput as a genuine extra VISIT,
+ *    not deeper single-visit baskets. false everywhere = disabled = shipped
+ *    behaviour; the mechanism draws no rng and, double-gated on crowd presence,
+ *    stays dark in a Village even if forced true (no cohort ever stocks out).
+ *  - `restockRevisitSyntheticSignal`: the founder-signal-neutral split for the
+ *    `restockRevisit` mechanism (cast-parity attempt #5). When true, a revisit's
+ *    purchase buys real stock and pays real revenue (the citizen's need and the
+ *    firm's P&L see the full purchase, money conserved) but is EXCLUDED from the
+ *    founder-visible market shortage gauge (marketStats units/unmet) — the same
+ *    synthetic-accounting idiom `catchupSyntheticSignal` applies to the catch-up
+ *    tranche. A revisit is a synthetic extra VISIT standing in for the URGENT_TRIPS
+ *    the after-work window denies the jobbed cast worker, not market demand, so
+ *    closing the cast gap via revisits does not re-inflate firm count (attempt #4
+ *    Finding 2: the revisit-as-market-demand re-widened the gap it was meant to
+ *    close). Only read when `restockRevisit` is on; false everywhere = the shipped
+ *    accounting (a revisit counts as market demand, byte-identical).
  */
 export const SIZE_PRESETS = {
-  village: { castTarget: 80, cohortCap: 0, crowdStart: 0, founderMaxAiFirms: 6, founderUndersupplyCooldown: 20, founderUndersupplyFillRate: 0.65, founderCash: 22000_00, mapWidth: 130, mapHeight: 92, founderCrowdWage: 16_00, catchupBaskets: 2, catchupSyntheticSignal: false, prosperityDrainFloor: 0, prosperityDrainRate: 0, immigrationEmpFloor: 0 },
-  city: { castTarget: 150, cohortCap: 2000, crowdStart: 300, founderMaxAiFirms: 18, founderUndersupplyCooldown: 20, founderUndersupplyFillRate: 0.65, founderCash: 22000_00, mapWidth: 260, mapHeight: 184, founderCrowdWage: 16_00, catchupBaskets: 2, catchupSyntheticSignal: false, prosperityDrainFloor: 0, prosperityDrainRate: 0, immigrationEmpFloor: 0 },
-  metropolis: { castTarget: 150, cohortCap: 10000, crowdStart: 1500, founderMaxAiFirms: 30, founderUndersupplyCooldown: 7, founderUndersupplyFillRate: 0.80, founderCash: 28000_00, mapWidth: 390, mapHeight: 276, founderCrowdWage: 16_00, catchupBaskets: 2, catchupSyntheticSignal: false, prosperityDrainFloor: 0, prosperityDrainRate: 0, immigrationEmpFloor: 0 },
+  village: { castTarget: 80, cohortCap: 0, crowdStart: 0, founderMaxAiFirms: 6, founderUndersupplyCooldown: 20, founderUndersupplyFillRate: 0.65, founderCash: 22000_00, mapWidth: 130, mapHeight: 92, founderCrowdWage: 16_00, catchupBaskets: 2, catchupSyntheticSignal: false, prosperityDrainFloor: 0, prosperityDrainRate: 0, restockRevisit: false, restockRevisitSyntheticSignal: false },
+  city: { castTarget: 150, cohortCap: 2000, crowdStart: 300, founderMaxAiFirms: 18, founderUndersupplyCooldown: 20, founderUndersupplyFillRate: 0.65, founderCash: 22000_00, mapWidth: 260, mapHeight: 184, founderCrowdWage: 16_00, catchupBaskets: 2, catchupSyntheticSignal: false, prosperityDrainFloor: 0, prosperityDrainRate: 0, restockRevisit: false, restockRevisitSyntheticSignal: false },
+  metropolis: { castTarget: 150, cohortCap: 10000, crowdStart: 1500, founderMaxAiFirms: 30, founderUndersupplyCooldown: 7, founderUndersupplyFillRate: 0.80, founderCash: 28000_00, mapWidth: 390, mapHeight: 276, founderCrowdWage: 16_00, catchupBaskets: 2, catchupSyntheticSignal: false, prosperityDrainFloor: 0, prosperityDrainRate: 0, restockRevisit: false, restockRevisitSyntheticSignal: false },
 } as const;
 
 export const DEFAULT_CONFIG: SimulationConfig = {
@@ -279,6 +321,8 @@ export const DEFAULT_CONFIG: SimulationConfig = {
   realEstateEnabled: false,
   investorsEnabled: false,
   tradeDemandPoolsEnabled: false,
+  regionEnabled: false,
+  riskTieredInterestEnabled: false,
 };
 
 /** Difficulty presets: starting capital, news volatility, AI aggressiveness. */
@@ -345,13 +389,20 @@ export function worldScaleConfig(
   let worldOverride: Partial<SimulationConfig> = {};
   if (world === 'city') {
     // City turns the whole stack on together (crowd + services + landlords +
-    // holdcos + trade pools) — the founder baselines are pinned with all four on.
+    // holdcos + trade pools + the region) — the founder baselines are pinned
+    // with the archetype channels on, and region.md step 4 landed the live
+    // partner (port_rosa) as the City new-game default: a second economy home
+    // trades with, on the freight edge. The pinned flag-OFF City baseline
+    // (rngState 2546912297, money 316900000) is preserved by the direct-config
+    // pin tests (regionScheduler/interestRates build config without this
+    // helper), so it stays the region-off reference; a NEW City game opts in.
     worldOverride = {
       sizePreset: 'city',
       servicesEnabled: true,
       realEstateEnabled: true,
       investorsEnabled: true,
       tradeDemandPoolsEnabled: true,
+      regionEnabled: true,
     };
   } else if (world === 'metropolis') {
     // Metropolis wires every channel City does EXCEPT investorsEnabled: the
@@ -359,16 +410,42 @@ export function worldScaleConfig(
     // reshuffles the D3-measured crowd-tier bands), so the flag is a no-op here —
     // omitted rather than set to something inert. services + realEstate + trade
     // pools all activate at metropolis (their gates are sizePreset !== 'village').
+    //
+    // regionEnabled ships here too (region.md step 4). It was deferred once
+    // because an early flip "made metrosmoke crawl" — MEASURED to a sharp cause:
+    // NOT tick cost, but a CRASH that halted the tick loop. The partner is fixed
+    // city-sized (PORT_ROSA_SPEC), but two PARTNER systems keyed off the HOST's
+    // `config.sizePreset` instead of the partner's own preset; at a Metropolis
+    // host MarketStatsSystem then indexed the metropolis product SUPERSET into
+    // the city-sized partner book and threw (undefined marketStats entry) on the
+    // first hour boundary — the loop stopped, the day counter froze, and the UI
+    // smoke read that as a "crawl". Fixed by keying MarketStatsSystem off the
+    // town's own book (byte-identical for home and for a City partner). The perf
+    // worry was also measured and refuted: the two-town tick delta sits BELOW the
+    // run-to-run noise floor at both scales; the one real O(towns × host-size)
+    // wart — the partner's makeContext rebuilding the full HOST contract index
+    // every tick (~15µs at Metropolis vs ~7µs at City, unread by any partner
+    // system) — is removed (empty partner index). Post-fix a two-town Metropolis
+    // runs to day 300 at seeds 11/4, money conserved to the cent, deterministic,
+    // and far under the perf guard. (Investors stays city-only; the partner seed
+    // gate is sizePreset !== 'village'.)
     worldOverride = {
       sizePreset: 'metropolis',
       servicesEnabled: true,
       realEstateEnabled: true,
       tradeDemandPoolsEnabled: true,
+      regionEnabled: true,
     };
   }
   const config: SimulationConfig = {
     ...configForDifficulty(difficulty),
     challengeMode: challenge,
+    // Phase 2 opt-in (docs/design/interest-rates.md): every new game gets the
+    // better, realistic loan pricing. Proven zero-AI-impact — no founder or
+    // passive player borrows on the pinned paths, so the pins are bit-identical
+    // flag-on (interestRates.test.ts). Old saves keep the flat rate via the
+    // normalize default false; Phase 3's repricing migration stays unshipped.
+    riskTieredInterestEnabled: true,
     ...sizeOverrides,
     ...worldOverride,
   };

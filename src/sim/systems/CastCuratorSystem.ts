@@ -29,6 +29,7 @@
 
 import type { SimContext, GameState } from '../core/GameState';
 import { emitEvent, recordTransaction } from '../core/GameState';
+import { townOf } from '../core/Town';
 import { cohortAccount, citizenAccount } from '../core/Transactions';
 import { isDayBoundary } from '../core/Tick';
 import type { Citizen, CitizenTier } from '../entities/Citizen';
@@ -49,15 +50,20 @@ const REBALANCE_HYSTERESIS = 2;
 const TIERS: CitizenTier[] = ['worker', 'comfortable', 'affluent'];
 
 function anyCrowd(state: GameState): boolean {
-  for (const cid in state.cohorts) {
-    if (state.cohorts[cid]!.population > 0) return true;
+  // Bare-`state` helper mid-gradient: home town by default (one-town region →
+  // same reference); gains a `townId` param at the endgame move.
+  const cohorts = townOf(state).cohorts;
+  for (const cid in cohorts) {
+    if (cohorts[cid]!.population > 0) return true;
   }
   return false;
 }
 
-/** The stratum a home location + tier belongs to, as `${districtId}:${tier}`. */
+/** The stratum a home location + tier belongs to, as `${districtId}:${tier}`.
+ * Bare-`state` helper mid-gradient: reads the home town by default (one-town
+ * region → identical reference); gains a `townId` param at the endgame move. */
 function stratumOf(state: GameState, home: Vec2, tier: CitizenTier): string {
-  const d = districtAt(state.districts, home.x, home.y);
+  const d = districtAt(townOf(state).districts, home.x, home.y);
   return `${d ? d.id : ''}:${tier}`;
 }
 
@@ -96,10 +102,11 @@ export function runCastCuratorSystem(ctx: SimContext): void {
  * the daily loop can keep draining a backlog until the strata are balanced). */
 function curate(ctx: SimContext): boolean {
   const { state } = ctx;
+  const town = townOf(state, ctx.townId);
 
   // --- census: cast + crowd per district × tier stratum ---
   const strata: Stratum[] = [];
-  for (const did of Object.keys(state.districts).sort()) {
+  for (const did of Object.keys(town.districts).sort()) {
     for (const tier of TIERS) strata.push({ key: `${did}:${tier}`, districtId: did, tier });
   }
   const castCount: Record<string, number> = {};
@@ -109,9 +116,9 @@ function curate(ctx: SimContext): boolean {
     pop[s.key] = 0;
   }
   let castTotal = 0;
-  for (const cid of Object.keys(state.citizens).sort()) {
-    const c = state.citizens[cid]!;
-    const home = state.facilities[c.homeFacilityId];
+  for (const cid of Object.keys(town.citizens).sort()) {
+    const c = town.citizens[cid]!;
+    const home = town.facilities[c.homeFacilityId];
     if (!home) continue;
     const key = stratumOf(state, home.location, c.tier);
     if (castCount[key] === undefined) continue; // stratum outside the partition
@@ -120,7 +127,7 @@ function curate(ctx: SimContext): boolean {
   }
   let totalPop = castTotal;
   for (const s of strata) {
-    const crowd = state.cohorts[s.key]?.population ?? 0;
+    const crowd = town.cohorts[s.key]?.population ?? 0;
     pop[s.key] = castCount[s.key]! + crowd;
     totalPop += crowd;
   }
@@ -167,7 +174,7 @@ function curate(ctx: SimContext): boolean {
   // stratum with no crowd can never have a target above its cast count), so a
   // promotion source always exists — but guard anyway; if either half of the
   // swap can't happen, we skip BOTH so the cast size stays invariant.
-  const source = state.cohorts[under.key];
+  const source = town.cohorts[under.key];
   if (!source || source.population <= 0) return false;
   const gone = pickRetiree(state, over);
   if (!gone) return false;
@@ -188,9 +195,13 @@ function curate(ctx: SimContext): boolean {
  */
 function pickRetiree(state: GameState, over: Stratum): Citizen | null {
   let pick: Citizen | null = null;
-  for (const cid of Object.keys(state.citizens).sort()) {
-    const c = state.citizens[cid]!;
-    const home = state.facilities[c.homeFacilityId];
+  // Bare-`state` helper mid-gradient: home town by default (one-town region →
+  // same reference); gains a `townId` param at the endgame move.
+  const town = townOf(state);
+  const citizens = town.citizens;
+  for (const cid of Object.keys(citizens).sort()) {
+    const c = citizens[cid]!;
+    const home = town.facilities[c.homeFacilityId];
     if (!home) continue;
     if (stratumOf(state, home.location, c.tier) !== over.key) continue;
     if (pick === null) {
@@ -219,16 +230,17 @@ function pickRetiree(state: GameState, over: Stratum): Citizen | null {
  */
 function resolvePromoteHome(ctx: SimContext, districtId: DistrictId, gone: Citizen): string | null {
   const { state } = ctx;
+  const town = townOf(state, ctx.townId);
   const inDistrict = (loc: Vec2): boolean =>
-    districtAt(state.districts, loc.x, loc.y)?.id === districtId;
+    districtAt(town.districts, loc.x, loc.y)?.id === districtId;
 
-  const goneHome = state.facilities[gone.homeFacilityId];
+  const goneHome = town.facilities[gone.homeFacilityId];
   if (goneHome && inDistrict(goneHome.location)) return gone.homeFacilityId;
 
   let homes = 0;
   let existing: string | null = null;
-  for (const fid of Object.keys(state.facilities).sort()) {
-    const f = state.facilities[fid]!;
+  for (const fid of Object.keys(town.facilities).sort()) {
+    const f = town.facilities[fid]!;
     if (f.type !== 'home') continue;
     homes += 1;
     if (existing === null && f.residentIds.length < 2 && inDistrict(f.location)) existing = fid;
@@ -243,7 +255,7 @@ function resolvePromoteHome(ctx: SimContext, districtId: DistrictId, gone: Citiz
     // die (A4 review finding).
     const slot =
       ctx.config.sizePreset === 'village'
-        ? homeSlotFor(Math.max(0, homes - 20), ctx.config.mapHeight)
+        ? homeSlotFor(Math.max(0, homes - 20), town.mapHeight)
         : firstFreeDistrictSlot(ctx.state, 'residential', HOME_SLOT_SPEC, [], districtId);
     if (slot && inDistrict(slot)) {
       const home = createFacility(state, 'home', state.worldFirmId, slot, { name: `Home ${homes + 1}` });
@@ -259,13 +271,15 @@ function resolvePromoteHome(ctx: SimContext, districtId: DistrictId, gone: Citiz
  * non-worker crowd, so a stratum's cohort may not exist yet. */
 function retire(ctx: SimContext, gone: Citizen, over: Stratum): void {
   const { state } = ctx;
+  // Cohort CREATION site — a writer, kept on the flat path until records move
+  // in option (c); the guard read + assign stay on `state.cohorts`.
   let cohort = state.cohorts[over.key];
   if (!cohort) {
     cohort = emptyCohort(over.districtId, over.tier, state.config.sizePreset);
     state.cohorts[over.key] = cohort;
   }
   const name = gone.name;
-  const districtName = state.districts[over.districtId]?.name ?? over.districtId;
+  const districtName = townOf(state, ctx.townId).districts[over.districtId]?.name ?? over.districtId;
   // Shared removal path — cash flows citizen -> cohort pool, conserved.
   removeCitizen(state, gone, cohortAccount(over.key), `Retired ${name} into the crowd`);
   cohort.population += 1;
@@ -315,7 +329,7 @@ function promote(
       note: `Promoted ${cit.name} from the crowd`,
     });
   }
-  const districtName = state.districts[under.districtId]?.name ?? under.districtId;
+  const districtName = townOf(state, ctx.townId).districts[under.districtId]?.name ?? under.districtId;
   emitEvent(
     state,
     'success',

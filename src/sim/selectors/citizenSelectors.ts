@@ -7,13 +7,16 @@ import type { Citizen } from '../entities/Citizen';
 import type { CitizenId, FirmId } from '../core/Id';
 import { average } from '../../utils/math';
 import { getProduct } from '../data/products';
+import { townOf } from '../core/Town';
 
 export function getCitizen(state: GameState, id: CitizenId): Citizen | undefined {
-  return state.citizens[id];
+  // Bare-`state` selector mid-gradient: home town by default (one-town region →
+  // same reference); gains a `townId` param at the endgame move.
+  return townOf(state).citizens[id];
 }
 
 export function allCitizens(state: GameState): Citizen[] {
-  return Object.values(state.citizens);
+  return Object.values(townOf(state).citizens);
 }
 
 export function citizensByEmployer(state: GameState, firmId: FirmId): Citizen[] {
@@ -86,8 +89,9 @@ export function laborMarketStats(state: GameState): LaborMarketStats {
   ];
   const wages: number[] = [];
   let luxuryAspirants = 0;
-  for (const id in state.citizens) {
-    const c = state.citizens[id]!;
+  const citizens = townOf(state).citizens;
+  for (const id in citizens) {
+    const c = citizens[id]!;
     const sk = c.skill;
     if (sk <= 0.85) buckets[0]!.count++;
     else if (sk <= 0.95) buckets[1]!.count++;
@@ -127,13 +131,14 @@ export interface EmployerRow {
 /** Who employs the town — with crew skill and pay (poaching intel). */
 export function employerBreakdown(state: GameState): EmployerRow[] {
   const rows: EmployerRow[] = [];
-  for (const fid in state.firms) {
-    const f = state.firms[fid]!;
+  const firms = townOf(state).firms;
+  for (const fid in firms) {
+    const f = firms[fid]!;
     if (f.ownerType !== 'player' && f.ownerType !== 'ai') continue;
     let skillSum = 0;
     let count = 0;
     for (const cid of f.employees) {
-      const c = state.citizens[cid];
+      const c = townOf(state).citizens[cid];
       if (c) {
         skillSum += c.skill;
         count++;
@@ -183,8 +188,9 @@ export function spendingPower(state: GameState): SpendingPower {
   for (const c of citizens) {
     for (const n of c.needs) urgencySum[n.productId] = (urgencySum[n.productId] ?? 0) + n.urgency;
   }
-  for (const pid in state.marketStats) {
-    const last = state.marketStats[pid]!.history.slice(-1)[0];
+  const marketStats = townOf(state).marketStats;
+  for (const pid in marketStats) {
+    const last = marketStats[pid]!.history.slice(-1)[0];
     if (!last) continue;
     const amount = last.averagePrice * last.unitsSold;
     if (amount > 0) {

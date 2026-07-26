@@ -30,12 +30,14 @@ describe('Apparel chain', () => {
   it('old saves without clothes normalize: needs + market stats appear', () => {
     const sim = newSim(1);
     const raw = JSON.parse(serialize(sim.getState()));
-    delete raw.marketStats.clothes;
-    for (const cid in raw.citizens) {
-      raw.citizens[cid].needs = raw.citizens[cid].needs.filter(
+    // The six families live under towns.home now (SAVE_VERSION 3).
+    const home = raw.towns.home;
+    delete home.marketStats.clothes;
+    for (const cid in home.citizens) {
+      home.citizens[cid].needs = home.citizens[cid].needs.filter(
         (n: { productId: string }) => n.productId !== 'clothes',
       );
-      delete raw.citizens[cid].preferences.clothes;
+      delete home.citizens[cid].preferences.clothes;
     }
     const loaded = deserialize(JSON.stringify(raw));
     expect(loaded.marketStats['clothes']).toBeTruthy();

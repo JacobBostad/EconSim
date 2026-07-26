@@ -7,17 +7,479 @@ thousands via statistical cohorts plus a fully-simulated cast, districts,
 25-30 firms, a broad product catalog, and specialist firm archetypes
 (real estate, investing, business services).
 
-The work runs in four arcs, and the fragments below are told newest-first
+The work runs in five arcs, and the fragments below are told newest-first
 within the section — so this navigation map reads the opposite way, oldest
 foundation first: **A — the engine** (data-driven demand, districts + dark
 cohorts, the live crowd economy, and the founder scaling that fills a
 Metropolis); **B — investing** (fair takeovers and the minority-stake control
 ladder); **C — breadth** (a wider consumer catalog, the B2B services channel,
 deep 3-stage chains); **D — the specialists** (the firm-archetype framework,
-then the landlord, holdco, and service-provider archetypes that ride it). A
-real City or Metropolis game switches the whole stack on together (crowd +
-districts + all three specialist channels); Village stays the classic,
-bit-identical, every-resident-simulated town.
+then the landlord, holdco, and service-provider archetypes that ride it);
+**E — the region** (a second simulated town, Port Rosa, that home trades with
+across a freight edge — live as the City new-game default). A real City game
+switches the whole stack on together (crowd + districts + all three specialist
+channels + the live region); a Metropolis runs the same crowd, districts,
+landlord, and service channels but keeps the holdco and the region City-scoped
+for now; Village stays the classic, bit-identical, every-resident-simulated
+town.
+
+- **Loan interest reads like a real economy — and is finally SHOWN.** A
+  playtester took a **$40,000** loan and watched **$36/day** drain off with no
+  rate anywhere on screen — they had to divide $36 by $40k to discover it was
+  ~33%/yr, credit-card pricing for a business loan. Loans are now **risk-tiered**
+  (`docs/design/interest-rates.md`): a cheap first dollar (`BASE_RATE 0.0003` ≈
+  **11%/yr**) plus a spread that rises with leverage (`debt ÷ operating net
+  worth`), climbing back to exactly the old **0.0009 ≈ 33%/yr** at the credit
+  limit — so low-leverage debt reads like inflation + a bank margin + risk, while
+  maxing leverage still costs today's ceiling. That same $40k loan on a healthy
+  ~$120k book now costs **~$17/day** (16%/yr), less than half of before. And the
+  rate is no longer invisible: it is surfaced in **four** places — the borrow
+  buttons and Debt line in the company inspector, the Debt card on the dashboard
+  (effective APR), the advisor's debt-service tip, and the Receivership emergency
+  loan (priced near the ceiling *because* you are distressed). New games at every
+  preset get the new pricing; in-progress saves keep their current behavior.
+  Behind `riskTieredInterestEnabled` — proven zero-impact on the AI economy (no
+  AI or passive player borrows on the pinned paths, so the village 11/4/7 and
+  city-11 pins are bit-identical flag-on).
+- **Region step 4, slice 5 — the partner quotes from its real economy (STEP 4
+  COMPLETE).** The gradient's END: the `TradeCityPool` is RETIRED for the live
+  partner. Its export quote no longer reads a seeded pool table — it reads the
+  partner town's REAL book: STOCK = its real retail-shelf units
+  (`partnerLarderStock`), DEMAND = its cohorts' actual recent daily sales off its
+  own `marketStats` (`partnerDailyDemand`, a 3-day window — tier-correct for free,
+  no hand-authored table), COVER = STOCK/DEMAND through the SAME clamped cover
+  curve (`coverMult`, factored out of `tradePool.ts` so the stub pool and the live
+  partner apply the identical curve). A new `PartnerMarketSystem` is the retired
+  pool's supply side moved onto the real shelf (production + gap-import tender
+  refill toward the 6-day cover buffer; cash-free, rng-free), and the shelf is
+  RE-SEEDED at cover-buffer scale (`SHELF_SEED_COVER_DAYS = 12 × crowd × perCapita`
+  — bread 4,680, converging to the ~2,340 target) instead of slice 4's degenerate
+  400k warehouse-scale. `cityPrice`, `settleExportLanding`, `performCityPurchase`,
+  and `ForwardSystem` route the live partner to its real larder and stub cities to
+  the pool; `startingScenario` (`willBeLivePartner`) seeds no pool row for the live
+  partner and `TradeCitySystem.updatePools` skips it — no dead flag-gated pool code
+  on the partner path. THE PAYOFF (the arc's endgame): a partner-side shock now
+  moves home's quote — draining the partner's bread shelf to 15% drops cover
+  6.01d → 0.90d, raises the export quote 332 → 516, and with freight home's next
+  300-bread export settles at the shocked price (locked 257 → 400/unit, net 236 →
+  368/unit). SANITY BAR cleared over a 300-day flag-on soak: the live quote stays
+  bounded (quote/base within [0.600, 1.764]× the walk band, no runaway), the
+  partner economy solvent (firm cash $883,876, cohort cash $160,764), region money
+  conserved to the cent every day. The ISOLATION invariant FLIPS by design (like
+  the slice-2 money-debt flip): home's book — and possibly its `rngState` — now
+  legitimately diverges flag-on vs flag-off because home trades a real partner;
+  what still holds is region conservation, two-run determinism, and FLAG-OFF
+  byte-identity (a flag-off `port_rosa` is a stub — its pool row STAYS; village
+  11/4/7 reproduce `3274842624/2896139677/4253583594`, plain City seed 11
+  reproduces `rngState 2546912297` money `316900000`). `tsc` clean; full `vitest
+  run` green (622 = 615 + 6 new `regionPartnerMarket.test.ts` + 1 net isolation
+  assertion; the perfGuard two-town timing case is a known contention flake, green
+  in isolation); `two-town-conservation.ts` and `second-town-isolation.ts` both
+  exit 0, updated to the isolation-flip invariant.
+
+- **Region step 4, slice 4 — the freight edge with a lead time.** Home's export
+  to the LIVE partner (`port_rosa`) is no longer instant: it becomes a dated
+  inter-town shipment (the `ForwardSystem` shape for physical goods). A new
+  WORLD-scoped `state.freight: FreightShipment[]` carries in-flight goods;
+  `Trade.dispatchFreight` (reached from `performExport` when `isFreightDest` — the
+  region flag on AND the destination is a real simulated town) pulls the goods and
+  locks the day's quote with **no money moving**, and the new `FreightSystem`
+  lands + settles it `FREIGHT_LEAD_DAYS` (3) later — goods feed the partner's
+  larder (the shared `settleExportLanding` tail the instant path uses) and the
+  payment settles THEN, `WORLD → firm` at the locked price with that day's freight
+  netted (freight risk live, price locked). In-flight goods are inventory, not
+  money, so region money is conserved to the cent every day across the whole
+  window. Stub cities (`ironvale`, non-simulated) and every flag-off game keep the
+  instant pool path byte-for-byte. `state.freight` is a SAVE-SHAPE addition kept at
+  SAVE_VERSION 3 (normalize-only, `?? []` — the map-dims precedent); a save taken
+  mid-flight round-trips and still lands on schedule (`arrivalDay` is absolute).
+  Measured (City seed 11, region on): a 300-bread leg dispatches day 0, lands 300
+  units in the larder day 3 and pays $249/unit net × 300 = $74,700; region money
+  invariant to the cent every day. No pinned band moved — measured, the AI routes
+  home's passive exports to `ironvale` (0 to `port_rosa`), so the freight edge only
+  engages on explicit `port_rosa` exports: village 11/4/7 reproduce
+  `3274842624/2896139677/4253583594`, plain City seed 11 reproduces `rngState
+  2546912297` money `316900000`, and the flag-on slice-3 bands stay green (no
+  re-pin). The pool's quote-cover is deliberately NOT re-sourced from the partner's
+  real stock this slice — measured degeneracy (warehouse-scale seeded shelves,
+  376k–400k units, peg the cover at min) defers that to slice 5, which retires the
+  pool. `tsc` clean; full `vitest run` green (615 = 606 + 9 new
+  `regionFreight.test.ts`); `two-town-conservation.ts` (now with a freight leg) and
+  `second-town-isolation.ts` both exit 0.
+- **Region step 4, slice 3 — the TownScheduler + the ticking partner.** The
+  partner trade city `port_rosa` graduates from an inert record to a **live
+  economy**. `Simulation.tick()` now runs a `TownScheduler`: for each town in
+  sorted town order it builds `makeContext(state, townId)` (the arg gained an
+  optional `townId` defaulting to `HOME_TOWN_ID`) and runs that town's system
+  list — home runs the full `SYSTEMS` sequence, a partner runs the light,
+  cast-less `PARTNER_SYSTEMS` subset (8 town-scoped, zero-rng systems:
+  market-stats, districts, crowd-rent, accounting, payroll, cohort-labor,
+  cohort-demand, production). Flag off ⇒ `sortedTownIds` is `['home']`, so the
+  loop runs exactly once over the full list in today's order — **byte-identical**
+  (village 11/4/7 `rngState` 3274842624/2896139677/4253583594; plain City seed 11
+  `rngState` 2546912297, money 316900000). `seedTown` now wires a REAL economy:
+  each producer firm owns a factory (specialty recipe + seeded inputs, staffed by
+  the crowd) and a retail store (its specialty on a seeded shelf); the partner's
+  districts are namespaced `port_rosa:<id>` so its cohort ids are region-unique
+  (the id-collision hazard, for cohorts/districts). The subset systems' bare-
+  `state` helpers gained an optional `townId` (home default → byte-identical), and
+  `recordTransaction`'s firm-ledger update now resolves region-wide so a partner
+  firm's P&L populates. Measured (City seed 11, region on, 60 days): the crowd
+  consumes (39,441 units bought, cohort pool $15,000 → $45,084, 60/300 employed),
+  6 factories produce (bread 12,272 … tools 7,470 units, cash $360k → $466k, 6/6
+  firm ledgers live), the book moves, and REGION money is conserved to the cent
+  every day (358,400,000). Home stays byte-isolated flag-on vs flag-off (rngState
+  + `towns.home`); two flag-on runs agree bit-for-bit. Perf (median, warmed):
+  flag-off City 0.220 ms/tick → flag-on two-town 0.273 ms/tick (+24%), well under
+  the 2 ms guard (`perfGuard` gains a two-town case). Deltas from the design's
+  named subset, documented with reasons: `SatisfactionSystem`/`TierSystem`
+  excluded (cast-only no-ops for a crowd-only town), `CohortSocialSystem` excluded
+  (its tier-creation/migration writers are still home-flat — deferred), and
+  `LogisticsSystem` excluded (world-scoped vehicles/contracts; freight is slice 4,
+  so factory output and shelf are seeded not linked). New probe
+  `docs/design/probes/two-town-conservation.ts` (conservation + flag-off
+  bit-identity + isolation-on, all green); `second-town-isolation.ts` updated for
+  the now-live partner. `tsc` clean; full suite **606** green (600 + 6 new).
+
+- **Region step 4, slice 2 — the region-wide money primitive.** The
+  account-resolution trio (`getAccountCash`/`accountExists`/`addAccountCash` under
+  `recordTransaction`) and the `totalMoneySupply` conservation sum in
+  `core/GameState.ts` now iterate `state.towns` in sorted town order (new
+  `sortedTownIds(state)` helper in `core/Town.ts`), then each town's records —
+  paying the region-money debt the step-3 seam documented. Landed as a proven
+  IDENTITY refactor while `towns` holds only `home`: the outer town loop is a
+  no-op wrapper (`towns.home`'s records ARE the flat aliases), so resolution
+  results, per-town iteration, and every pin are byte-identical (village 11/4/7
+  rngState 3274842624/2896139677/4253583594; plain City 11 rngState 2546912297
+  money 316900000). The optional `firmTownIndex` was measured-away, not built: the
+  one-town outer loop is perf noise (full-flag City seed 11, 5-sample median 0.976
+  ms/tick after vs 0.981 before). The shipped isolation probe's `regionMoneySupply`
+  is now the test oracle (`tests/regionMoney.test.ts`): `totalMoneySupply` equals
+  it on a live City state, and the primitive resolves/sums across a hand-attached
+  second town while conservation holds through an inter-town settlement. `tsc`
+  clean; full suite 600 green (598 + 2 new); goldenSave corpus green unmodified.
+- **The region — step 4, slice 1: the town factory + the flag (Arc E).** The
+  seam that grows the world from one town to a region. `seedTown(region, townId,
+  spec)` (`src/sim/data/seedTown.ts`), carved from `startingScenario`, mints ONLY
+  a partner town's six record families off the region's SHARED `idCounters`
+  (town-namespaced ids, so they are region-unique AND home's own counters never
+  advance) and a LOCAL rng (so the shared rng stream is untouched) — it subsumes
+  the isolation probe's hand-rolled `buildPartnerRecords`. A new `regionEnabled`
+  config flag (default OFF everywhere; no preset turns it on yet) seeds one INERT
+  `port_rosa` partner alongside home at construction, double-gated off Village.
+  `TownRecords` gains per-town `mapWidth`/`mapHeight`; `townOf`'s map getters read
+  the town's own fields, with home's set = `config` at construction and on load —
+  a provable value-identity, so SAVE_VERSION stays 3 (normalize-only default, no
+  new migration; golden v9 still round-trips). No dispatch, no money-primitive, no
+  freight edge yet — the partner is unticked. Measured: pinned village 11
+  (`3274842624`) and city 11 (`2546912297` / money `316900000`) byte-identical
+  flag-off; a 30-day flag-on City run has home's rngState, serialized `towns.home`,
+  and flat money identical to flag-off (the partner inert); the flat money
+  primitive omits exactly the partner's `19,500,000`-cent holder cash (the slice-2
+  debt, quantified). Full suite green (598 = 587 + 11 `regionSeed.test.ts`); the
+  updated `second-town-isolation.ts` probe passes. See docs/design/region.md
+  § "What ships now — the town factory + the flag (step 4, slice 1)".
+- **Perf assertions made contention-robust (grandJunction / playtestV8).** The
+  two heavy-bot playtests asserted `state.perf.avgTickMs < 2`, but avgTickMs is
+  an EWMA *mean* that absorbs the long right tail a loaded machine adds to
+  individual ticks — so a full parallel vitest run flaked (measured EWMA up to
+  6.14 under CPU saturation) while ALWAYS passing in isolation; the sim was
+  never slower, the wall clock was contended, and every full-suite run paid a
+  re-run-in-isolation tax. Replaced with a bound on the *median* per-tick wall
+  time, which is contention-invariant (contention lands in p90+/max, not the
+  middle): across 3 back-to-back full runs under 6 busy processes pinned to 4
+  cores the medians held at 0.238–0.253 ms (grandJunction) and 0.213–0.222 ms
+  (playtestV8) — a <5% wobble — while the old mean swung 1.65→6.14, crossing the
+  `< 2` bound. New bound `median < 1.5 ms` (~6x over the worst observed median,
+  tolerant of a ~6x-slower CI runner) still catches the per-tick regression
+  class it guards: injecting a 2 ms/tick busy-loop drives the median to ~2.3 ms
+  → RED (fails-on-revert verified). Test-only + this note; sim core untouched,
+  all pins hold, full suite green three times back-to-back.
+- **Golden save v9 — the towns-era fixture (first `SAVE_VERSION` 3 save in the
+  corpus).** The step-3 endgame moved the six record families under
+  `state.towns.home` (flat paths now non-enumerable aliases); v9 freezes that
+  shape so every future migration must prove it can load a real towns-shaped
+  save, not just the flat v1–v8 corpus. Minted by a City game, seed 11, day 120,
+  left to grow itself with no player actions (the v8 recipe at the current
+  engine) — the full archetype economy live under the new shape: 15 firms
+  (7 operators, 3 landlords, 2 holdcos, 1 service provider), 14 service
+  contracts, 5 districts, a 300-strong crowd across 3 cohorts, 42-strong cast.
+  The stored JSON carries ONLY the `towns` key — no flat `firms`/`districts`/…
+  leak in (the aliases are non-enumerable). Reproducible byte-for-byte via
+  `docs/design/probes/mint-golden-v9.ts` (the one wall-clock-noisy field,
+  `state.perf`, is zeroed at mint — v7/v8 froze live perf noise; v9 does not);
+  fixture **1,790,455 bytes**. The v9 trio in `goldenSave.test.ts` (loads intact
+  with records under `towns.home` and every flat alias resolving to the same
+  object, runs 5 days money-conserved, round-trips `serialize(deserialize)`) plus
+  a guard that PINS the split — v1–v8 have no `towns` key and stay flat, v9 is the
+  sole towns-shaped fixture at `SAVE_VERSION` 3. Suite **584 → 587** (+3); v1–v8
+  fixtures byte-untouched; `tsc` clean, full suite green.
+- **A — cast-parity attempt #4: the JOINT landing (measured across the full
+  grid, NOT shipped, docs-only).** Executed the forward path attempt #3 named —
+  land the `restockRevisit` demand-timing half JOINTLY with the inert
+  `immigrationEmpFloor` "flood-stopper" and a founder trigger meant to hold crowd
+  empShare ≈ 0.5. All pieces already in-tree; nothing newly built (probe only:
+  `docs/design/probes/cast-joint.ts`). The 300-day × 3-seed grid anchors the
+  shipped baseline to the digit (9/9/8 firms, all PASS) then sweeps the joint
+  regime. **Verdict: NO SHIP** — and the grid REFUTES the hypothesis's second
+  half: `immigrationEmpFloor` is **byte-inert across the entire regime** (floor-on
+  == floor-off on every cell; the crowd holds its 300 bootstrap regardless),
+  because post the A4 `INFLOW_RATE = 0.002` pinning there is no headcount flood
+  left to gate — the empShare crater the prior verdict blamed on immigration is a
+  tier-COMPOSITION effect (comfortable demoting into worker) an immigration gate
+  cannot touch. Two further findings: the revisit's demand counts as MARKET demand
+  (unlike the synthetic catch-up), so it re-inflates the founder signal (9→13
+  firms at the raised trigger) and re-opens the gap it means to close (seed-11 cast
+  worker sat 58→41, gap 3.8→27.7); and no founder-lever setting holds empShare ≈
+  0.5 while seating bands AND gap (empShare caps ~0.40-0.49 under the $18-wage
+  hiring throttle; the three targets are mutually exclusive, the gates chaotically
+  bistable). Money conserves to the cent on every cell; **no band widened, nothing
+  re-pinned, no code changed** — the four ingredients stay dark at their inert
+  defaults, full 587-suite + all pins unchanged. Sharpened attempt-#5 hypothesis
+  (recorded): a founder-signal-neutral cast-throughput lever (synthetic revisit) ×
+  a `CROWD_WAGE_BUFFER_DAYS` relaxation that lifts empShare WITHOUT more sellers,
+  swept at the shipped trigger. See docs/design/cohorts-and-districts.md,
+  "Cast-parity attempt #4 — the JOINT landing".
+- **A — cast-parity attempt #3: the restocked-shelf revisit (measured, NOT
+  shipped, dark foundation).** Built the forward path the prior cast-parity
+  verdict named — a cast-SHOPPING model change, not another demand constant: when
+  a City cast **worker**'s urgent need stocks out at an *open* store, that (store,
+  product) is queued, and if logistics restocks it the **same day** the worker
+  gets **one** extra purchase attempt through the SAME `RetailDemandSystem` path
+  ("swung by on the way home"). Flag-gated `SIZE_PRESETS.restockRevisit` (false
+  every preset; a new per-tick `runRestockRevisitSystem` and an optional
+  never-populated `Citizen.pendingRevisits`), so flag-off is **byte-identical** —
+  village seeds 11/4/7 and city seed 11 pins hold, and a Village stays
+  bit-identical even with the flag FORCED true (double-gated on crowd presence).
+  The 300-day × 3-seed grid (`docs/design/probes/cast-revisit.ts`): the mechanism
+  engages exactly as designed (cast worker sat **+2 to +3.6**, cast bread urgency
+  and emigration ease) but re-triggers the documented **immigration flood** —
+  seed-11 crowd empShare craters 0.36→0.25, collapsing the comfortable band
+  (0.365→**0.291**) and blowing the committed worker gap-daily guard (5.84→
+  **10.52**); seed 4 fails gap-daily (7.02→**9.22**); only seed 7 seats. Money
+  conserves to the cent on every cell. **No band widened, nothing re-pinned** —
+  the revisit is confirmed the right demand-side half of the fix but insufficient
+  alone (it needs the inert `immigrationEmpFloor` gate to land jointly), and lands
+  dark-and-inert as the fourth measured cast-parity foundation. Suite +5
+  (`castRevisit.test.ts`, now 580); `tsc` clean, full suite green. See
+  docs/design/cohorts-and-districts.md, "Cast-parity attempt #3".
+- **E step 3 — the Town seam (ENDGAME: the records genuinely MOVE).** Option (c)
+  lands. The six record families (`districts`, `cohorts`, `citizens`,
+  `marketStats`, `firms`, `facilities`) now LIVE at `state.towns[HOME_TOWN_ID]`
+  (a new `GameState.towns: Record<TownId, TownRecords>`); `townOf`'s getters read
+  `state.towns[townId] ?? state.towns[HOME_TOWN_ID]` (one-town region: every id
+  resolves home), so **no converted call site changed** — the point of landing
+  the accessor first. The old flat paths (`state.firms`, ...) survive as
+  **non-enumerable accessor aliases** onto `towns.home`, installed by
+  `installTownAliases` from every construction path (fresh game, deserialize,
+  migration): un-converted writers (`state.firms[id] = ...`, `delete
+  state.facilities[x]`) and wholesale replacers (`state.districts = {...}`) keep
+  working through the alias, while `JSON.stringify` skips the non-enumerable
+  aliases so a save carries only `towns` and never doubles — the exact failure
+  that got the naive-aliasing option (a) rejected on move one. `SAVE_VERSION`
+  2 → 3 with a `v2 -> v3` migration that wraps an old save's flat records into
+  `towns.home` (BOTH paths then install the aliases before `normalize`); golden
+  saves v1–v8 become the migration corpus and all load, run conserved, and
+  round-trip. Hazard audit swept clean: no production `{...state}`/
+  `structuredClone`/`Object.keys(state)`/`for..in state`; `saveMeta` reads
+  `raw.towns?.home ?? raw` (old + new saves); 15 downgrade-simulation tests
+  relocated their raw-JSON field reads to `raw.towns.home.X` (a faithful
+  byte-layout relocation, no production flat-fallback branch). `townSeam.test.ts`
+  flips its invariant — a save now HAS `towns` and NOT the six flat keys, at
+  `SAVE_VERSION` 3, with an in-test old-shape save migrating and round-tripping.
+  Save size grows a constant **+19 bytes** (the `"towns":{"home":…}}` wrapper,
+  ~0.0016%). Suite **584** (+1 migration test); pinned baselines hold
+  bit-identically — village 11/4/7 `rngState` 3274842624 / 2896139677 /
+  4253583594 (conserved), city seed 11 `rngState` 2546912297 / money 316900000;
+  `tsc` clean, `npm run build` clean, all five e2e green (deepsmoke exercises the
+  in-game save/load + named slots). The serialized byte layout changed by design;
+  the rng stream, economy, and money did not. **Step 3 is COMPLETE.**
+
+- **E step 3 — the Town seam (closing batch: UI batch 2 + map dims).** The last
+  two rows of the remaining-families table land. **UI batch 2**: the ~80
+  remaining flat family reads across src/ui and src/render convert — 14 UI
+  files (EntityInspector 11, FacilityModal 11, SupplyChainDashboard 5, and
+  smaller) plus ~30 TownRenderer sites, each through one hoisted
+  `townOf(state)` home-default local; a pure read-path change (same object
+  references, so React behaviour is unchanged), leaving the residual flat
+  family reads in UI/render at **zero**. **Map dims**: the Town view gains
+  `mapWidth`/`mapHeight` getters (delegating to `state.config` today, becoming
+  per-town fields at the endgame); the 11 town-scoped readers (placement, slot
+  enumeration, movement bounds, renderer world size) convert, while config
+  construction/serialization/migration readers stay on `config`, classified.
+  For a scalar family the accessor-identity tests are the load-bearing
+  fails-on-revert guards (a broken getter agrees with itself run-to-run, so
+  the determinism double-runs can't see it — the identity assertions do). With
+  this, **every row of the step-3 conversion table is DONE**: all six record
+  families, the map dims, and every UI read route through the seam. What
+  remains of step 3 is the endgame itself — the records genuinely move to
+  `state.towns[townId]` behind one versioned migration, with `townOf` swapping
+  its getters and no call site changing. Suite 583/583; pinned baselines
+  exact; full e2e gauntlet green.
+- **E step 3 — the Town seam (fifth slice, facilities).** The last big family
+  converts: every **facility reader** in the sim layer routes through
+  `townOf(...).facilities` — **226 reader refs across 55 files**, harvested as
+  two parallel file partitions (systems/ 137 refs / 33 files; core+selectors+
+  data 89 refs / 22 files). `facilityId` cross-refs (contract endpoints,
+  workplace/home lookups, manager assignments) are reads and converted. Only
+  two writers exist in all of sim code and both stay flat: `startingScenario`'s
+  facility creation and `Demolition`'s `delete` — every other path (labor
+  resets, positioning, `FireSale`/`Acquisition` ownership transfer,
+  resident/employee rosters) mutates an existing record through the view. The
+  family has zero refs in the money primitive. Fails-on-revert: a
+  scratch-broken facilities getter turns **160 tests red across 71 files**;
+  restored green. Suite +1 facilities-determinism seam test (every facility's
+  level/status/workers/dailyStats/inventories bit-agree over a 30-day City
+  double-run; now 583); `tsc` clean; pinned baselines exact. With this, ALL
+  SIX record families read through the seam — remaining before the endgame
+  move: map dims and the rest of the UI reads.
+- **E step 3 — the Town seam (fourth slice, firms).** The largest family so far
+  converts in one batch: every **firm reader** in the sim layer routes through
+  `townOf(...).firms` — **230 reader refs across 49 files**, harvested as two
+  parallel file partitions (systems/ 149 refs / 30 files; core+selectors+data
+  81 refs / 19 files) that never touch `Town.ts`, whose `firms`/`facilities`
+  getters landed one commit ahead precisely so partitions need no shared edit.
+  Ownership cross-refs (`state.firms[fac.ownerFirmId]` and kin) are reads and
+  converted. Writers stay flat, all classified: the four founder creation sites
+  + two abandon deletes in `AIFounderSystem`, the acquisition `delete`, and
+  `startingScenario`'s firm creation (its mutations of EXISTING firms route
+  through the view, per the citizens-slice precedent). The region-wide money
+  primitive in `GameState.ts` — now including `recordTransaction`'s firm-ledger
+  reads — stays flat with its comments extended to name firms. Fails-on-revert:
+  a scratch-broken firms getter turns **151 tests red across 65 files**;
+  restoring returns green. Suite +1 firms-determinism seam test (two City
+  seed-11 runs bit-agree on every firm's cash, debt, and valuation over 30
+  days; now 582); `tsc` clean; pinned baselines reproduce exactly. Remaining:
+  facilities (~360), map dims, and the rest of the UI reads.
+- **E step 3 — the Town seam (UI batch, district/cohort reads).** The last
+  deferred slice of the district/cohort families lands: the UI's flat reads now
+  route through the seam. **7 reader references across 2 files** —
+  `PopulationDashboard` (the district roster, the crowd-per-district cohort loop,
+  and the `districtAt` building tally) and `TownRenderer.drawAmbientCrowd` (the
+  cohort-population scan and the per-district lookup) — read `townOf(state)`
+  (home default, since the UI renders the home town; each carries a one-line
+  comment noting the town selector it gains at the endgame). A pure read-path
+  change: no component, memoization, or prop restructure, and because the
+  accessor returns the SAME objects the flat path did, React memo/deps behaviour
+  is unchanged. The remaining UI families (citizens, firms, facilities,
+  marketStats — ~81 flat reads audited) stay flat for a later UI batch: each
+  converts once its family's `Town` getter has landed (citizens and marketStats
+  landed in this batch's sim slice; firms and facilities are still to come).
+  Verified end to end: the full e2e gauntlet is green (smoke, deepsmoke,
+  citysmoke `reachedDay` 66, metrosmoke, fpsguard p95 33.4ms under the 80ms
+  bound), `tsc` clean, the full suite green, and the fails-on-revert probe
+  (`get cohorts() { return {}; }`) turns pinned cohort tests red. Pinned
+  baselines untouched (no sim path changed).
+- **E step 3 — the Town seam (third slice, citizens + marketStats).** The `Town`
+  view's third and fourth families convert together: every **citizen reader**
+  (**70 sites across 28 files**) and every **marketStats reader** (**22 sites
+  across 16 files**) in the sim layer now routes through `townOf(...).citizens` /
+  `.marketStats`. ctx-scoped systems (`Labor`, `Payroll`, `Satisfaction`, `Tier`,
+  `Movement`, `CitizenSchedule`, `Accounting`, `TownStats`, `Rent`, `Immigration`,
+  `CastCurator`, `RetailDemand`, `MarketStats`, `CohortDemand`, `EventLog`,
+  `OperatorBehavior`, `expansion`) hoist `const town = townOf(ctx.state,
+  ctx.townId)` once; bare-`state` helpers, selectors, achievement/mission checks,
+  and `Simulation` command handlers call `townOf(state)` (home default) with the
+  endgame-param comment where the surrounding converted families carry one. The
+  daily `MarketStatsSystem` rebuild was inspected under the writer rule: it
+  reads-then-mutates each existing per-product entry in place (same object
+  reference), so it routes through the view like any reader — only
+  `emptyMarketStat` creation is a writer. Writers stay flat by design: the
+  `createCitizen` sinks (`factories`, `startingScenario`), the one removal path
+  (`LaborSystem.removeCitizen`'s `delete`), the `marketStats` partition creators,
+  and `migrations`. The **money-scope reads** — the account-resolution trio and
+  `totalMoneySupply` conservation, now for citizen cash as well as cohort — stay
+  flat by design (region-wide; they resolve/iterate ALL towns at the endgame),
+  each commented. The harness is shown to guard the conversion: a scratch
+  mis-conversion `get citizens() { return {}; }` turns **91 tests red across 52
+  files**, and `get marketStats() { return {}; }` turns **266 tests red across 90
+  files** (the widest blast radius — the book is read with `!` non-null
+  assertions throughout); restoring each returns green. Pinned baselines hold
+  exactly: village seeds 11/4/7 reproduce `rngState` 3274842624 / 2896139677 /
+  4253583594, city seed 11 its `rngState` 2546912297 and money supply 316900000.
+  Suite +1 citizen/marketStats-determinism test in `townSeam.test.ts` (now 581);
+  `tsc` clean; no UI touched. Remaining families (firms ~450, facilities ~360,
+  map dims, UI reads) follow the same recipe in region.md § step 3.
+- **E step 3 — the Town seam (second slice, cohorts).** The `Town` view's second
+  family converts: every **cohort reader** in the sim layer now routes through
+  `townOf(...).cohorts` — **46 reader references across 9 files** (`CrowdRent`,
+  `CohortSocial`, `CohortLabor`, `CohortDemand`, `CastCurator`, `Payroll`,
+  `AIFounder`, `RetailDemand` systems + `reportSelectors`). ctx-scoped systems
+  hoist `const town = townOf(ctx.state, ctx.townId)` once and read `town.cohorts`;
+  bare-`state` helpers mid-gradient call `townOf(state).cohorts` (home default)
+  and carry a comment noting the `townId` param they gain at the endgame move.
+  Writers stay flat by design (the view is read-only): the two tier-promotion
+  CREATION sites (`CohortSocial.moveTier`, `CastCurator.retire`) plus
+  `startingScenario` and `migrations`. The **money-scope subtlety** the districts
+  family never hit is documented and left flat: the account-resolution primitive
+  (`getAccountCash`/`accountExists`/`addAccountCash` under `recordTransaction`)
+  and the `totalMoneySupply` conservation sum are **region-wide** reads — money
+  moves between towns, so at the endgame they resolve/iterate ALL towns' cohorts,
+  and routing them through a single town's view would misrepresent their scope.
+  The harness is shown to guard the conversion: a scratch mis-conversion
+  (`get cohorts() { return {}; }`) turns **28 tests red across 14 files**;
+  restoring returns green. Pinned baselines hold exactly: village seeds 11/4/7
+  reproduce `rngState` 3274842624 / 2896139677 / 4253583594, city seed 11 its
+  `rngState` 2546912297 and money supply 316900000. Suite +1 cohort-determinism
+  test in `townSeam.test.ts` (now 575); `tsc` clean; no UI touched. Remaining
+  families (firms ~450, facilities ~360, citizens ~210, marketStats ~35, map
+  dims, UI reads) follow the same recipe in region.md § step 3.
+- **E step 3 — the Town seam (first slice, spike).** The region's `GameState`
+  refactor (`state.firms` → `state.towns[townId].firms`, ~1,300 sites) lands its
+  first honest brick: the `Town` as a **view**, not stored state. `core/Town.ts`
+  adds `townOf(state, townId)` — getters that return the flat records, so
+  `townOf(state,'home').districts === state.districts` (same reference) — plus
+  `HOME_TOWN_ID` and a `townId` seam threaded through `SimContext` (defaulted to
+  home by `makeContext`). Because the town is **computed, never serialized**, no
+  `towns` key enters a save: byte-identical, zero migration, `SAVE_VERSION`
+  untouched. The design decision — option **(b) view first, then (c) records
+  move** — is written into region.md as the step-3 as-built plan, with the
+  conversion recipe the firms/facilities/citizens batches follow. The **districts
+  family** is fully converted as the first slice: **14 reader sites across 8
+  files** now route through the accessor (writers stay flat by design; the view
+  is read-only). Each conversion is provably behaviour-identical (the accessor
+  returns the same object), and the harness is shown to guard it — a scratch
+  mis-conversion (`get districts() { return {}; }`) turns 8 tests red across 3
+  files; restoring returns green. Pinned baselines hold: village seeds 11/4/7
+  reproduce `rngState` 3274842624 / 2896139677 / 4253583594, city seed 11 its
+  `rngState` and money supply. Suite +7 (`townSeam.test.ts`, now 567); `tsc` and
+  `build` clean; no UI touched. Remaining families (cohorts ~50, firms ~450,
+  facilities ~360, citizens ~210, marketStats ~35, map dims, UI reads) are
+  itemized with the recipe in region.md § step 3.
+- **Challenge mode at City scale.** The scored 200-day challenge (final score +
+  local leaderboard + share summary) predated the world-scale era and only knew
+  the Village. It is now a first-class City experience. The New Game challenge
+  toggle already composed with the world picker (a City challenge gets the City
+  era flags worldScaleConfig turns on); this pass makes the SCORING and the BOARD
+  honest at scale. What mis-scored: the score's town-satisfaction leg read only
+  the simulated cast, blind to the crowd cohorts that are most of a City — so a
+  thriving City of hundreds scored its satisfaction off ~150 named agents.
+  Fixed: `challengeScore` now weights satisfaction over the cast AND the crowd
+  (population-weighted, mirroring the cohort migration gate); in a Village the
+  crowd is empty so it reduces to the cast mean exactly (bit-identical — the
+  Village score is unchanged). The rest of the formula was already honest at
+  scale and is documented as such: valuation (600 of 1000 pts) is net-worth-based
+  (companyValuation), so City rent, service seats, dividends, and pool-export
+  revenue all flow through cash and daily net profit into the score — a City
+  income empire scores like an operator. Leaderboards are now keyed SEPARATELY
+  per world (a Village 200-day score and a City one are different games): the
+  Village board keeps the original `econsim.challenges` key untouched — every
+  pre-world-scale score survives with NO migration — and City/Metropolis get
+  their own `econsim.challenges.<world>` slots (the named-save-slot idiom).
+  Legacy Village entries with no `world` field are stamped `village` on read. The
+  share summary and the finish-line/Awards displays name the world scale, and
+  Awards renders one board per world. Balance (docs/design/probes/city-challenge.ts,
+  the same v7 bot at 200 days, seeds 11/9): the City run lands in a sane band vs
+  the Village — Village meadowbrook 124-140, City meadowbrook 216-269, City
+  grand_junction 215-224 — higher because the crowd economy grows a bigger, more
+  valuable firm ($44-57k net worth vs $18-20k), with no score component pegged
+  (valuation 150-216 of 600, well under the $150k cap; exports/share still
+  discriminate) and money conserved to the cent. Separate boards make the
+  Village-vs-City gap a feature, not an unfairness, so NO display/multiplier tune
+  was needed — sim behavior is not a challenge-mode knob. Suite +7 (567 tests).
+  The one sim-source change is the pure read-only score selector (not in the tick
+  path), so the pinned Village (seed 11 rngState 3274842624) and City trajectories
+  are untouched.
 
 - **The City cast-parity mechanism — built, measured across the full grid, NOT
   shipped (docs-only verdict).** The forward path the City-decoupling verdict

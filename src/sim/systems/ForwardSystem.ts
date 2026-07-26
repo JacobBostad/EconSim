@@ -17,6 +17,7 @@
 
 import type { SimContext, GameState } from '../core/GameState';
 import { emitEvent, recordTransaction } from '../core/GameState';
+import { townOf } from '../core/Town';
 import { firmAccount, WORLD_ACCOUNT } from '../core/Transactions';
 import { isDayBoundary } from '../core/Tick';
 import { nextId } from '../core/Id';
@@ -25,6 +26,7 @@ import { getProduct } from '../data/products';
 import { getTradeCity } from '../data/tradeCities';
 import { getQuantity, removeStock } from '../entities/Inventory';
 import { cityPrice, exportFreightFee, applyPriceImpact, impactedFillPrice, feedPool } from '../core/Trade';
+import { isLivePartnerCity, partnerLarderStock, feedPartnerLarder } from '../core/PartnerMarket';
 import { formatMoney } from '../../utils/formatMoney';
 
 export const FORWARD_MAX_OPEN = 2;
@@ -52,7 +54,9 @@ export function sellForward(
   deliveryDay: number,
   currentDay: number,
 ): boolean {
-  const firm = state.firms[firmId];
+  // Bare-`state` helper mid-gradient: home town by default (one-town region →
+  // same reference); gains a `townId` param at the endgame move.
+  const firm = townOf(state).firms[firmId];
   if (!firm) return false;
   if (firm.forwards.length >= FORWARD_MAX_OPEN) return false;
   const qty = Math.round(quantity);
@@ -100,7 +104,9 @@ export function forwardMark(state: GameState, fwd: { productId: ProductId; quant
  * is via recordTransaction, so money stays conserved. Returns true on success.
  */
 export function closeForward(state: GameState, firmId: FirmId, forwardId: string): boolean {
-  const firm = state.firms[firmId];
+  // Bare-`state` helper mid-gradient: home town by default (one-town region →
+  // same reference); gains a `townId` param at the endgame move.
+  const firm = townOf(state).firms[firmId];
   if (!firm) return false;
   const fwd = firm.forwards.find((f) => f.id === forwardId);
   if (!fwd) return false;
@@ -174,10 +180,11 @@ export function closeForward(state: GameState, firmId: FirmId, forwardId: string
 export function runForwardSystem(ctx: SimContext): void {
   const { state } = ctx;
   if (!isDayBoundary(state.tick, ctx.config)) return;
+  const town = townOf(state, ctx.townId);
   const day = ctx.time.day;
 
-  for (const fid in state.firms) {
-    const firm = state.firms[fid]!;
+  for (const fid in town.firms) {
+    const firm = town.firms[fid]!;
     if (firm.forwards.length === 0) continue;
     for (const fwd of [...firm.forwards]) {
       if (fwd.deliveryDay > day) continue;
@@ -189,7 +196,7 @@ export function runForwardSystem(ctx: SimContext): void {
       let pulled = 0;
       for (const facId of firm.facilities) {
         if (pulled >= fwd.quantity) break;
-        const fac = state.facilities[facId];
+        const fac = town.facilities[facId];
         if (!fac || fac.type !== 'warehouse') continue;
         for (const inv of [fac.inputInventory, fac.outputInventory]) {
           if (pulled >= fwd.quantity) break;
@@ -220,7 +227,13 @@ export function runForwardSystem(ctx: SimContext): void {
         // then — only settlement puts physical stock on the shelf. This is the
         // divergence region.md flagged (a forward delivery used to create no
         // cover overhang a spot export would), now resolved.
-        if (state.tradeCities[fwd.cityId]?.pool?.inventory[fwd.productId] !== undefined) {
+        // Route the two supply models (slice 5): a LIVE partner takes the goods
+        // into its REAL larder, a stub city into its pool.
+        if (isLivePartnerCity(state, fwd.cityId)) {
+          if (partnerLarderStock(state, fwd.cityId, fwd.productId) !== undefined) {
+            feedPartnerLarder(state, fwd.cityId, fwd.productId, pulled);
+          }
+        } else if (state.tradeCities[fwd.cityId]?.pool?.inventory[fwd.productId] !== undefined) {
           feedPool(state, fwd.cityId, fwd.productId, pulled);
         }
         if (fwd.lockedPrice >= product.basePrice * FORWARD_WIN_MULT) {

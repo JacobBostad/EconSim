@@ -23,27 +23,51 @@ describe('worldScaleConfig — New Game world-scale wiring', () => {
     expect(cfg.realEstateEnabled).toBe(false);
     expect(cfg.investorsEnabled).toBe(false);
     expect(cfg.tradeDemandPoolsEnabled).toBe(false);
-    // bit-identity: a Village New Game is exactly the difficulty config.
-    expect(cfg).toEqual({ ...configForDifficulty('standard'), challengeMode: false });
+    // Phase 2 opt-in (docs/design/interest-rates.md): every New Game at every
+    // preset gets the better, realistic loan pricing (proven zero-AI-impact —
+    // no founder or passive player borrows on the pinned paths, so the pins are
+    // bit-identical flag-on). Old saves keep the flat rate via normalize false.
+    expect(cfg.riskTieredInterestEnabled).toBe(true);
+    // Otherwise a Village New Game is exactly the difficulty config.
+    expect(cfg).toEqual({
+      ...configForDifficulty('standard'),
+      challengeMode: false,
+      riskTieredInterestEnabled: true,
+    });
   });
 
-  it('city turns the whole stack on together (all four channels)', () => {
+  it('every preset opts into risk-tiered interest for a New Game', () => {
+    for (const world of ['village', 'city', 'metropolis'] as const) {
+      expect(worldScaleConfig('standard', false, 'cozy', world).riskTieredInterestEnabled).toBe(true);
+    }
+  });
+
+  it('city turns the whole stack on together (all channels + the region)', () => {
     const cfg = worldScaleConfig('standard', false, 'cozy', 'city');
     expect(cfg.sizePreset).toBe('city');
     expect(cfg.servicesEnabled).toBe(true);
     expect(cfg.realEstateEnabled).toBe(true);
     expect(cfg.investorsEnabled).toBe(true);
     expect(cfg.tradeDemandPoolsEnabled).toBe(true);
+    // region.md step 4 landed the live partner (port_rosa) as the City new-game
+    // default — a second economy on the freight edge. The pinned flag-OFF City
+    // baseline stays the region-off reference via the direct-config pin tests.
+    expect(cfg.regionEnabled).toBe(true);
     // City keeps the difficulty starting cash (no uplift).
     expect(cfg.playerStartCash).toBe(configForDifficulty('standard').playerStartCash);
   });
 
-  it('metropolis wires the biggest preset + services/realEstate/trade pools, investors OFF', () => {
+  it('metropolis wires the biggest preset + services/realEstate/trade pools + the region, investors OFF', () => {
     const cfg = worldScaleConfig('standard', false, 'cozy', 'metropolis');
     expect(cfg.sizePreset).toBe('metropolis');
     expect(cfg.servicesEnabled).toBe(true);
     expect(cfg.realEstateEnabled).toBe(true);
     expect(cfg.tradeDemandPoolsEnabled).toBe(true);
+    // The region now ships at Metropolis too (region.md step 4): the one-time
+    // deferral was measured to a fixable crash (the partner MarketStats
+    // host-preset mismatch), not a genuine cost — a two-town Metropolis runs to
+    // day 300 conserved/deterministic and far under the perf guard.
+    expect(cfg.regionEnabled).toBe(true);
     // investorsEnabled is a no-op at metropolis (founder row is city-only), so
     // the wiring leaves it off rather than pretending it does something.
     expect(cfg.investorsEnabled).toBe(false);

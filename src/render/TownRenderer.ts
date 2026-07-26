@@ -14,6 +14,7 @@
  */
 
 import type { GameState } from '../sim/core/GameState';
+import { townOf, HOME_TOWN_ID, type TownId, type Town } from '../sim/core/Town';
 import type { FacilityType } from '../sim/entities/Facility';
 import type { CitizenActivity } from '../sim/entities/Citizen';
 import { computeTime } from '../sim/core/Tick';
@@ -148,6 +149,14 @@ export interface RendererCallbacks {
   getFollowId: () => string | null;
   /** Manual pan/zoom broke the follow — clear it upstream. */
   onFollowBroken: () => void;
+  /**
+   * Which town the map is LOOKING at (region.md step 5, the town switcher).
+   * Defaults to home; every `townOf` read in the renderer routes through it, so
+   * pointing it at a partner renders THAT town's map/crowd/facilities. Flag-off
+   * games always return `home`, so `townOf(s,'home') === townOf(s)` and the
+   * render is byte-identical to the pre-switcher renderer. Optional so a test or
+   * embedder that omits it gets the home view unchanged. */
+  getTownId?: () => TownId;
 }
 
 export class TownRenderer {
@@ -207,6 +216,17 @@ export class TownRenderer {
     this.unbindEvents();
   }
 
+  /**
+   * The town view every render/hit-test read routes through — the town the
+   * switcher is LOOKING at (region.md step 5). With no `getTownId` callback, or
+   * with it returning `home` (every flag-off game), this is exactly `townOf(s)`,
+   * so the render is byte-identical to the pre-switcher renderer. Pointing the
+   * switcher at a partner returns THAT town's records so its map draws.
+   */
+  private town(s: GameState): Town {
+    return townOf(s, this.cb.getTownId?.() ?? HOME_TOWN_ID);
+  }
+
   // --- sizing -----------------------------------------------------------
   private resize(): void {
     const rect = this.canvas.getBoundingClientRect();
@@ -223,15 +243,16 @@ export class TownRenderer {
   private view = { scale: 1, cx: 65, cy: 46, minX: 0, minY: 0, maxX: 1, maxY: 1 };
 
   private updateView(s: GameState): void {
+    const town = this.town(s);
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-    for (const id in s.facilities) {
-      const f = s.facilities[id]!;
+    for (const id in town.facilities) {
+      const f = town.facilities[id]!;
       if (f.location.x < minX) minX = f.location.x;
       if (f.location.y < minY) minY = f.location.y;
       if (f.location.x > maxX) maxX = f.location.x;
       if (f.location.y > maxY) maxY = f.location.y;
     }
-    if (!isFinite(minX)) { minX = 0; minY = 0; maxX = s.config.mapWidth; maxY = s.config.mapHeight; }
+    if (!isFinite(minX)) { const town = this.town(s); minX = 0; minY = 0; maxX = town.mapWidth; maxY = town.mapHeight; }
     const padW = 14, padH = 12;
     minX -= padW; maxX += padW; minY -= padH; maxY += padH;
     const w = Math.max(1, maxX - minX), h = Math.max(1, maxY - minY);
@@ -263,8 +284,9 @@ export class TownRenderer {
   /** Where a selectable entity stands right now (facilities, citizens,
    * vehicles — firms have no location). */
   private entityLocation(s: GameState, id: string): Vec | null {
-    return s.facilities[id]?.location
-      ?? s.citizens[id]?.currentLocation
+    const town = this.town(s);
+    return town.facilities[id]?.location
+      ?? town.citizens[id]?.currentLocation
       ?? s.vehicles[id]?.currentLocation
       ?? null;
   }
@@ -281,7 +303,7 @@ export class TownRenderer {
     // drag/wheel/arrow input breaks the follow (see those handlers).
     const followId = this.cb.getFollowId();
     if (followId) {
-      const cit = s.citizens[followId];
+      const cit = this.town(s).citizens[followId];
       if (!cit) {
         this.cb.onFollowBroken();
       } else {
@@ -484,15 +506,16 @@ export class TownRenderer {
       if (d <= r && d < best.d) { best.id = id; best.d = d; }
     };
     const psc = this.effScale();
-    for (const id in s.facilities) {
-      const f = s.facilities[id]!;
+    const town = this.town(s);
+    for (const id in town.facilities) {
+      const f = town.facilities[id]!;
       consider(id, this.drawPos(id, f.location), Math.max(11, (f.type === 'home' ? 1.7 : 2.9) * psc));
     }
     for (const id in s.vehicles) {
       const v = s.vehicles[id]!;
       if (v.status === 'enroute') consider(id, this.drawPos(id, v.currentLocation), 10);
     }
-    for (const id in s.citizens) consider(id, this.drawPos(id, s.citizens[id]!.currentLocation), 7);
+    for (const id in town.citizens) consider(id, this.drawPos(id, town.citizens[id]!.currentLocation), 7);
     return best.id;
   }
 
@@ -617,11 +640,12 @@ export class TownRenderer {
       ctx.fill();
     };
 
+    const town = this.town(s);
     for (const cid in s.contracts) {
       const c = s.contracts[cid]!;
       if (!c.active) continue;
-      const src = s.facilities[c.sourceFacilityId];
-      const dst = s.facilities[c.destinationFacilityId];
+      const src = town.facilities[c.sourceFacilityId];
+      const dst = town.facilities[c.destinationFacilityId];
       if (!src || !dst) continue;
       const isPlayer = c.ownerFirmId === s.playerFirmId;
       const width = Math.min(4.5, 1.2 + c.targetQuantity / 25);
@@ -636,15 +660,15 @@ export class TownRenderer {
     }
 
     // Export lanes: any warehouse with a standing order or shipped units today.
-    for (const fid in s.facilities) {
-      const f = s.facilities[fid]!;
+    for (const fid in town.facilities) {
+      const f = town.facilities[fid]!;
       if (f.type !== 'warehouse') continue;
       const exporting = Object.keys(f.exportOrders).length > 0 || f.dailyStats.unitsShipped > 0;
       if (!exporting) continue;
       const isPlayer = f.ownerFirmId === s.playerFirmId;
       route(
         f.location,
-        { x: s.config.mapWidth + 6, y: Math.min(f.location.y, 20) },
+        { x: town.mapWidth + 6, y: Math.min(f.location.y, 20) },
         1.8,
         isPlayer ? 'rgba(120,220,180,0.7)' : 'rgba(150,190,170,0.35)',
         true,
@@ -657,16 +681,18 @@ export class TownRenderer {
 
   /** Sampled land-value grid, cached until homes/residents change. */
   private landValues(s: GameState): NonNullable<TownRenderer['landGrid']> {
+    const town = this.town(s);
     let homes = 0, residents = 0;
-    for (const fid in s.facilities) {
-      const f = s.facilities[fid]!;
+    for (const fid in town.facilities) {
+      const f = town.facilities[fid]!;
       if (f.type === 'home') { homes += 1; residents += f.residentIds.length; }
     }
     const key = `${homes}:${residents}:${s.seed}`;
     if (this.landGrid && this.landGrid.key === key) return this.landGrid;
     const step = 4;
-    const cols = Math.ceil(s.config.mapWidth / step) + 1;
-    const rows = Math.ceil(s.config.mapHeight / step) + 1;
+    // Grid spans the town's map (town-scoped world size).
+    const cols = Math.ceil(town.mapWidth / step) + 1;
+    const rows = Math.ceil(town.mapHeight / step) + 1;
     const v = new Float32Array(cols * rows);
     // Snapshot the homes once and sample every cell against it (A4): the grid is
     // thousands of queries over one unchanged home set, so building the index once
@@ -731,7 +757,7 @@ export class TownRenderer {
     const size = (isApartment ? 2.0 : def.type === 'home' ? 1.45 : 2.6) * sc;
     const sp = this.mouse;
     const cost = Math.round(def.buildCost * landCostMultiplier(landValueAt(s, world)));
-    const cash = s.firms[s.playerFirmId]?.cash ?? 0;
+    const cash = this.town(s).firms[s.playerFirmId]?.cash ?? 0;
     const blocker = placementBlocker(s, world);
     const affordable = cash >= cost && !blocker;
 
@@ -877,14 +903,15 @@ export class TownRenderer {
   private decorKey = '';
 
   private buildDecor(s: GameState): void {
-    const key = `${Math.round(this.view.minX)},${Math.round(this.view.maxX)},${Object.keys(s.facilities).length}`;
+    const town = this.town(s);
+    const key = `${Math.round(this.view.minX)},${Math.round(this.view.maxX)},${Object.keys(town.facilities).length}`;
     if (key === this.decorKey) return;
     this.decorKey = key;
     // deterministic scatter (LCG) of trees/bushes in open ground
     const trees: { x: number; y: number; r: number }[] = [];
     let seed = 1337;
     const rnd = () => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; };
-    const facs = Object.values(s.facilities);
+    const facs = Object.values(town.facilities);
     for (let i = 0; i < 130; i++) {
       const x = this.view.minX + rnd() * (this.view.maxX - this.view.minX);
       const y = this.view.minY + rnd() * (this.view.maxY - this.view.minY);
@@ -914,6 +941,7 @@ export class TownRenderer {
 
   private drawGround(s: GameState, _hour: number): void {
     const ctx = this.ctx;
+    const town = this.town(s);
     const season = seasonOf(s);
     const winter = season === 'winter';
     // Beyond the town plate: muted neutral so the daylight plate pops.
@@ -954,8 +982,8 @@ export class TownRenderer {
     zone(62, 46, 30, 'rgba(205,200,185,0.25)');  // commercial paving
 
     // farm plots: tilled field rows + fence around every farm
-    for (const fid in s.facilities) {
-      const f = s.facilities[fid]!;
+    for (const fid in town.facilities) {
+      const f = town.facilities[fid]!;
       if (f.type !== 'farm') continue;
       const c = this.w2s(s, f.location);
       const pw = 11 * sc, ph = 7.5 * sc;
@@ -979,8 +1007,8 @@ export class TownRenderer {
 
     // retail plaza: light paving under the shopping cluster
     let rx = 0, ry = 0, rn = 0;
-    for (const fid in s.facilities) {
-      const f = s.facilities[fid]!;
+    for (const fid in town.facilities) {
+      const f = town.facilities[fid]!;
       if (f.type === 'retail') { rx += f.location.x; ry += f.location.y; rn++; }
     }
     if (rn > 0) {
@@ -1109,8 +1137,9 @@ export class TownRenderer {
     // driveways for businesses only — homes sit on their residential streets,
     // and a driveway per house turned the neighborhoods into a picket fence.
     ctx.lineCap = 'round';
-    for (const id in s.facilities) {
-      const f = s.facilities[id]!;
+    const town = this.town(s);
+    for (const id in town.facilities) {
+      const f = town.facilities[id]!;
       if (f.type === 'home') continue;
       let ny = hYs[0]!; for (const y of hYs) if (Math.abs(y - f.location.y) < Math.abs(ny - f.location.y)) ny = y;
       const a = this.w2s(s, f.location), bpt = this.w2s(s, { x: f.location.x, y: ny });
@@ -1139,14 +1168,17 @@ export class TownRenderer {
   private drawAmbientCrowd(s: GameState): void {
     const sc = this.effScale();
     if (lodEnabled(s) && sc < LOD_CITIZEN_SKIP_SCALE) return; // dots would be sub-pixel — skip
-    const cohortIds = Object.keys(s.cohorts);
+    // The renderer draws the home town (one-town region → identical reference);
+    // it gains a town selector at the endgame move.
+    const town = this.town(s);
+    const cohortIds = Object.keys(town.cohorts);
     if (cohortIds.length === 0) return;
 
     // Cohort population per district (summed across tiers).
     const popByDistrict: Record<string, number> = {};
     let anyPop = 0;
     for (const cid of cohortIds) {
-      const co = s.cohorts[cid]!;
+      const co = town.cohorts[cid]!;
       if (co.population <= 0) continue;
       popByDistrict[co.districtId] = (popByDistrict[co.districtId] ?? 0) + co.population;
       anyPop += co.population;
@@ -1158,7 +1190,7 @@ export class TownRenderer {
     const ctx = this.ctx;
     ctx.save();
     for (const did of Object.keys(popByDistrict).sort()) {
-      const d = s.districts[did];
+      const d = town.districts[did];
       if (!d) continue;
       const pop = popByDistrict[did]!;
       const b = d.bounds;
@@ -1202,12 +1234,13 @@ export class TownRenderer {
 
   private drawFacilities(s: GameState, hour: number): void {
     const ctx = this.ctx;
+    const town = this.town(s);
     const selected = this.cb.getSelectedId();
     const night = Math.max(0, this.nightAmount(hour) - 0.2);
     // Painter's order: draw north-most first so nearer buildings overlap
     // correctly in the oblique projection.
-    const order = Object.keys(s.facilities).sort(
-      (a, b) => s.facilities[a]!.location.y - s.facilities[b]!.location.y,
+    const order = Object.keys(town.facilities).sort(
+      (a, b) => town.facilities[a]!.location.y - town.facilities[b]!.location.y,
     );
     const cull = this.visibleWorldRect(s, FACILITY_CULL_MARGIN);
     const lod = this.glyphLod(s);
@@ -1220,7 +1253,7 @@ export class TownRenderer {
     const declutter = lodEnabled(s);
     const labelRects: { x0: number; y0: number; x1: number; y1: number }[] = [];
     for (const id of order) {
-      const f = s.facilities[id]!;
+      const f = town.facilities[id]!;
       const p = this.drawPos(id, f.location);
       // Viewport cull: skip anything whose ground anchor is outside the visible
       // rect (+ margin for building height). This is the big-map win — on a
@@ -1382,8 +1415,9 @@ export class TownRenderer {
     // lit-building halos: homes glow softly, shops brighter, working factories
     // give off a cooler industrial light
     const cull = this.visibleWorldRect(s, FACILITY_CULL_MARGIN);
-    for (const id in s.facilities) {
-      const f = s.facilities[id]!;
+    const town = this.town(s);
+    for (const id in town.facilities) {
+      const f = town.facilities[id]!;
       if (f.status === 'closed') continue;
       const loc = f.location;
       if (loc.x < cull.minX || loc.x > cull.maxX || loc.y < cull.minY || loc.y > cull.maxY) continue;
@@ -1429,13 +1463,14 @@ export class TownRenderer {
     const ctx = this.ctx;
     const k = Math.min(1, dt * 8);
     const cull = this.visibleWorldRect(s, FACILITY_CULL_MARGIN);
+    const town = this.town(s);
     for (const id in s.vehicles) {
       const v = s.vehicles[id]!;
       if (v.status !== 'enroute') continue;
       // Cull trucks whose live position is offscreen (skips route-line + sprite).
       const lv = v.currentLocation;
       if (lv.x < cull.minX || lv.x > cull.maxX || lv.y < cull.minY || lv.y > cull.maxY) continue;
-      const origin = s.facilities[v.originFacilityId]?.location ?? v.currentLocation;
+      const origin = town.facilities[v.originFacilityId]?.location ?? v.currentLocation;
       const straight = Math.max(1e-6, Math.hypot(v.targetLocation.x - origin.x, v.targetLocation.y - origin.y));
       const done = Math.hypot(v.currentLocation.x - origin.x, v.currentLocation.y - origin.y);
       const route = this.vehicleRoute(s, id, origin, v.targetLocation);
@@ -1489,7 +1524,8 @@ export class TownRenderer {
       entry = { origin, key, route, walkRoads };
       this.citRouteCache.set(id, entry);
       if (this.citRouteCache.size > 400) {
-        for (const cid of this.citRouteCache.keys()) if (!s.citizens[cid]) this.citRouteCache.delete(cid);
+        const town = this.town(s);
+        for (const cid of this.citRouteCache.keys()) if (!town.citizens[cid]) this.citRouteCache.delete(cid);
       }
     }
     if (!entry.walkRoads) return c.currentLocation;
@@ -1506,8 +1542,9 @@ export class TownRenderer {
     // whole per-agent pass is skipped (trails still decay below). Positions are
     // not eased while skipped — they resnap when the player zooms back in.
     const drawSprites = !lodEnabled(s) || this.effScale() >= LOD_CITIZEN_SKIP_SCALE;
-    if (drawSprites) for (const id in s.citizens) {
-      const c = s.citizens[id]!;
+    const town = this.town(s);
+    if (drawSprites) for (const id in town.citizens) {
+      const c = town.citizens[id]!;
       const prev = this.smooth.get(id);
       const p = this.ease(id, this.citizenPos(s, id, c), k);
       const sp = this.w2s(s, p);
@@ -1569,8 +1606,9 @@ export class TownRenderer {
     // instead of bursting a backlog. Village (glyphLod false) is unaffected —
     // floaters spawn at every zoom exactly as before.
     const quiet = this.glyphLod(s);
-    for (const id in s.facilities) {
-      const f = s.facilities[id]!;
+    const town = this.town(s);
+    for (const id in town.facilities) {
+      const f = town.facilities[id]!;
       const prev = this.prevStats.get(id) ?? { revenue: 0, received: 0, produced: 0 };
       const sp = this.w2s(s, this.drawPos(id, f.location));
       // a sale happened -> money rises from the store
@@ -1756,8 +1794,9 @@ export class TownRenderer {
     }
     ctx.stroke();
 
-    for (const id in s.facilities) {
-      const f = s.facilities[id]!;
+    const town = this.town(s);
+    for (const id in town.facilities) {
+      const f = town.facilities[id]!;
       const p = toMini(f.location);
       const player = f.ownerFirmId === s.playerFirmId;
       const d = f.type === 'home' && f.defId !== 'apartment' ? 2.6 : 3.6;
@@ -1797,9 +1836,10 @@ export class TownRenderer {
   }
 
   private hoverLabel(s: GameState, id: string): string | null {
-    const f = s.facilities[id];
+    const town = this.town(s);
+    const f = town.facilities[id];
     if (f) return f.type === 'home' ? f.name : `${f.name} — ${f.status}`;
-    const c = s.citizens[id];
+    const c = town.citizens[id];
     if (c) return `${c.name} — ${c.activity}`;
     const v = s.vehicles[id];
     if (v) return `Shipment: ${Math.floor(v.cargo.quantity)} ${getProduct(v.cargo.productId).name}`;

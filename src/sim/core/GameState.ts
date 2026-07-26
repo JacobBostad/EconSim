@@ -28,6 +28,7 @@ import type { Vehicle } from '../entities/Vehicle';
 import type { Contract } from '../entities/Contract';
 import type { MarketStat } from '../entities/Market';
 import type { TradeCityPool } from '../data/tradePool';
+import type { FreightShipment } from '../entities/Freight';
 import type { GameEvent, EventSeverity, EventCategory } from './Events';
 import {
   type Transaction,
@@ -35,15 +36,17 @@ import {
   type LedgerCategory,
 } from './Transactions';
 import { Rng } from './Random';
+import { HOME_TOWN_ID, sortedTownIds, type TownId, type TownRecords } from './Town';
 import { computeTime, type GameTime } from './Tick';
 import { nextId } from './Id';
 import {
   buildContractIndex,
+  emptyContractIndex,
   indexAddContract,
   type ContractIndex,
 } from './ContractIndex';
 
-export const SAVE_VERSION = 2;
+export const SAVE_VERSION = 3;
 
 /**
  * Dev/test builds fail loud on invariant violations (a settlement against a
@@ -143,8 +146,22 @@ export interface GameState {
   paused: boolean;
   config: SimulationConfig;
 
+  /**
+   * The region's towns, each holding the six town-scoped record families
+   * (districts, cohorts, citizens, marketStats, firms, facilities). This is the
+   * SERIALIZED home of those records (region.md step 3 endgame). One-town region:
+   * only `towns[HOME_TOWN_ID]` exists. The flat `citizens`/`firms`/... fields
+   * below are non-enumerable accessor ALIASES onto `towns[HOME_TOWN_ID]`
+   * (installed by `installTownAliases`), so writers keep working and only `towns`
+   * is written to a save. See core/Town.ts.
+   */
+  towns: Record<TownId, TownRecords>;
+
+  /** Alias onto `towns[HOME_TOWN_ID].citizens` (non-enumerable; see Town.ts). */
   citizens: Record<CitizenId, Citizen>;
+  /** Alias onto `towns[HOME_TOWN_ID].firms` (non-enumerable; see Town.ts). */
   firms: Record<FirmId, Firm>;
+  /** Alias onto `towns[HOME_TOWN_ID].facilities` (non-enumerable; see Town.ts). */
   facilities: Record<FacilityId, Facility>;
   vehicles: Record<VehicleId, Vehicle>;
   contracts: Record<ContractId, Contract>;
@@ -173,6 +190,16 @@ export interface GameState {
    * only when the flag was on at creation, so a pinned (flag-off) game
    * serializes exactly the pre-Arc-E book. */
   tradeCities: Record<string, { pricesByProduct: Record<ProductId, number>; pool?: TradeCityPool }>;
+  /**
+   * In-flight inter-town freight (region.md step 4, slice 4). Each entry is a
+   * dated shipment dispatched from home toward a LIVE partner city, settled by
+   * `FreightSystem` on its `arrivalDay` (goods land in the partner larder, the
+   * locked-price payment settles then). WORLD-scoped (a shipment can cross
+   * towns). A SAVE-SHAPE addition kept at SAVE_VERSION 3 (normalize-only): the
+   * empty-array default is derivable, so an old save loads with `[]` and is
+   * byte-identical — the map-dims precedent. Flag off (or no partner) ⇒ always
+   * `[]`, and FreightSystem is a no-op, so every pinned baseline is untouched. */
+  freight: FreightShipment[];
   /** Active rush order (timed bulk-export contract), if any. */
   rushOrder: RushOrder | null;
   /** Pre-announced city price shock, if one is pending or in effect. */
@@ -206,6 +233,19 @@ export interface GameState {
   /** Premises the player-as-LANDLORD repossessed from an insolvent tenant (the
    * landlord side of the repossession rung) — landlord_repossession. */
   landlordRepossessions: number;
+  /**
+   * The best PARTNER-freight price the player has ever LOCKED, as a whole-percent
+   * of that product's base at the destination city (`round(priceLocked * 100 /
+   * base)`), taken across every player freight the FreightSystem settles. It's the
+   * region era's arbitrage read made observable: the read-the-market mission reads
+   * it above 100 (a Port Rosa freight locked above base), the shock achievement at
+   * ≥130 (a 1.3× spike locked in). A max, so a later cheaper freight never lowers a
+   * peak already earned — the marketShareByProduct idiom (one signal, tiered bars).
+   * Written ONLY on the player's own freight settlement (the deskTrades idiom), so
+   * it perturbs no trajectory, and structurally inert in Village: `state.freight`
+   * is always empty there (no partner), so FreightSystem never writes it. Default
+   * 0 (normalize-only, mirroring the other era tallies). */
+  freightBestSpikePct: number;
   /**
    * Consecutive days the town has met the emigration misery bar (worker-heavy
    * AND deeply unsatisfied). Past the grace period families start leaving;
@@ -276,6 +316,14 @@ export interface SimContext {
   rng: Rng;
   time: GameTime;
   /**
+   * The town this tick's systems operate on (region.md step 3 seam). One-town
+   * region: always `HOME_TOWN_ID`. A system reads its town's records through
+   * `townOf(ctx.state, ctx.townId)` — the accessor that returns the flat records
+   * today and `state.towns[townId]` once the endgame move lands, so a converted
+   * call site needs no further edit. See core/Town.ts.
+   */
+  townId: TownId;
+  /**
    * Per-tick contract lookup tables (see ContractIndex.ts). Built once here and
    * kept current by the mid-tick mutation sites so the AI-strategy/logistics
    * paths answer "which contracts source/feed this facility / belong to this
@@ -284,13 +332,26 @@ export interface SimContext {
   contractIndex: ContractIndex;
 }
 
-export function makeContext(state: GameState): SimContext {
+export function makeContext(state: GameState, townId: TownId = HOME_TOWN_ID): SimContext {
+  // `townId` is the town this context's systems operate on. It defaults to
+  // HOME_TOWN_ID, so every pre-region caller (`makeContext(state)`) is
+  // byte-identical to before — a one-town region builds exactly today's home
+  // context. The TownScheduler (region.md step 4, slice 3) is the first caller
+  // to pass a value other than 'home': it builds one context per town in sorted
+  // town order, and each town's systems read their own records through
+  // `townOf(ctx.state, ctx.townId)`.
   return {
     state,
     config: state.config,
     rng: new Rng(state),
     time: computeTime(state.tick, state.config),
-    contractIndex: buildContractIndex(state),
+    townId,
+    // Home builds the real host-scoped index its AI/logistics systems read; a
+    // partner town (region.md step 4) runs none of the index's consumers and
+    // mints no contracts, so it gets an empty index instead of paying an
+    // O(host-contracts) rebuild every tick for nothing (see emptyContractIndex).
+    contractIndex:
+      townId === HOME_TOWN_ID ? buildContractIndex(state) : emptyContractIndex(),
   };
 }
 
@@ -316,29 +377,80 @@ export function addContract(ctx: SimContext, contract: Contract): void {
   indexAddContract(ctx.contractIndex, contract);
 }
 
+/**
+ * Resolve a firm by id ACROSS the region (the same money-scope boundary the
+ * account primitive draws): a firm's accounting-ledger update under
+ * recordTransaction must reach the firm wherever it lives, since a partner town's
+ * firm transacts through the shared world ledger too. Ids are region-unique (the
+ * town factory shares `idCounters`), so the firm lives in at most one town and
+ * the sorted scan returns the same object whatever the order. One-town region:
+ * `towns.home.firms` IS the flat `state.firms` alias, so this is byte-identical to
+ * the pre-region `state.firms[id]` read the ledger update used.
+ */
+function findFirmRegionWide(state: GameState, firmId: FirmId): Firm | undefined {
+  for (const tid of sortedTownIds(state)) {
+    const f = state.towns[tid]!.firms[firmId];
+    if (f) return f;
+  }
+  return undefined;
+}
+
 // ---------------------------------------------------------------------------
 // Account access
 // ---------------------------------------------------------------------------
 
+// The account-resolution primitive under recordTransaction (getAccountCash /
+// accountExists / addAccountCash). A money account is resolved by id, and money
+// moves between towns, so these are REGION-WIDE reads: they resolve against
+// EVERY town's firms, cohorts AND citizens (`state.towns[townId]`, in sorted town
+// order), NOT a single town's view. Because entity ids are region-unique (the
+// town factory shares the region's `idCounters`), an id lives in at most one
+// town, so the scan returns the same holder whatever the town order — sorted only
+// pins a deterministic order. One-town region: `sortedTownIds` is `['home']` and
+// `towns.home.firms` IS the flat `state.firms` alias, so the outer loop is a
+// no-op wrapper and resolution is byte-identical to the pre-region flat read (the
+// firm-ledger reads inside recordTransaction resolve the same region-unique firm
+// ids). A ref that no town holds reads 0 / does not exist, exactly as the flat
+// `?? 0` / `!!` did.
 function getAccountCash(state: GameState, ref: AccountRef): number {
   if (ref.kind === 'world') return state.worldCash;
-  if (ref.kind === 'firm') return state.firms[ref.id!]?.cash ?? 0;
-  if (ref.kind === 'cohort') return state.cohorts[ref.id!]?.cashPool ?? 0;
-  return state.citizens[ref.id!]?.cash ?? 0;
+  for (const tid of sortedTownIds(state)) {
+    const t = state.towns[tid]!;
+    if (ref.kind === 'firm') {
+      const f = t.firms[ref.id!];
+      if (f) return f.cash;
+    } else if (ref.kind === 'cohort') {
+      const co = t.cohorts[ref.id!];
+      if (co) return co.cashPool;
+    } else {
+      const c = t.citizens[ref.id!];
+      if (c) return c.cash;
+    }
+  }
+  return 0;
 }
 
 /**
  * Whether an account reference resolves to a live holder. The world account
  * always exists; a firm/cohort/citizen ref is valid only while that entity is
- * still in state. A settlement against a vanished counterparty (a firm deleted
- * mid-day by an acquisition, a citizen who emigrated) must not move money on
- * only one side — see the guard in recordTransaction.
+ * still in state (in ANY town — region-wide, see the primitive's note above). A
+ * settlement against a vanished counterparty (a firm deleted mid-day by an
+ * acquisition, a citizen who emigrated) must not move money on only one side —
+ * see the guard in recordTransaction.
  */
 function accountExists(state: GameState, ref: AccountRef): boolean {
   if (ref.kind === 'world') return true;
-  if (ref.kind === 'firm') return !!state.firms[ref.id!];
-  if (ref.kind === 'cohort') return !!state.cohorts[ref.id!];
-  return !!state.citizens[ref.id!];
+  for (const tid of sortedTownIds(state)) {
+    const t = state.towns[tid]!;
+    if (ref.kind === 'firm') {
+      if (t.firms[ref.id!]) return true;
+    } else if (ref.kind === 'cohort') {
+      if (t.cohorts[ref.id!]) return true;
+    } else {
+      if (t.citizens[ref.id!]) return true;
+    }
+  }
+  return false;
 }
 
 function describeAccount(ref: AccountRef): string {
@@ -350,18 +462,31 @@ function addAccountCash(state: GameState, ref: AccountRef, delta: number): void 
     state.worldCash += delta;
     return;
   }
-  if (ref.kind === 'firm') {
-    const f = state.firms[ref.id!];
-    if (f) f.cash += delta;
-    return;
+  // Region-wide: credit/debit the holder in whichever town holds this id (ids are
+  // region-unique, so at most one). One-town region: only `home` is scanned, and
+  // a missing id is a silent no-op — identical to the flat guarded write.
+  for (const tid of sortedTownIds(state)) {
+    const t = state.towns[tid]!;
+    if (ref.kind === 'firm') {
+      const f = t.firms[ref.id!];
+      if (f) {
+        f.cash += delta;
+        return;
+      }
+    } else if (ref.kind === 'cohort') {
+      const co = t.cohorts[ref.id!];
+      if (co) {
+        co.cashPool += delta;
+        return;
+      }
+    } else {
+      const c = t.citizens[ref.id!];
+      if (c) {
+        c.cash += delta;
+        return;
+      }
+    }
   }
-  if (ref.kind === 'cohort') {
-    const co = state.cohorts[ref.id!];
-    if (co) co.cashPool += delta;
-    return;
-  }
-  const c = state.citizens[ref.id!];
-  if (c) c.cash += delta;
 }
 
 // ---------------------------------------------------------------------------
@@ -441,16 +566,19 @@ export function recordTransaction(
     note: input.note ?? '',
   };
 
-  // Update firm accounting accumulators by category.
+  // Update firm accounting accumulators by category. Region-wide firm lookup:
+  // a partner town's firm ledger must update from its own transactions too (the
+  // money-scope boundary the account primitive draws). Byte-identical for home —
+  // a home firm id resolves in `towns.home` (sorted first, = the flat alias).
   if (input.firmId) {
-    const firm = state.firms[input.firmId];
+    const firm = findFirmRegionWide(state, input.firmId);
     if (firm) {
       applyToLedger(firm.accounting.lifetime, input.category, amount);
       applyToLedger(firm.accounting.today, input.category, amount);
     }
   }
   if (input.counterparty) {
-    const other = state.firms[input.counterparty.firmId];
+    const other = findFirmRegionWide(state, input.counterparty.firmId);
     if (other) {
       applyToLedger(other.accounting.lifetime, input.counterparty.category, amount);
       applyToLedger(other.accounting.today, input.counterparty.category, amount);
@@ -569,8 +697,18 @@ export function emitEvent(
 /** Total money across citizens + firms + cohorts + world (constant). */
 export function totalMoneySupply(state: GameState): number {
   let sum = state.worldCash;
-  for (const id in state.firms) sum += state.firms[id]!.cash;
-  for (const id in state.citizens) sum += state.citizens[id]!.cash;
-  for (const id in state.cohorts) sum += state.cohorts[id]!.cashPool;
+  // Region-wide money read: conservation sums the WHOLE region's firm, citizen
+  // and cohort cash, so it iterates EVERY town's holders (`state.towns[townId]`,
+  // in sorted town order) plus the one shared world account — this is the probe's
+  // `regionMoneySupply` oracle. Cash is integer cents, so the sum is exact and
+  // order-independent; the per-town `for..in` matches the pre-region flat read
+  // exactly. One-town region: the outer loop is just `home`, whose records ARE
+  // the flat `state.firms` / `.citizens` / `.cohorts` aliases — byte-identical.
+  for (const tid of sortedTownIds(state)) {
+    const t = state.towns[tid]!;
+    for (const id in t.firms) sum += t.firms[id]!.cash;
+    for (const id in t.citizens) sum += t.citizens[id]!.cash;
+    for (const id in t.cohorts) sum += t.cohorts[id]!.cashPool;
+  }
   return sum;
 }

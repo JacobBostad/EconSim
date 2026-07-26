@@ -14,6 +14,7 @@
 
 import type { SimContext, GameState } from '../core/GameState';
 import { recordTransaction } from '../core/GameState';
+import { townOf, HOME_TOWN_ID, type TownId } from '../core/Town';
 import {
   citizenAccount,
   firmAccount,
@@ -26,6 +27,7 @@ import type { ProductId } from '../core/Id';
 import { getQuantity, getQuality, removeStock } from '../entities/Inventory';
 import { distance } from '../entities/Location';
 import { getProduct } from '../data/products';
+import { isDayBoundary } from '../core/Tick';
 import { SIZE_PRESETS } from '../core/SimulationConfig';
 import { worldDemandMult, worldSpendingMult } from '../data/worldEvents';
 import { seasonDemandMult } from '../data/seasons';
@@ -53,20 +55,46 @@ function catchupBaskets(state: GameState): number {
 function catchupSyntheticSignal(state: GameState): boolean {
   return SIZE_PRESETS[state.config.sizePreset].catchupSyntheticSignal;
 }
+/** Cast "restocked-shelf revisit" flag (cast-parity attempt #3). Preset-gated,
+ * false everywhere by default — see SIZE_PRESETS and runRestockRevisitSystem. */
+function restockRevisitEnabled(state: GameState): boolean {
+  return SIZE_PRESETS[state.config.sizePreset].restockRevisit;
+}
+/** Founder-signal-neutral split for the revisit (cast-parity attempt #5). When
+ * true, a revisit's purchase is excluded from the founder-visible market shortage
+ * gauge — the same synthetic-accounting idiom `catchupSyntheticSignal` gives the
+ * catch-up tranche. Only meaningful when `restockRevisit` is on. */
+function restockRevisitSyntheticSignal(state: GameState): boolean {
+  return SIZE_PRESETS[state.config.sizePreset].restockRevisitSyntheticSignal;
+}
+/** Cap on a citizen's pending-revisit queue: the shoppable staples are few and a
+ * store restocks within a day, so this only bounds pathological growth. */
+const MAX_PENDING_REVISITS = 6;
 
 /** Whether any crowd cohort holds population — the gate that keeps the crowd-
  * scale backlog catch-up (see attemptPurchase) dark in a Village, so the 300-day
  * Village re-run stays bit-identical. Exported for that mechanism's test. */
 export function anyCohortPopulation(state: GameState): boolean {
-  for (const cid in state.cohorts) {
-    if (state.cohorts[cid]!.population > 0) return true;
+  // Bare-`state` helper mid-gradient: home town by default (one-town region →
+  // same reference); gains a `townId` param at the endgame move.
+  const cohorts = townOf(state).cohorts;
+  for (const cid in cohorts) {
+    if (cohorts[cid]!.population > 0) return true;
   }
   return false;
 }
 
 /** Price a firm charges for a product (falls back to base price). */
-export function storePrice(state: GameState, facility: Facility, productId: ProductId): number {
-  const firm = state.firms[facility.ownerFirmId];
+export function storePrice(
+  state: GameState,
+  facility: Facility,
+  productId: ProductId,
+  townId: TownId = HOME_TOWN_ID,
+): number {
+  // Town-scoped: resolves the store's owning firm in THIS town (ctx.townId), so
+  // a partner store reads its own firm's price. Home default is byte-identical
+  // for one-town callers.
+  const firm = townOf(state, townId).firms[facility.ownerFirmId];
   const p = firm?.pricesByProduct[productId];
   return p && p > 0 ? p : getProduct(productId).basePrice;
 }
@@ -97,7 +125,7 @@ export function scoreStore(
 ): StoreScore | null {
   if (!facility.retailProductIds.includes(productId)) return null;
   const product = getProduct(productId);
-  const home = ctx.state.facilities[citizen.homeFacilityId];
+  const home = townOf(ctx.state, ctx.townId).facilities[citizen.homeFacilityId];
   const refPrice = product.basePrice;
   const price = storePrice(ctx.state, facility, productId);
   const stock = getQuantity(facility.inputInventory, productId);
@@ -110,7 +138,7 @@ export function scoreStore(
   const reliabilityRaw = citizen.storeReliability[facility.id] ?? 0;
   const reliabilityScore =
     reliabilityRaw > 0 ? clamp(reliabilityRaw / 10, 0, 1) : 0.4;
-  const firm = ctx.state.firms[facility.ownerFirmId];
+  const firm = townOf(ctx.state, ctx.townId).firms[facility.ownerFirmId];
   const brandScore = clamp((firm?.brandByProduct[productId] ?? 0) / 100, 0, 1);
 
   // Grand-opening novelty: citizens try a NEW store (first ~15 days, fading)
@@ -126,7 +154,7 @@ export function scoreStore(
   const affinity = positioningAffinity(facility.positioning, citizen.tier, {
     avgQuality: getQuality(facility.inputInventory, productId),
     price,
-    marketAvgPrice: ctx.state.marketStats[productId]?.averagePrice || refPrice,
+    marketAvgPrice: townOf(ctx.state, ctx.townId).marketStats[productId]?.averagePrice || refPrice,
   });
 
   const score =
@@ -157,23 +185,24 @@ export function chooseBestStore(
   productId: ProductId,
 ): Facility | null {
   const districtLocal = ctx.config.sizePreset !== 'village';
+  const town = townOf(ctx.state, ctx.townId);
   let allowed: Set<string> | null = null;
   if (districtLocal) {
-    const home = ctx.state.facilities[citizen.homeFacilityId];
+    const home = town.facilities[citizen.homeFacilityId];
     const originDistrict = home
-      ? districtAt(ctx.state.districts, home.location.x, home.location.y)
+      ? districtAt(town.districts, home.location.x, home.location.y)
       : null;
-    if (originDistrict) allowed = shoppingDistrictIds(ctx.state.districts, originDistrict.id);
+    if (originDistrict) allowed = shoppingDistrictIds(town.districts, originDistrict.id);
   }
   let best: Facility | null = null;
   let bestScore = -Infinity;
-  for (const id in ctx.state.facilities) {
-    const fac = ctx.state.facilities[id]!;
+  for (const id in town.facilities) {
+    const fac = town.facilities[id]!;
     if (!fac.retailProductIds.includes(productId)) continue;
     if (fac.status === 'closed') continue;
     if (fac.employees.length === 0 && crowdCount(fac) === 0) continue;
     if (allowed) {
-      const d = districtAt(ctx.state.districts, fac.location.x, fac.location.y);
+      const d = districtAt(town.districts, fac.location.x, fac.location.y);
       if (!d || !allowed.has(d.id)) continue;
     }
     const scored = scoreStore(ctx, citizen, fac, productId);
@@ -189,10 +218,11 @@ export function chooseBestStore(
 
 export function runRetailDemandSystem(ctx: SimContext): void {
   const { state } = ctx;
-  for (const id in state.citizens) {
-    const cit = state.citizens[id]!;
+  const town = townOf(state, ctx.townId);
+  for (const id in town.citizens) {
+    const cit = town.citizens[id]!;
     if (cit.activity !== 'shopping' || cit.movementState !== 'idle') continue;
-    const store = cit.targetFacilityId ? state.facilities[cit.targetFacilityId] : null;
+    const store = cit.targetFacilityId ? town.facilities[cit.targetFacilityId] : null;
     // Whatever happens, after a shopping visit the citizen heads home.
     sendHome(ctx, cit);
     if (!store || store.retailProductIds.length === 0) continue;
@@ -219,17 +249,19 @@ function attemptPurchase(
   store: Facility,
   productId: ProductId,
   need: Citizen['needs'][number],
+  opts: { revisit?: boolean } = {},
 ): void {
   const { state } = ctx;
+  const town = townOf(state, ctx.townId);
   const product = getProduct(productId);
-  const stat = state.marketStats[productId]!;
+  const stat = town.marketStats[productId]!;
   stat.demandAttempts += 1;
 
   const open = storeIsOpen(ctx, store);
   const stock = getQuantity(store.inputInventory, productId);
   const price = storePrice(state, store, productId);
   // Strong brands and high quality raise what citizens will pay.
-  const firm = state.firms[store.ownerFirmId];
+  const firm = town.firms[store.ownerFirmId];
   const brand = firm?.brandByProduct[productId] ?? 0;
   const qual = getQuality(store.inputInventory, productId);
   const premium = 1 + brand / 250 + (qual - 50) / 300;
@@ -288,6 +320,7 @@ function attemptPurchase(
   // applied to all tiers). The crowd gate keeps this dark in a Village, so the
   // 300-day Village re-run stays bit-identical (verified).
   const doCatchup =
+    !opts.revisit &&
     cit.tier === 'worker' &&
     need.urgency > ctx.config.needUrgentThreshold &&
     anyCohortPopulation(state);
@@ -304,8 +337,20 @@ function attemptPurchase(
   // physically buys. With the flag off (shipped) the two are equal and every stat
   // path is byte-identical to before. City-gated via anyCohortPopulation +
   // preset, so Village is untouched.
-  const marketWant =
-    doCatchup && catchupSyntheticSignal(state) ? baseWantQty : wantQty;
+  // A signal-neutral revisit (attempt #5) is a synthetic extra VISIT in its
+  // entirety — it stands in for an URGENT_TRIP the after-work window denied, not
+  // market demand — so the WHOLE revisit is excluded from the founder gauge
+  // (marketWant 0), where the catch-up excludes only its extra tranche (baseWantQty
+  // stays visible). A revisit never runs the catch-up branch (opts.revisit gates
+  // doCatchup off), so the two cases don't overlap. Flag off (shipped) → wantQty,
+  // byte-identical.
+  const marketWant = opts.revisit
+    ? restockRevisitSyntheticSignal(state)
+      ? 0
+      : wantQty
+    : doCatchup && catchupSyntheticSignal(state)
+      ? baseWantQty
+      : wantQty;
 
   if (!open || stock <= 0) {
     // Stockout / store closed -> lost sale. Both cases keep feeding
@@ -320,6 +365,13 @@ function attemptPurchase(
     stat.stockoutCount += 1;
     cit.dailyStats.unmetNeeds += 1;
     cit.satisfaction = clamp(cit.satisfaction - 2, 0, 100);
+    // Restocked-shelf revisit (cast-parity attempt #3): the shelf was EMPTY at an
+    // OPEN store (a genuine stockout, not a closed door) — queue this (store,
+    // product) so that if logistics restocks it later today the trip-limited cast
+    // worker gets one "swung by on the way home" attempt (runRestockRevisitSystem).
+    // A revisit's own stockout never re-queues (opts.revisit). Worker-tier + crowd
+    // gated to match the catch-up's scope, flag-gated so it is dark by default.
+    if (open && !opts.revisit) queueRevisit(state, cit, store.id, productId, need);
     return;
   }
 
@@ -404,7 +456,7 @@ function attemptPurchase(
 }
 
 function sendHome(ctx: SimContext, cit: Citizen): void {
-  const home = ctx.state.facilities[cit.homeFacilityId];
+  const home = townOf(ctx.state, ctx.townId).facilities[cit.homeFacilityId];
   if (!home) {
     cit.activity = 'home';
     cit.movementState = 'idle';
@@ -414,4 +466,90 @@ function sendHome(ctx: SimContext, cit: Citizen): void {
   cit.targetLocation = { ...home.location };
   cit.activity = 'commuting-home';
   cit.movementState = 'moving';
+}
+
+/** Queue a (store, product) for a same-day restocked-shelf revisit. Called only
+ * from the OPEN-store stockout branch of attemptPurchase. All gates live here so
+ * a flag-off / non-worker / Village citizen never even gets the field assigned
+ * (serialization stays byte-identical). Only urgent stockouts queue — a mildly
+ * wanted staple isn't worth a special trip. Deduped by (store, product), capped. */
+function queueRevisit(
+  state: GameState,
+  cit: Citizen,
+  storeId: string,
+  productId: ProductId,
+  need: Citizen['needs'][number],
+): void {
+  if (!restockRevisitEnabled(state)) return;
+  if (cit.tier !== 'worker') return;
+  if (!anyCohortPopulation(state)) return;
+  if (need.urgency < state.config.needUrgentThreshold) return;
+  const q = cit.pendingRevisits ?? (cit.pendingRevisits = []);
+  if (q.length >= MAX_PENDING_REVISITS) return;
+  for (const r of q) if (r.storeId === storeId && r.productId === productId) return;
+  q.push({ storeId, productId });
+}
+
+/**
+ * Restocked-shelf revisit (cast-parity attempt #3 — see
+ * docs/design/cohorts-and-districts.md). Runs right after RetailDemandSystem in
+ * the tick, so it sees the shelves the crowd and cast have already shopped this
+ * tick plus whatever LogisticsSystem restocked. For each cast worker carrying a
+ * queued (store, product) — an urgent need that stocked out at an OPEN store
+ * earlier today — if that store has since RESTOCKED that product and is still
+ * open, the worker gets ONE extra purchase attempt through the SAME
+ * attemptPurchase path (revisit flag: a plain single basket, no catch-up
+ * stacking, no re-queue). This gives the trip-limited worker — jobbed the whole
+ * work day, its after-work shop window closing before a late restock arrives —
+ * the cohort's URGENT_TRIPS throughput as a genuine extra VISIT rather than a
+ * deeper single-visit basket (which the prior verdict measured supply-capped).
+ *
+ * Determinism: draws no rng (the store is already known — no chooseBestStore
+ * jitter), sorted citizen iteration, money only via attemptPurchase's
+ * recordTransaction. Dark by default (flag false everywhere) and double-gated on
+ * crowd presence, so it never runs in a pinned Village/City-off run and cannot
+ * engage in a Village even if the flag is forced true (no cohort → the gate in
+ * queueRevisit never fires, so no queue exists to process).
+ */
+export function runRestockRevisitSystem(ctx: SimContext): void {
+  const { state } = ctx;
+  if (!restockRevisitEnabled(state)) return;
+  if (!anyCohortPopulation(state)) return;
+
+  const newDay = isDayBoundary(state.tick, ctx.config);
+  const storesOpenNow =
+    ctx.time.hour >= ctx.config.storeOpenHour && ctx.time.hour < ctx.config.storeCloseHour;
+  const isWorkHour =
+    ctx.time.hour >= ctx.config.workStartHour && ctx.time.hour < ctx.config.workEndHour;
+
+  const town = townOf(state, ctx.townId);
+  for (const id of Object.keys(town.citizens).sort()) {
+    const cit = town.citizens[id]!;
+    const q = cit.pendingRevisits;
+    if (!q || q.length === 0) continue;
+    // Same-day only: a new day wipes yesterday's queue (nothing is queued on the
+    // midnight boundary tick — stores are shut — so no fresh entry is lost).
+    if (newDay) { cit.pendingRevisits = undefined; continue; }
+    // A worker at its shift can't swing by; and the store must be open.
+    const atWork =
+      cit.employmentStatus === 'employed' && cit.workplaceFacilityId != null && isWorkHour;
+    if (!storesOpenNow || atWork) continue;
+
+    const remaining: { storeId: string; productId: ProductId }[] = [];
+    for (const rv of q) {
+      const store = town.facilities[rv.storeId];
+      const need = cit.needs.find((n) => n.productId === rv.productId);
+      // Store demolished or need already satisfied elsewhere: drop the entry.
+      if (!store || !need || need.urgency < state.config.needUrgencyThreshold) continue;
+      const stock = getQuantity(store.inputInventory, rv.productId);
+      if (stock <= 0 || !storeIsOpen(ctx, store)) {
+        remaining.push(rv); // still empty / shut — keep waiting for a restock today
+        continue;
+      }
+      // Restocked → one extra attempt through the shared purchase path, then the
+      // entry is consumed (one revisit only) whatever the outcome.
+      attemptPurchase(ctx, cit, store, rv.productId, need, { revisit: true });
+    }
+    cit.pendingRevisits = remaining.length ? remaining : undefined;
+  }
 }

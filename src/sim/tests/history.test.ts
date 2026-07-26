@@ -48,9 +48,10 @@ describe('Trend history', () => {
     const tpd = ticksPerDay(sim.getState().config);
     sim.run(tpd * 2 + 1);
     const raw = JSON.parse(serialize(sim.getState()));
-    for (const pid in raw.marketStats) delete raw.marketStats[pid].history;
-    for (const fid in raw.firms) {
-      for (const d of raw.firms[fid].accounting.dailyHistory) delete d.valuation;
+    const home = raw.towns.home; // the six families live under towns.home now
+    for (const pid in home.marketStats) delete home.marketStats[pid].history;
+    for (const fid in home.firms) {
+      for (const d of home.firms[fid].accounting.dailyHistory) delete d.valuation;
     }
     const loaded = deserialize(JSON.stringify(raw));
     expect(loaded.marketStats['bread']!.history).toEqual([]);

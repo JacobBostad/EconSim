@@ -23,6 +23,7 @@
 
 import type { GameState } from './GameState';
 import type { Vec2 } from '../entities/Location';
+import { townOf, HOME_TOWN_ID, type TownId } from './Town';
 
 /** Distance beyond which a home contributes nothing. */
 const HOME_REACH = 45;
@@ -46,20 +47,24 @@ export interface HomeIndex {
 }
 
 /** Snapshot the current homes for repeated {@link landValueFromIndex} queries. */
-export function buildHomeIndex(state: GameState): HomeIndex {
+export function buildHomeIndex(state: GameState, townId: TownId = HOME_TOWN_ID): HomeIndex {
   // Two passes so the typed arrays are exact-sized. Both iterate facilities in
   // insertion order, so the index visits homes in the identical order the direct
   // scan did — the invariant the byte-identity of every query rests on.
   let count = 0;
-  for (const fid in state.facilities) {
-    if (state.facilities[fid]!.type === 'home') count += 1;
+  // Town-scoped: DistrictSystem passes ctx.townId so a partner's land-value
+  // cache reads the PARTNER's homes, never home's. Home default is byte-identical
+  // for one-town callers (the money-path query at line 112 keeps the home read).
+  const facilities = townOf(state, townId).facilities;
+  for (const fid in facilities) {
+    if (facilities[fid]!.type === 'home') count += 1;
   }
   const xs = new Float64Array(count);
   const ys = new Float64Array(count);
   const residents = new Float64Array(count);
   let i = 0;
-  for (const fid in state.facilities) {
-    const fac = state.facilities[fid]!;
+  for (const fid in facilities) {
+    const fac = facilities[fid]!;
     if (fac.type !== 'home') continue;
     xs[i] = fac.location.x;
     ys[i] = fac.location.y;

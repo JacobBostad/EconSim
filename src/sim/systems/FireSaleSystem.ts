@@ -15,6 +15,7 @@
 
 import type { SimContext, GameState, FacilityOffer } from '../core/GameState';
 import { emitEvent } from '../core/GameState';
+import { townOf } from '../core/Town';
 import { isDayBoundary } from '../core/Tick';
 import { FIRE_SALE_RATE } from '../core/FireSale';
 import { facilityBookValue } from '../core/Demolition';
@@ -46,12 +47,15 @@ function saleRoll(seed: number, day: number): number {
  * doesn't nag about the same building every week.
  */
 function worstAIFacility(state: GameState, day: number) {
+  // Bare-`state` helper mid-gradient: home town by default (one-town region →
+  // same reference); gains a `townId` param at the endgame move.
+  const town = townOf(state);
   let worst: { id: string; net: number } | null = null;
   const cooled = state.lastLapsedFireSale;
-  for (const fid in state.facilities) {
-    const f = state.facilities[fid]!;
+  for (const fid in town.facilities) {
+    const f = town.facilities[fid]!;
     if (f.type === 'home' || f.type === 'importer' || f.status === 'closed') continue;
-    const firm = state.firms[f.ownerFirmId];
+    const firm = town.firms[f.ownerFirmId];
     if (firm?.ownerType !== 'ai') continue;
     if (cooled && cooled.facilityId === fid && day < cooled.day + FIRE_SALE_COOLDOWN_DAYS) continue;
     const recent = firm.accounting.dailyHistory.slice(-7);
@@ -69,18 +73,19 @@ function worstAIFacility(state: GameState, day: number) {
 export function runFireSaleSystem(ctx: SimContext): void {
   const { state } = ctx;
   if (!isDayBoundary(state.tick, ctx.config)) return;
+  const town = townOf(state, ctx.townId);
   const day = ctx.time.day;
 
   const active = state.facilityOffer;
   if (active) {
-    const fac = state.facilities[active.facilityId];
+    const fac = town.facilities[active.facilityId];
     const stillValid = fac && fac.ownerFirmId === active.sellerFirmId;
     if (!stillValid || day > active.deadlineDay) {
       state.facilityOffer = null;
       if (stillValid) {
         state.lastLapsedFireSale = { facilityId: active.facilityId, day };
         emitEvent(state, 'info', 'finance',
-          `🏷️ The fire sale on ${fac.name} has ended — ${state.firms[active.sellerFirmId]?.name ?? 'the seller'} took it off the block.`);
+          `🏷️ The fire sale on ${fac.name} has ended — ${town.firms[active.sellerFirmId]?.name ?? 'the seller'} took it off the block.`);
       }
     }
     return; // one at a time
@@ -90,8 +95,8 @@ export function runFireSaleSystem(ctx: SimContext): void {
   if (saleRoll(state.seed, day) >= FIRE_SALE_DAILY_CHANCE) return;
   const worst = worstAIFacility(state, day);
   if (!worst) return;
-  const fac = state.facilities[worst.id]!;
-  const seller = state.firms[fac.ownerFirmId]!;
+  const fac = town.facilities[worst.id]!;
+  const seller = town.firms[fac.ownerFirmId]!;
 
   const offer: FacilityOffer = {
     facilityId: fac.id,

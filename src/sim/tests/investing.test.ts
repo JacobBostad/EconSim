@@ -181,10 +181,11 @@ describe('Investing: stakes on the balance sheet', () => {
     sim.dispatch({ type: 'BUY_SHARES', firmId: player.id, targetFirmId: target, percent: 10 });
 
     const raw = JSON.parse(serialize(state)) as {
-      firms: Record<string, Record<string, unknown>>;
+      towns: { home: { firms: Record<string, Record<string, unknown>> } };
     };
-    for (const fid in raw.firms) {
-      const f = raw.firms[fid]!;
+    const home = raw.towns.home; // the six families live under towns.home now
+    for (const fid in home.firms) {
+      const f = home.firms[fid]!;
       delete f.shareCostBasis;
       const acc = f.accounting as { lifetime: Record<string, unknown>; today: Record<string, unknown> };
       delete acc.lifetime.dividendIn;

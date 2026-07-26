@@ -11,11 +11,28 @@ Headless-browser checks against the production build (`vite preview`):
   era's panels — Population/Districts, Standings & Stock Market, a facility
   inspector, and the Build panel's lease-from-landlord option. Asserts zero
   page errors. Polls the day counter, so it is robust to machine speed.
+- `switchersmoke.mjs` — the town switcher (region.md step 5). Asserts the
+  FLAG-OFF guarantee in the shipped UI: a normally-started City game renders no
+  `.town-switcher` chrome (region is off at every New Game preset), with zero
+  page errors. The partner-view operate-guard is store-verified
+  (`src/sim/tests/townSwitcher.test.ts`) because no in-app path enables the
+  region flag yet; extend this smoke once a preset wires it.
 - `metrosmoke.mjs` — the Metropolis (biggest world scale) smoke: starts a
   Metropolis game on a pinned seed, runs a few days (short horizon — booting the
   390×276 crowd/district render paths and the wider catalog, not chasing a
   founder milestone), then opens Population/Districts and the era dashboards.
   Asserts zero page errors; polls the day counter.
+- `regionsmoke.mjs` — the region smoke: a City game now opts into the region by
+  default (a live partner town, Port Rosa), so this drives the era's one new
+  play — the freight edge. Runs ~25 days to warm the partner's book, checks the
+  Gazette Trade Desk renders the live-partner cover, then builds a warehouse,
+  buys a staple into it, and freights it to Port Rosa: asserts the dispatch
+  event, runs past the lead time, and asserts the delivery event (the shipment
+  round-trips). Zero page errors; polls the day counter and the event log. Also
+  the region media-capture pass: snaps `shot-region-main.png` (town switcher),
+  `shot-region-tradedesk.png` (Port Rosa's live-partner book) and
+  `shot-region-freight.png` (the in-flight freight chip) into `e2e/.artifacts/`
+  (non-fatal captures) — the docs/media refresh curates the README shots from these.
 
 ```bash
 npm run build && npx vite preview --port 4173 &   # serve dist/
@@ -23,6 +40,7 @@ npm run e2e          # quick smoke
 npm run e2e:deep     # full gauntlet (~40s)
 npm run e2e:city     # City / world-scale gauntlet (~30s)
 npm run e2e:metro    # Metropolis boot smoke (~15s)
+npm run e2e:region   # Region / freight-edge gauntlet (~40s)
 ```
 
 Env: `BASE_URL` (default http://localhost:4173), `CHROMIUM_PATH` to point

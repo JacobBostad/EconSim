@@ -34,6 +34,7 @@ import type { Firm } from '../entities/Firm';
 import type { ServiceContract } from '../entities/ServiceContract';
 import type { ServiceDef } from '../data/services';
 import { recordTransaction, emitEvent } from '../core/GameState';
+import { townOf } from '../core/Town';
 import { firmAccount } from '../core/Transactions';
 import { nextId } from '../core/Id';
 import { isDayBoundary } from '../core/Tick';
@@ -52,9 +53,12 @@ import {
 /** Seat capacity a firm offers for one service (0 if it runs no open facility
  * of that service's type). */
 export function serviceCapacity(state: GameState, firm: Firm, def: ServiceDef): number {
+  // Bare-`state` helper mid-gradient: home town by default (one-town region →
+  // same reference); gains a `townId` param at the endgame move.
+  const town = townOf(state);
   let seats = 0;
   for (const facId of firm.facilities) {
-    const fac = state.facilities[facId];
+    const fac = town.facilities[facId];
     if (fac && fac.type === def.facilityType && fac.status !== 'closed') {
       seats += def.seatsPerLevel * fac.level;
     }
@@ -135,12 +139,15 @@ export function computeSeatDemand(firm: Firm): number {
  * billing stays in (service id, contract id) order.
  */
 function processService(state: GameState, firmIds: string[], def: ServiceDef): void {
+  // Bare-`state` helper mid-gradient: home town by default (one-town region →
+  // same reference); gains a `townId` param at the endgame move.
+  const town = townOf(state);
   // --- 1) Prune this service's dead contracts --------------------------------
   for (const cid of Object.keys(state.serviceContracts).sort()) {
     const c = state.serviceContracts[cid]!;
     if (c.serviceId !== def.id) continue;
-    const provider = state.firms[c.providerFirmId];
-    const subscriber = state.firms[c.subscriberFirmId];
+    const provider = town.firms[c.providerFirmId];
+    const subscriber = town.firms[c.subscriberFirmId];
     if (!provider || !subscriber || serviceCapacity(state, provider, def) <= 0) {
       delete state.serviceContracts[cid];
     }
@@ -149,7 +156,7 @@ function processService(state: GameState, firmIds: string[], def: ServiceDef): v
   // --- 2) Provider pricing walk (utilization) --------------------------------
   const capacity: Record<string, number> = {};
   for (const fid of firmIds) {
-    const firm = state.firms[fid]!;
+    const firm = town.firms[fid]!;
     const cap = serviceCapacity(state, firm, def);
     if (cap <= 0) continue;
     capacity[fid] = cap;
@@ -179,7 +186,7 @@ function processService(state: GameState, firmIds: string[], def: ServiceDef): v
     for (const pid of providerIds) {
       if (pid === self) continue;
       if ((capacity[pid]! - (used[pid] ?? 0)) <= 0) continue;
-      const price = listedPrice(state.firms[pid]!, def);
+      const price = listedPrice(town.firms[pid]!, def);
       if (price < bestPrice) {
         bestPrice = price;
         best = pid;
@@ -196,8 +203,8 @@ function processService(state: GameState, firmIds: string[], def: ServiceDef): v
   for (const cid of Object.keys(state.serviceContracts).sort()) {
     const c = state.serviceContracts[cid]!;
     if (c.serviceId !== def.id) continue;
-    const sub = state.firms[c.subscriberFirmId]!;
-    const provider = state.firms[c.providerFirmId]!;
+    const sub = town.firms[c.subscriberFirmId]!;
+    const provider = town.firms[c.providerFirmId]!;
     if (sub.ownerType === 'ai') {
       // Per-seat economics: with the proportional benefit, held seats pay off iff
       // the full-coverage value clears the full-demand bill (seat-count invariant),
@@ -223,11 +230,11 @@ function processService(state: GameState, firmIds: string[], def: ServiceDef): v
   // 3b) Resize survivors + reprice to the provider's current listed price.
   for (const subId of Object.keys(subscriberOf).sort()) {
     const c = state.serviceContracts[subscriberOf[subId]!]!;
-    const provider = state.firms[c.providerFirmId]!;
+    const provider = town.firms[c.providerFirmId]!;
     c.pricePerSeatDay = listedPrice(provider, def);
     const cap = capacity[c.providerFirmId]!;
-    const want = state.firms[subId]!.ownerType === 'ai'
-      ? serviceSeatDemand(state.firms[subId]!)
+    const want = town.firms[subId]!.ownerType === 'ai'
+      ? serviceSeatDemand(town.firms[subId]!)
       : c.seats;
     const seats = Math.max(0, Math.min(want, cap - (used[c.providerFirmId] ?? 0)));
     if (seats <= 0) {
@@ -243,7 +250,7 @@ function processService(state: GameState, firmIds: string[], def: ServiceDef): v
   //     production/brand benefit would be wasted, and cross-provider churn is
   //     noise), so it is skipped here. Operators are unchanged.
   for (const fid of firmIds) {
-    const firm = state.firms[fid]!;
+    const firm = town.firms[fid]!;
     if (firm.ownerType !== 'ai') continue;
     if (firm.strategy.archetype === 'service') continue;
     if (subscriberOf[fid] !== undefined && state.serviceContracts[subscriberOf[fid]!]) continue;
@@ -251,7 +258,7 @@ function processService(state: GameState, firmIds: string[], def: ServiceDef): v
     if (desired <= 0) continue;
     const providerId = bestProvider(used, fid);
     if (!providerId) continue;
-    const provider = state.firms[providerId]!;
+    const provider = town.firms[providerId]!;
     const price = listedPrice(provider, def);
     const seats = Math.min(desired, capacity[providerId]! - (used[providerId] ?? 0));
     if (seats <= 0) continue;
@@ -278,8 +285,9 @@ export function runServiceBillingSystem(ctx: SimContext): void {
   const { state } = ctx;
   if (!isDayBoundary(state.tick, ctx.config)) return;
   if (!ctx.config.servicesEnabled || ctx.config.sizePreset === 'village') return;
+  const town = townOf(state, ctx.townId);
 
-  const firmIds = Object.keys(state.firms).sort();
+  const firmIds = Object.keys(town.firms).sort();
 
   // Prune / price-walk / churn each service in catalog (id) order.
   for (const serviceId of SERVICE_IDS) {
@@ -318,7 +326,7 @@ export function runServiceBillingSystem(ctx: SimContext): void {
     seatsHeld[c.serviceId]![c.subscriberFirmId]! += c.seats;
   }
   for (const fid of firmIds) {
-    const firm = state.firms[fid]!;
+    const firm = town.firms[fid]!;
     const desired = serviceSeatDemand(firm);
     // Reset both benefits, then stamp what each service's coverage grants.
     firm.serviceBoost = 1;
