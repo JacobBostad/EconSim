@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, afterEach } from 'vitest';
 import { newSim, normalizedSerialize } from './helpers';
 import { serialize, deserialize, cloneState, saveGame, loadGame, hasSave, BACKUP_SLOT } from '../persistence/saveLoad';
 import { Simulation } from '../core/Simulation';
@@ -50,8 +50,8 @@ describe('Save slots (backup)', () => {
       const simA = newSim(1);
       simA.run(50);
       const simB = newSim(2);
-      expect(saveGame(simA.getState(), BACKUP_SLOT)).toBe(true);
-      expect(saveGame(simB.getState())).toBe(true);
+      expect(saveGame(simA.getState(), BACKUP_SLOT).ok).toBe(true);
+      expect(saveGame(simB.getState()).ok).toBe(true);
       expect(hasSave(BACKUP_SLOT)).toBe(true);
 
       const backup = loadGame(BACKUP_SLOT)!;
@@ -61,5 +61,75 @@ describe('Save slots (backup)', () => {
     } finally {
       delete (globalThis as Record<string, unknown>).localStorage;
     }
+  });
+});
+
+describe('saveGame failure reporting', () => {
+  const original = globalThis.localStorage;
+
+  afterEach(() => {
+    Object.defineProperty(globalThis, 'localStorage', {
+      value: original,
+      configurable: true,
+      writable: true,
+    });
+  });
+
+  function stubStorage(setItem: () => void): void {
+    Object.defineProperty(globalThis, 'localStorage', {
+      value: { setItem, getItem: () => null, removeItem: () => {}, key: () => null, length: 0 },
+      configurable: true,
+      writable: true,
+    });
+  }
+
+  it('reports a full quota as "quota", not a bare failure', () => {
+    // Chrome's shape. The whole point is that the caller can tell the player
+    // to free space rather than showing a generic error, or worse, nothing.
+    stubStorage(() => {
+      const err = new Error('exceeded') as Error & { name: string; code: number };
+      err.name = 'QuotaExceededError';
+      err.code = 22;
+      throw err;
+    });
+
+    const result = saveGame(newSim(1).getState());
+    expect(result.ok).toBe(false);
+    expect(result.reason).toBe('quota');
+    expect(result.bytes).toBeGreaterThan(0);
+  });
+
+  it('recognises the Firefox quota error too', () => {
+    stubStorage(() => {
+      const err = new Error('quota') as Error & { name: string; code: number };
+      err.name = 'NS_ERROR_DOM_QUOTA_REACHED';
+      err.code = 1014;
+      throw err;
+    });
+
+    expect(saveGame(newSim(1).getState()).reason).toBe('quota');
+  });
+
+  it('reports any other write failure as "unknown" rather than swallowing it', () => {
+    stubStorage(() => {
+      throw new Error('nope');
+    });
+
+    const result = saveGame(newSim(1).getState());
+    expect(result.ok).toBe(false);
+    expect(result.reason).toBe('unknown');
+  });
+
+  it('reports a successful save with the payload size', () => {
+    const writes: string[] = [];
+    stubStorage(() => {
+      writes.push('written');
+    });
+
+    const result = saveGame(newSim(1).getState());
+    expect(result.ok).toBe(true);
+    expect(result.reason).toBeUndefined();
+    expect(result.bytes).toBeGreaterThan(0);
+    expect(writes).toHaveLength(1);
   });
 });

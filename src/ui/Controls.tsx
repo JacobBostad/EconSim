@@ -2,7 +2,7 @@ import React, { useRef, useState } from 'react';
 import { useGameStore } from '../store/useGameStore';
 import type { Speed } from '../sim/core/Commands';
 import {
-  serialize, deserialize, saveGame, loadGame, listSaves, removeSave, saveMeta,
+  serialize, deserialize, loadGame, listSaves, removeSave, saveMeta,
 } from '../sim/persistence/saveLoad';
 import { getScenario } from '../sim/data/scenarios';
 import { formatMoney } from '../utils/formatMoney';
@@ -13,6 +13,9 @@ const SPEEDS: Speed[] = [1, 5, 20, 100];
 
 export function Controls(): React.ReactElement {
   const sim = useGameStore((s) => s.sim);
+  // Route manual saves through the store too, so a full quota raises the same
+  // banner an autosave failure does instead of silently doing nothing.
+  const persistState = useGameStore((s) => s.persistState);
   const setSpeed = useGameStore((s) => s.setSpeed);
   const togglePause = useGameStore((s) => s.togglePause);
   const save = useGameStore((s) => s.save);
@@ -113,7 +116,7 @@ function SaveSlots(): React.ReactElement {
                   </span>
                   <span className="row" style={{ gap: 4 }}>
                     <button onClick={() => loadSlot(slot)}>Load</button>
-                    <button onClick={() => { saveGame(sim.getState(), slot); setBump((b) => b + 1); }} title="Overwrite with the current town">
+                    <button onClick={() => { persistState(sim.getState(), slot); setBump((b) => b + 1); }} title="Overwrite with the current town">
                       Overwrite
                     </button>
                     <button onClick={() => { removeSave(slot); setBump((b) => b + 1); }} title="Delete this save">
@@ -133,7 +136,7 @@ function SaveSlots(): React.ReactElement {
               <button
                 disabled={!name.trim() || SYSTEM_SLOTS.has(name.trim())}
                 onClick={() => {
-                  saveGame(sim.getState(), name.trim());
+                  persistState(sim.getState(), name.trim());
                   setName('');
                   setBump((b) => b + 1);
                 }}
